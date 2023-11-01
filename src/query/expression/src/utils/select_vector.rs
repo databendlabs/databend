@@ -63,8 +63,6 @@ impl SelectVector {
     }
 
     pub fn swap(&mut self, i: usize, j: usize) {
-        let tmp = self.sel_vector[i];
-        self.sel_vector[i] = self.sel_vector[j];
-        self.sel_vector[j] = tmp;
+        self.sel_vector.swap(i, j);
     }
 }

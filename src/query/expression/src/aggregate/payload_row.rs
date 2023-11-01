@@ -64,7 +64,7 @@ pub unsafe fn serialize_column_to_rowformat(
     rows: usize,
     address: &[*const u8],
     offset: usize,
-    scratch: &Vec<u8>,
+    _scratch: &mut Vec<u8>,
 ) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
@@ -72,10 +72,7 @@ pub unsafe fn serialize_column_to_rowformat(
             NumberColumn::NUM_TYPE(buffer) => {
                 for i in 0..rows {
                     let index = select_index.get_index(i);
-                    store(
-                        &buffer[index],
-                        address[index].offset(offset as isize) as *mut u8,
-                    );
+                    store(&buffer[index], address[index].add(offset) as *mut u8);
                 }
             }
         }),
@@ -84,10 +81,7 @@ pub unsafe fn serialize_column_to_rowformat(
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
                     for i in 0..rows {
                         let index = select_index.get_index(i);
-                        store(
-                            &buffer[index],
-                            address[index].offset(offset as isize) as *mut u8,
-                        );
+                        store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
             })
@@ -95,44 +89,32 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Boolean(v) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
-                store(
-                    &v.get_bit(index),
-                    address[index].offset(offset as isize) as *mut u8,
-                );
+                store(&v.get_bit(index), address[index].add(offset) as *mut u8);
             }
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
-                let data = arena.alloc_slice_copy(&v.index_unchecked(index));
+                let data = arena.alloc_slice_copy(v.index_unchecked(index));
 
-                store(
-                    &(data.len() as u32),
-                    address[index].offset(offset as isize) as *mut u8,
-                );
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
 
                 store(
                     &(data.as_ptr() as u64),
-                    address[index].offset((offset + 4) as isize) as *mut u8,
+                    address[index].add(offset + 4) as *mut u8,
                 );
             }
         }
         Column::Timestamp(buffer) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
-                store(
-                    &buffer[index],
-                    address[index].offset(offset as isize) as *mut u8,
-                );
+                store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Date(buffer) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
-                store(
-                    &buffer[index],
-                    address[index].offset(offset as isize) as *mut u8,
-                );
+                store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Nullable(c) => serialize_column_to_rowformat(
@@ -142,7 +124,7 @@ pub unsafe fn serialize_column_to_rowformat(
             rows,
             address,
             offset,
-            scratch,
+            _scratch,
         ),
 
         Column::Array(_array) | Column::Map(_array) => {
@@ -153,9 +135,6 @@ pub unsafe fn serialize_column_to_rowformat(
         }
     }
 }
-
-// static void TemplatedMatchType(UnifiedVectorFormat &col, Vector &rows, SelectionVector &sel, idx_t &count,
-//    idx_t col_offset, idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
 
 pub unsafe fn row_match_columns(
     cols: &[Column],
@@ -339,16 +318,16 @@ unsafe fn row_match_string_column(
             let idx = select_index.get_index(i);
             let isnull = !validity.get_bit(idx);
 
-            let validity_address = address[idx].offset(validity_offset as isize);
+            let validity_address = address[idx].add(validity_offset);
             let isnull2 = load::<u8>(validity_address) != 0;
 
             equal = isnull == isnull2;
             if !isnull && !isnull2 {
-                let len_address = address[idx].offset(col_offset as isize);
-                let address = address[idx].offset((col_offset + 4) as isize);
+                let len_address = address[idx].add(col_offset);
+                let address = address[idx].add(col_offset + 4);
                 let len = load::<u32>(len_address) as usize;
 
-                let value = StringType::index_column_unchecked(&col, idx);
+                let value = StringType::index_column_unchecked(col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
@@ -370,12 +349,12 @@ unsafe fn row_match_string_column(
         for i in 0..*count {
             let idx = select_index.get_index(i);
 
-            let len_address = address[idx].offset(col_offset as isize);
-            let address = address[idx].offset((col_offset + 4) as isize);
+            let len_address = address[idx].add(col_offset);
+            let address = address[idx].add(col_offset + 4);
 
             let len = load::<u32>(len_address) as usize;
 
-            let value = StringType::index_column_unchecked(&col, idx);
+            let value = StringType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {
@@ -418,12 +397,12 @@ unsafe fn row_match_column_type<T: ArgType>(
             let idx = select_index.get_index(i);
             let isnull = !validity.get_bit(idx);
 
-            let validity_address = address[idx].offset(validity_offset as isize);
+            let validity_address = address[idx].add(validity_offset);
             let isnull2 = load::<u8>(validity_address) != 0;
 
             equal = isnull == isnull2;
             if !isnull && !isnull2 {
-                let address = address[idx].offset(col_offset as isize);
+                let address = address[idx].add(col_offset);
                 let scalar = load::<<T as ValueType>::Scalar>(address);
                 let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
@@ -442,7 +421,7 @@ unsafe fn row_match_column_type<T: ArgType>(
         for i in 0..*count {
             let idx = select_index.get_index(i);
             let value = T::index_column_unchecked(&col, idx);
-            let address = address[idx].offset(col_offset as isize);
+            let address = address[idx].add(col_offset);
             let scalar = load::<<T as ValueType>::Scalar>(address);
             let value = T::to_owned_scalar(value);
 

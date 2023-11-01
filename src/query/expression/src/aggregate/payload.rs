@@ -135,7 +135,7 @@ impl Payload {
         let page_ptr = self.get_page_ptr(page);
         let row_offset = (row % self.row_per_page) * self.tuple_size;
 
-        unsafe { page_ptr.offset(row_offset as isize) }
+        unsafe { page_ptr.add(row_offset) }
     }
 
     pub fn append_rows(
@@ -166,7 +166,7 @@ impl Payload {
                     let idx = select_vector.get_index(i);
                     if bitmap.get_bit(idx) {
                         unsafe {
-                            let dst = address[i].offset(write_offset as isize);
+                            let dst = address[i].add(write_offset);
                             store(&1, dst as *mut u8);
                         }
                     }
@@ -195,7 +195,7 @@ impl Payload {
         for i in 0..new_group_rows {
             let idx = select_vector.get_index(i);
             unsafe {
-                let dst = address[i].offset(write_offset as isize);
+                let dst = address[i].add(write_offset);
                 store(&group_hashes[idx], dst as *mut u8);
             }
         }
@@ -207,7 +207,7 @@ impl Payload {
             let place = self.arena.alloc_layout(self.state_layout);
             let idx = select_vector.get_index(i);
             unsafe {
-                let dst = address[idx].offset(write_offset as isize);
+                let dst = address[idx].add(write_offset);
                 store(&(place.as_ptr() as u64), dst as *mut u8);
             }
 
@@ -228,7 +228,7 @@ impl Drop for Payload {
                     let row_ptr = self.get_row_ptr(row);
 
                     unsafe {
-                        let state_addr: u64 = load(row_ptr.offset(self.state_offset as isize));
+                        let state_addr: u64 = load(row_ptr.add(self.state_offset));
                         aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
                     };
                 }

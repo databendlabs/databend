@@ -92,9 +92,9 @@ impl AggregateHashTable {
 
         for i in 0..row_count {
             state.state_places[i] = unsafe {
-                StateAddr::new(load::<u64>(
-                    state.addresses[i].offset(self.payload.state_offset as isize),
-                ) as usize)
+                StateAddr::new(
+                    load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
+                )
             };
         }
 
@@ -131,7 +131,7 @@ impl AggregateHashTable {
             self.resize(new_capacity);
         }
 
-        state.ajust_group_columns(group_columns, hashes, row_count, self.capacity);
+        state.adjust_group_columns(group_columns, hashes, row_count, self.capacity);
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -198,7 +198,7 @@ impl AggregateHashTable {
                 let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
                 let page_offset = entry.page_offset as usize * self.payload.tuple_size;
 
-                state.addresses[index] = unsafe { page_ptr.offset(page_offset as isize) };
+                state.addresses[index] = unsafe { page_ptr.add(page_offset) };
             }
 
             unsafe {
@@ -233,9 +233,9 @@ impl AggregateHashTable {
         // set state places
         for i in 0..row_count {
             state.state_places[i] = unsafe {
-                StateAddr::new(load::<u64>(
-                    state.addresses[i].offset(self.payload.state_offset as isize),
-                ) as usize)
+                StateAddr::new(
+                    load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
+                )
             };
         }
 
@@ -307,7 +307,7 @@ impl AggregateHashTable {
         // iterate over payloads and copy to new entries
         for row in 0..self.len() {
             let row_ptr = self.payload.get_row_ptr(row);
-            let hash: u64 = unsafe { load(row_ptr.offset(self.payload.hash_offset as isize)) };
+            let hash: u64 = unsafe { load(row_ptr.add(self.payload.hash_offset)) };
             let mut hash_slot = hash & mask;
 
             while entries[hash_slot as usize].page_nr != 0 {

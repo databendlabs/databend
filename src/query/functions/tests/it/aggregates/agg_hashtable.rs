@@ -138,7 +138,7 @@ fn test_agg_hashtable() {
             Int64Type::from_data_with_validity(vec![0, 1, 2, 3], validities.clone()),
             Int64Type::from_data_with_validity(vec![0, 1, 2, 3], validities.clone()),
             Int64Type::from_data_with_validity(
-                vec![rows / 2 * 0, rows / 2 * 1, rows / 2 * 2, rows / 2 * 3],
+                vec![0, rows / 2, rows, rows / 2 * 3],
                 validities.clone(),
             ),
             UInt64Type::from_data(vec![urows / 2, urows / 2, urows / 2, urows / 2]),

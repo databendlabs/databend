@@ -34,7 +34,7 @@ pub struct ProbeState {
 }
 
 impl ProbeState {
-    pub fn ajust_group_columns(
+    pub fn adjust_group_columns(
         &mut self,
         group_columns: &[Column],
         hashes: &[u64],
@@ -58,7 +58,7 @@ impl ProbeState {
         if self.row_count < row_count {
             self.ht_offsets.resize(row_count, 0);
             self.hash_salts.resize(row_count, 0);
-            self.addresses.resize(row_count, 0 as *const u8);
+            self.addresses.resize(row_count, std::ptr::null::<u8>());
             self.state_places.resize(row_count, StateAddr::new(0));
 
             self.group_compare_vector.resize(row_count);

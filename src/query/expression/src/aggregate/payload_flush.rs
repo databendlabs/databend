@@ -58,7 +58,7 @@ impl Payload {
 
         if state.row_count < rows {
             state.group_hashes.resize(rows, 0);
-            state.addresses.resize(rows, 0 as *const u8);
+            state.addresses.resize(rows, std::ptr::null::<u8>());
             state.state_places.resize(rows, StateAddr::new(0));
         }
 
@@ -78,9 +78,7 @@ impl Payload {
 
         for i in 0..rows {
             state.state_places[i] = unsafe {
-                StateAddr::new(
-                    load::<u64>(state.addresses[i].offset(self.state_offset as isize)) as usize,
-                )
+                StateAddr::new(load::<u64>(state.addresses[i].add(self.state_offset)) as usize)
             };
         }
 
@@ -93,7 +91,7 @@ impl Payload {
 
         for i in 0..len {
             state.group_hashes[i] =
-                unsafe { load::<u64>(state.addresses[i].offset(self.hash_offset as isize)) };
+                unsafe { load::<u64>(state.addresses[i].add(self.hash_offset)) };
         }
     }
 
@@ -150,9 +148,8 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> Column {
         let len = state.probe_state.row_count;
-        let iter = (0..len).map(|idx| unsafe {
-            load::<T::Scalar>(state.addresses[idx].offset(col_offset as isize))
-        });
+        let iter =
+            (0..len).map(|idx| unsafe { load::<T::Scalar>(state.addresses[idx].add(col_offset)) });
         let col = T::column_from_iter(iter, &[]);
         T::upcast_column(col)
     }
@@ -167,11 +164,9 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len =
-                    load::<u32>(state.addresses[idx].offset(col_offset as isize)) as usize;
+                let str_len = load::<u32>(state.addresses[idx].add(col_offset)) as usize;
                 let data_address =
-                    load::<u64>(state.addresses[idx].offset((col_offset + 4) as isize)) as usize
-                        as *const u8;
+                    load::<u64>(state.addresses[idx].add(col_offset + 4)) as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 
