@@ -30,6 +30,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use regex::Captures;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -89,7 +90,14 @@ impl SyncSystemTable for BacktraceTable {
                     writeln!(stack_frames, "{}", frame).unwrap();
                 }
 
-                for frame in frames_iter {
+                for mut frame in frames_iter {
+                    frame = frame.replace("::{{closure}}", "");
+
+                    let regex = regex::Regex::new("<(.+) as .+>").unwrap();
+                    let frame = regex
+                        .replace(&frame, |caps: &Captures| format!("{}", &caps[1]))
+                        .to_string();
+
                     writeln!(stack_frames, "{}", frame).unwrap();
                 }
 
