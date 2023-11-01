@@ -49,9 +49,8 @@ Databend Cloud currently uses Amazon S3 as its cloud provider, and is planning t
 
 The following diagram provides a visual representation of the various layers that comprise the architecture of Databend Cloud. Each layer plays a critical role in enabling the functionality and performance of the cloud platform. By examining the architecture layers in detail, you can gain a better understanding of how Databend Cloud operates and how data flows through the system.
 
-<div>
 <img src="https://user-images.githubusercontent.com/172204/221402796-646f5bc7-40b9-4e42-b837-2e60e1ba4583.png" alt="Databend Cloud Architecture" />
-</div>
+
 
 ## More Resources 🔗
 
