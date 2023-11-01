@@ -1018,10 +1018,10 @@ insert into t values ('1.234', 1.234, 1.234, 1.234), ('1.567', 1.567, 1.567, 1.5
 statement ok
 set numeric_cast_option = 'truncating'
 
-query TTI
-select cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0)), cast(1.5 as int)
+query TTTI
+select cast('1.16' as decimal(2,1)), cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0)), cast(1.5 as int)
 ----
-0 0 1
+1.1 0 0 1
 
 query TTTT
 select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(10, 2)), cast(d as decimal(10, 2)) from t
@@ -1042,10 +1042,10 @@ select cast(b as int), cast(c as int), cast(d as int) from t
 statement ok
 set numeric_cast_option = 'rounding'
 
-query TTI
-select cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0)), cast(1.5 as int)
+query TTTI
+select cast('1.16' as decimal(2,1)), cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0)), cast(1.5 as int)
 ----
-1 1 2
+1.2 1 1 2
 
 query TTTT
 select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(10, 2)), cast(d as decimal(10, 2)) from t

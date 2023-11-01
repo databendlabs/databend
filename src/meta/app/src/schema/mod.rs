@@ -43,6 +43,8 @@ pub use database::RenameDatabaseReq;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
 pub use index::*;
+pub use least_visible_time::GetLVTReply;
+pub use least_visible_time::GetLVTReq;
 pub use least_visible_time::LeastVisibleTime;
 pub use least_visible_time::LeastVisibleTimeKey;
 pub use least_visible_time::SetLVTReply;

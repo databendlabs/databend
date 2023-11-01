@@ -100,11 +100,13 @@ where
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
         let darray = NumberType::<T>::try_downcast_column(column).unwrap();
         self.value += darray[row].as_();
+
         Ok(())
     }
 
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()> {
         let value = sum_primitive::<T, TSum>(column, validity)?;
+
         self.value += value;
         Ok(())
     }

@@ -99,6 +99,8 @@ use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -3638,6 +3640,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 return Ok(SetLVTReply { time: new_time });
             }
         }
+    }
+
+    #[minitrace::trace]
+    async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError> {
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+
+        let lvt_key = LeastVisibleTimeKey { table_id };
+        let (_lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
+            get_pb_value(self, &lvt_key).await?;
+
+        Ok(GetLVTReply {
+            time: lvt_opt.map(|time| time.time),
+        })
     }
 
     fn name(&self) -> String {

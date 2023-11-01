@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-use std::io::Read;
-
 use common_expression::TableSchemaRef;
-use common_io::format_diagnostic::verbose_char;
 use common_storage::FileParseError;
 
 pub fn truncate_column_data(s: String) -> String {
@@ -41,35 +37,5 @@ pub fn get_decode_error_by_pos(
         column_name: field.name().to_string(),
         column_type: field.data_type().to_string(),
         column_data: truncate_column_data(column_data),
-    }
-}
-
-pub(crate) fn check_column_end(
-    reader: &mut Cursor<&[u8]>,
-    schema: &TableSchemaRef,
-    column_index: usize,
-) -> std::result::Result<(), FileParseError> {
-    let mut next = [0u8; 1];
-    // read from Cursor never returns Err
-    let readn = reader.read(&mut next[..]).unwrap();
-
-    if readn > 0 {
-        let size_remained = reader.remaining_slice().len() + 1;
-        let field = &schema.fields()[column_index];
-        let error_pos = reader.position() as usize - 1;
-        reader.set_position(0);
-        Err(FileParseError::ColumnDataNotDrained {
-            column_index: column_index as u32,
-            size_remained: size_remained as u32,
-            error_pos: error_pos as u32,
-            column_name: field.name().to_string(),
-            column_type: field.data_type().to_string(),
-            next_char: verbose_char(next[0]),
-            column_data: truncate_column_data(
-                String::from_utf8_lossy(reader.remaining_slice()).to_string(),
-            ),
-        })
-    } else {
-        Ok(())
     }
 }

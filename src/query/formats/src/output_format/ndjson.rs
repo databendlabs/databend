@@ -18,7 +18,6 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 
 use crate::field_encoder::FieldEncoderJSON;
-use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
@@ -50,8 +49,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
             if col_index != 0 {
                 buf.push(b',');
             }
-            self.field_encoder
-                .write_string_inner(v.as_bytes(), &mut buf, false);
+            self.field_encoder.write_string(v.as_bytes(), &mut buf);
         }
         buf.extend_from_slice(b"]\n");
         buf
@@ -98,13 +96,17 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                 }
 
                 if STRINGS {
-                    buf.push(b'"');
-                    self.field_encoder
-                        .write_field(column, row_index, &mut buf, true);
-                    buf.push(b'"');
+                    let mut tmp = vec![];
+                    self.field_encoder.write_field(column, row_index, &mut tmp);
+                    if !tmp.is_empty() && tmp[0] == b'\"' {
+                        buf.extend_from_slice(&tmp);
+                    } else {
+                        buf.push(b'"');
+                        buf.extend_from_slice(&tmp);
+                        buf.push(b'"');
+                    }
                 } else {
-                    self.field_encoder
-                        .write_field(column, row_index, &mut buf, false)
+                    self.field_encoder.write_field(column, row_index, &mut buf)
                 }
             }
             if COMPACT {

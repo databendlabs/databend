@@ -61,6 +61,7 @@ use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IcebergCatalogOption;
@@ -1456,9 +1457,15 @@ impl SchemaApiTestSuite {
         {
             let time = 1024;
             let req = SetLVTReq { table_id, time };
+            let get_req = GetLVTReq { table_id };
+
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert!(res.time.is_none());
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert_eq!(res.time.unwrap(), 1024);
 
             // test lvt never fall back
             let time = 102;
@@ -1466,12 +1473,16 @@ impl SchemaApiTestSuite {
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert_eq!(res.time.unwrap(), 1024);
 
             let time = 1025;
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1025);
+            let res = mt.get_table_lvt(get_req).await?;
+            assert_eq!(res.time.unwrap(), 1025);
         }
 
         Ok(())

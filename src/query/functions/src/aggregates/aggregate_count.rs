@@ -167,11 +167,16 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn batch_merge_result(&self, places: &[StateAddr], builder: &mut ColumnBuilder) -> Result<()> {
+    fn batch_merge_result(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 for place in places {
-                    let state = place.get::<AggregateCountState>();
+                    let state = place.next(offset).get::<AggregateCountState>();
                     builder.push(state.count);
                 }
             }

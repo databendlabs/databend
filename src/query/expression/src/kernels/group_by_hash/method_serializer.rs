@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_hashtable::FastHash;
 
-use super::utils::serialize_column;
+use super::utils::serialize_group_columns;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::Column;
@@ -46,7 +46,7 @@ impl HashMethod for HashMethodSerializer {
             serialize_size += column.serialize_size();
             serialize_columns.push(column.clone());
         }
-        Ok(KeysState::Column(Column::String(serialize_column(
+        Ok(KeysState::Column(Column::String(serialize_group_columns(
             &serialize_columns,
             num_rows,
             serialize_size,
