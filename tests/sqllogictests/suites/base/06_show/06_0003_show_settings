@@ -28,6 +28,16 @@ SHOW SETTINGS
 statement ok
 SHOW SETTINGS LIKE 'enable%'
 
+query TT
+SHOW SETTINGS LIKE 'max%' LIMIT 1
+----
+max_block_size 65536 65536 SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+
+query TT
+SHOW SETTINGS WHERE NAME='max_memory_usage' LIMIT 1
+----
+max_memory_usage 26903340646 26903340646 SESSION Sets the maximum memory usage in bytes for processing a single query. UInt64
+
 onlyif mysql
 statement ok
 set max_memory_usage = 1024*1024*1024*1.5
