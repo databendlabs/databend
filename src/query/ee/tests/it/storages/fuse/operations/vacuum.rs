@@ -19,6 +19,8 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use common_base::base::tokio;
+use common_catalog::table::NavigationPoint;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -173,6 +175,60 @@ async fn check_vacuum(
     .await
 }
 
+// after purge out of retention time snapshot, test if navigate will fail
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_navigate_after_purge() -> Result<()> {
+    let number_of_block = 1;
+    let fixture = TestFixture::new().await;
+    fixture.create_default_table().await?;
+
+    append_sample_data(number_of_block, &fixture).await?;
+
+    // get current snapshot
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let last_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let last_snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+
+    // sleep and append some data
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    append_sample_data(number_of_block, &fixture).await?;
+
+    // test navigate
+    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let point = NavigationPoint::SnapshotID(last_snapshot.snapshot_id.simple().to_string());
+    let point2 = NavigationPoint::TimePoint(retention_time);
+    assert!(fuse_table.navigate_to(&point).await.is_ok());
+    assert!(fuse_table.navigate_to(&point2).await.is_ok());
+
+    // purge table
+    let ctx = fixture.ctx();
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+    let mut files = HashSet::new();
+    files.insert(last_snapshot_loc);
+    check_vacuum(
+        &fixture,
+        files,
+        "test_fuse_vacuum_navigate_after_purge",
+        retention_time,
+        1,
+        2,
+        2,
+    )
+    .await?;
+
+    // after purge test navigate again
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    assert!(fuse_table.navigate_to(&point).await.is_err());
+    assert!(fuse_table.navigate_to(&point2).await.is_err());
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_vacuum_committed_different_snapshot_format_files() -> Result<()> {
     // case 1: if an old snapshot format file committed, then the old snapshot will not be purged
@@ -234,7 +290,7 @@ async fn test_fuse_vacuum_committed_different_snapshot_format_files() -> Result<
         check_vacuum(
             &fixture,
             HashSet::new(),
-            "test_fuse_vacuum_orphan_files step 2: verify files",
+            "test_fuse_vacuum_committed_different_snapshot_format_files case 1",
             retention_time,
             2,
             2,
@@ -279,7 +335,7 @@ async fn test_fuse_vacuum_committed_different_snapshot_format_files() -> Result<
         check_vacuum(
             &fixture,
             files,
-            "test_fuse_vacuum_orphan_files step 2: verify files",
+            "test_fuse_vacuum_committed_different_snapshot_format_files case 2",
             retention_time,
             1,
             2,
@@ -336,7 +392,7 @@ async fn test_fuse_vacuum_different_snapshot_format_orphan_files() -> Result<()>
         check_vacuum(
             &fixture,
             HashSet::new(),
-            "test_fuse_vacuum_orphan_files step 2: verify files",
+            "test_fuse_vacuum_different_snapshot_format_orphan_files: verify files",
             retention_time,
             2,
             2,

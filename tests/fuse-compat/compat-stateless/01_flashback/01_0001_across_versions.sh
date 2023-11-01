@@ -87,16 +87,8 @@ echo "optimize table fuse_test_compaction compact" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after compaction the table still contains {1,2}"
 echo "select c from fuse_test_compaction order by c" | $BENDSQL_CLIENT_CONNECT
 
-<<<<<<< HEAD
 echo "checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 5 exist"
-echo "select count() c, format_version v from fuse_snapshot('default', 'fuse_test_compaction') group by v order by c " | $MYSQL_CLIENT_CONNECT
-||||||| 04656a0fa0
-echo "checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 3 exist"
-echo "select count() c, format_version v from fuse_snapshot('default', 'fuse_test_compaction') group by v order by c " | $MYSQL_CLIENT_CONNECT
-=======
-echo "checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 3 exist"
 echo "select count() c, format_version v from fuse_snapshot('default', 'fuse_test_compaction') group by v order by c " | $BENDSQL_CLIENT_CONNECT
->>>>>>> upstream/main
 
 echo "checking the version and location of snapshots s2 is correct"
 echo "select snapshot_location='${FST_SNAPSHOT_S2_ID_LOC}', format_version=2 from fuse_snapshot('default', 'fuse_test_compaction') where snapshot_id='$FST_SNAPSHOT_S2_ID'" | $BENDSQL_CLIENT_CONNECT

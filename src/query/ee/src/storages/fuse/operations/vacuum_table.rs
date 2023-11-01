@@ -407,9 +407,13 @@ impl VacuumOperator {
         }
 
         // purge old of retention time snapshot files
-        let files: HashSet<String> = purge_snapshot_files.iter().cloned().collect();
+        let snapshots_to_be_purged: HashSet<String> =
+            purge_snapshot_files.iter().cloned().collect();
         self.fuse_table
-            .try_purge_location_files(self.ctx.clone(), files)
+            .try_purge_location_files_and_cache::<TableSnapshot, _, _>(
+                self.ctx.clone(),
+                snapshots_to_be_purged,
+            )
             .await?;
         let status = format!(
             "do_vacuum with table {}: purge snapshot files:{},cos:{} sec",
