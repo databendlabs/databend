@@ -203,7 +203,9 @@ pub unsafe fn row_match_column(
     };
 
     match col {
-        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => todo!(),
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+            *count = *no_match_count;
+        }
 
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(_) => {
@@ -378,7 +380,6 @@ unsafe fn row_match_string_column(
                 equal = false;
             } else {
                 let data_address = load::<u64>(address) as usize as *const u8;
-
                 let scalar = std::slice::from_raw_parts(data_address, len);
                 equal = scalar.eq(value);
             }
@@ -393,7 +394,7 @@ unsafe fn row_match_string_column(
         }
     }
 
-    *count = *no_match_count;
+    *count = match_count;
 }
 
 unsafe fn row_match_column_type<T: ArgType>(
@@ -455,5 +456,5 @@ unsafe fn row_match_column_type<T: ArgType>(
         }
     }
 
-    *count = *no_match_count;
+    *count = match_count;
 }

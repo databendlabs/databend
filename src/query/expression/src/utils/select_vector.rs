@@ -55,7 +55,11 @@ impl SelectVector {
     }
 
     pub fn get_index(&self, idx: usize) -> usize {
-        self.sel_vector[idx]
+        if self.increment {
+            idx
+        } else {
+            self.sel_vector[idx]
+        }
     }
 
     pub fn swap(&mut self, i: usize, j: usize) {

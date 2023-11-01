@@ -56,15 +56,13 @@ impl Payload {
             return false;
         }
 
-        state.group_columns.clear();
-        if state.group_hashes.len() < rows {
+        if state.row_count < rows {
             state.group_hashes.resize(rows, 0);
-        }
-
-        if state.addresses.len() < rows {
             state.addresses.resize(rows, 0 as *const u8);
+            state.state_places.resize(rows, StateAddr::new(0));
         }
 
+        state.group_columns.clear();
         state.row_count = rows;
         state.probe_state.ajust_row_count(rows);
 

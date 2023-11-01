@@ -22,6 +22,7 @@ use super::payload::Payload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
+use crate::group_hash_columns;
 use crate::load;
 use crate::select_vector::SelectVector;
 use crate::types::DataType;
@@ -83,11 +84,10 @@ impl AggregateHashTable {
         &mut self,
         state: &mut ProbeState,
         group_columns: &[Column],
-        params: &[&[Column]],
+        params: &[Vec<Column>],
         row_count: usize,
     ) -> Result<usize> {
-        // TODO
-        let group_hashes = vec![];
+        let group_hashes = group_hash_columns(group_columns);
         let new_group_count = self.probe_and_create(state, group_columns, row_count, &group_hashes);
 
         for i in 0..row_count {
@@ -138,6 +138,9 @@ impl AggregateHashTable {
 
         let mut select_vector = SelectVector::auto_increment();
 
+        let mut payload_page_offset = self.len() % self.payload.row_per_page;
+        let mut payload_page_nr = (self.len() / self.payload.row_per_page) + 1;
+
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
@@ -152,7 +155,14 @@ impl AggregateHashTable {
                 if entry.page_nr == 0 {
                     entry.salt = state.hash_salts[index];
                     // set to 1 to mark it's occupied, will be corrected later
-                    entry.page_nr = 1;
+                    entry.page_nr = payload_page_nr as u32;
+                    entry.page_offset = payload_page_offset as u16;
+
+                    payload_page_offset += 1;
+                    if payload_page_offset == self.payload.row_per_page {
+                        payload_page_offset = 0;
+                        payload_page_nr += 1;
+                    }
 
                     state.empty_vector.set_index(new_entry_count, index);
                     state.new_groups.set_index(new_group_count, index);
@@ -183,7 +193,7 @@ impl AggregateHashTable {
             // 3. handle need_compare_count
             for need_compare_idx in 0..need_compare_count {
                 let index = state.group_compare_vector.get_index(need_compare_idx);
-                let entry = &mut self.entries[index];
+                let entry = &mut self.entries[state.ht_offsets[index]];
 
                 let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
                 let page_offset = entry.page_offset as usize * self.payload.tuple_size;
@@ -195,7 +205,7 @@ impl AggregateHashTable {
                 row_match_columns(
                     group_columns,
                     &state.addresses,
-                    &mut select_vector,
+                    &mut state.group_compare_vector,
                     need_compare_count,
                     &self.payload.validity_offsets,
                     &self.payload.group_offsets,
@@ -215,6 +225,8 @@ impl AggregateHashTable {
             }
 
             std::mem::swap(&mut select_vector, &mut state.no_match_vector);
+            state.no_match_vector.resize(no_match_count);
+
             remaining_entries = no_match_count;
         }
 
@@ -258,12 +270,8 @@ impl AggregateHashTable {
         Ok(())
     }
 
-    pub fn merge_result(
-        &mut self,
-        other: Self,
-        flush_state: &mut PayloadFlushState,
-    ) -> Result<bool> {
-        if other.payload.flush(flush_state) {
+    pub fn merge_result(&mut self, flush_state: &mut PayloadFlushState) -> Result<bool> {
+        if self.payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 
             flush_state.aggregate_results.clear();
@@ -295,7 +303,7 @@ impl AggregateHashTable {
     pub fn resize(&mut self, new_capacity: usize) {
         let mask = (new_capacity - 1) as u64;
 
-        let mut entries = Self::new_entries(self.capacity);
+        let mut entries = Self::new_entries(new_capacity);
         // iterate over payloads and copy to new entries
         for row in 0..self.len() {
             let row_ptr = self.payload.get_row_ptr(row);

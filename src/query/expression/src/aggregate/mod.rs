@@ -15,6 +15,7 @@
 mod aggregate_function;
 mod aggregate_function_state;
 mod aggregate_hashtable;
+mod group_hash;
 mod payload;
 mod payload_flush;
 mod payload_row;
@@ -23,3 +24,6 @@ mod probe_state;
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
+pub use group_hash::*;
+pub use payload_flush::*;
+pub use probe_state::*;

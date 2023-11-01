@@ -65,12 +65,17 @@ impl Payload {
         let mut state_addr_offsets = Vec::new();
         let state_layout = get_layout_offsets(&aggrs, &mut state_addr_offsets).unwrap();
 
-        let validity_size = group_types
-            .iter()
-            .filter(|x| matches!(x, DataType::Nullable(_)))
-            .count();
+        let mut tuple_size = 0;
+        let mut validity_offsets = Vec::with_capacity(group_types.len());
+        for x in group_types.iter() {
+            if x.is_nullable() {
+                validity_offsets.push(tuple_size);
+                tuple_size += 1;
+            } else {
+                validity_offsets.push(0);
+            }
+        }
 
-        let mut tuple_size = validity_size;
         let mut group_offsets = Vec::with_capacity(group_types.len());
         let mut group_sizes = Vec::with_capacity(group_types.len());
 
@@ -88,7 +93,6 @@ impl Payload {
 
         let state_offset = tuple_size;
         tuple_size += 8;
-        let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size);
 
         Self {
             arena,
@@ -96,11 +100,11 @@ impl Payload {
             group_types,
             aggrs,
             tuple_size,
-            row_per_page,
+            row_per_page: (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1),
             current_row: 0,
             group_offsets,
             group_sizes,
-            validity_offsets: vec![],
+            validity_offsets,
             hash_offset,
             state_offset,
             state_addr_offsets,
@@ -147,8 +151,8 @@ impl Payload {
         for i in 0..new_group_rows {
             let idx = select_vector.get_index(i);
 
-            self.current_row += 1;
             state.addresses[idx] = self.get_row_ptr(self.current_row);
+            self.current_row += 1;
         }
 
         let address = state.addresses.as_slice();
@@ -173,7 +177,6 @@ impl Payload {
 
         let mut scratch = vec![];
         for (idx, col) in group_columns.iter().enumerate() {
-            write_offset += self.group_sizes[idx];
             unsafe {
                 serialize_column_to_rowformat(
                     &self.arena,
@@ -185,6 +188,7 @@ impl Payload {
                     &mut scratch,
                 );
             }
+            write_offset += self.group_sizes[idx];
         }
 
         // write group hashes
@@ -199,16 +203,17 @@ impl Payload {
         write_offset += 8;
 
         // write states
-        for aggr in self.aggrs.iter() {
-            let layout = aggr.state_layout();
-            for i in 0..new_group_rows {
-                let idx = select_vector.get_index(i);
-                let place = self.arena.alloc_layout(layout);
-                aggr.init_state(place.into());
-                unsafe {
-                    let dst = address[idx].offset(write_offset as isize);
-                    store(&(place.as_ptr() as u64), dst as *mut u8);
-                }
+        for i in 0..new_group_rows {
+            let place = self.arena.alloc_layout(self.state_layout);
+            let idx = select_vector.get_index(i);
+            unsafe {
+                let dst = address[idx].offset(write_offset as isize);
+                store(&(place.as_ptr() as u64), dst as *mut u8);
+            }
+
+            let place = StateAddr::from(place);
+            for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
+                aggr.init_state(place.next(*offset));
             }
         }
     }
