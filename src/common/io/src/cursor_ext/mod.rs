@@ -23,5 +23,6 @@ pub use cursor_read_bytes_ext::ReadBytesExt;
 pub use cursor_read_datetime_ext::BufferReadDateTimeExt;
 pub use cursor_read_datetime_ext::DateTimeResType;
 pub use cursor_read_number_ext::collect_number;
+pub use cursor_read_number_ext::read_num_text_exact;
 pub use cursor_read_number_ext::ReadNumberExt;
 pub use cursor_read_string_ext::BufferReadStringExt;

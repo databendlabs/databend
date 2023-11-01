@@ -1949,6 +1949,7 @@ dependencies = [
  "arrow-select",
  "async-backtrace",
  "base64 0.21.0",
+ "bumpalo",
  "chrono",
  "chrono-tz",
  "comfy-table 6.1.4",
