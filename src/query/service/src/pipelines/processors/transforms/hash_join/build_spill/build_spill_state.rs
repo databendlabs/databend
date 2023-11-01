@@ -171,9 +171,6 @@ impl BuildSpillState {
             total_bytes += block.memory_size();
         }
 
-        let byte = Byte::from_unit(total_bytes as f64, ByteUnit::B).unwrap();
-        let total_gb = byte.get_appropriate_unit(false).format(3);
-
         if total_bytes * 3 > spill_threshold {
             return Ok(true);
         }

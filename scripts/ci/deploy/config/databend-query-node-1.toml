@@ -42,9 +42,6 @@ enable_udf_server = true
 udf_server_allow_list = ['http://0.0.0.0:8815']
 # cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 
-max_memory_limit_enabled=true
-max_server_memory_usage = 3221225472
-
 [[query.users]]
 name = "root"
 auth_type = "no_password"
