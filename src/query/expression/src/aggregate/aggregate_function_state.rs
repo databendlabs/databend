@@ -18,7 +18,7 @@ use std::ptr::NonNull;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::aggregates::AggregateFunctionRef;
+use super::AggregateFunctionRef;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr {
