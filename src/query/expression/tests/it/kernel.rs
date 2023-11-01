@@ -446,3 +446,79 @@ pub fn test_take_compact() -> common_exception::Result<()> {
 
     Ok(())
 }
+
+/// Test filter boolean when offset != 0. 
+#[test]
+pub fn test_filter_boolean() -> common_exception::Result<()> {
+    use common_expression::types::DataType;
+    use common_expression::types::NumberDataType;
+    use common_expression::BlockEntry;
+    use common_expression::Column;
+    use common_expression::DataBlock;
+    use common_expression::Value;
+    use rand::Rng;
+
+    let mut rng = rand::thread_rng();
+    let num_blocks = rng.gen_range(5..30);
+    let data_types = vec![
+        DataType::Boolean,
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
+    ];
+
+    let mut take_indices = Vec::new();
+    let mut idx = 0;
+    let mut blocks = Vec::with_capacity(data_types.len());
+    let mut filtered_blocks = Vec::with_capacity(data_types.len());
+    for _ in 0..num_blocks {
+        let len = rng.gen_range(5..100);
+        let offset = rng.gen_range(0..std::cmp::min(7, len - 1));
+        let mut filter = Column::random(&DataType::Boolean, len)
+            .into_boolean()
+            .unwrap();
+        filter.slice(offset, len - offset);
+
+        let mut columns = Vec::with_capacity(data_types.len());
+        for data_type in data_types.iter() {
+            let column = Column::random(data_type, len);
+            columns.push(column.slice(offset..len));
+        }
+
+        let mut block_entries = Vec::with_capacity(data_types.len());
+        let mut filtered_block_entries = Vec::with_capacity(data_types.len());
+        for (col, data_type) in columns.into_iter().zip(data_types.iter()) {
+            filtered_block_entries.push(BlockEntry::new(
+                data_type.clone(),
+                Value::Column(col.filter(&filter)),
+            ));
+            block_entries.push(BlockEntry::new(data_type.clone(), Value::Column(col)));
+        }
+
+        blocks.push(DataBlock::new(block_entries, len - offset));
+        filtered_blocks.push(DataBlock::new(
+            filtered_block_entries,
+            len - offset - filter.unset_bits(),
+        ));
+
+        for val in filter.iter() {
+            if val {
+                take_indices.push(idx);
+            }
+            idx += 1;
+        }
+    }
+
+    let block_1 = DataBlock::concat(&blocks)?.take(&take_indices, &mut None)?;
+    let block_2 = DataBlock::concat(&filtered_blocks)?;
+
+    assert_eq!(block_1.num_columns(), block_2.num_columns());
+    assert_eq!(block_1.num_rows(), block_2.num_rows());
+
+    let columns_1 = block_1.columns();
+    let columns_2 = block_2.columns();
+    for idx in 0..columns_1.len() {
+        assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
+        assert_eq!(columns_1[idx].value, columns_2[idx].value);
+    }
+
+    Ok(())
+}

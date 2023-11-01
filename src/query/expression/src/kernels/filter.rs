@@ -233,7 +233,7 @@ impl Column {
         T::upcast_column(T::build_column(builder))
     }
 
-    // low-level API using unsafe to improve performance.
+    /// low-level API using unsafe to improve performance.
     fn filter_primitive_types<T: Copy>(values: &Buffer<T>, filter: &Bitmap) -> Buffer<T> {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
@@ -300,7 +300,7 @@ impl Column {
         builder.into()
     }
 
-    // low-level API using unsafe to improve performance.
+    /// low-level API using unsafe to improve performance.
     fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
@@ -424,7 +424,10 @@ impl Column {
         StringColumn::new(data.into(), offsets.into())
     }
 
-    fn copy_continuous_bits(
+    /// # Safety
+    /// * `src` + `src_idx`(in bits) must be [valid] for reads of `len` bits.
+    /// * `ptr` must be [valid] for writes of `len` bits.
+    unsafe fn copy_continuous_bits(
         ptr: &mut *mut u8,
         src: &[u8],
         mut dst_idx: usize,
@@ -435,9 +438,7 @@ impl Column {
         let chunks = BitChunks::new(src, src_idx, len);
         chunks.iter().for_each(|chunk| {
             unset_bits += chunk.count_zeros();
-            unsafe {
-                copy_advance_aligned(&chunk as *const _ as *const u8, ptr, 8);
-            }
+            copy_advance_aligned(&chunk as *const _ as *const u8, ptr, 8);
         });
 
         let mut remainder = chunks.remainder_len();
@@ -445,26 +446,24 @@ impl Column {
         src_idx += len - remainder;
 
         let mut buf = 0;
-        unsafe {
-            while remainder > 0 {
-                if (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0 {
-                    buf |= BIT_MASK[dst_idx % 8];
-                } else {
-                    unset_bits += 1;
-                }
-                src_idx += 1;
-                dst_idx += 1;
-                remainder -= 1;
-                if dst_idx % 8 == 0 {
-                    store_advance_aligned(buf, ptr);
-                    buf = 0;
-                }
+        while remainder > 0 {
+            if (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0 {
+                buf |= BIT_MASK[dst_idx % 8];
+            } else {
+                unset_bits += 1;
+            }
+            src_idx += 1;
+            dst_idx += 1;
+            remainder -= 1;
+            if dst_idx % 8 == 0 {
+                store_advance_aligned(buf, ptr);
+                buf = 0;
             }
         }
         (buf, unset_bits as usize)
     }
 
-    // low-level API using unsafe to improve performance.
+    /// low-level API using unsafe to improve performance.
     fn filter_boolean_types(bitmap: &Bitmap, filter: &Bitmap) -> Bitmap {
         debug_assert_eq!(bitmap.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
