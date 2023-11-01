@@ -35,6 +35,8 @@ pub struct GetLVTReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetLVTReply {
+    // return the current LeastVisibleTime
+    // None if unset before
     pub time: Option<u64>,
 }
 
