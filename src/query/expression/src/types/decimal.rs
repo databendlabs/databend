@@ -271,6 +271,7 @@ pub trait Decimal:
     fn checked_sub(self, rhs: Self) -> Option<Self>;
     fn checked_div(self, rhs: Self) -> Option<Self>;
     fn checked_mul(self, rhs: Self) -> Option<Self>;
+    fn checked_rem(self, rhs: Self) -> Option<Self>;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -285,7 +286,7 @@ pub trait Decimal:
     fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
 
-    fn to_int<U: NumCast>(self, scale: u8) -> Option<U>;
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U>;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
@@ -357,6 +358,10 @@ impl Decimal for i128 {
 
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
+    }
+
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -435,9 +440,22 @@ impl Decimal for i128 {
         self as f64 / div
     }
 
-    fn to_int<U: NumCast>(self, scale: u8) -> Option<U> {
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
         let div = 10i128.checked_pow(scale as u32)?;
-        num_traits::cast(self / div)
+        let mut val = self / div;
+        if rounding_mode && scale > 0 {
+            // Checking whether numbers need to be added or subtracted to calculate rounding
+            if let Some(r) = self.checked_rem(div) {
+                if let Some(m) = r.checked_div(i128::e(scale as u32 - 1)) {
+                    if m >= 5i128 {
+                        val = val.checked_add(1i128)?;
+                    } else if m <= -5i128 {
+                        val = val.checked_sub(1i128)?;
+                    }
+                }
+            }
+        }
+        num_traits::cast(val)
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
@@ -535,6 +553,10 @@ impl Decimal for i256 {
         self.checked_mul(rhs)
     }
 
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
+    }
+
     fn min_for_precision(to_precision: u8) -> Self {
         MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
@@ -580,10 +602,13 @@ impl Decimal for i256 {
         self.as_f64() / div
     }
 
-    fn to_int<U: NumCast>(self, scale: u8) -> Option<U> {
-        let div = i256::from(10).checked_pow(scale as u32)?;
-        let (h, l) = (self / div).into_words();
-        if h > 0 { None } else { l.to_int(scale) }
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
+        if !(i128::MIN..=i128::MAX).contains(&self) {
+            None
+        } else {
+            let val = self.as_i128();
+            val.to_int(scale, rounding_mode)
+        }
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar {

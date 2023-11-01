@@ -18,6 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::add_row_number::AddRowNumber;
 use super::aggregate::Aggregate;
 use super::dummy_table_scan::DummyTableScan;
 use super::eval_scalar::EvalScalar;
@@ -84,6 +85,7 @@ pub enum RelOp {
     MaterializedCte,
     Lambda,
     ConstantTableScan,
+    AddRowNumber,
 
     // Pattern
     Pattern,
@@ -101,6 +103,7 @@ pub enum RelOperator {
     Sort(Sort),
     Limit(Limit),
     Exchange(Exchange),
+    AddRowNumber(AddRowNumber),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     RuntimeFilterSource(RuntimeFilterSource),
@@ -133,6 +136,7 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
             RelOperator::Lambda(rel_op) => rel_op.rel_op(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
+            RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -156,6 +160,7 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -179,6 +184,7 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -202,6 +208,7 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::AddRowNumber(rel_op) => rel_op.derive_cardinality(rel_expr),
         }
     }
 
@@ -265,6 +272,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::ConstantTableScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::AddRowNumber(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }

@@ -539,11 +539,14 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
+        let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
 
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
             tz,
+            rounding_mode,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),

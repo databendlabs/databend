@@ -39,15 +39,51 @@ use common_storage::metrics::merge_into::merge_into_matched_operation_millisecon
 use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
 
+use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SourceFullMatched;
+
+#[typetag::serde(name = "source_full_macthed")]
+impl BlockMetaInfo for SourceFullMatched {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SourceFullMatched::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
 
 enum MutationKind {
     Update(UpdateDataBlockMutation),
     Delete(DeleteDataBlockMutation),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+// if we use hash shuffle join strategy, the enum
+// type can't be parser when transform data between nodes.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct MixRowNumberKindAndLog {
+    pub log: Option<MutationLogs>,
+    // kind's range is [0,1,2], 0 stands for log
+    // 1 stands for row_id_update, 2 stands for row_id_delete,
+    pub kind: usize,
+}
+
+#[typetag::serde(name = "mix_row_id_kind_and_log")]
+impl BlockMetaInfo for MixRowNumberKindAndLog {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        MixRowNumberKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum RowIdKind {
     Update,
     Delete,
