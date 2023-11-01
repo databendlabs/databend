@@ -480,6 +480,9 @@ impl MergeIntoInterpreter {
         let mut eval_scalar_items = Vec::with_capacity(m_join.source_conditions.len());
         let mut min_max_binding = Vec::with_capacity(m_join.source_conditions.len() * 2);
         let mut min_max_scalar_items = Vec::with_capacity(m_join.source_conditions.len() * 2);
+        if m_join.source_conditions.is_empty() {
+            return Ok(Box::new(join.clone()));
+        }
         for source_side_expr in m_join.source_conditions {
             // eval source side join expr
             let index = metadata
@@ -551,6 +554,8 @@ impl MergeIntoInterpreter {
             min_max_scalar_items.push(max);
         }
 
+        let group_item = eval_scalar_items[0].clone();
+
         let eval_source_side_join_expr_op = EvalScalar {
             items: eval_scalar_items,
         };
@@ -574,7 +579,7 @@ impl MergeIntoInterpreter {
 
         let agg_partial_op = Aggregate {
             mode: AggregateMode::Partial,
-            group_items: vec![],
+            group_items: vec![group_item.clone()],
             aggregate_functions: min_max_scalar_items.clone(),
             from_distinct: false,
             limit: None,
@@ -586,7 +591,7 @@ impl MergeIntoInterpreter {
         );
         let agg_final_op = Aggregate {
             mode: AggregateMode::Final,
-            group_items: vec![],
+            group_items: vec![group_item],
             aggregate_functions: min_max_scalar_items,
             from_distinct: false,
             limit: None,
