@@ -1309,7 +1309,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32)
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1380,7 +1380,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32)
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -7016,9 +7016,46 @@ CreateStage(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "1a2b3c",
+                        "aws_secret_key": "4x5y6z",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7055,7 +7092,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
