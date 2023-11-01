@@ -13,7 +13,7 @@
   a {
     text-decoration: var(--text-blue-600);
     &:hover {
-      text-decoration: unset;
+      text-decoration-thickness: 1px;
     }
   }
   p {

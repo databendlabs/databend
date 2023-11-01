@@ -107,7 +107,7 @@ fn test_decimal_with_size_text() -> Result<()> {
     };
 
     for (s, l) in cases {
-        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false);
+        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
         match r {
             Ok(r) => assert_eq!((l, s.len() - 1), r, "{s}: {l:?} != {r:?}"),
             Err(e) => panic!("{s}: {l:?} != {e:?}"),
@@ -117,7 +117,7 @@ fn test_decimal_with_size_text() -> Result<()> {
     let cases = vec!["", "10000000000#", "1e10"];
 
     for s in cases {
-        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false);
+        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
         assert!(r.is_err(), "{s}: {r:?}");
     }
 

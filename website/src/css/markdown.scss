@@ -3,6 +3,9 @@
     margin-top: 1.5rem;
     margin-bottom: 1.5rem;
   }
+  p+img, h2+img, h3+img {
+    margin-top: 1.5rem;
+  }
   .tabs {
     margin-top: 1.5rem;
     border-bottom: 1px solid hsl(var(--border));

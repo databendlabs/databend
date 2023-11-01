@@ -18,9 +18,8 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::TsvFileFormatParams;
 
-use crate::field_encoder::helpers::write_escaped_string;
-use crate::field_encoder::FieldEncoderRowBased;
-use crate::field_encoder::FieldEncoderTSV;
+use crate::field_encoder::helpers::write_tsv_escaped_string;
+use crate::field_encoder::FieldEncoderCSV;
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
@@ -30,10 +29,9 @@ pub type TSVWithNamesAndTypesOutputFormat = TSVOutputFormatBase<true, true>;
 
 pub struct TSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
     schema: TableSchemaRef,
-    field_encoder: FieldEncoderTSV,
+    field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
-    quote: u8,
 }
 
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
@@ -42,13 +40,12 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NA
         params: &TsvFileFormatParams,
         options_ext: &FileFormatOptionsExt,
     ) -> Self {
-        let field_encoder = FieldEncoderTSV::create(params, options_ext);
+        let field_encoder = FieldEncoderCSV::create_tsv(params, options_ext);
         Self {
             schema,
             field_encoder,
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
-            quote: params.quote.as_bytes()[0],
         }
     }
 
@@ -60,7 +57,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NA
             if col_index != 0 {
                 buf.push(fd);
             }
-            write_escaped_string(v.as_bytes(), &mut buf, self.quote);
+            write_tsv_escaped_string(v.as_bytes(), &mut buf, self.field_delimiter);
         }
 
         buf.extend_from_slice(&self.record_delimiter);
@@ -90,8 +87,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                 if col_index != 0 {
                     buf.push(fd);
                 }
-                self.field_encoder
-                    .write_field(column, row_index, &mut buf, true);
+                self.field_encoder.write_field(column, row_index, &mut buf);
             }
             buf.extend_from_slice(rd)
         }
