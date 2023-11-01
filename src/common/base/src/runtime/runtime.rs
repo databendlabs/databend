@@ -381,5 +381,5 @@ where
         .map_err(|e| ErrorCode::Internal(format!("try join all futures failure, {}", e)))
 }
 
-pub const GLOBAL_TASK: &'static str = "Zxv39PlwG1ahbF0APRUf03";
-pub const GLOBAL_TASK_DESC: &'static str = "Global spawn task";
+pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";
+pub const GLOBAL_TASK_DESC: &str = "Global spawn task";
