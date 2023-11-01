@@ -50,6 +50,7 @@ use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::DeletePlan;
+use common_sql::plans::Insert;
 use common_sql::plans::UpdatePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -65,6 +66,7 @@ use walkdir::WalkDir;
 
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
+use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
@@ -654,6 +656,13 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
     let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
     delete_interpreter.execute(ctx).await?;
+    Ok(())
+}
+
+pub async fn do_insert(ctx: Arc<QueryContext>, plan: Insert) -> Result<()> {
+    println!("insert");
+    let insert_interpreter = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
+    insert_interpreter.execute(ctx).await?;
     Ok(())
 }
 
