@@ -72,8 +72,10 @@ impl DataReader {
 
 pub type IndexedChunk = (FieldIndex, Vec<u8>);
 pub type IndexedReaders = HashMap<FieldIndex, DataReader>;
+pub type GroupsReaders = HashMap<FieldIndex, IndexedReaders>;
 
 pub enum Parquet2PartData {
     RowGroup(IndexedReaders),
+    Groups(GroupsReaders),
     SmallFiles(Vec<Vec<u8>>),
 }

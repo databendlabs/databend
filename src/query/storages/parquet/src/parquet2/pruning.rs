@@ -50,6 +50,7 @@ use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
 use super::partition::ColumnMeta;
+use super::Parquet2GroupsPart;
 use super::Parquet2RowGroupPart;
 use crate::parquet2::statistics::collect_row_group_stats;
 use crate::parquet2::statistics::BatchStatistics;
@@ -261,15 +262,18 @@ impl PartitionPruner {
             let (sub_stats, parts) =
                 self.read_and_prune_file_meta(path, file_meta, operator.clone())?;
 
-            for p in parts {
-                stats.partitions_total += 1;
+            let mut groups = HashMap::with_capacity(parts.len());
+
+            for (gid, p) in parts.into_iter().enumerate() {
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
                 max_compressed_size = max_compressed_size.max(p.compressed_size());
-                partitions.push(Arc::new(
-                    Box::new(ParquetPart::Parquet2RowGroup(p)) as Box<dyn PartInfo>
-                ));
+                groups.insert(gid, p);
             }
+            partitions.push(Arc::new(
+                Box::new(ParquetPart::Parquet2Groups(Parquet2GroupsPart { groups }))
+                    as Box<dyn PartInfo>,
+            ));
             stats.merge(&sub_stats);
         }
 
