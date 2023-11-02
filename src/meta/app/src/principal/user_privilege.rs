@@ -154,7 +154,7 @@ impl UserPrivilegeSet {
     /// on databases and tables, and has some Global only privileges.
     pub fn available_privileges_on_global() -> Self {
         let database_privs = Self::available_privileges_on_database();
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | Grant | CreateDataMask | UsageExternalStage | ReadInternalStage | WriteInternalStage | UsageUDF });
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | Grant | CreateDataMask });
         (database_privs.privileges | privs).into()
     }
 
