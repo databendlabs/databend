@@ -40,7 +40,7 @@ pub unsafe fn store_advance_aligned<T>(val: T, ptr: &mut *mut T) {
 
 /// # Safety
 ///
-/// * `src` must be [valid] for writes of `count * size_of::<T>()` bytes.
+/// * `src` must be [valid] for reads of `count * size_of::<T>()` bytes.
 /// * `ptr` must be [valid] for writes of `count * size_of::<T>()` bytes.
 /// * Both `src` and `dst` must be properly aligned.
 /// * The region of memory beginning at `val` with a size of `count * size_of::<T>()`
@@ -70,4 +70,100 @@ pub unsafe fn set_vec_len_by_ptr<T>(vec: &mut Vec<T>, ptr: *const T) {
 #[inline]
 pub unsafe fn store<T: Copy>(val: T, ptr: *mut u8) {
     core::ptr::write(ptr as _, val)
+}
+
+/// Iterates over an arbitrarily aligned byte buffer
+///
+/// Yields an iterator of u64, and a remainder. The first byte in the buffer
+/// will be the least significant byte in output u64
+#[derive(Debug)]
+pub struct BitChunks<'a> {
+    buffer: &'a [u8],
+    /// offset inside a byte, guaranteed to be between 0 and 7 (inclusive)
+    bit_offset: usize,
+    /// number of complete u64 chunks
+    chunk_len: usize,
+    /// number of remaining bits, guaranteed to be between 0 and 63 (inclusive)
+    remainder_len: usize,
+}
+
+impl<'a> BitChunks<'a> {
+    pub fn new(buffer: &'a [u8], offset: usize, len: usize) -> Self {
+        assert!((offset + len + 7) / 8 <= buffer.len() * 8);
+
+        let byte_offset = offset / 8;
+        let bit_offset = offset % 8;
+
+        // number of complete u64 chunks
+        let chunk_len = len / 64;
+        // number of remaining bits
+        let remainder_len = len % 64;
+
+        BitChunks::<'a> {
+            buffer: &buffer[byte_offset..],
+            bit_offset,
+            chunk_len,
+            remainder_len,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BitChunkIterator {
+    buffer: *const u64,
+    bit_offset: usize,
+    chunk_len: usize,
+    index: usize,
+}
+
+impl<'a> BitChunks<'a> {
+    /// Returns the number of remaining bits, guaranteed to be between 0 and 63 (inclusive)
+    #[inline]
+    pub const fn remainder_len(&self) -> usize {
+        self.remainder_len
+    }
+
+    /// Returns an iterator over chunks of 64 bits represented as an u64
+    #[inline]
+    pub const fn iter(&self) -> BitChunkIterator {
+        BitChunkIterator {
+            buffer: self.buffer.as_ptr() as *const u64,
+            bit_offset: self.bit_offset,
+            chunk_len: self.chunk_len,
+            index: 0,
+        }
+    }
+}
+
+impl Iterator for BitChunkIterator {
+    type Item = u64;
+
+    #[inline]
+    fn next(&mut self) -> Option<u64> {
+        let index = self.index;
+        if index >= self.chunk_len {
+            return None;
+        }
+
+        // bit-packed buffers are stored starting with the least-significant byte first
+        // so when reading as u64 on a big-endian machine, the bytes need to be swapped
+        let current = unsafe { std::ptr::read_unaligned(self.buffer.add(index)).to_le() };
+
+        let bit_offset = self.bit_offset;
+
+        let combined = if bit_offset == 0 {
+            current
+        } else {
+            // the constructor ensures that bit_offset is in 0..8
+            // that means we need to read at most one additional byte to fill in the high bits
+            let next =
+                unsafe { std::ptr::read_unaligned(self.buffer.add(index + 1) as *const u8) as u64 };
+
+            (current >> bit_offset) | (next << (64 - bit_offset))
+        };
+
+        self.index = index + 1;
+
+        Some(combined)
+    }
 }

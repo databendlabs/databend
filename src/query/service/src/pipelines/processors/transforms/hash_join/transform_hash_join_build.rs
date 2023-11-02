@@ -94,7 +94,6 @@ impl TransformHashJoinBuild {
             // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
             // Partition all rows and stat how many partitions and rows in each partition.
             // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
-            // For each partition, we should equally divide the rows into each processor.
             // Then all processors will spill same partitions.
             let mut spill_tasks = spill_state.spill_coordinator.spill_tasks.lock();
             spill_state.split_spill_tasks(
@@ -157,6 +156,20 @@ impl Processor for TransformHashJoinBuild {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinBuildStep::Running => {
+                if let Some(spill_state) = self.spill_state.as_ref() && !self.from_spill {
+                    if spill_state.check_need_spill()? {
+                        spill_state.spill_coordinator.need_spill()?;
+                        self.wait_spill()?;
+                        // WaitProbe or FirstSpill, so set Event to Async
+                        return Ok(Event::Async);
+                    } else if spill_state.spill_coordinator.get_need_spill() {
+                        // even if input can fit into memory, but there exists one processor need to spill,
+                        // then it needs to wait spill.
+                        self.wait_spill()?;
+                        return Ok(Event::Async);
+                    }
+                }
+
                 if self.input_data.is_some() {
                     return Ok(Event::Sync);
                 }
@@ -185,20 +198,6 @@ impl Processor for TransformHashJoinBuild {
                     }
                     self.build_state.row_space_build_done()?;
                     return Ok(Event::Async);
-                }
-
-                if let Some(spill_state) = self.spill_state.as_ref() {
-                    if spill_state.check_need_spill()? {
-                        spill_state.spill_coordinator.need_spill()?;
-                        self.wait_spill()?;
-                        // WaitProbe or FirstSpill, so set Event to Async
-                        return Ok(Event::Async);
-                    } else if spill_state.spill_coordinator.get_need_spill() {
-                        // even if input can fit into memory, but there exists one processor need to spill,
-                        // then it needs to wait spill.
-                        self.wait_spill()?;
-                        return Ok(Event::Async);
-                    }
                 }
 
                 match self.input_port.has_data() {
@@ -247,10 +246,13 @@ impl Processor for TransformHashJoinBuild {
                     if self.from_spill {
                         return self.build_state.build(data_block);
                     }
-                    if let Some(spill_state) = &mut self.spill_state && spill_state.spiller.is_any_spilled() {
-                        // If the processor had spilled data, we should continue to spill
-                        self.step = HashJoinBuildStep::FollowSpill;
-                        self.spill_data = Some(data_block);
+                    if let Some(spill_state) = &mut self.spill_state {
+                        if spill_state.spiller.is_any_spilled() {
+                            self.step = HashJoinBuildStep::FollowSpill;
+                            self.spill_data = Some(data_block);
+                        } else {
+                            self.build_state.build(data_block)?;
+                        }
                     } else {
                         self.build_state.build(data_block)?;
                     }
@@ -309,7 +311,6 @@ impl Processor for TransformHashJoinBuild {
                 let spill_state = self.spill_state.as_mut().unwrap();
                 spill_state.spill(self.processor_id).await?;
                 // After spill, the processor should continue to run, and process incoming data.
-                // FIXME: We should wait all processors finish spill, and then continue to run.
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::FollowSpill => {

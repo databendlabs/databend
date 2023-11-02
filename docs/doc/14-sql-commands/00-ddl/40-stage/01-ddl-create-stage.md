@@ -38,7 +38,7 @@ import TabItem from '@theme/TabItem';
 
 ```sql
 externalStageParams ::=
-  URL = 's3://<bucket>[<path/>]'
+  's3://<bucket>[<path/>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -55,7 +55,7 @@ To create an external stage on Amazon S3, you can also use an IAM user account, 
 
 ```sql
 externalStageParams ::=
-  URL = 'azblob://<container>[<path/>]'
+  'azblob://<container>[<path/>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -68,7 +68,7 @@ For the connection parameters available for accessing Azure Blob Storage, see [C
 
 ```sql
 externalLocation ::=
-  URL = 'gcs://<bucket>[<path>]'
+  'gcs://<bucket>[<path>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -81,7 +81,7 @@ For the connection parameters available for accessing Google Cloud Storage, see 
 
 ```sql
 externalLocation ::=
-  URL = 'oss://<bucket>[<path>]'
+  'oss://<bucket>[<path>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -94,7 +94,7 @@ For the connection parameters available for accessing Alibaba Cloud OSS, see [Co
 
 ```sql
 externalLocation ::=
-  URL = 'cos://<bucket>[<path>]'
+  'cos://<bucket>[<path>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -107,7 +107,7 @@ For the connection parameters available for accessing Tencent Cloud Object Stora
 
 ```sql
 externalLocation ::=
-  URL = "hdfs://<endpoint_url>[<path>]"
+  "hdfs://<endpoint_url>[<path>]"
   CONNECTION = (
         <connection_parameters>
   )
@@ -120,7 +120,7 @@ For the connection parameters available for accessing HDFS, see [Connection Para
 
 ```sql
 externalLocation ::=
-  URL = "webhdfs://<endpoint_url>[<path>]"
+  "webhdfs://<endpoint_url>[<path>]"
   CONNECTION = (
         <connection_parameters>
   )
