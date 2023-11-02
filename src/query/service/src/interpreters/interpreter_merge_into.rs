@@ -125,11 +125,8 @@ impl MergeStyleJoin<'_> {
             .iter()
             .zip(self.source_conditions.iter())
         {
-            match (t, s) {
-                (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) => {
-                    column_map.insert(t_col.column.index, s_col.column.clone());
-                }
-                _ => {}
+            if let (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) = (t, s) {
+                column_map.insert(t_col.column.index, s_col.column.clone());
             }
         }
         column_map
