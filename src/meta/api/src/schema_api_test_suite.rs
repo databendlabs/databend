@@ -5240,7 +5240,7 @@ impl SchemaApiTestSuite {
                 expire_at: (Utc::now().timestamp() + 2) as u64,
                 user: "root".to_string(),
                 node: "node1".to_string(),
-                session_id: "session1".to_string(),
+                query_id: "query1".to_string(),
             };
             let res1 = mt.create_lock_revision(req1).await?;
 
@@ -5250,7 +5250,7 @@ impl SchemaApiTestSuite {
                 expire_at: (Utc::now().timestamp() + 2) as u64,
                 user: "root".to_string(),
                 node: "node1".to_string(),
-                session_id: "session1".to_string(),
+                query_id: "query2".to_string(),
             };
             let res2 = mt.create_lock_revision(req2).await?;
             assert!(res2.revision > res1.revision);

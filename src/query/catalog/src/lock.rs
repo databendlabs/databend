@@ -57,14 +57,14 @@ pub trait LockExt: Lock {
         &self,
         user: String,
         node: String,
-        session_id: String,
+        query_id: String,
         expire_secs: u64,
     ) -> CreateLockRevReq {
         CreateLockRevReq {
             lock_key: self.gen_lock_key(),
             user,
             node,
-            session_id,
+            query_id,
             expire_at: Utc::now().timestamp() as u64 + expire_secs,
         }
     }
