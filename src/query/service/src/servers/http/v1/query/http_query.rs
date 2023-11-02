@@ -269,7 +269,10 @@ impl HttpQuery {
                         .set_setting(k.to_string(), v.to_string())
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!("unknown session setting: {}", k);
+                                warn!(
+                                    "{}: http query unknown session setting: {}",
+                                    &ctx.query_id, k
+                                );
                                 Ok(())
                             } else {
                                 Err(e)
@@ -482,12 +485,6 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-
-        info!(
-            "{}: http query update duration to {:?}, expire at {:?}",
-            self.id, duration, deadline
-        );
-
         let mut t = self.expire_state.lock().await;
         *t = ExpireState::ExpireAt(deadline);
     }
