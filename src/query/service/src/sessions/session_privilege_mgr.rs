@@ -161,7 +161,11 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             Some(auth_role) => vec![auth_role],
             None => {
                 let current_user = self.get_current_user()?;
-                current_user.grants.roles()
+                let mut roles = current_user.grants.roles();
+                if let Some(current_role) = self.get_current_role() {
+                    roles.push(current_role.name);
+                }
+                roles
             }
         };
 
