@@ -17,6 +17,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
+use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
@@ -54,11 +57,14 @@ use common_sql::plans::RelOperator;
 use common_sql::plans::ScalarItem;
 use common_sql::plans::UpdatePlan;
 use common_sql::BindContext;
+use common_sql::ColumnBinding;
 use common_sql::ColumnBindingBuilder;
 use common_sql::IndexType;
 use common_sql::MetadataRef;
+use common_sql::NameResolutionContext;
 use common_sql::ScalarExpr;
 use common_sql::TypeCheck;
+use common_sql::TypeChecker;
 use common_sql::Visibility;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
@@ -110,6 +116,23 @@ impl MergeStyleJoin<'_> {
             source_sexpr,
             target_sexpr,
         }
+    }
+
+    pub fn collect_column_map(&self) -> HashMap<usize, ColumnBinding> {
+        let mut column_map = HashMap::new();
+        for (t, s) in self
+            .target_conditions
+            .iter()
+            .zip(self.source_conditions.iter())
+        {
+            match (t, s) {
+                (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) => {
+                    column_map.insert(t_col.column.index, s_col.column.clone());
+                }
+                _ => {}
+            }
+        }
+        column_map
     }
 }
 
@@ -207,7 +230,13 @@ impl MergeIntoInterpreter {
         };
 
         let optimized_input = self
-            .build_static_filter(&input, meta_data, self.ctx.clone())
+            .build_static_filter(
+                &input,
+                meta_data,
+                self.ctx.clone(),
+                check_table,
+                *bind_context.clone(),
+            )
             .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
@@ -464,6 +493,8 @@ impl MergeIntoInterpreter {
         join: &SExpr,
         metadata: &MetadataRef,
         ctx: Arc<QueryContext>,
+        table: Arc<dyn Table>,
+        mut bind_context: BindContext,
     ) -> Result<Box<SExpr>> {
         // 1. collect statistics from the source side
         // plan of source table is extended to:
@@ -479,8 +510,68 @@ impl MergeIntoInterpreter {
         let mut eval_scalar_items = Vec::with_capacity(m_join.source_conditions.len());
         let mut min_max_binding = Vec::with_capacity(m_join.source_conditions.len() * 2);
         let mut min_max_scalar_items = Vec::with_capacity(m_join.source_conditions.len() * 2);
+        let mut group_items = vec![];
         if m_join.source_conditions.is_empty() {
             return Ok(Box::new(join.clone()));
+        }
+        let column_map = m_join.collect_column_map();
+        let fuse_table =
+            table
+                .as_any()
+                .downcast_ref::<FuseTable>()
+                .ok_or(ErrorCode::Unimplemented(format!(
+                    "table {}, engine type {}, does not support MERGE INTO",
+                    table.name(),
+                    table.get_table_info().engine(),
+                )))?;
+        let mut group_exprs = vec![];
+        if let Some(cluster_key_str) = fuse_table.cluster_key_str() {
+            let sql_dialect = Dialect::MySQL;
+            let tokens = tokenize_sql(&cluster_key_str)?;
+            let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+            if ast_exprs.len() > 0 {
+                let ast_expr = &ast_exprs[0];
+                let name_resolution_ctx =
+                    NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+                let mut type_checker = TypeChecker::new(
+                    &mut bind_context,
+                    ctx.clone(),
+                    &name_resolution_ctx,
+                    metadata.clone(),
+                    &[],
+                    false,
+                    false,
+                );
+                let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
+                let projected = scalar_expr
+                    .try_project_column_binding(|binding| column_map.get(&binding.index).cloned());
+                if let Some(p) = projected {
+                    group_exprs.push(p);
+                }
+            }
+        }
+        for group_expr in group_exprs {
+            let index = metadata
+                .write()
+                .add_derived_column("".to_string(), group_expr.data_type()?);
+            let evaled = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "".to_string(),
+                    index,
+                    Box::new(group_expr.data_type()?),
+                    Visibility::Visible,
+                )
+                .build(),
+            });
+            eval_scalar_items.push(ScalarItem {
+                scalar: group_expr.clone(),
+                index,
+            });
+            group_items.push(ScalarItem {
+                scalar: evaled.clone(),
+                index,
+            });
         }
         for source_side_expr in m_join.source_conditions {
             // eval source side join expr
@@ -553,8 +644,6 @@ impl MergeIntoInterpreter {
             min_max_scalar_items.push(max);
         }
 
-        let group_item = eval_scalar_items[0].clone();
-
         let eval_source_side_join_expr_op = EvalScalar {
             items: eval_scalar_items,
         };
@@ -578,7 +667,7 @@ impl MergeIntoInterpreter {
 
         let agg_partial_op = Aggregate {
             mode: AggregateMode::Partial,
-            group_items: vec![group_item.clone()],
+            group_items: group_items.clone(),
             aggregate_functions: min_max_scalar_items.clone(),
             from_distinct: false,
             limit: None,
@@ -590,7 +679,7 @@ impl MergeIntoInterpreter {
         );
         let agg_final_op = Aggregate {
             mode: AggregateMode::Final,
-            group_items: vec![group_item],
+            group_items,
             aggregate_functions: min_max_scalar_items,
             from_distinct: false,
             limit: None,
