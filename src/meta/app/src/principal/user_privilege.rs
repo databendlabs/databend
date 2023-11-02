@@ -66,14 +66,12 @@ pub enum UserPrivilegeType {
     CreateDataMask = 1 << 16,
     // Privilege to Own a databend object such as database/table.
     Ownership = 1 << 17,
-    // Privilege to use external stage
-    UsageExternalStage = 1 << 18,
-    // Privilege to Read internal stage
-    ReadInternalStage = 1 << 19,
-    // Privilege to Write internal stage
-    WriteInternalStage = 1 << 20,
+    // Privilege to Read stage
+    Read = 1 << 18,
+    // Privilege to Write stage
+    Write = 1 << 19,
     // Privilege to usage UDF
-    UsageUDF = 1 << 21,
+    UsageUDF = 1 << 20,
 
     // TODO: remove this later
     Set = 1 << 4,
@@ -98,9 +96,8 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Set
         | CreateDataMask
         | Ownership
-        | UsageExternalStage
-        | ReadInternalStage
-        | WriteInternalStage
+        | Read
+        | Write
         | UsageUDF
     }
 );
@@ -126,9 +123,8 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Set => "SET",
             UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
             UserPrivilegeType::Ownership => "OWNERSHIP",
-            UserPrivilegeType::UsageExternalStage => "UsageExternalStage",
-            UserPrivilegeType::ReadInternalStage => "ReadInternalStage",
-            UserPrivilegeType::WriteInternalStage => "WriteInternalStage",
+            UserPrivilegeType::Read => "Read",
+            UserPrivilegeType::Write => "Write",
             UserPrivilegeType::UsageUDF => "UsageUDF",
         })
     }
@@ -171,7 +167,7 @@ impl UserPrivilegeSet {
     }
 
     pub fn available_privileges_on_stage() -> Self {
-        make_bitflags!(UserPrivilegeType::{ UsageExternalStage | ReadInternalStage | WriteInternalStage }).into()
+        make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
     }
 
     pub fn available_privileges_on_udf() -> Self {

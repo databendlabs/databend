@@ -1994,18 +1994,8 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
 
 pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
     alt((
-        value(
-            UserPrivilegeType::UsageExternalStage,
-            rule! { USAGEEXTERNALSTAGE },
-        ),
-        value(
-            UserPrivilegeType::ReadInternalStage,
-            rule! { READINTERNALSTAGE },
-        ),
-        value(
-            UserPrivilegeType::WriteInternalStage,
-            rule! { WRITEINTERNALSTAGE },
-        ),
+        value(UserPrivilegeType::Read, rule! { READ }),
+        value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
 }
 

@@ -31,20 +31,24 @@ echo "create user u1 identified by 'password';" | $BENDSQL_CLIENT_CONNECT
 echo "grant insert on default.test_table to u1;" | $BENDSQL_CLIENT_CONNECT
 echo "==== check internal stage write priv ==="
 echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
-echo "grant WriteInternalStage on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "grant Write on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
+echo "grant select on default.test_table to u1;" | $BENDSQL_CLIENT_CONNECT
 echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
 echo "list @s2;" | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 echo "==== check external stage priv ==="
 echo "copy into @s1/csv/ from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
-echo "grant UsageExternalStage on stage s1 to 'u1'" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s1/csv from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
+echo "grant write on stage s1 to 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s1/csv/ from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
+echo "copy into test_table from @s1/csv/ FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT
+echo "grant read on stage s1 to 'u1'" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s1/csv/ FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT
 
 echo "==== check internal stage read priv ==="
 echo "truncate table test_table;" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT
-echo "grant ReadInternalStage on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "grant Read on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT
 
 echo "remove @s2;" | $BENDSQL_CLIENT_CONNECT
@@ -60,11 +64,11 @@ echo "CREATE STAGE presign_stage;" | $BENDSQL_CLIENT_CONNECT
 
 # Most arguments is the same with previous, except:
 # -X PUT: Specify the http method
-echo "grant WriteInternalStage, ReadInternalStage on stage presign_stage to 'u1'" | $BENDSQL_CLIENT_CONNECT
-echo "revoke WriteInternalStage on stage presign_stage from 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "grant Write, Read on stage presign_stage to 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "revoke Write on stage presign_stage from 'u1'" | $BENDSQL_CLIENT_CONNECT
 curl -s -w "%{http_code}\n" -X PUT -o /dev/null -H Content-Type:application/octet-stream "`echo "PRESIGN UPLOAD @presign_stage/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT`"
 
-echo "revoke ReadInternalStage on stage presign_stage from 'u1'" | $BENDSQL_CLIENT_CONNECT
+echo "revoke Read on stage presign_stage from 'u1'" | $BENDSQL_CLIENT_CONNECT
 curl -s -w "%{http_code}\n" -o /dev/null "`echo "PRESIGN @presign_stage/hello_word.txt" | $TEST_USER_CONNECT`"
 
 ## Drop table.

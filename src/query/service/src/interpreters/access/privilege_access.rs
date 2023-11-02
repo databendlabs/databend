@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::plans::PresignAction;
@@ -220,7 +219,7 @@ impl AccessChecker for PrivilegeAccess {
                 self
                     .validate_access(
                         &GrantObject::UDF(plan.udf.name.clone()),
-                        vec![UserPrivilegeType::UsageUDF],
+                        vec![UserPrivilegeType::Alter],
                         true,
                     )
                     .await?;
@@ -661,26 +660,13 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoTable(plan) => {
                 let stage_name = &plan.stage_table_info.stage_info.stage_name;
-                match plan.stage_table_info.stage_info.stage_type {
-                    StageType::External => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::UsageExternalStage],
-                                false,
-                            )
-                            .await?
-                    }
-                    _ => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::ReadInternalStage],
-                                false,
-                            )
-                            .await?
-                    }
-                }
+                self
+                    .validate_access(
+                        &GrantObject::Stage(stage_name.clone()),
+                        vec![UserPrivilegeType::Read],
+                        false,
+                    )
+                    .await?;
                 self
                     .validate_access(
                         &GrantObject::Table(
@@ -695,26 +681,15 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoLocation(plan) => {
                 let stage_name = &plan.stage.stage_name;
-                match plan.stage.stage_type {
-                    StageType::External => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::UsageExternalStage],
-                                false,
-                            )
-                            .await?
-                    }
-                    _ => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::WriteInternalStage],
-                                false,
-                            )
-                            .await?
-                    }
-                }
+                self
+                    .validate_access(
+                        &GrantObject::Stage(stage_name.clone()),
+                        vec![UserPrivilegeType::Write],
+                        false,
+                    )
+                    .await?;
+                let from = plan.from.clone();
+                return self.check(ctx, &from).await?
             }
 
             Plan::CreateShareEndpoint(_)
@@ -760,33 +735,23 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetRole(_) => {}
             Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
-                let stage = &plan.stage.stage_type;
                 let stage_name = &plan.stage.stage_name;
                 let action = &plan.action;
-                match (stage, action) {
-                    (StageType::External, _) => {
+                match action {
+                    PresignAction::Upload => {
                         self
                             .validate_access(
                                 &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::UsageExternalStage],
+                                vec![UserPrivilegeType::Write],
                                 false,
                             )
                             .await?
                     }
-                    (_, PresignAction::Upload) => {
+                    PresignAction::Download => {
                         self
                             .validate_access(
                                 &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::WriteInternalStage],
-                                false,
-                            )
-                            .await?
-                    }
-                    (_, PresignAction::Download) => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::ReadInternalStage],
+                                vec![UserPrivilegeType::Read],
                                 false,
                             )
                             .await?
