@@ -191,6 +191,7 @@ RestAPI client:
 | `wait_time_secs` | Request wait time for page, default to `1` |
 | `max_rows_in_buffer` | Max rows for page buffer |
 | `max_rows_per_page` | Max response rows for a single page |
+| `page_request_timeout_secs` | Timeout for a single page request, default to `30` |
 
 Example to disable presign using set
 ```

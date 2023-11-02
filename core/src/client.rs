@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use http::StatusCode;
 use once_cell::sync::Lazy;
@@ -63,6 +64,8 @@ pub struct APIClient {
     max_rows_in_buffer: Option<i64>,
     max_rows_per_page: Option<i64>,
 
+    page_request_timeout: Duration,
+
     tls_ca_file: Option<String>,
 
     presigned_url_disabled: bool,
@@ -96,6 +99,12 @@ impl APIClient {
                 }
                 "max_rows_per_page" => {
                     client.max_rows_per_page = Some(v.parse()?);
+                }
+                "page_request_timeout_secs" => {
+                    client.page_request_timeout = {
+                        let secs: u64 = v.parse()?;
+                        Duration::from_secs(secs)
+                    };
                 }
                 "presigned_url_disabled" => {
                     client.presigned_url_disabled = match v.as_ref() {
@@ -252,6 +261,7 @@ impl APIClient {
                 .get(endpoint.clone())
                 .basic_auth(self.user.clone(), self.password.clone())
                 .headers(headers.clone())
+                .timeout(self.page_request_timeout)
                 .send()
                 .await
         };
@@ -522,6 +532,7 @@ impl Default for APIClient {
             wait_time_secs: None,
             max_rows_in_buffer: None,
             max_rows_per_page: None,
+            page_request_timeout: Duration::from_secs(30),
             tls_ca_file: None,
             presigned_url_disabled: false,
         }
