@@ -116,6 +116,10 @@ impl UserApiProvider {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
+        account_admin.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
+        );
 
         let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         public.grants.grant_privileges(

@@ -27,6 +27,8 @@ pub struct GrantObjectVisibilityChecker {
     granted_databases: HashSet<(String, String)>,
     granted_tables: HashSet<(String, String, String)>,
     extra_databases: HashSet<(String, String)>,
+    granted_udfs: HashSet<String>,
+    granted_stages: HashSet<String>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -34,6 +36,8 @@ impl GrantObjectVisibilityChecker {
         let mut granted_global = false;
         let mut granted_databases = HashSet::new();
         let mut granted_tables = HashSet::new();
+        let mut granted_udfs = HashSet::new();
+        let mut granted_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
 
         let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
@@ -59,6 +63,12 @@ impl GrantObjectVisibilityChecker {
                         // if table is visible, the table's database is also treated as visible
                         extra_databases.insert((catalog.to_string(), db.to_string()));
                     }
+                    GrantObject::UDF(udf) => {
+                        granted_udfs.insert(udf.to_string());
+                    }
+                    GrantObject::Stage(stage) => {
+                        granted_stages.insert(stage.to_string());
+                    }
                 }
             }
         }
@@ -68,7 +78,31 @@ impl GrantObjectVisibilityChecker {
             granted_databases,
             granted_tables,
             extra_databases,
+            granted_udfs,
+            granted_stages,
         }
+    }
+
+    pub fn check_stage_visibility(&self, stage: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        if self.granted_stages.contains(stage) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_udf_visibility(&self, udf: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        if self.granted_udfs.contains(udf) {
+            return true;
+        }
+        false
     }
 
     pub fn check_database_visibility(&self, catalog: &str, db: &str) -> bool {

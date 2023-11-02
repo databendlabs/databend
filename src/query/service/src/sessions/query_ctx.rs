@@ -510,6 +510,10 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_available_roles().await
     }
 
+    fn get_current_session_id(&self) -> String {
+        self.get_current_session().get_id()
+    }
+
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         self.shared.session.get_visibility_checker().await
     }
@@ -805,12 +809,12 @@ impl TableContext for QueryContext {
 impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, name: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.shared.try_get_runtime()?.spawn(task))
+        Ok(self.shared.try_get_runtime()?.spawn(name, task))
     }
 }
 
