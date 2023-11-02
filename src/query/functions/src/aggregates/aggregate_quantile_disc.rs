@@ -31,13 +31,13 @@ use common_expression::ColumnBuilder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use ethnum::i256;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -46,14 +46,14 @@ use crate::aggregates::StateAddr;
 use crate::with_simple_no_number_mapped_type;
 use crate::BUILTIN_FUNCTIONS;
 
-pub trait QuantileStateFunc<T: ValueType>: Send + Sync + 'static {
+pub trait QuantileStateFunc<T: ValueType>:
+    Serialize + DeserializeOwned + Send + Sync + 'static
+{
     fn new() -> Self;
     fn add(&mut self, other: T::ScalarRef<'_>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self, builder: &mut ColumnBuilder, levels: Vec<f64>) -> Result<()>;
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
 #[derive(Serialize, Deserialize)]
 struct QuantileState<T>
@@ -148,13 +148,6 @@ where
         }
         Ok(())
     }
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = deserialize_from_slice(reader)?;
-        Ok(())
-    }
 }
 #[derive(Clone)]
 pub struct AggregateQuantileDiscFunction<T, State> {
@@ -229,17 +222,21 @@ where
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        state.serialize(writer)
+        serialize_state(writer, state)
     }
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
+        let rhs: State = deserialize_state(reader)?;
+        state.merge(&rhs)
     }
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<State>();
+
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<State>();
-        state.merge(rhs)
+        let other = rhs.get::<State>();
+        state.merge(other)
     }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder, self.levels.clone())

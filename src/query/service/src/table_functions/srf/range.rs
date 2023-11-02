@@ -163,6 +163,7 @@ impl Table for RangeTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         match self.name() {
             "generate_series" => {

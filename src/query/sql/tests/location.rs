@@ -40,10 +40,10 @@ use common_sql::planner::binder::parse_uri_location;
 
 #[tokio::test]
 async fn test_parse_uri_location() -> Result<()> {
-    let thread_name = match std::thread::current().name() {
-        None => panic!("thread name is none"),
-        Some(thread_name) => thread_name.to_string(),
-    };
+    let thread_name = std::thread::current()
+        .name()
+        .map(ToString::to_string)
+        .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
     GlobalConfig::init(InnerConfig::default())?;
@@ -90,9 +90,11 @@ async fn test_parse_uri_location() -> Result<()> {
                     endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                     presign_endpoint_url: "".to_string(),
                     root: "/highest/".to_string(),
+                    server_side_encryption: "".to_string(),
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),
                     access_key_secret: "p=ear1".to_string(),
+                    server_side_encryption_key_id: "".to_string(),
                 }),
                 "/".to_string(),
             ),

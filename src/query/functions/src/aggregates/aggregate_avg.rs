@@ -27,7 +27,6 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use ethnum::i256;
 use serde::Deserialize;
 use serde::Serialize;
@@ -35,6 +34,8 @@ use serde::Serialize;
 use super::aggregate_sum::DecimalSumState;
 use super::aggregate_sum::NumberSumState;
 use super::aggregate_sum::SumState;
+use super::deserialize_state;
+use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
@@ -42,7 +43,7 @@ use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Serialize, Deserialize)]
-struct AvgState<T: SumState> {
+struct AvgState<T> {
     pub value: T,
     pub count: u64,
 }
@@ -117,21 +118,22 @@ where T: SumState
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AvgState<T>>();
 
-        writer.write_scalar(&state.count)?;
-        state.value.serialize(writer)
+        serialize_state(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AvgState<T>>();
-        state.count = reader.read_scalar()?;
-        state.value.deserialize(reader)
+        let rhs: AvgState<T> = deserialize_state(reader)?;
+
+        state.count += rhs.count;
+        state.value.merge(&rhs.value)
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<AvgState<T>>();
         let rhs = rhs.get::<AvgState<T>>();
         state.count += rhs.count;
-        state.value.merge(&mut rhs.value)
+        state.value.merge(&rhs.value)
     }
 
     #[allow(unused_mut)]

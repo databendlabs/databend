@@ -38,17 +38,17 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
-use common_metrics::load_global_prometheus_registry;
+use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
-use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
+use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
@@ -111,9 +111,9 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        .layer(PrometheusClientLayer::new(
-            &mut load_global_prometheus_registry(),
-        ))
+        //.layer(PrometheusClientLayer::new(
+        //    load_global_prometheus_registry().inner_mut(),
+        //))
         .finish();
 
     Ok(op)
@@ -234,12 +234,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Try to load region from env if not set.
         builder.region(&region);
     } else {
-        return Err(Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!(
-                "region for s3 storage is not set and failed to auto detect, please check and set it manually"
-            ),
-        ));
+        // FIXME: we should return error here but keep those logic for compatibility.
+        warn!(
+            "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
+        );
+        builder.region("us-east-1");
     }
 
     // Credential.
@@ -320,7 +319,9 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
-        .root(&cfg.root);
+        .root(&cfg.root)
+        .server_side_encryption(&cfg.server_side_encryption)
+        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
 
     Ok(builder)
 }
@@ -446,6 +447,14 @@ impl DataOperator {
             operator,
             params: sp.clone(),
         })
+    }
+
+    /// Check license must be run after license manager setup.
+    pub async fn check_license(&self) -> common_exception::Result<()> {
+        if self.params.need_encryption_feature() {
+            get_storage_encryption_handler().check_license().await?;
+        }
+        Ok(())
     }
 
     pub fn instance() -> DataOperator {

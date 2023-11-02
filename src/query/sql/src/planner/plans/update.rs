@@ -112,7 +112,13 @@ impl UpdatePlan {
                         }
                     }
 
-                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+                    let mut right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+                    let right_data_type = right.data_type()?;
+
+                    // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
+                    // change into nullable, so we need to cast this.
+                    right = wrap_cast_scalar(&right, &right_data_type, target_type)?;
+
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,
                         func_name: "if".to_string(),

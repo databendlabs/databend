@@ -20,7 +20,7 @@ use common_meta_types::NodeId;
 use common_meta_types::StoredMembership;
 
 /// APIs to access the non-user-data of the state machine(leveled map).
-pub(in crate::sm_v002) trait SysDataApiRO {
+pub trait SysDataApiRO {
     fn curr_seq(&self) -> u64;
 
     fn last_applied_ref(&self) -> &Option<LogId>;

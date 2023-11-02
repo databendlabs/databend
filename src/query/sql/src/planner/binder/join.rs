@@ -211,6 +211,7 @@ impl Binder {
             marker_index: None,
             from_correlated_subquery: false,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
@@ -262,7 +263,6 @@ impl Binder {
                 Arc::new(
                     Filter {
                         predicates: left_push_down,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -275,7 +275,6 @@ impl Binder {
                 Arc::new(
                     Filter {
                         predicates: right_push_down,
-                        is_having: false,
                     }
                     .into(),
                 ),

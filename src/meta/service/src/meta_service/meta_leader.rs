@@ -15,10 +15,13 @@
 use std::collections::BTreeSet;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::sm_v002::SMV002;
 use common_meta_sled_store::openraft::ChangeMembers;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::ClientWriteError;
 use common_meta_types::Cmd;
@@ -31,22 +34,25 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::RaftError;
 use common_meta_types::SeqV;
-use common_metrics::counter::Count;
+use common_metrics::count::Count;
+use futures::StreamExt;
 use log::as_debug;
 use log::debug;
 use log::info;
 use maplit::btreemap;
 use maplit::btreeset;
+use tonic::codegen::BoxStream;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
-use crate::meta_service::raftmeta::MetaRaft;
+use crate::meta_service::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;
+use crate::request_handling::Handler;
 use crate::store::RaftStore;
 
 /// The container of APIs of the leader in a meta service cluster.
@@ -58,18 +64,12 @@ pub struct MetaLeader<'a> {
     raft: &'a MetaRaft,
 }
 
-impl<'a> MetaLeader<'a> {
-    pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
-        MetaLeader {
-            sto: &meta_node.sto,
-            raft: &meta_node.raft,
-        }
-    }
-
+#[async_trait::async_trait]
+impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
     #[minitrace::trace]
-    pub async fn handle_request(
+    async fn handle(
         &self,
-        req: ForwardRequest,
+        req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaOperationError> {
         debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
@@ -104,6 +104,68 @@ impl<'a> MetaLeader<'a> {
                 let res = sm.kv_api().prefix_list_kv(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
+    #[minitrace::trace]
+    async fn handle(
+        &self,
+        req: ForwardRequest<MetaGrpcReadReq>,
+    ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
+        debug!(req = as_debug!(&req); "handle(MetaGrpcReadReq)");
+
+        let sm = self.get_state_machine().await;
+        let kv_api = sm.kv_api();
+
+        match req.body {
+            MetaGrpcReadReq::GetKV(req) => {
+                // safe unwrap(): Infallible
+                let got = kv_api.get_kv(&req.key).await.unwrap();
+
+                let item = StreamItem::from((req.key.clone(), got));
+                let strm = futures::stream::iter([Ok(item)]);
+
+                Ok(strm.boxed())
+            }
+
+            MetaGrpcReadReq::MGetKV(req) => {
+                // safe unwrap(): Infallible
+                let values = kv_api.mget_kv(&req.keys).await.unwrap();
+
+                let kv_iter = req
+                    .keys
+                    .clone()
+                    .into_iter()
+                    .zip(values)
+                    .map(|(k, v)| Ok(StreamItem::from((k, v))));
+
+                let strm = futures::stream::iter(kv_iter);
+
+                Ok(strm.boxed())
+            }
+
+            MetaGrpcReadReq::ListKV(req) => {
+                // safe unwrap(): Infallible
+                let kvs = kv_api.prefix_list_kv(&req.prefix).await.unwrap();
+
+                let kv_iter = kvs.into_iter().map(|kv| Ok(StreamItem::from(kv)));
+
+                let strm = futures::stream::iter(kv_iter);
+
+                Ok(strm.boxed())
+            }
+        }
+    }
+}
+
+impl<'a> MetaLeader<'a> {
+    pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
+        MetaLeader {
+            sto: &meta_node.sto,
+            raft: &meta_node.raft,
         }
     }
 
@@ -223,7 +285,7 @@ impl<'a> MetaLeader<'a> {
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
             let sm = self.get_state_machine().await;
-            sm.last_membership_ref().membership().clone()
+            sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
 

@@ -7,11 +7,7 @@ select version();
 SQL
 
 cat <<SQL | bendsql
-DROP TABLE IF EXISTS hits;
-SQL
-
-cat <<SQL | bendsql
-VACUUM DROP TABLE retain 0 hours;
+DROP TABLE IF EXISTS hits ALL;
 SQL
 
 cat <<SQL | bendsql
@@ -125,7 +121,7 @@ cat <<SQL | bendsql
 SQL
 
 cat <<SQL | bendsql
-COPY INTO hits FROM 's3://repo.databend.rs/hits_p/' credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY') pattern ='.*[.]tsv' file_format=(type='TSV' field_delimiter='\\t' record_delimiter='\\n' skip_header=1);
+COPY INTO hits FROM 's3://repo.databend.rs/hits_p/' credentials=(access_key_id ='$REPO_ACCESS_KEY_ID' secret_access_key ='$REPO_SECRET_ACCESS_KEY') pattern ='.*[.]tsv' file_format=(type='TSV' field_delimiter='\\t' record_delimiter='\\n' skip_header=1);
 SQL
 
 cat <<SQL | bendsql

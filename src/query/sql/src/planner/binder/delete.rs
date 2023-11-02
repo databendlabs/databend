@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::DeleteStmt;
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
@@ -59,15 +60,18 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &mut BindContext,
-        table_reference: &'a TableReference,
-        filter: &'a Option<Expr>,
+        stamt: &DeleteStmt,
     ) -> Result<Plan> {
+        let DeleteStmt {
+            table, selection, ..
+        } = stamt;
+
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
             database,
             table,
             ..
-        } = table_reference
+        } = table
         {
             self.normalize_object_identifier_triple(catalog, database, table)
         } else {
@@ -77,9 +81,7 @@ impl<'a> Binder {
             ));
         };
 
-        let (table_expr, mut context) = self
-            .bind_table_reference(bind_context, table_reference)
-            .await?;
+        let (table_expr, mut context) = self.bind_single_table(bind_context, table).await?;
 
         context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(
@@ -93,7 +95,7 @@ impl<'a> Binder {
         );
 
         let (selection, subquery_desc) = self
-            .process_selection(filter, table_expr, &mut scalar_binder)
+            .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
 
         let plan = DeletePlan {
@@ -129,7 +131,6 @@ impl Binder {
 
         let filter = Filter {
             predicates: vec![scalar.clone()],
-            is_having: false,
         };
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {

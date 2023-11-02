@@ -32,13 +32,13 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use itertools::Itertools;
 use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
@@ -47,11 +47,11 @@ use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 use crate::BUILTIN_FUNCTIONS;
 
-const MEDIAN: u8 = 0;
-const QUANTILE: u8 = 1;
+pub(crate) const MEDIAN: u8 = 0;
+pub(crate) const QUANTILE: u8 = 1;
 
 #[derive(Serialize, Deserialize)]
-struct QuantileTDigestState {
+pub(crate) struct QuantileTDigestState {
     epsilon: u32,
     max_centroids: usize,
 
@@ -67,7 +67,7 @@ struct QuantileTDigestState {
 }
 
 impl QuantileTDigestState {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             epsilon: 100u32,
             max_centroids: 2048,
@@ -82,17 +82,17 @@ impl QuantileTDigestState {
         }
     }
 
-    fn add(&mut self, other: f64) {
+    pub(crate) fn add(&mut self, other: f64, weight: Option<u64>) {
         if self.unmerged_weights.len() + self.weights.len() >= self.max_centroids - 1 {
             self.compress();
         }
 
-        self.unmerged_weights.push(1f64);
+        self.unmerged_weights.push(weight.unwrap_or(1) as f64);
         self.unmerged_means.push(other);
         self.unmerged_total_weight += 1f64;
     }
 
-    fn merge(&mut self, rhs: &mut Self) -> Result<()> {
+    pub(crate) fn merge(&mut self, rhs: &mut Self) -> Result<()> {
         if rhs.len() == 0 {
             return Ok(());
         }
@@ -107,7 +107,11 @@ impl QuantileTDigestState {
         Ok(())
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder, levels: Vec<f64>) -> Result<()> {
+    pub(crate) fn merge_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        levels: Vec<f64>,
+    ) -> Result<()> {
         if levels.len() > 1 {
             let builder = match builder {
                 ColumnBuilder::Array(box b) => b,
@@ -126,7 +130,7 @@ impl QuantileTDigestState {
         Ok(())
     }
 
-    fn quantile(&mut self, level: f64) -> f64 {
+    pub(crate) fn quantile(&mut self, level: f64) -> f64 {
         self.compress();
         if self.weights.is_empty() {
             return 0f64;
@@ -317,13 +321,13 @@ where T: Number + AsPrimitive<f64>
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
                     if is_valid {
-                        state.add(value.as_());
+                        state.add(value.as_(), None);
                     }
                 }
             }
             None => {
                 for value in column.iter() {
-                    state.add(value.as_());
+                    state.add(value.as_(), None);
                 }
             }
         }
@@ -335,7 +339,7 @@ where T: Number + AsPrimitive<f64>
         let v = NumberType::<T>::index_column(&column, row);
         if let Some(v) = v {
             let state = place.get::<QuantileTDigestState>();
-            state.add(v.as_())
+            state.add(v.as_(), None)
         }
         Ok(())
     }
@@ -350,26 +354,27 @@ where T: Number + AsPrimitive<f64>
         column.iter().zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
             let state = addr.get::<QuantileTDigestState>();
-            let v = v.as_();
-            state.add(v)
+            state.add(v.as_(), None)
         });
         Ok(())
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        serialize_into_buf(writer, state)
+        serialize_state(writer, state)
     }
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<QuantileTDigestState>();
-        *state = deserialize_from_slice(reader)?;
 
-        Ok(())
-    }
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<QuantileTDigestState>();
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        state.merge(rhs)
+        let mut rhs: QuantileTDigestState = deserialize_state(reader)?;
+        state.merge(&mut rhs)
     }
+
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<QuantileTDigestState>();
+        let other = rhs.get::<QuantileTDigestState>();
+        state.merge(other)
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())
@@ -487,7 +492,7 @@ pub fn try_create_aggregate_quantile_tdigest_function<const TYPE: u8>(
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
+            "{} just support numeric type, but got '{:?}'",
             display_name, arguments[0]
         ))),
     })

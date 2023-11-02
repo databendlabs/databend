@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::time::Instant;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_client::MetaGrpcReq;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -34,19 +35,24 @@ use common_meta_types::protobuf::MemberListReply;
 use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_metrics::counter::Count;
-use common_tracing::func_name;
+use common_metrics::count::Count;
+use futures::stream::TryChunksError;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::info;
+use minitrace::full_name;
+use minitrace::func_name;
 use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
+use tonic::codegen::BoxStream;
 use tonic::metadata::MetadataMap;
 use tonic::transport::NamedService;
 use tonic::Request;
@@ -54,7 +60,8 @@ use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::meta_service::meta_service_impl::GrpcStream;
+use crate::grpc_helper::GrpcHelper;
+use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
@@ -89,6 +96,95 @@ impl MetaServiceImpl {
         })?;
         Ok(claim)
     }
+
+    #[minitrace::trace]
+    async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
+        let req: MetaGrpcReq = request.try_into()?;
+        info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+
+        let t0 = Instant::now();
+
+        let m = &self.meta_node;
+        let reply = match &req {
+            MetaGrpcReq::UpsertKV(a) => {
+                let res = m.upsert_kv(a.clone()).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::GetKV(a) => {
+                let res = m.get_kv(&a.key).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::MGetKV(a) => {
+                let res = m.mget_kv(&a.keys).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::ListKV(a) => {
+                let res = m.prefix_list_kv(&a.prefix).await;
+                RaftReply::from(res)
+            }
+        };
+        let elapsed = t0.elapsed();
+        info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
+
+        network_metrics::incr_request_result(reply.error.is_empty());
+
+        Ok(reply)
+    }
+
+    #[minitrace::trace]
+    async fn handle_kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+
+        info!("{}: Received ReadRequest: {:?}", func_name!(), req);
+
+        let req = ForwardRequest {
+            forward_to_leader: 1,
+            body: req,
+        };
+
+        let t0 = Instant::now();
+
+        let res = self
+            .meta_node
+            .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
+            .await
+            .map_err(GrpcHelper::internal_err);
+
+        let elapsed = t0.elapsed();
+        info!("Handled(elapsed: {:?}) ReadRequest: {:?}", elapsed, req);
+
+        network_metrics::incr_request_result(res.is_ok());
+        res
+    }
+
+    #[minitrace::trace]
+    async fn handle_txn(&self, request: Request<TxnRequest>) -> Result<TxnReply, Status> {
+        let request = request.into_inner();
+
+        info!("{}: Receive txn_request: {}", func_name!(), request);
+
+        let ret = self.meta_node.transaction(request).await;
+
+        let body = match ret {
+            Ok(resp) => TxnReply {
+                success: resp.success,
+                error: "".to_string(),
+                responses: resp.responses,
+            },
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
+        };
+
+        network_metrics::incr_request_result(body.error.is_empty());
+
+        Ok(body)
+    }
 }
 
 impl NamedService for MetaServiceImpl {
@@ -97,8 +193,7 @@ impl NamedService for MetaServiceImpl {
 
 #[async_trait::async_trait]
 impl MetaService for MetaServiceImpl {
-    // rpc handshake related type
-    type HandshakeStream = GrpcStream<HandshakeResponse>;
+    type HandshakeStream = BoxStream<HandshakeResponse>;
 
     // rpc handshake first
     #[minitrace::trace]
@@ -158,98 +253,59 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &r);
+    async fn kv_api(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
+        self.check_token(request.metadata())?;
 
-        let reply = async {
-            self.check_token(r.metadata())?;
-            network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
-            let _guard = RequestInFlight::guard();
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
 
-            let req: MetaGrpcReq = r.try_into()?;
-            info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let reply = self.handle_kv_api(request).in_span(root).await?;
 
-            let t0 = Instant::now();
-
-            let m = &self.meta_node;
-            let reply = match &req {
-                MetaGrpcReq::UpsertKV(a) => {
-                    let res = m.upsert_kv(a.clone()).await;
-                    RaftReply::from(res)
-                }
-                MetaGrpcReq::GetKV(a) => {
-                    let res = m.get_kv(&a.key).await;
-                    RaftReply::from(res)
-                }
-                MetaGrpcReq::MGetKV(a) => {
-                    let res = m.mget_kv(&a.keys).await;
-                    RaftReply::from(res)
-                }
-                MetaGrpcReq::ListKV(a) => {
-                    let res = m.prefix_list_kv(&a.prefix).await;
-                    RaftReply::from(res)
-                }
-            };
-
-            let elapsed = t0.elapsed();
-            info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
-
-            Ok::<_, tonic::Status>(reply)
-        }
-        .in_span(root)
-        .await?;
-
-        network_metrics::incr_request_result(reply.error.is_empty());
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
         Ok(Response::new(reply))
+    }
+
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        self.check_token(request.metadata())?;
+
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+
+        let strm = self.handle_kv_read_v1(request).in_span(root).await?;
+
+        Ok(Response::new(strm))
     }
 
     async fn transaction(
         &self,
         request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
-        async {
-            self.check_token(request.metadata())?;
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let _guard = RequestInFlight::guard();
+        self.check_token(request.metadata())?;
 
-            let request = request.into_inner();
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
 
-            info!("{}: Receive txn_request: {}", func_name!(), request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let reply = self.handle_txn(request).in_span(root).await?;
 
-            let ret = self.meta_node.transaction(request).await;
-            network_metrics::incr_request_result(ret.is_ok());
+        network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-            let body = match ret {
-                Ok(resp) => TxnReply {
-                    success: resp.success,
-                    error: "".to_string(),
-                    responses: resp.responses,
-                },
-                Err(err) => TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                },
-            };
-
-            network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-            Ok(Response::new(body))
-        }
-        .in_span(root)
-        .await
+        Ok(Response::new(reply))
     }
 
-    type ExportStream =
-        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+    type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
 
-    // Export all meta data.
-    //
-    // Including raft hard state, logs and state machine.
-    // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
+    /// Export all meta data.
+    ///
+    /// Including header, raft state, logs and state machine.
+    /// The exported data is a series of JSON encoded strings of `RaftStoreEntry`.
     async fn export(
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
@@ -257,16 +313,21 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let res = meta_node.sto.export().await?;
+        let strm = meta_node.sto.inner().export();
 
-        let stream = ExportStream { data: res };
-        let s = stream.map(|strings| Ok(ExportedChunk { data: strings }));
+        let chunk_size = 32;
+        // - Chunk up upto 32 Ok items inside a Vec<String>;
+        // - Convert Vec<String> to ExportedChunk;
+        // - Convert TryChunkError<_, io::Error> to Status;
+        let s = strm
+            .try_chunks(chunk_size)
+            .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
+            .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
 
         Ok(Response::new(Box::pin(s)))
     }
 
-    type WatchStream =
-        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
+    type WatchStream = Pin<Box<dyn Stream<Item = Result<WatchResponse, Status>> + Send + 'static>>;
 
     #[minitrace::trace]
     async fn watch(
@@ -308,6 +369,44 @@ impl MetaService for MetaServiceImpl {
         Ok(Response::new(resp))
     }
 
+    async fn get_cluster_status(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ClusterStatus>, Status> {
+        let _guard = RequestInFlight::guard();
+        let status = self
+            .meta_node
+            .get_status()
+            .await
+            .map_err(|e| Status::internal(format!("get meta node status failed: {}", e)))?;
+
+        let resp = ClusterStatus {
+            id: status.id,
+            binary_version: status.binary_version,
+            data_version: status.data_version.to_string(),
+            endpoint: status.endpoint,
+            db_size: status.db_size,
+            state: status.state,
+            is_leader: status.is_leader,
+            current_term: status.current_term,
+            last_log_index: status.last_log_index,
+            last_applied: status.last_applied.to_string(),
+            snapshot_last_log_id: status.snapshot_last_log_id.map(|id| id.to_string()),
+            purged: status.purged.map(|id| id.to_string()),
+            leader: status.leader.map(|node| node.to_string()),
+            replication: status
+                .replication
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k, v.to_string())))
+                .collect(),
+            voters: status.voters.iter().map(|n| n.to_string()).collect(),
+            non_voters: status.non_voters.iter().map(|n| n.to_string()).collect(),
+            last_seq: status.last_seq,
+        };
+        Ok(Response::new(resp))
+    }
+
     async fn get_client_info(
         &self,
         request: Request<Empty>,
@@ -322,25 +421,5 @@ impl MetaService for MetaServiceImpl {
             return Ok(Response::new(resp));
         }
         Err(Status::unavailable("can not get client ip address"))
-    }
-}
-
-pub struct ExportStream {
-    pub data: Vec<String>,
-}
-
-impl Stream for ExportStream {
-    type Item = Vec<String>;
-
-    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let l = self.data.len();
-
-        if l == 0 {
-            return Poll::Ready(None);
-        }
-
-        let chunk_size = std::cmp::min(16, l);
-
-        Poll::Ready(Some(self.data.drain(0..chunk_size).collect()))
     }
 }

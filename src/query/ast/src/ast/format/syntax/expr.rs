@@ -135,6 +135,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 .append(pretty_expr(*right))
                 .append(RcDoc::text(")")),
         },
+        Expr::JsonOp {
+            op, left, right, ..
+        } => RcDoc::text("(")
+            .append(pretty_expr(*left))
+            .append(RcDoc::space())
+            .append(RcDoc::text(op.to_string()))
+            .append(RcDoc::space())
+            .append(pretty_expr(*right))
+            .append(RcDoc::text(")")),
         Expr::Cast {
             expr,
             target_type,
@@ -170,6 +179,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(RcDoc::text(field.to_string()))
             .append(RcDoc::space())
             .append(RcDoc::text("FROM"))
+            .append(RcDoc::space())
+            .append(pretty_expr(*expr))
+            .append(RcDoc::text(")")),
+        Expr::DatePart {
+            kind: field, expr, ..
+        } => RcDoc::text("DATE_PART(")
+            .append(RcDoc::text(field.to_string()))
+            .append(RcDoc::space())
+            .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(pretty_expr(*expr))
             .append(RcDoc::text(")")),

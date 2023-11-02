@@ -64,11 +64,11 @@ select parse_json('{ "test" : "\\"abc\"测试⚠️✅❌မြန်မာဘ�
 ----
 {"test":"\"abc\"测试⚠️✅❌မြန်မာဘာသာ"}
 
-statement error 1001
+statement error 1006
 select parse_json('[1,')
 
 
-statement error 1001
+statement error 1006
 select parse_json('"ab')
 
 
@@ -221,4 +221,3 @@ select to_variant(a), to_variant(b), to_variant(c) from t3
 
 statement ok
 DROP DATABASE db1
-

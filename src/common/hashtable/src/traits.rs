@@ -20,6 +20,7 @@ use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
+use ethnum::i256;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
@@ -234,6 +235,31 @@ impl FastHash for i128 {
     }
 }
 
+impl FastHash for i256 {
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        cfg_if::cfg_if! {
+            if #[cfg(target_feature = "sse4.2")] {
+                use std::arch::x86_64::_mm_crc32_u64;
+                let mut value = u64::MAX;
+                for x in self.0 {
+                    value = unsafe { _mm_crc32_u64(value, x as u64) };
+                    value = unsafe { _mm_crc32_u64(value, (x >> 64) as u64) };
+                }
+                value
+            } else {
+                use std::hash::Hasher;
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
+                for x in self.0 {
+                    hasher.write_i128(x);
+                }
+                hasher.finish()
+            }
+        }
+    }
+}
+
 impl FastHash for U256 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -256,6 +282,13 @@ impl FastHash for U256 {
                 hasher.finish()
             }
         }
+    }
+}
+
+impl FastHash for bool {
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        (*self as u8).fast_hash()
     }
 }
 
@@ -436,20 +469,15 @@ pub trait HashtableLike {
 pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
-    fn contains(&self, key_ref: &Self::Key) -> bool;
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn probe(&self, hashes: &mut [u64]);
 
-    fn probe_hash_table(
-        &self,
-        key_ref: &Self::Key,
-        vec_ptr: *mut RowPtr,
-        occupied: usize,
-        capacity: usize,
-    ) -> (usize, u64);
+    fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 
-    fn next_incomplete_ptr(
+    fn next_probe(
         &self,
-        key_ref: &Self::Key,
-        incomplete_ptr: u64,
+        key: &Self::Key,
+        ptr: u64,
         vec_ptr: *mut RowPtr,
         occupied: usize,
         capacity: usize,

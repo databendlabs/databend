@@ -15,6 +15,7 @@
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::hash::Hasher;
+use std::io::BufRead;
 use std::marker::Send;
 use std::marker::Sync;
 use std::sync::Arc;
@@ -44,10 +45,13 @@ use serde::Serialize;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-pub trait DistinctStateFunc: Send + Sync {
+use super::deserialize_state;
+use super::serialize_state;
+
+pub trait DistinctStateFunc: Sized + Send + Sync {
     fn new() -> Self;
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
+    fn deserialize(reader: &mut &[u8]) -> Result<Self>;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
     fn add(&mut self, columns: &[Column], row: usize) -> Result<()>;
@@ -82,12 +86,12 @@ impl DistinctStateFunc for AggregateDistinctState {
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, &self.set)
+        serialize_state(writer, &self.set)
     }
 
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = deserialize_from_slice(reader)?;
-        Ok(())
+    fn deserialize(reader: &mut &[u8]) -> Result<Self> {
+        let set = deserialize_state(reader)?;
+        Ok(Self { set })
     }
 
     fn is_empty(&self) -> bool {
@@ -104,7 +108,7 @@ impl DistinctStateFunc for AggregateDistinctState {
             .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
             .collect::<Vec<_>>();
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-        serialize_into_buf(&mut buffer, &values)?;
+        serialize_state(&mut buffer, &values)?;
         self.set.insert(buffer);
         Ok(())
     }
@@ -123,7 +127,7 @@ impl DistinctStateFunc for AggregateDistinctState {
                     .collect::<Vec<_>>();
 
                 let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-                serialize_into_buf(&mut buffer, &values)?;
+                serialize_state(&mut buffer, &values)?;
                 self.set.insert(buffer);
             }
         }
@@ -142,7 +146,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
         for data in self.set.iter() {
             let mut slice = data.as_slice();
-            let scalars: Vec<Scalar> = deserialize_from_slice(&mut slice)?;
+            let scalars: Vec<Scalar> = deserialize_state(&mut slice)?;
             scalars.iter().enumerate().for_each(|(idx, group_value)| {
                 builders[idx].push(group_value.as_ref());
             });
@@ -167,15 +171,16 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         Ok(())
     }
 
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn deserialize(reader: &mut &[u8]) -> Result<Self> {
         let size = reader.read_uvarint()?;
-        self.set = ShortStringHashSet::<[u8]>::with_capacity(size as usize, Arc::new(Bump::new()));
+        let mut set =
+            ShortStringHashSet::<[u8]>::with_capacity(size as usize, Arc::new(Bump::new()));
         for _ in 0..size {
             let s = reader.read_uvarint()? as usize;
-            let _ = self.set.set_insert(&reader[..s]);
-            *reader = &reader[s..];
+            let _ = set.set_insert(&reader[..s]);
+            reader.consume(s);
         }
-        Ok(())
+        Ok(Self { set })
     }
 
     fn is_empty(&self) -> bool {
@@ -247,19 +252,19 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for e in self.set.iter() {
-            serialize_into_buf(writer, e.key())?
+            serialize_state(writer, e.key())?
         }
         Ok(())
     }
 
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn deserialize(reader: &mut &[u8]) -> Result<Self> {
         let size = reader.read_uvarint()?;
-        self.set = CommonHashSet::with_capacity(size as usize);
+        let mut set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let t: T = deserialize_from_slice(reader)?;
-            let _ = self.set.set_insert(t).is_ok();
+            let t: T = deserialize_state(reader)?;
+            let _ = set.set_insert(t).is_ok();
         }
-        Ok(())
+        Ok(Self { set })
     }
 
     fn is_empty(&self) -> bool {
@@ -328,19 +333,19 @@ impl DistinctStateFunc for AggregateUniqStringState {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            serialize_into_buf(writer, value.key())?
+            serialize_state(writer, value.key())?
         }
         Ok(())
     }
 
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn deserialize(reader: &mut &[u8]) -> Result<Self> {
         let size = reader.read_uvarint()?;
-        self.set = StackHashSet::with_capacity(size as usize);
+        let mut set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let e = deserialize_from_slice(reader)?;
-            let _ = self.set.set_insert(e).is_ok();
+            let e = deserialize_state(reader)?;
+            let _ = set.set_insert(e).is_ok();
         }
-        Ok(())
+        Ok(Self { set })
     }
 
     fn is_empty(&self) -> bool {

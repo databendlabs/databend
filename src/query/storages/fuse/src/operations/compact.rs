@@ -108,7 +108,7 @@ impl FuseTable {
         )))
     }
 
-    pub fn build_compact_partial(
+    pub fn build_compact_source(
         &self,
         ctx: Arc<dyn TableContext>,
         parts: Partitions,
@@ -160,7 +160,7 @@ impl FuseTable {
 
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false, false)?;
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -175,7 +175,8 @@ impl FuseTable {
         )?;
 
         // sort
-        let cluster_stats_gen = self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds)?;
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds, None)?;
         pipeline.add_transform(
             |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
                 let proc = TransformSerializeBlock::try_create(

@@ -89,6 +89,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (57, "2023-09-05: Add: catalog.proto add hdfs config", ),
     (58, "2023-09-06: Add: udf.proto/UserDefinedFunction", ),
     (59, "2023-08-17: Add: user.proto/CsvFileFormatParams add field `allow_column_count_mismatch`", ),
+    (60, "2023-08-17: Add: user.proto/CopyOptions add field `return_failed_only`", ),
+    (61, "2023-10-19: Add: config.proto/OssStorageConfig add SSE options"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

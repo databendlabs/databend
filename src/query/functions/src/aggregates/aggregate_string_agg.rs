@@ -25,12 +25,12 @@ use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::deserialize_state;
+use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
@@ -122,20 +122,21 @@ impl AggregateFunction for AggregateStringAggFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<StringAggState>();
-        serialize_into_buf(writer, state)?;
+        serialize_state(writer, state)?;
         Ok(())
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<StringAggState>();
-        state.values = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<StringAggState>();
-        let state = place.get::<StringAggState>();
+        let rhs: StringAggState = deserialize_state(reader)?;
         state.values.extend_from_slice(rhs.values.as_slice());
+        Ok(())
+    }
+
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<StringAggState>();
+        let other = rhs.get::<StringAggState>();
+        state.values.extend_from_slice(other.values.as_slice());
         Ok(())
     }
 

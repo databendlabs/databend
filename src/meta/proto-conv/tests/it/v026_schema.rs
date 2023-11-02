@@ -16,6 +16,7 @@ use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use minitrace::func_name;
 
 use crate::common;
 

@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_expression::serialize::read_decimal;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::type_check::common_super_type;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
@@ -106,7 +107,7 @@ fn test_decimal_with_size_text() -> Result<()> {
     };
 
     for (s, l) in cases {
-        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false);
+        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
         match r {
             Ok(r) => assert_eq!((l, s.len() - 1), r, "{s}: {l:?} != {r:?}"),
             Err(e) => panic!("{s}: {l:?} != {e:?}"),
@@ -116,7 +117,7 @@ fn test_decimal_with_size_text() -> Result<()> {
     let cases = vec!["", "10000000000#", "1e10"];
 
     for s in cases {
-        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false);
+        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
         assert!(r.is_err(), "{s}: {r:?}");
     }
 
@@ -142,5 +143,21 @@ fn test_decimal_common_type() {
         }));
         let r = common_super_type(l, b, &[]);
         assert_eq!(r, Some(expected));
+    }
+}
+
+#[test]
+fn test_float_to_128() {
+    let cases = vec![
+        (123.456, 123),
+        (-123.456, -123),
+        (0.0, 0),
+        (0.123, 0),
+        (-0.123, 0),
+    ];
+
+    for (a, b) in cases {
+        let r = i128::from_float(a);
+        assert_eq!(r, b);
     }
 }

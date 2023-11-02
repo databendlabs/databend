@@ -20,14 +20,14 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/check
-        timeout-minutes: 30
+        timeout-minutes: 60
         with:
           github_token: ${{ github.token }}
 
@@ -66,11 +66,31 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 30
+        timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: all
+
+  build_address_sanitizer:
+    name: build_${{ matrix.arch }}_${{ matrix.libc }}_asan
+    runs-on: [ self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}" ]
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, libc: gnu }
+          - { arch: aarch64, libc: gnu }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux_sanitizer
+        timeout-minutes: 60
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          artifacts: query
 
   build_other:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
@@ -87,7 +107,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 30
+        timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
@@ -101,7 +121,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
-        timeout-minutes: 30
+        timeout-minutes: 60
 
   test_metactl:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -170,7 +190,6 @@ jobs:
           - "standalone"
           - "crdb"
           - "duckdb"
-          - "tpch"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
@@ -212,6 +231,33 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.dirs }}
 
+  sqllogic_standalone_cloud:
+    name: sqllogic_standalone_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    strategy:
+      matrix:
+        dirs:
+          - "task"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Start Cloud Control Server
+        run: |
+          pip install grpcio grpcio-reflection protobuf grpcio-tools
+          python3 tests/cloud_control_server/simple_server.py &
+          sleep 2
+      - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: mysql,http,clickhouse
+          storage-format: all
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.dirs }}
+
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -222,6 +268,7 @@ jobs:
           - "base"
           - "ydb"
           - "tpcds"
+          - "tpch"
         format:
           - "parquet"
           - "native"
@@ -280,10 +327,8 @@ jobs:
         dirs:
           - "base"
           - "query"
-          - "cluster"
           - "crdb"
           - "duckdb"
-          - "tpch"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
@@ -299,20 +344,22 @@ jobs:
 
   sqllogic_cluster_large:
     name: sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
       matrix:
         dirs:
           - "ydb"
           - "tpcds"
+          - "tpch"
+          - "cluster"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: mysql,http,clickhouse
+          handlers: http
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure

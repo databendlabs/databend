@@ -71,8 +71,6 @@ where Method: HashMethodBounds
             let hashtable = self.method.create_hash_table::<usize>(arena)?;
             let _dropper = AggregateHashTableDropper::create(self.params.clone());
             let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
-            let temp_place = self.params.alloc_layout(&mut hash_cell.arena);
-            hash_cell.temp_values.push(temp_place.addr());
 
             for bucket_data in data {
                 match bucket_data {
@@ -96,12 +94,12 @@ where Method: HashMethodBounds
 
                             let mut current_len = hash_cell.hashtable.len();
                             unsafe {
-                                for (row, key) in keys_iter.enumerate() {
+                                for key in keys_iter {
                                     if reach_limit {
                                         let entry = hash_cell.hashtable.entry(key);
                                         if let Some(entry) = entry {
                                             let place = Into::<StateAddr>::into(*entry.get());
-                                            places.push((row, place));
+                                            places.push(place);
                                         }
                                         continue;
                                     }
@@ -110,7 +108,7 @@ where Method: HashMethodBounds
                                         Ok(mut entry) => {
                                             let place =
                                                 self.params.alloc_layout(&mut hash_cell.arena);
-                                            places.push((row, place));
+                                            places.push(place);
 
                                             *entry.get_mut() = place.addr();
 
@@ -123,7 +121,7 @@ where Method: HashMethodBounds
                                         }
                                         Err(entry) => {
                                             let place = Into::<StateAddr>::into(*entry.get());
-                                            places.push((row, place));
+                                            places.push(place);
                                         }
                                     }
                                 }
@@ -138,38 +136,19 @@ where Method: HashMethodBounds
                         let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
                         for agg in states_columns.iter().take(aggregate_function_len) {
-                            let aggr_column =
-                                agg.value.as_column().unwrap().as_string().ok_or_else(|| {
-                                    ErrorCode::IllegalDataType(format!(
-                                        "Aggregation column should be StringType, but got {:?}",
-                                        agg.value
-                                    ))
-                                })?;
-                            states_binary_columns.push(aggr_column);
+                            let col = agg.value.as_column().unwrap();
+                            states_binary_columns.push(col.slice(0..places.len()));
                         }
 
                         let aggregate_functions = &self.params.aggregate_functions;
                         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-                        for (row, place) in places.iter() {
-                            for (idx, aggregate_function) in aggregate_functions.iter().enumerate()
-                            {
-                                let final_place = place.next(offsets_aggregate_states[idx]);
-                                let state_place = temp_place.next(offsets_aggregate_states[idx]);
-
-                                let mut data =
-                                    unsafe { states_binary_columns[idx].index_unchecked(*row) };
-                                aggregate_function.deserialize(state_place, &mut data)?;
-                                aggregate_function.merge(final_place, state_place)?;
-                                if aggregate_function.need_manual_drop_state() {
-                                    unsafe {
-                                        // State may allocate memory out of the arena,
-                                        // drop state to avoid memory leak.
-                                        aggregate_function.drop_state(state_place);
-                                    }
-                                    aggregate_function.init_state(state_place);
-                                }
-                            }
+                        for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                            aggregate_function.batch_merge(
+                                &places,
+                                offsets_aggregate_states[idx],
+                                &states_binary_columns[idx],
+                            )?;
                         }
                     }
                     AggregateMeta::HashTable(payload) => unsafe {
@@ -193,7 +172,7 @@ where Method: HashMethodBounds
                             {
                                 let final_place = place.next(offsets_aggregate_states[idx]);
                                 let state_place = old_place.next(offsets_aggregate_states[idx]);
-                                aggregate_function.merge(final_place, state_place)?;
+                                aggregate_function.merge_states(final_place, state_place)?;
                             }
                         }
                     },
@@ -236,7 +215,7 @@ where Method: HashMethodBounds
                         );
                     }
                 }
-                aggregate_function.batch_merge_result(&places, builder)?;
+                aggregate_function.batch_merge_result(&places, 0, builder)?;
             }
 
             // Build final state block.

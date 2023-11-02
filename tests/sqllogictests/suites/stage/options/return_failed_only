@@ -1,0 +1,10 @@
+statement ok
+drop table if exists ii
+
+statement ok
+create table ii (a int, b int)
+
+query 
+copy into ii from @data/csv/ files = ('it.csv', 'ii_100.csv') file_format = (type = CSV) on_error=continue return_failed_only=true
+----
+csv/it.csv 0 2 Invalid value 'b' for column 1 (b Int32 NULL): invalid text for number 1

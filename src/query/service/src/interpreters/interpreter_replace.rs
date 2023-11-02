@@ -15,11 +15,14 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageInfo;
+use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::Deduplicate;
@@ -29,20 +32,24 @@ use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
-use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
+use common_sql::BindContext;
+use common_sql::Metadata;
+use common_sql::NameResolutionContext;
+use common_sql::ScalarBinder;
 use common_storage::StageFileInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
+use parking_lot::RwLock;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
-use crate::interpreters::interpreter_copy::CopyInterpreter;
+use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -94,25 +101,27 @@ impl Interpreter for ReplaceInterpreter {
             )?;
         }
 
-        // hook compact
-        let compact_target = CompactTargetTableDescription {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-        };
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
 
-        let compact_hook_trace_ctx = CompactHookTraceCtx {
-            start,
-            operation_name: "replace_into".to_owned(),
-        };
+            let compact_hook_trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "replace_into".to_owned(),
+            };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut pipeline.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
+            hook_compact(
+                self.ctx.clone(),
+                &mut pipeline.main_pipeline,
+                compact_target,
+                compact_hook_trace_ctx,
+            )
+            .await;
+        }
 
         Ok(pipeline)
     }
@@ -127,6 +136,10 @@ impl ReplaceInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
         let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
@@ -154,6 +167,7 @@ impl ReplaceInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
@@ -167,7 +181,8 @@ impl ReplaceInterpreter {
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
-        let (mut root, select_ctx) = self
+
+        let (mut root, select_ctx, bind_context) = self
             .connect_input_source(
                 self.ctx.clone(),
                 &self.plan.source,
@@ -175,6 +190,68 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+        if let Some(s) = &select_ctx {
+            let select_schema = s.select_schema.as_ref();
+            // validate schema
+            if select_schema.fields().len() < plan.schema().fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
+            }
+        }
+
+        let delete_when = if let Some(expr) = &plan.delete_when {
+            if bind_context.is_none() {
+                return Err(ErrorCode::Unimplemented(
+                    "Delete semantic is only supported in subquery",
+                ));
+            }
+            let mut bind_context = bind_context.unwrap();
+            let name_resolution_ctx =
+                NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+            let metadata = Arc::new(RwLock::new(Metadata::default()));
+            let mut scalar_binder = ScalarBinder::new(
+                &mut bind_context,
+                self.ctx.clone(),
+                &name_resolution_ctx,
+                metadata,
+                &[],
+                Default::default(),
+                Default::default(),
+            );
+            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let columns = scalar.used_columns();
+            if columns.len() != 1 {
+                return Err(ErrorCode::BadArguments(
+                    "Delete must have one column in predicate",
+                ));
+            }
+            let delete_column = columns.iter().next().unwrap();
+            let column_bindings = &bind_context.columns;
+            let delete_column_binding = column_bindings.iter().find(|c| c.index == *delete_column);
+            if delete_column_binding.is_none() {
+                return Err(ErrorCode::BadArguments(
+                    "Delete must have one column in predicate",
+                ));
+            }
+            let delete_column_name = delete_column_binding.unwrap().column_name.clone();
+            let filter = cast_expr_to_non_null_boolean(
+                scalar.as_expr()?.project_column_ref(|col| col.index),
+            )?;
+
+            let filter = filter.as_remote_expr();
+
+            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                return Err(ErrorCode::Unimplemented(
+                    "Delete must have deterministic predicate",
+                ));
+            }
+            Some((filter, delete_column_name))
+        } else {
+            None
+        };
+
         // remove top exchange
         if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
             root = input.clone();
@@ -201,7 +278,7 @@ impl ReplaceInterpreter {
             vec![]
         };
 
-        root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
+        root = Box::new(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
             bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
@@ -212,8 +289,9 @@ impl ReplaceInterpreter {
             table_schema: plan.schema.clone(),
             table_level_range_index,
             need_insert: true,
-        }));
-        root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
+            delete_when,
+        })));
+        root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
@@ -228,7 +306,7 @@ impl ReplaceInterpreter {
                 .collect(),
             block_slots: None,
             need_insert: true,
-        }));
+        })));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
@@ -238,14 +316,14 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
-        root = Box::new(PhysicalPlan::CommitSink(CommitSink {
+        root = Box::new(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
             merge_meta: false,
-        }));
+        })));
         Ok((root, purge_info))
     }
 
@@ -265,32 +343,25 @@ impl ReplaceInterpreter {
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
-    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
+    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>, Option<BindContext>)> {
         match source {
             InsertInputSource::Values { data, start } => self
                 .connect_value_source(schema.clone(), data, *start)
-                .map(|x| (x, None)),
+                .map(|x| (x, None, None)),
 
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
             }
             InsertInputSource::Stage(plan) => match *plan.clone() {
-                Plan::Copy(copy_plan) => match copy_plan.as_ref() {
-                    CopyPlan::IntoTable(copy_into_table_plan) => {
-                        let interpreter =
-                            CopyInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                        let (physical_plan, files) = interpreter
-                            .build_physical_plan(copy_into_table_plan)
-                            .await?;
-                        *purge_info = Some((
-                            files,
-                            copy_into_table_plan.stage_table_info.stage_info.clone(),
-                        ));
-                        Ok((Box::new(physical_plan), None))
-                    }
-                    _ => unreachable!("plan in InsertInputSource::Stage must be CopyIntoTable"),
-                },
-                _ => unreachable!("plan in InsertInputSource::Stag must be Copy"),
+                Plan::CopyIntoTable(copy_plan) => {
+                    let interpreter =
+                        CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
+                    let (physical_plan, files) =
+                        interpreter.build_physical_plan(&copy_plan).await?;
+                    *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
+                    Ok((Box::new(physical_plan), None, None))
+                }
+                _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
             _ => Err(ErrorCode::Unimplemented(
                 "input source other than literal VALUES and sub queries are NOT supported yet.",
@@ -316,7 +387,7 @@ impl ReplaceInterpreter {
         &'a self,
         ctx: Arc<QueryContext>,
         query_plan: &Plan,
-    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
+    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>, Option<BindContext>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -345,6 +416,6 @@ impl ReplaceInterpreter {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
         };
-        Ok((physical_plan, Some(select_ctx)))
+        Ok((physical_plan, Some(select_ctx), Some(*bind_context.clone())))
     }
 }

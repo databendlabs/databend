@@ -19,7 +19,7 @@ anyerror = { workspace = true }
 derive_more = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -29,7 +29,7 @@ tonic = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
-prost-build = "0.11.1"
+prost-build = { workspace = true }
 tonic-build = { workspace = true }
 
 [dev-dependencies]

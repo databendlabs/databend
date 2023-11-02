@@ -297,6 +297,15 @@ pub fn check_function<Index: ColumnIndex>(
         return check_function(span, original_fn_name, params, args, fn_registry);
     }
 
+    // to_string('a')
+    if params.is_empty() && name.starts_with("to_") && args.len() == 1 {
+        let type_name = args[0].data_type().remove_nullable();
+        match get_simple_cast_function(false, &type_name) {
+            Some(n) if name.eq_ignore_ascii_case(&n) => return Ok(args[0].clone()),
+            _ => {}
+        }
+    }
+
     let candidates = fn_registry.search_candidates(name, params, args);
 
     if candidates.is_empty() && !fn_registry.contains(name) {
@@ -742,6 +751,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_variant",
     "to_boolean",
     "to_decimal",
+    "to_bitmap",
 ];
 
 pub fn is_simple_cast_function(name: &str) -> bool {

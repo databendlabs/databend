@@ -73,7 +73,7 @@ SELECT json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', nul
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
-statement error 1001
+statement error 1006
 SELECT json_object('k1', 1, 'k2', 'str', 'k3')
 
 query T
@@ -96,7 +96,7 @@ SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'},
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
-statement error 1001
+statement error 1006
 SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3')
 
 query T
@@ -192,3 +192,67 @@ query T
 SELECT json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
 ----
 1
+
+query T
+SELECT json_each(NULL)
+----
+
+query T
+SELECT json_each(parse_json('null'))
+----
+
+query T
+SELECT json_each(parse_json('true'))
+----
+
+query T
+SELECT json_each(parse_json('[1, 2, 3]'))
+----
+
+query T
+SELECT json_each(parse_json('{}'))
+----
+
+query T
+SELECT json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
+----
+('a','1')
+('b','[1,2,3]')
+('c','true')
+('d','{"k1":1,"k2":2}')
+
+
+query T
+SELECT json_array_elements(NULL)
+----
+
+query T
+SELECT json_array_elements(parse_json('null'))
+----
+
+query T
+SELECT json_array_elements(parse_json('true'))
+----
+
+query T
+SELECT json_array_elements(parse_json('[]'))
+----
+
+query T
+SELECT json_array_elements(parse_json('[1, 2, 3]'))
+----
+1
+2
+3
+
+query T
+SELECT json_array_elements(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
+----
+
+query T
+SELECT json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2": 2}]'))
+----
+1
+[1,2,3]
+true
+{"k1":1,"k2":2}

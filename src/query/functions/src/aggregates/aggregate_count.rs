@@ -25,14 +25,15 @@ use common_expression::utils::column_merge_validity;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::*;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::deserialize_state;
+use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
-pub struct AggregateCountState {
+struct AggregateCountState {
     count: u64,
 }
 
@@ -149,28 +150,33 @@ impl AggregateFunction for AggregateCountFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        serialize_into_buf(writer, &state.count)
+        serialize_state(writer, &state.count)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        state.count = deserialize_from_slice(reader)?;
+        let other: u64 = deserialize_state(reader)?;
+        state.count += other;
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let rhs = rhs.get::<AggregateCountState>();
-        state.count += rhs.count;
-
+        let other = rhs.get::<AggregateCountState>();
+        state.count += other.count;
         Ok(())
     }
 
-    fn batch_merge_result(&self, places: &[StateAddr], builder: &mut ColumnBuilder) -> Result<()> {
+    fn batch_merge_result(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 for place in places {
-                    let state = place.get::<AggregateCountState>();
+                    let state = place.next(offset).get::<AggregateCountState>();
                     builder.push(state.count);
                 }
             }

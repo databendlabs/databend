@@ -10,11 +10,11 @@ for j in $(seq 1 1000);do
 	printf "0123456789\n" >> "$DATA"
 done
 
-echo "drop table if exists t1" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists t1 all" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE TABLE t1
 (
     c0 string
-);" | $MYSQL_CLIENT_CONNECT
+);" | $BENDSQL_CLIENT_CONNECT
 
 echo "---load"
 curl -sH "insert_sql:insert into t1 file_format = (type = CSV)" \
@@ -23,9 +23,9 @@ curl -sH "insert_sql:insert into t1 file_format = (type = CSV)" \
 -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 
 echo "---row_count"
-echo "select count(*) from t1" | $MYSQL_CLIENT_CONNECT
+echo "select count(*) from t1" | $BENDSQL_CLIENT_CONNECT
 
 echo "---block_count"
-echo "select block_count from fuse_snapshot('default','t1')" | $MYSQL_CLIENT_CONNECT
+echo "select block_count from fuse_snapshot('default','t1')" | $BENDSQL_CLIENT_CONNECT
 
-echo "drop table if exists t1" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT

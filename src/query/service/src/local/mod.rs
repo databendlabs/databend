@@ -20,6 +20,7 @@ pub(crate) mod helper;
 use std::env;
 use std::io::stdin;
 use std::io::IsTerminal;
+use std::path::Path;
 
 use common_config::Config;
 use common_config::InnerConfig;
@@ -35,21 +36,27 @@ use crate::GlobalServices;
 
 pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
-    env::set_var("META_EMBEDDED_DIR", temp_dir.path().join("_meta"));
+    let p = env::var("DATABEND_DATA_PATH");
+    let path = match &p {
+        Ok(p) => Path::new(p),
+        Err(_) => temp_dir.path(),
+    };
+
+    env::set_var("META_EMBEDDED_DIR", path.join("_meta"));
     let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
-        root: temp_dir.path().join("_data").to_str().unwrap().to_owned(),
+        root: path.join("_data").to_str().unwrap().to_owned(),
     });
 
-    let meta_dir = temp_dir.path().join("_meta");
+    let meta_dir = path.join("_meta");
     MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
         .await
         .unwrap();
 
     GlobalServices::init(conf.clone()).await?;
     // init oss license manager
-    OssLicenseManager::init().unwrap();
+    OssLicenseManager::init(conf.query.tenant_id.clone()).unwrap();
 
     // Cluster register.
     ClusterDiscovery::instance()

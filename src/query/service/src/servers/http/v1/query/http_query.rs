@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use log::info;
 use log::warn;
+use minitrace::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -152,7 +153,7 @@ pub struct StageAttachmentConf {
 
 #[derive(Debug, Clone)]
 pub struct ResponseState {
-    pub running_time_ms: f64,
+    pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
@@ -190,6 +191,7 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -271,13 +273,11 @@ impl HttpQuery {
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }
-        if let Some(query_id) = query_id {
-            // TODO: validate the query_id to be uuid format
-            ctx.set_id(query_id);
-        }
+
+        // TODO: validate the query_id to be uuid format
+        ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
-        let query_id = ctx.get_id();
         let sql = &request.sql;
         info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
 
@@ -295,10 +295,8 @@ impl HttpQuery {
         };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
-        let start_time = Instant::now();
         let state = Arc::new(RwLock::new(Executor {
             query_id: query_id.clone(),
-            start_time,
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
         }));
         let block_sender_closer = block_sender.closer();
@@ -310,10 +308,15 @@ impl HttpQuery {
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root(std::any::type_name::<ExecuteState>(), parent)
+        } else {
+            Span::noop()
+        };
+
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
-        http_query_runtime_instance
-            .runtime()
-            .try_spawn(async move {
+        http_query_runtime_instance.runtime().try_spawn(
+            async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
@@ -329,19 +332,21 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
-                        stop_time: Instant::now(),
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
+                        query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
                     };
                     info!(
-                        "http query {}, change state to Stopped, fail to start {:?}",
+                        "{}: http query change state to Stopped, fail to start {:?}",
                         &query_id_clone, e
                     );
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
                         .await;
                     block_sender_closer.close();
                 }
-            })?;
+            }
+            .in_span(span),
+        )?;
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
@@ -365,6 +370,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
@@ -396,7 +402,7 @@ impl HttpQuery {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
         ResponseState {
-            running_time_ms: state.elapsed().as_secs_f64() * 1000.0,
+            running_time_ms: state.get_query_duration_ms(),
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
@@ -466,6 +472,12 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
+
+        info!(
+            "{}: http query update duration to {:?}, expire at {:?}",
+            self.id, duration, deadline
+        );
+
         let mut t = self.expire_state.lock().await;
         *t = ExpireState::ExpireAt(deadline);
     }

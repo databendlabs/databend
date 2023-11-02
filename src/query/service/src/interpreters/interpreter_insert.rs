@@ -16,12 +16,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::table::AppendMode;
-use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_meta_app::principal::StageFileFormatType;
-use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSourcer;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
@@ -88,6 +87,9 @@ impl Interpreter for InsertInterpreter {
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
 
@@ -239,11 +241,16 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
-                hook_refresh_indexes(
+                let refresh_agg_index_desc = RefreshAggIndexDesc {
+                    catalog: self.plan.catalog.clone(),
+                    database: self.plan.database.clone(),
+                    table: self.plan.table.clone(),
+                };
+
+                hook_refresh_agg_index(
                     self.ctx.clone(),
-                    &self.plan,
-                    table.as_ref(),
                     &mut build_res.main_pipeline,
+                    refresh_agg_index_desc,
                 )
                 .await?;
 
@@ -267,31 +274,19 @@ impl Interpreter for InsertInterpreter {
             append_mode,
         )?;
 
-        hook_refresh_indexes(
+        let refresh_agg_index_desc = RefreshAggIndexDesc {
+            catalog: self.plan.catalog.clone(),
+            database: self.plan.database.clone(),
+            table: self.plan.table.clone(),
+        };
+
+        hook_refresh_agg_index(
             self.ctx.clone(),
-            &self.plan,
-            table.as_ref(),
             &mut build_res.main_pipeline,
+            refresh_agg_index_desc,
         )
         .await?;
 
         Ok(build_res)
     }
-}
-
-#[async_backtrace::framed]
-async fn hook_refresh_indexes(
-    ctx: Arc<QueryContext>,
-    plan: &Insert,
-    table: &dyn Table,
-    pipeline: &mut Pipeline,
-) -> Result<()> {
-    let refresh_agg_index_desc = RefreshAggIndexDesc {
-        catalog: plan.catalog.clone(),
-        database: plan.database.clone(),
-        table: plan.table.clone(),
-        table_id: table.get_id(),
-    };
-
-    hook_refresh_agg_index(ctx, pipeline, refresh_agg_index_desc).await
 }

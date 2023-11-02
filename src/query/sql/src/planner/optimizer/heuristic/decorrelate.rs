@@ -236,6 +236,7 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: true,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         };
 
         // Rewrite plan to semi-join.
@@ -245,7 +246,6 @@ impl SubqueryRewriter {
                 Arc::new(
                     Filter {
                         predicates: left_filters,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -262,7 +262,6 @@ impl SubqueryRewriter {
                 Arc::new(
                     Filter {
                         predicates: right_filters,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -308,6 +307,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -351,6 +351,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -409,6 +410,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 Ok((
@@ -504,6 +506,7 @@ impl SubqueryRewriter {
                 marker_index: None,
                 from_correlated_subquery: false,
                 contain_runtime_filter: false,
+                need_hold_hash_table: false,
             }
             .into();
             return Ok(SExpr::create_binary(
@@ -577,11 +580,7 @@ impl SubqueryRewriter {
                     predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
                 }
 
-                let filter_plan = Filter {
-                    predicates,
-                    is_having: filter.is_having,
-                }
-                .into();
+                let filter_plan = Filter { predicates }.into();
                 Ok(SExpr::create_unary(
                     Arc::new(filter_plan),
                     Arc::new(flatten_plan),
@@ -618,6 +617,7 @@ impl SubqueryRewriter {
                             marker_index: join.marker_index,
                             from_correlated_subquery: false,
                             contain_runtime_filter: false,
+                            need_hold_hash_table: false,
                         }
                         .into(),
                     ),
@@ -688,7 +688,12 @@ impl SubqueryRewriter {
                     if let ScalarExpr::AggregateFunction(AggregateFunction { func_name, .. }) =
                         &scalar
                     {
-                        if func_name.eq_ignore_ascii_case("count") || func_name.eq("count_distinct")
+                        // For scalar subquery, we'll convert it to single join.
+                        // Single join is similar to left outer join, if there isn't matched row in the right side, we'll add NULL value for the right side.
+                        // But for count aggregation function, NULL values should be 0.
+                        if aggregate.aggregate_functions.len() == 1
+                            && (func_name.eq_ignore_ascii_case("count")
+                                || func_name.eq("count_distinct"))
                         {
                             flatten_info.from_count_func = true;
                         }

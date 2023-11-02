@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
+use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::InsertSource;
@@ -30,6 +31,7 @@ pub struct ReplaceStmt {
     pub on_conflict_columns: Vec<Identifier>,
     pub columns: Vec<Identifier>,
     pub source: InsertSource,
+    pub delete_when: Option<Expr>,
 }
 
 impl Display for ReplaceStmt {
@@ -56,6 +58,9 @@ impl Display for ReplaceStmt {
             write!(f, "(")?;
             write_comma_separated_list(f, &self.on_conflict_columns)?;
             write!(f, ") ")?;
+        }
+        if let Some(expr) = &self.delete_when {
+            write!(f, "DELETE WHEN {expr} ")?;
         }
 
         write!(f, "{}", self.source)

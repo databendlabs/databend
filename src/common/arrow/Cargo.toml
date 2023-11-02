@@ -35,16 +35,16 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Crates.io dependencies
-arrow = { package = "arrow2", version = "0.17.4", default-features = false, features = [
+arrow = { git = "https://github.com/jorgecarleitao/arrow2", rev = "b073454", package = "arrow2", default-features = false, features = [
     "arrow",
     "io_parquet",
     "io_parquet_compression",
     "serde_types",
 ] }
 
-arrow-format = { version = "0.8.0", features = ["flight-data", "flight-service", "ipc"] }
+arrow-format = { workspace = true }
 futures = "0.3.24"
-native = { package = "strawboat", git = "https://github.com/sundy-li/strawboat", rev = "25e5270" }
+native = { package = "strawboat", git = "https://github.com/sundy-li/strawboat", rev = "f3114b" }
 parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types"] }
 
 [dev-dependencies]

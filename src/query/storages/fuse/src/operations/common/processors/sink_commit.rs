@@ -33,6 +33,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
@@ -357,11 +358,24 @@ where F: SnapshotGenerator + Send + 'static
                             }
                         }
                         metrics_inc_commit_mutation_success();
-                        let duration = self.start_time.elapsed();
+                        {
+                            let elapsed_time = self.start_time.elapsed().as_millis();
+                            let status = format!(
+                                "commit mutation success after {} retries, which took {} ms",
+                                self.retries, elapsed_time
+                            );
+                            metrics_inc_commit_milliseconds(elapsed_time);
+                            self.ctx.set_status_info(&status);
+                        }
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
-                        metrics_inc_commit_milliseconds(duration.as_millis());
+                        for segment in self.abort_operation.segments.iter() {
+                            self.ctx.add_segment_location((
+                                segment.to_string(),
+                                SegmentInfo::VERSION,
+                            ))?;
+                        }
                         self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }

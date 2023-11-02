@@ -61,6 +61,7 @@ use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IcebergCatalogOption;
@@ -127,6 +128,7 @@ use crate::testing::get_kv_data;
 use crate::DatamaskApi;
 use crate::SchemaApi;
 use crate::ShareApi;
+use crate::DEFAULT_MGET_SIZE;
 
 /// Test suite of `SchemaApi`.
 ///
@@ -286,6 +288,7 @@ impl SchemaApiTestSuite {
         suite.table_update_mask_policy(&b.build().await).await?;
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
+        suite.table_list_many(&b.build().await).await?;
         suite.table_list_all(&b.build().await).await?;
         suite
             .table_drop_undrop_list_history(&b.build().await)
@@ -1453,9 +1456,15 @@ impl SchemaApiTestSuite {
         {
             let time = 1024;
             let req = SetLVTReq { table_id, time };
+            let get_req = GetLVTReq { table_id };
+
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert!(res.time.is_none());
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert_eq!(res.time.unwrap(), 1024);
 
             // test lvt never fall back
             let time = 102;
@@ -1463,12 +1472,16 @@ impl SchemaApiTestSuite {
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert_eq!(res.time.unwrap(), 1024);
 
             let time = 1025;
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1025);
+            let res = mt.get_table_lvt(get_req).await?;
+            assert_eq!(res.time.unwrap(), 1025);
         }
 
         Ok(())
@@ -4727,6 +4740,54 @@ impl SchemaApiTestSuite {
                 assert_eq!(tb_ids[0], res[0].ident.table_id);
                 assert_eq!(tb_ids[1], res[1].ident.table_id);
             }
+        }
+
+        Ok(())
+    }
+
+    /// Test listing many tables that exceeds default mget chunk size.
+    #[minitrace::trace]
+    async fn table_list_many<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        // Create tables that exceeds the default mget chunk size
+        let n = DEFAULT_MGET_SIZE + 20;
+
+        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
+
+        info!("--- prepare db");
+        {
+            util.create_db().await?;
+        }
+
+        info!("--- create {} tables", n);
+        {
+            for i in 0..n {
+                let table_name = format!("tb_{:0>5}", i);
+
+                let table_meta = util.table_meta();
+                let req = CreateTableReq {
+                    if_not_exists: false,
+                    name_ident: TableNameIdent {
+                        tenant: util.tenant(),
+                        db_name: util.db_name(),
+                        table_name,
+                    },
+                    table_meta: table_meta.clone(),
+                };
+                let resp = util.mt.create_table(req).await?;
+
+                if i % 100 == 0 {
+                    info!("--- created {} tables: {:?}", i, resp);
+                }
+            }
+        }
+
+        info!("--- get_tables");
+        {
+            let res = mt
+                .list_tables(ListTableReq::new(util.tenant(), util.db_name()))
+                .await?;
+            assert_eq!(n, res.len());
         }
 
         Ok(())

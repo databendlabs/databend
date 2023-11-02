@@ -35,9 +35,9 @@ use common_profile::WindowAttribute;
 use itertools::Itertools;
 
 use crate::executor::format::pretty_display_agg_desc;
-use crate::executor::FragmentKind;
+use crate::executor::physical_plans::common::FragmentKind;
+use crate::executor::physical_plans::physical_window::WindowFunction;
 use crate::executor::PhysicalPlan;
-use crate::executor::WindowFunction;
 use crate::planner::Metadata;
 use crate::MetadataRef;
 
@@ -505,15 +505,19 @@ fn flatten_plan_node_profile(
             plan_node_profs.push(prof);
         }
         PhysicalPlan::MaterializedCte(_) => todo!(),
-        PhysicalPlan::DeletePartial(_)
+        PhysicalPlan::DeleteSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::CopyIntoTable(_)
         | PhysicalPlan::AsyncSourcer(_)
         | PhysicalPlan::MergeInto(_)
+        | PhysicalPlan::AddRowNumber(_)
+        | PhysicalPlan::MergeIntoAppendNotMatched(_)
         | PhysicalPlan::MergeIntoSource(_)
         | PhysicalPlan::Deduplicate(_)
         | PhysicalPlan::ReplaceInto(_)
-        | PhysicalPlan::CompactPartial(_) => unreachable!(),
+        | PhysicalPlan::CompactSource(_)
+        | PhysicalPlan::ReclusterSource(_)
+        | PhysicalPlan::ReclusterSink(_) => unreachable!(),
     }
 
     Ok(())

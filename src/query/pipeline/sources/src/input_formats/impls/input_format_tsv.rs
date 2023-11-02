@@ -17,18 +17,18 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
-use common_formats::FieldDecoderRowBased;
-use common_formats::FieldDecoderTSV;
 use common_formats::FileFormatOptionsExt;
+use common_formats::SeparatedTextDecoder;
+use common_io::cursor_ext::BufferReadStringExt;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::TsvFileFormatParams;
 use common_storage::FileParseError;
 use log::debug;
 
-use crate::input_formats::error_utils::check_column_end;
 use crate::input_formats::error_utils::get_decode_error_by_pos;
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
@@ -46,35 +46,49 @@ impl InputFormatTSV {
 
     fn read_column(
         builder: &mut ColumnBuilder,
-        field_decoder: &FieldDecoderTSV,
+        field_decoder: &SeparatedTextDecoder,
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
-            builder.push_default();
+            match default_values {
+                None => {
+                    builder.push_default();
+                }
+                Some(values) => {
+                    builder.push(values[column_index].as_ref());
+                }
+            }
             Ok(())
         } else {
-            let mut reader = Cursor::new(col_data);
-            if let Err(e) = field_decoder.read_field(builder, &mut reader, true) {
+            // todo(youngsofun): optimize this later after refactor.
+            let mut cursor = Cursor::new(col_data);
+            let mut data = vec![];
+            cursor.read_escaped_string_text(&mut data).map_err(|e| {
+                get_decode_error_by_pos(column_index, schema, &e.to_string(), col_data)
+            })?;
+            if let Err(e) = field_decoder.read_field(builder, &data) {
                 return Err(get_decode_error_by_pos(
                     column_index,
                     schema,
                     &e.message(),
                     col_data,
                 ));
-            };
-            check_column_end(&mut reader, schema, column_index)
+            }
+            Ok(())
         }
     }
 
     fn read_row(
         field_delimiter: u8,
-        field_decoder: &FieldDecoderTSV,
+        field_decoder: &SeparatedTextDecoder,
         buf: &[u8],
         columns: &mut Vec<ColumnBuilder>,
         schema: &TableSchemaRef,
         columns_to_read: &Option<Vec<usize>>,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         let num_columns = columns.len();
         let mut column_index = 0;
@@ -94,6 +108,7 @@ impl InputFormatTSV {
                             &buf[field_start..field_end],
                             column_index,
                             schema,
+                            default_values,
                         ) {
                             error = Some(e);
                             break;
@@ -123,6 +138,7 @@ impl InputFormatTSV {
                         &buf[field_start..field_end],
                         column_index,
                         schema,
+                        default_values,
                     ) {
                         error = Some(err);
                         break;
@@ -170,7 +186,7 @@ impl InputFormatTextBase for InputFormatTSV {
         options: &FileFormatOptionsExt,
     ) -> Arc<dyn FieldDecoder> {
         let tsv_params = TsvFileFormatParams::downcast_unchecked(params);
-        Arc::new(FieldDecoderTSV::create(tsv_params, options))
+        Arc::new(SeparatedTextDecoder::create_tsv(tsv_params, options))
     }
 
     fn try_create_align_state(
@@ -198,7 +214,7 @@ impl InputFormatTextBase for InputFormatTSV {
         let field_decoder = builder
             .field_decoder
             .as_any()
-            .downcast_ref::<FieldDecoderTSV>()
+            .downcast_ref::<SeparatedTextDecoder>()
             .expect("must success");
         let field_delimiter =
             TsvFileFormatParams::downcast_unchecked(&builder.ctx.file_format_params)
@@ -216,6 +232,7 @@ impl InputFormatTextBase for InputFormatTSV {
                 columns,
                 schema,
                 &builder.projection,
+                &builder.ctx.default_values,
             ) {
                 builder.ctx.on_error(
                     e,

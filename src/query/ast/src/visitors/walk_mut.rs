@@ -55,6 +55,12 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             left,
             right,
         } => visitor.visit_binary_op(*span, op, left, right),
+        Expr::JsonOp {
+            span,
+            op,
+            left,
+            right,
+        } => visitor.visit_json_op(*span, op, left, right),
         Expr::UnaryOp { span, op, expr } => visitor.visit_unary_op(*span, op, expr),
         Expr::Cast {
             span,
@@ -68,6 +74,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             target_type,
         } => visitor.visit_try_cast(*span, expr, target_type),
         Expr::Extract { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
+        Expr::DatePart { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
         Expr::Position {
             span,
             substr_expr,
@@ -312,20 +319,21 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
         Statement::MergeInto(merge_into) => visitor.visit_merge_into(merge_into),
-        Statement::Delete {
-            table_reference,
-            selection,
-            ..
-        } => visitor.visit_delete(table_reference, selection),
+        Statement::Delete(delete) => visitor.visit_delete(delete),
         Statement::Update(update) => visitor.visit_update(update),
-        Statement::Copy(stmt) => visitor.visit_copy(stmt),
-        Statement::ShowSettings { like } => visitor.visit_show_settings(like),
-        Statement::ShowProcessList => visitor.visit_show_process_list(),
-        Statement::ShowMetrics => visitor.visit_show_metrics(),
-        Statement::ShowEngines => visitor.visit_show_engines(),
-        Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
-        Statement::ShowIndexes => visitor.visit_show_indexes(),
-        Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
+        Statement::CopyIntoLocation(stmt) => visitor.visit_copy_into_location(stmt),
+        Statement::CopyIntoTable(stmt) => visitor.visit_copy_into_table(stmt),
+        Statement::ShowSettings { show_options } => visitor.visit_show_settings(show_options),
+        Statement::ShowProcessList { show_options } => {
+            visitor.visit_show_process_list(show_options)
+        }
+        Statement::ShowMetrics { show_options } => visitor.visit_show_metrics(show_options),
+        Statement::ShowEngines { show_options } => visitor.visit_show_engines(show_options),
+        Statement::ShowFunctions { show_options } => visitor.visit_show_functions(show_options),
+        Statement::ShowIndexes { show_options } => visitor.visit_show_indexes(show_options),
+        Statement::ShowTableFunctions { show_options } => {
+            visitor.visit_show_table_functions(show_options)
+        }
         Statement::KillStmt {
             kill_target,
             object_id,
@@ -445,5 +453,12 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropNetworkPolicy(stmt) => visitor.visit_drop_network_policy(stmt),
         Statement::DescNetworkPolicy(stmt) => visitor.visit_desc_network_policy(stmt),
         Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
+
+        Statement::CreateTask(stmt) => visitor.visit_create_task(stmt),
+        Statement::ExecuteTask(stmt) => visitor.visit_execute_task(stmt),
+        Statement::DropTask(stmt) => visitor.visit_drop_task(stmt),
+        Statement::AlterTask(stmt) => visitor.visit_alter_task(stmt),
+        Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
+        Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
     }
 }

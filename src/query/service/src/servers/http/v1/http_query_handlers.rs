@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::base::mask_connection_info;
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use highway::HighwayHash;
 use log::error;
 use log::info;
+use minitrace::full_name;
+use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -83,7 +87,7 @@ impl QueryError {
 pub struct QueryStats {
     #[serde(flatten)]
     pub progresses: Progresses,
-    pub running_time_ms: f64,
+    pub running_time_ms: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -216,21 +220,31 @@ async fn query_final_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    info!("final http query: {}", query_id);
-    let http_query_manager = HttpQueryManager::instance();
-    match http_query_manager.remove_query(&query_id).await {
-        Some(query) => {
-            let mut response = query.get_response_state_only().await;
-            if response.state.state == ExecuteStateKind::Running {
-                return Err(PoemError::from_string(
-                    format!("query {} is still running, can not final it", query_id),
-                    StatusCode::BAD_REQUEST,
-                ));
+    let trace_id = query_id_to_trace_id(&query_id);
+    let root = Span::root(
+        full_name!(),
+        SpanContext::new(trace_id, SpanId(rand::random())),
+    );
+
+    async {
+        info!("{}: final http query", query_id);
+        let http_query_manager = HttpQueryManager::instance();
+        match http_query_manager.remove_query(&query_id).await {
+            Some(query) => {
+                let mut response = query.get_response_state_only().await;
+                if response.state.state == ExecuteStateKind::Running {
+                    return Err(PoemError::from_string(
+                        format!("query {} is still running, can not final it", query_id),
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                Ok(QueryResponse::from_internal(query_id, response, true))
             }
-            Ok(QueryResponse::from_internal(query_id, response, true))
+            None => Err(query_id_not_found(query_id)),
         }
-        None => Err(query_id_not_found(query_id)),
     }
+    .in_span(root)
+    .await
 }
 
 // currently implementation only support kill http query
@@ -239,16 +253,26 @@ async fn query_cancel_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
-    info!("kill http query: {}", query_id);
-    let http_query_manager = HttpQueryManager::instance();
-    match http_query_manager.get_query(&query_id).await {
-        Some(query) => {
-            query.kill().await;
-            http_query_manager.remove_query(&query_id).await;
-            StatusCode::OK
+    let trace_id = query_id_to_trace_id(&query_id);
+    let root = Span::root(
+        full_name!(),
+        SpanContext::new(trace_id, SpanId(rand::random())),
+    );
+
+    async {
+        info!("{}: http query is killed", query_id);
+        let http_query_manager = HttpQueryManager::instance();
+        match http_query_manager.get_query(&query_id).await {
+            Some(query) => {
+                query.kill().await;
+                http_query_manager.remove_query(&query_id).await;
+                StatusCode::OK
+            }
+            None => StatusCode::NOT_FOUND,
         }
-        None => StatusCode::NOT_FOUND,
     }
+    .in_span(root)
+    .await
 }
 
 #[poem::handler]
@@ -256,14 +280,24 @@ async fn query_state_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let http_query_manager = HttpQueryManager::instance();
-    match http_query_manager.get_query(&query_id).await {
-        Some(query) => {
-            let response = query.get_response_state_only().await;
-            Ok(QueryResponse::from_internal(query_id, response, false))
+    let trace_id = query_id_to_trace_id(&query_id);
+    let root = Span::root(
+        full_name!(),
+        SpanContext::new(trace_id, SpanId(rand::random())),
+    );
+
+    async {
+        let http_query_manager = HttpQueryManager::instance();
+        match http_query_manager.get_query(&query_id).await {
+            Some(query) => {
+                let response = query.get_response_state_only().await;
+                Ok(QueryResponse::from_internal(query_id, response, false))
+            }
+            None => Err(query_id_not_found(query_id)),
         }
-        None => Err(query_id_not_found(query_id)),
     }
+    .in_span(root)
+    .await
 }
 
 #[poem::handler]
@@ -271,19 +305,28 @@ async fn query_page_handler(
     _ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
-    let http_query_manager = HttpQueryManager::instance();
-    match http_query_manager.get_query(&query_id).await {
-        Some(query) => {
-            query.update_expire_time(true).await;
-            let resp = query
-                .get_response_page(page_no)
-                .await
-                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-            query.update_expire_time(false).await;
-            Ok(QueryResponse::from_internal(query_id, resp, false))
+    let trace_id = query_id_to_trace_id(&query_id);
+    let root = Span::root(
+        full_name!(),
+        SpanContext::new(trace_id, SpanId(rand::random())),
+    );
+
+    async {
+        let http_query_manager = HttpQueryManager::instance();
+        match http_query_manager.get_query(&query_id).await {
+            Some(query) => {
+                query.update_expire_time(true).await;
+                let resp = query.get_response_page(page_no).await.map_err(|err| {
+                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                })?;
+                query.update_expire_time(false).await;
+                Ok(QueryResponse::from_internal(query_id, resp, false))
+            }
+            None => Err(query_id_not_found(query_id)),
         }
-        None => Err(query_id_not_found(query_id)),
     }
+    .in_span(root)
+    .await
 }
 
 #[poem::handler]
@@ -292,38 +335,45 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    info!("new http query request: {:?}", req);
-    let http_query_manager = HttpQueryManager::instance();
-    let sql = req.sql.clone();
+    let trace_id = query_id_to_trace_id(&ctx.query_id);
+    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
 
-    let query = http_query_manager
-        .try_create_query(ctx, req)
-        .await
-        .map_err(|err| err.display_with_sql(&sql));
-    match query {
-        Ok(query) => {
-            query.update_expire_time(true).await;
-            let resp = query
-                .get_response_page(0)
-                .await
-                .map_err(|err| err.display_with_sql(&sql))
-                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-            let (rows, next_page) = match &resp.data {
-                None => (0, None),
-                Some(p) => (p.page.data.num_rows(), p.next_page_no),
-            };
-            info!(
-                "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                &query.id, &resp.state, rows, next_page, sql
-            );
-            query.update_expire_time(false).await;
-            Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
-        }
-        Err(e) => {
-            error!("Fail to start sql, Error: {:?}", e);
-            Ok(QueryResponse::fail_to_start_sql(&e).into_response())
+    async {
+        info!("new http query request: {:}", mask_connection_info(&format!("{:?}", req)));
+        let http_query_manager = HttpQueryManager::instance();
+        let sql = req.sql.clone();
+
+        let query = http_query_manager
+            .try_create_query(ctx, req)
+            .await
+            .map_err(|err| err.display_with_sql(&sql));
+        match query {
+            Ok(query) => {
+                query.update_expire_time(true).await;
+                let resp = query
+                    .get_response_page(0)
+                    .await
+                    .map_err(|err| err.display_with_sql(&sql))
+                    .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+                let (rows, next_page) = match &resp.data {
+                    None => (0, None),
+                    Some(p) => (p.page.data.num_rows(), p.next_page_no),
+                };
+                info!(
+                    "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                    &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
+                );
+                query.update_expire_time(false).await;
+                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
+            }
+            Err(e) => {
+                error!("Fail to start sql, Error: {:?}", e);
+                Ok(QueryResponse::fail_to_start_sql(&e).into_response())
+            }
         }
     }
+    .in_span(root)
+    .await
 }
 
 pub fn query_route() -> Route {
@@ -354,4 +404,9 @@ fn query_id_not_found(query_id: String) -> PoemError {
         format!("query id not found {}", query_id),
         StatusCode::NOT_FOUND,
     )
+}
+
+fn query_id_to_trace_id(query_id: &str) -> TraceId {
+    let [hash_high, hash_low] = highway::PortableHash::default().hash128(query_id.as_bytes());
+    TraceId(((hash_high as u128) << 64) + (hash_low as u128))
 }

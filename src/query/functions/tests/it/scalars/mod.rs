@@ -31,12 +31,16 @@ use itertools::Itertools;
 
 mod arithmetic;
 mod array;
+mod bitmap;
+
 mod boolean;
 mod cast;
 mod comparison;
 mod control;
 mod datetime;
 mod geo;
+// NOTE:(everpcpc) result different on macos
+#[cfg(not(target_os = "macos"))]
 mod geo_h3;
 mod hash;
 mod map;

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::ondisk::DATA_VERSION;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::openraft::ErrorSubject;
@@ -73,6 +74,10 @@ impl RaftStore {
         let sto = StoreInner::open_create(config, open, create).await?;
         Ok(Self::new(sto))
     }
+
+    pub fn inner(&self) -> Arc<StoreInner> {
+        self.inner.clone()
+    }
 }
 
 impl Deref for RaftStore {
@@ -97,6 +102,8 @@ impl RaftLogReader<TypeConfig> for RaftStore {
 
         match self
             .log
+            .read()
+            .await
             .range_values(range)
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
@@ -132,6 +139,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     async fn save_committed(&mut self, committed: Option<LogId>) -> Result<(), StorageError> {
         self.raft_state
+            .write()
+            .await
             .save_committed(committed)
             .await
             .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Write)
@@ -139,6 +148,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     async fn read_committed(&mut self) -> Result<Option<LogId>, StorageError> {
         self.raft_state
+            .read()
+            .await
             .read_committed()
             .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Read)
     }
@@ -146,6 +157,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
     async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, StorageError> {
         let last_purged_log_id = match self
             .log
+            .read()
+            .await
             .get_last_purged()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
@@ -158,6 +171,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         let last = match self
             .log
+            .read()
+            .await
             .logs()
             .last()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
@@ -191,6 +206,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         match self
             .raft_state
+            .write()
+            .await
             .save_vote(hs)
             .await
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write)
@@ -211,6 +228,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         match self
             .log
+            .write()
+            .await
             .range_remove(log_id.index..)
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
@@ -229,6 +248,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         if let Err(err) = self
             .log
+            .write()
+            .await
             .set_last_purged(log_id)
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
@@ -238,6 +259,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
         };
         if let Err(err) = self
             .log
+            .write()
+            .await
             .range_remove(..=log_id.index)
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
@@ -265,6 +288,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         match self
             .log
+            .write()
+            .await
             .append(entries)
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
@@ -287,7 +312,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
 
         let mut sm = self.state_machine.write().await;
-        let res = sm.apply_entries(entries).await;
+        let res = sm.apply_entries(entries).await?;
 
         Ok(res)
     }
@@ -396,6 +421,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
     async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
         match self
             .raft_state
+            .read()
+            .await
             .read_vote()
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Read)
         {
@@ -411,8 +438,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
         &mut self,
     ) -> Result<(Option<LogId>, StoredMembership), StorageError> {
         let sm = self.state_machine.read().await;
-        let last_applied = *sm.last_applied_ref();
-        let last_membership = sm.last_membership_ref().clone();
+        let last_applied = *sm.sys_data_ref().last_applied_ref();
+        let last_membership = sm.sys_data_ref().last_membership_ref().clone();
 
         debug!(
             "last_applied_state: applied: {:?}, membership: {:?}",

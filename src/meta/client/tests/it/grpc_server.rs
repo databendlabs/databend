@@ -22,6 +22,7 @@ use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
@@ -29,24 +30,27 @@ use common_meta_types::protobuf::MemberListReply;
 use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::TxnReply;
 use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use futures::Stream;
 use rand::Rng;
+use tonic::codegen::BoxStream;
 use tonic::transport::Server;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 
+/// A service that times out a kv_api() call, without impl other API.
 pub struct GrpcServiceForTestImpl {}
 
 #[tonic::async_trait]
 impl MetaService for GrpcServiceForTestImpl {
     type HandshakeStream =
-        Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send + Sync + 'static>>;
+        Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send + 'static>>;
 
     async fn handshake(
         &self,
@@ -68,8 +72,17 @@ impl MetaService for GrpcServiceForTestImpl {
         Err(Status::unimplemented("Not yet implemented"))
     }
 
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        _request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        todo!()
+    }
+
     type ExportStream =
-        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + 'static>>;
 
     async fn export(
         &self,
@@ -79,7 +92,7 @@ impl MetaService for GrpcServiceForTestImpl {
     }
 
     type WatchStream =
-        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
+        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + 'static>>;
 
     async fn watch(
         &self,
@@ -99,6 +112,13 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
+        todo!()
+    }
+
+    async fn get_cluster_status(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ClusterStatus>, Status> {
         todo!()
     }
 

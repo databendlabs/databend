@@ -13,7 +13,7 @@ const ASKBEND_URL = 'https://ask.databend.rs';
 const config = {
     title: 'Databend',
     staticDirectories: ['static', '../docs/public'],
-    tagline: 'Databend is a modern cloud data warehouse that empowers your object storage for real-time analytics.',
+    tagline: 'Databend - Your best alternative to Snowflake. Cost-effective and simple for massive-scale analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -32,19 +32,19 @@ const config = {
         },
     },
     headTags: [
-      {
-        tagName: 'link',
-        attributes: {
-          rel: 'mask-icon',
-          sizes: 'any',
-          color: '#0175f6',
-          href: '/img/logo/logo-no-text.svg',
+        {
+            tagName: 'link',
+            attributes: {
+                rel: 'mask-icon',
+                sizes: 'any',
+                color: '#0175f6',
+                href: '/img/logo/logo-no-text.svg',
+            },
         },
-      },
     ],
     customFields: {
-      blogTags: ['weekly','databend'],
-      askBendUrl: isProduction ? ASKBEND_URL : ''
+        blogTags: ['weekly', 'databend'],
+        askBendUrl: isProduction ? ASKBEND_URL : ''
     },
     presets: [
         [
@@ -55,21 +55,21 @@ const config = {
                     path: '../docs/doc',
                     routeBasePath: 'doc',
                     sidebarPath: require.resolve('../docs/doc/sidebars.js'),
-                    editUrl: ({locale, docPath}) => {
+                    editUrl: ({ locale, docPath }) => {
                         if (locale !== config.i18n.defaultLocale) {
-                          return `https://databend.crowdin.com/databend/${locale}`;
+                            return `https://databend.crowdin.com/databend/${locale}`;
                         }
                         return `https://github.com/datafuselabs/databend/edit/main/docs/doc/${docPath}`;
-                      },
+                    },
                 },
                 blog: {
                     showReadingTime: true,
-                    editUrl: ({locale, blogPath}) => {
+                    editUrl: ({ locale, blogPath }) => {
                         if (locale !== config.i18n.defaultLocale) {
-                          return `https://databend.crowdin.com/databend/${locale}`;
+                            return `https://databend.crowdin.com/databend/${locale}`;
                         }
                         return `https://github.com/datafuselabs/databend/edit/main/website/blog/${blogPath}`;
-                      },
+                    },
                     blogSidebarCount: 5,
                     postsPerPage: 'ALL',
                     blogListComponent: '@site/src/components/CustomBlog/CustomBlogListPage.js',
@@ -102,37 +102,39 @@ const config = {
                 path: '../docs/dev',
                 routeBasePath: 'dev',
                 sidebarPath: require.resolve('../docs/dev/sidebars.js'),
-                editUrl: ({locale, devPath}) => {
+                editUrl: ({ locale, devPath }) => {
                     if (locale !== config.i18n.defaultLocale) {
-                      return `https://databend.crowdin.com/databend/${locale}`;
+                        return `https://databend.crowdin.com/databend/${locale}`;
                     }
                     return `https://github.com/datafuselabs/databend/edit/main/docs/dev/${devPath}`;
-                  },
+                },
             },
         ],
         'plugin-image-zoom',
         [
-          "docusaurus-plugin-devserver",
-          {
-            devServer: {
-              proxy: {
-                "/query": {
-                  target: ASKBEND_URL,
-                  // pathRewrite: { "^/query": "" },
-                  changeOrigin: true,
-                  headers: {
-                    Origin: ASKBEND_URL
-                  }
+            "docusaurus-plugin-devserver",
+            {
+                devServer: {
+                    proxy: {
+                        "/query": {
+                            target: ASKBEND_URL,
+                            // pathRewrite: { "^/query": "" },
+                            changeOrigin: true,
+                            headers: {
+                                Origin: ASKBEND_URL
+                            }
+                        },
+                    },
                 },
-              },
             },
-          },
         ]
     ],
     themeConfig:
         /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
-            zoomSelector: 'article :not(a) > img',
+            imageZoom: {
+                selector: 'article :not(a) > img'
+            },
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
                 content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/DatabendLabs" >Twitter</a> ${TwitterSvg}`,

@@ -13,7 +13,6 @@ doctest = false
 test = false
 
 [dependencies]
-chrono = { workspace = true }
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
@@ -27,6 +26,7 @@ common-protos = { path = "../../meta/protos" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
+minitrace = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

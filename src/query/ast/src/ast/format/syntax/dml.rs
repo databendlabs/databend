@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
@@ -21,12 +23,13 @@ use crate::ast::format::syntax::inline_comma;
 use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
-use crate::ast::CopyStmt;
-use crate::ast::CopyUnit;
-use crate::ast::Expr;
+use crate::ast::CopyIntoLocationSource;
+use crate::ast::CopyIntoLocationStmt;
+use crate::ast::CopyIntoTableSource;
+use crate::ast::CopyIntoTableStmt;
+use crate::ast::DeleteStmt;
 use crate::ast::InsertSource;
 use crate::ast::InsertStmt;
-use crate::ast::TableReference;
 use crate::ast::UpdateExpr;
 use crate::ast::UpdateStmt;
 
@@ -121,10 +124,14 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
     })
 }
 
-pub(crate) fn pretty_delete(table: TableReference, selection: Option<Expr>) -> RcDoc<'static> {
+pub(crate) fn pretty_delete(delete_stmt: DeleteStmt) -> RcDoc<'static> {
     RcDoc::text("DELETE FROM")
-        .append(RcDoc::line().nest(NEST_FACTOR).append(pretty_table(table)))
-        .append(if let Some(selection) = selection {
+        .append(
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(pretty_table(delete_stmt.table)),
+        )
+        .append(if let Some(selection) = delete_stmt.selection {
             RcDoc::line().append(RcDoc::text("WHERE")).append(
                 RcDoc::line()
                     .nest(NEST_FACTOR)
@@ -175,22 +182,26 @@ fn pretty_update_list(update_list: Vec<UpdateExpr>) -> RcDoc<'static> {
     )
 }
 
-pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
+pub(crate) fn pretty_copy_into_table(copy_stmt: CopyIntoTableStmt) -> RcDoc<'static> {
     RcDoc::text("COPY")
         .append(RcDoc::line().append(RcDoc::text("INTO ")))
-        .append(pretty_copy_unit(copy_stmt.dst))
-        .append(RcDoc::line().append(RcDoc::text("FROM ")))
-        .append(pretty_copy_unit(copy_stmt.src))
-        .append(if let Some(files) = &copy_stmt.files {
-            RcDoc::line()
-                .append(RcDoc::text("FILES = "))
-                .append(parenthesized(
-                    interweave_comma(files.iter().map(|file| RcDoc::text(format!("{:?}", file))))
-                        .group(),
-                ))
+        .append(RcDoc::text(format!("{}", copy_stmt.dst)))
+        .append(if let Some(cols) = &copy_stmt.dst_columns {
+            parenthesized(
+                interweave_comma(cols.iter().map(|file| RcDoc::text(format!("{:?}", file))))
+                    .group(),
+            )
         } else {
             RcDoc::nil()
         })
+        .append(RcDoc::line().append(RcDoc::text("FROM ")))
+        .append(match copy_stmt.src {
+            CopyIntoTableSource::Location(v) => RcDoc::text(format!("{v}")),
+            CopyIntoTableSource::Query(query) => RcDoc::text("(")
+                .append(pretty_query(*query))
+                .append(RcDoc::text(")")),
+        })
+        .append(pretty_file_format(&copy_stmt.file_format))
         .append(if let Some(pattern) = &copy_stmt.pattern {
             RcDoc::line()
                 .append(RcDoc::text("PATTERN = "))
@@ -198,18 +209,12 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if !copy_stmt.file_format.is_empty() {
+        .append(if let Some(files) = &copy_stmt.files {
             RcDoc::line()
-                .append(RcDoc::text("FILE_FORMAT = "))
+                .append(RcDoc::text("FILES = "))
                 .append(parenthesized(
-                    interweave_comma(copy_stmt.file_format.iter().map(|(k, v)| {
-                        RcDoc::text(k.to_string())
-                            .append(RcDoc::space())
-                            .append(RcDoc::text("="))
-                            .append(RcDoc::space())
-                            .append(RcDoc::text(format!("{:?}", v)))
-                    }))
-                    .group(),
+                    interweave_comma(files.iter().map(|file| RcDoc::text(format!("{:?}", file))))
+                        .group(),
                 ))
         } else {
             RcDoc::nil()
@@ -247,43 +252,40 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
         )
 }
 
-fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
-    match copy_unit {
-        CopyUnit::Table {
-            catalog,
-            database,
-            table,
-            columns,
-        } => if let Some(catalog) = catalog {
-            RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
-        } else {
-            RcDoc::nil()
-        }
-        .append(if let Some(database) = database {
-            RcDoc::text(database.to_string()).append(RcDoc::text("."))
-        } else {
-            RcDoc::nil()
+pub(crate) fn pretty_copy_into_location(copy_stmt: CopyIntoLocationStmt) -> RcDoc<'static> {
+    RcDoc::text("COPY")
+        .append(RcDoc::line().append(RcDoc::text("INTO ")))
+        .append(RcDoc::text(format!("{:?}", copy_stmt.dst)))
+        .append(RcDoc::line().append(RcDoc::text("FROM ")))
+        .append(match copy_stmt.src {
+            CopyIntoLocationSource::Table(v) => RcDoc::text(format!("{v}")),
+            CopyIntoLocationSource::Query(query) => RcDoc::text("(")
+                .append(pretty_query(*query))
+                .append(RcDoc::text(")")),
         })
-        .append(RcDoc::text(table.to_string()))
-        .append(if let Some(columns) = columns {
+        .append(pretty_file_format(&copy_stmt.file_format))
+        .append(
             RcDoc::line()
-                .append(RcDoc::text("("))
-                .append(
-                    interweave_comma(
-                        columns
-                            .into_iter()
-                            .map(|column| RcDoc::text(column.to_string())),
-                    )
-                    .nest(NEST_FACTOR)
-                    .group(),
-                )
-                .append(RcDoc::text(")"))
-        } else {
-            RcDoc::nil()
-        }),
-        CopyUnit::Location(v) => RcDoc::text(v.to_string()),
-        CopyUnit::Query(query) => RcDoc::text("(")
-            .append(pretty_query(*query))
-            .append(RcDoc::text(")")),
+                .append(RcDoc::text("SINGLE = "))
+                .append(RcDoc::text(copy_stmt.single.to_string())),
+        )
+}
+
+fn pretty_file_format(file_format: &BTreeMap<String, String>) -> RcDoc<'static> {
+    if !file_format.is_empty() {
+        RcDoc::line()
+            .append(RcDoc::text("FILE_FORMAT = "))
+            .append(parenthesized(
+                interweave_comma(file_format.iter().map(|(k, v)| {
+                    RcDoc::text(k.to_string())
+                        .append(RcDoc::space())
+                        .append(RcDoc::text("="))
+                        .append(RcDoc::space())
+                        .append(RcDoc::text(format!("{:?}", v)))
+                }))
+                .group(),
+            ))
+    } else {
+        RcDoc::nil()
     }
 }

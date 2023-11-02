@@ -2,6 +2,9 @@ statement ok
 drop table if exists t_compact_0
 
 statement ok
+set enable_distributed_compact = 1
+
+statement ok
 create table t_compact_0 (a int not null) row_per_block=5 block_per_segment=5
 
 statement ok

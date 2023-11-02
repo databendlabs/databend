@@ -16,6 +16,7 @@ use common_meta_app as mt;
 use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageParams;
+use minitrace::func_name;
 
 use crate::common;
 
@@ -69,6 +70,7 @@ fn test_decode_v51_obs_stage() -> anyhow::Result<()> {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -117,6 +119,7 @@ fn test_decode_v51_cos_stage() -> anyhow::Result<()> {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()

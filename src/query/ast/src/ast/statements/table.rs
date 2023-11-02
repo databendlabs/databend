@@ -19,8 +19,8 @@ use std::format;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
-use crate::ast::write_space_separated_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -156,6 +156,10 @@ impl Display for CreateTableStmt {
             write!(f, " {source}")?;
         }
 
+        if let Some(uri_location) = &self.uri_location {
+            write!(f, " {uri_location}")?;
+        }
+
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
         }
@@ -167,7 +171,7 @@ impl Display for CreateTableStmt {
         }
 
         // Format table options
-        write_space_separated_map(f, self.table_options.iter())?;
+        write_comma_separated_map(f, &self.table_options)?;
         if let Some(as_query) = &self.as_query {
             write!(f, " AS {as_query}")?;
         }
@@ -182,6 +186,7 @@ pub struct AttachTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
+    pub read_only: bool,
 }
 
 impl Display for AttachTableStmt {
@@ -195,7 +200,11 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        write!(f, " FROM {0}", self.uri_location)?;
+        write!(f, " FROM {}", self.uri_location)?;
+
+        if self.read_only {
+            write!(f, " READ_ONLY")?;
+        }
 
         Ok(())
     }
@@ -256,6 +265,7 @@ pub struct DropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub all: bool,
 }
 
 impl Display for DropTableStmt {
@@ -271,6 +281,9 @@ impl Display for DropTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+        if self.all {
+            write!(f, " ALL")?;
+        }
 
         Ok(())
     }
@@ -354,34 +367,34 @@ impl Display for AlterTableAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AlterTableAction::SetOptions { set_options } => {
-                write!(f, "SET OPTIONS: ").expect("Set Options Write Error ");
-                write_space_separated_map(f, set_options.iter())
+                write!(f, "SET OPTIONS (")?;
+                write_comma_separated_map(f, set_options)?;
+                write!(f, ")")?;
             }
             AlterTableAction::RenameTable { new_table } => {
-                write!(f, "RENAME TO {new_table}")
+                write!(f, "RENAME TO {new_table}")?;
             }
             AlterTableAction::RenameColumn {
                 old_column,
                 new_column,
             } => {
-                write!(f, "RENAME COLUMN {old_column} TO {new_column}")
+                write!(f, "RENAME COLUMN {old_column} TO {new_column}")?;
             }
             AlterTableAction::AddColumn { column, option } => {
                 write!(f, "ADD COLUMN {column}{option}")?;
-                Ok(())
             }
             AlterTableAction::ModifyColumn { action } => {
-                write!(f, "MODIFY COLUMN {action}")
+                write!(f, "MODIFY COLUMN {action}")?;
             }
             AlterTableAction::DropColumn { column } => {
-                write!(f, "DROP COLUMN {column}")
+                write!(f, "DROP COLUMN {column}")?;
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 write!(f, "CLUSTER BY ")?;
-                write_comma_separated_list(f, cluster_by)
+                write_comma_separated_list(f, cluster_by)?;
             }
             AlterTableAction::DropTableClusterKey => {
-                write!(f, "DROP CLUSTER KEY")
+                write!(f, "DROP CLUSTER KEY")?;
             }
             AlterTableAction::ReclusterTable {
                 is_final,
@@ -398,13 +411,12 @@ impl Display for AlterTableAction {
                 if let Some(limit) = limit {
                     write!(f, " LIMIT {limit}")?;
                 }
-                Ok(())
             }
             AlterTableAction::RevertTo { point } => {
                 write!(f, "REVERT TO {}", point)?;
-                Ok(())
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -477,7 +489,6 @@ impl Display for TruncateTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-
         Ok(())
     }
 }

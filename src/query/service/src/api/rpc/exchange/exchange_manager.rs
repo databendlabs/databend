@@ -31,6 +31,7 @@ use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Status;
@@ -97,6 +98,7 @@ impl DataExchangeManager {
 
     // Create connections for cluster all nodes. We will push data through this connection.
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
@@ -172,6 +174,7 @@ impl DataExchangeManager {
     }
 
     // Execute query in background
+    #[minitrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -186,6 +189,7 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
+    #[minitrace::trace]
     pub fn init_query_fragments_plan(
         &self,
         ctx: &Arc<QueryContext>,
@@ -206,6 +210,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn handle_statistics_exchange(
         &self,
         id: String,
@@ -222,6 +227,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
@@ -248,6 +254,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn on_finished_query(&self, query_id: &str) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -262,6 +269,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -720,7 +728,14 @@ impl QueryCoordinator {
         let mut statistics_sender =
             StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Distributed-Executor", parent)
+        } else {
+            Span::noop()
+        };
+
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
+            let _g = span.set_local_parent();
             statistics_sender.shutdown(executor.execute().err());
             query_ctx
                 .get_exchange_manager()
@@ -806,12 +821,18 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
+
             let pipeline_builder = PipelineBuilder::create(
+                pipeline_ctx.get_function_context()?,
+                pipeline_ctx.get_settings(),
                 pipeline_ctx,
                 enable_profiling,
                 SharedProcessorProfiles::default(),
             );
-            self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
+
+            let res = pipeline_builder.finalize(&self.physical_plan)?;
+
+            self.pipeline_build_res = Some(res);
         }
 
         Ok(())

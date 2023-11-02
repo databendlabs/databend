@@ -49,9 +49,9 @@ use common_meta_types::MatchSeq::Any;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
-use common_tracing::func_name;
 use log::as_debug;
 use log::debug;
+use minitrace::func_name;
 
 use crate::background_api::BackgroundApi;
 use crate::deserialize_struct;
@@ -72,6 +72,7 @@ use crate::util::txn_trials;
 /// Thus every type that impl kvapi::KVApi impls BackgroundApi.
 #[tonic::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
+    #[minitrace::trace]
     async fn create_background_job(
         &self,
         req: CreateBackgroundJobReq,
@@ -143,6 +144,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     }
 
     // TODO(zhihanz): needs to drop both background job and related background tasks, also needs to gracefully shutdown running queries
+    #[minitrace::trace]
     async fn drop_background_job(
         &self,
         _req: DeleteBackgroundJobReq,
@@ -150,6 +152,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         todo!()
     }
 
+    #[minitrace::trace]
     async fn update_background_job_status(
         &self,
         req: UpdateBackgroundJobStatusReq,
@@ -167,6 +170,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         .await
     }
 
+    #[minitrace::trace]
     async fn update_background_job_params(
         &self,
         req: UpdateBackgroundJobParamsReq,
@@ -183,6 +187,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         .await
     }
 
+    #[minitrace::trace]
     async fn get_background_job(
         &self,
         req: GetBackgroundJobReq,
@@ -197,6 +202,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         Ok(GetBackgroundJobReply { id, info: job })
     }
 
+    #[minitrace::trace]
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
@@ -221,6 +227,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         Ok(res)
     }
 
+    #[minitrace::trace]
     async fn update_background_task(
         &self,
         req: UpdateBackgroundTaskReq,
@@ -249,6 +256,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         })
     }
 
+    #[minitrace::trace]
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
@@ -269,6 +277,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         Ok(res)
     }
 
+    #[minitrace::trace]
     async fn get_background_task(
         &self,
         req: GetBackgroundTaskReq,

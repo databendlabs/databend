@@ -3,9 +3,9 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop table if exists ontime_mini;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists ontime_mini;" | $BENDSQL_CLIENT_CONNECT
 ## Create table
-cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $MYSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $BENDSQL_CLIENT_CONNECT
 
 ontime_statements=(
   ## Load data
@@ -24,8 +24,8 @@ ontime_statements=(
 )
 
 for i in "${ontime_statements[@]}"; do
-  echo "$i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $BENDSQL_CLIENT_CONNECT
 done
 
 ## Clean table
-echo "drop table if exists ontime_mini;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists ontime_mini all;" | $BENDSQL_CLIENT_CONNECT

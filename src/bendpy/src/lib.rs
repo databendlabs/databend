@@ -21,6 +21,7 @@ mod schema;
 mod utils;
 
 use std::env;
+use std::path::Path;
 
 use common_config::Config;
 use common_config::InnerConfig;
@@ -37,21 +38,26 @@ use utils::RUNTIME;
 /// A Python module implemented in Rust.
 #[pymodule]
 fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
-    env::set_var("META_EMBEDDED_DIR", ".databend/_meta");
+    let data_path = env::var("DATABEND_DATA_PATH").unwrap_or(".databend/".to_string());
+    let path = Path::new(&data_path);
+
+    env::set_var("META_EMBEDDED_DIR", path.join("_meta"));
+
     let mut conf: InnerConfig = Config::load(false).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
-        root: ".databend/_data".to_string(),
+        root: path.join("_data").to_str().unwrap().to_owned(),
     });
 
     RUNTIME.block_on(async {
-        MetaEmbedded::init_global_meta_store(".databend/_meta".to_string())
+        let meta_dir = path.join("_meta");
+        MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
             .await
             .unwrap();
         GlobalServices::init(conf.clone()).await.unwrap();
 
         // init oss license manager
-        OssLicenseManager::init().unwrap();
+        OssLicenseManager::init(conf.query.tenant_id.clone()).unwrap();
         ClusterDiscovery::instance()
             .register_to_metastore(&conf)
             .await

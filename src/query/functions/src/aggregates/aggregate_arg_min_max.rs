@@ -26,7 +26,6 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -39,6 +38,8 @@ use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
+use super::deserialize_state;
+use super::serialize_state;
 use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
@@ -49,7 +50,9 @@ use crate::with_simple_no_number_mapped_type;
 // State for arg_min(arg, val) and arg_max(arg, val)
 // A: ValueType for arg.
 // V: ValueType for val.
-pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>: Send + Sync + 'static {
+pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
+    Serialize + DeserializeOwned + Send + Sync + 'static
+{
     fn new() -> Self;
     fn add(&mut self, value: V::ScalarRef<'_>, data: Scalar);
     fn add_batch(
@@ -60,8 +63,6 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>: Send + Sync + 'st
     ) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn merge_result(&mut self, column: &mut ColumnBuilder) -> Result<()>;
 }
 
@@ -180,15 +181,6 @@ where
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        *self = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
         if self.value.is_some() {
             if let Some(inner) = A::try_downcast_builder(builder) {
@@ -291,18 +283,20 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        state.serialize(writer)
+        serialize_state(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
+        let rhs: State = deserialize_state(reader)?;
+
+        state.merge(&rhs)
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<State>();
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<State>();
-        state.merge(rhs)
+        let other = rhs.get::<State>();
+        state.merge(other)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {

@@ -94,6 +94,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.nested.init_state(place);
     }
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        self.nested.serialize_size_per_row().map(|row| row + 1)
+    }
+
     #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
@@ -202,20 +206,26 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         Ok(())
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        if self.get_flag(place) == 0 {
+            // initial the state to remove the dirty stats
+            self.init_state(place);
+        }
+
         if NULLABLE_RESULT {
             let flag = reader[reader.len() - 1];
-            self.nested
-                .deserialize(place, &mut &reader[..reader.len() - 1])?;
-            self.set_flag(place, flag);
+            if flag == 1 {
+                self.set_flag(place, 1);
+                self.nested.merge(place, &mut &reader[..reader.len() - 1])?;
+            }
         } else {
-            self.nested.deserialize(place, reader)?;
+            self.nested.merge(place, reader)?;
         }
 
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         if self.get_flag(place) == 0 {
             // initial the state to remove the dirty stats
             self.init_state(place);
@@ -223,7 +233,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
 
         if self.get_flag(rhs) == 1 {
             self.set_flag(place, 1);
-            self.nested.merge(place, rhs)?;
+            self.nested.merge_states(place, rhs)?;
         }
 
         Ok(())

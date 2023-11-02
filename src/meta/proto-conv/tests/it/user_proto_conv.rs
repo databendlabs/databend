@@ -93,6 +93,7 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
 
@@ -133,6 +134,7 @@ pub(crate) fn test_s3_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -170,6 +172,7 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -207,6 +210,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -240,6 +244,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -256,9 +261,11 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
+                server_side_encryption: "".to_string(),
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
                 presign_endpoint_url: "".to_string(),
+                server_side_encryption_key_id: "".to_string(),
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
@@ -275,6 +282,7 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -307,6 +315,7 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -340,6 +349,7 @@ pub(crate) fn test_obs_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -373,6 +383,7 @@ pub(crate) fn test_cos_stage_info() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -814,6 +825,7 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -843,6 +855,7 @@ pub(crate) fn test_stage_info_v18() -> mt::principal::StageInfo {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()

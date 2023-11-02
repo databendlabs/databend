@@ -231,6 +231,10 @@ pub enum ExprElement {
     BinaryOp {
         op: BinaryOperator,
     },
+    /// JSON operation
+    JsonOp {
+        op: JsonOperator,
+    },
     /// Unary operation
     UnaryOp {
         op: UnaryOperator,
@@ -251,6 +255,11 @@ pub enum ExprElement {
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
+        field: IntervalKind,
+        expr: Box<Expr>,
+    },
+    /// DATE_PART(IntervalKind, <expr>)
+    DatePart {
         field: IntervalKind,
         expr: Box<Expr>,
     },
@@ -418,6 +427,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
             },
+            ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
         };
@@ -448,6 +458,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 target_type,
             },
             ExprElement::Extract { field, expr } => Expr::Extract {
+                span: transform_span(elem.span.0),
+                kind: field,
+                expr,
+            },
+            ExprElement::DatePart { field, expr } => Expr::DatePart {
                 span: transform_span(elem.span.0),
                 kind: field,
                 expr,
@@ -587,6 +602,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 not,
+            },
+            ExprElement::JsonOp { op } => Expr::JsonOp {
+                span: transform_span(elem.span.0),
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+                op,
             },
             _ => unreachable!(),
         };
@@ -729,6 +750,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             "::" ~ ^#type_name
         },
         |(_, target_type)| ExprElement::PgCast { target_type },
+    );
+    let date_part = map(
+        rule! {
+            DATE_PART ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
+        },
+        |(_, _, field, _, expr, _)| ExprElement::DatePart {
+            field,
+            expr: Box::new(expr),
+        },
     );
     let extract = map(
         rule! {
@@ -933,6 +963,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
+    let json_op = map(json_op, |op| ExprElement::JsonOp { op });
+
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
     // Floating point literal with leading dot will be parsed as a period map access,
@@ -1035,6 +1067,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #exists : "`[NOT] EXISTS (SELECT ...)`"
             | #between : "`[NOT] BETWEEN ... AND ...`"
             | #binary_op : "<operator>"
+            | #json_op : "<operator>"
             | #unary_op : "<operator>"
             | #cast : "`CAST(... AS ...)`"
             | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
@@ -1044,7 +1077,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #timestamp_expr: "`TIMESTAMP <str_literal>`"
             | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
-            | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
+            | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
+            | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
         ),
         rule!(
             #position : "`POSITION(... IN ...)`"
@@ -1120,6 +1154,15 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::BitwiseShiftLeft, rule! { ShiftLeft }),
             value(BinaryOperator::BitwiseShiftRight, rule! { ShiftRight }),
         )),
+    ))(i)
+}
+
+pub fn json_op(i: Input) -> IResult<JsonOperator> {
+    alt((
+        value(JsonOperator::Arrow, rule! { "->" }),
+        value(JsonOperator::LongArrow, rule! { "->>" }),
+        value(JsonOperator::HashArrow, rule! { "#>" }),
+        value(JsonOperator::HashLongArrow, rule! { "#>>" }),
     ))(i)
 }
 
@@ -1398,6 +1441,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         value(IntervalKind::Second, rule! { SECOND }),
         value(IntervalKind::Doy, rule! { DOY }),
         value(IntervalKind::Dow, rule! { DOW }),
+        value(IntervalKind::Week, rule! { WEEK }),
         value(
             IntervalKind::Year,
             rule! { #literal_string_eq_ignore_case("YEAR")  },
@@ -1433,6 +1477,10 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         value(
             IntervalKind::Dow,
             rule! { #literal_string_eq_ignore_case("DOW")  },
+        ),
+        value(
+            IntervalKind::Week,
+            rule! { #literal_string_eq_ignore_case("WEEK")  },
         ),
     ))(i)
 }

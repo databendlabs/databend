@@ -28,6 +28,8 @@ use common_expression::SNAPSHOT_NAME_COL_NAME;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
+use common_management::RoleApi;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::Ownership;
 use common_meta_app::schema::TableMeta;
@@ -60,6 +62,7 @@ use storages_common_table_meta::table::OPT_KEY_ENGINE;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
 use crate::interpreters::InsertInterpreter;
@@ -100,11 +103,9 @@ impl Interpreter for CreateTableInterpreter {
             .any(|f| f.computed_expr().is_some());
         if has_computed_column {
             let license_manager = get_license_manager();
-            license_manager.manager.check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                tenant.clone(),
-                ComputedColumn,
-            )?;
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
@@ -154,6 +155,11 @@ impl Interpreter for CreateTableInterpreter {
 impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
+        assert!(
+            !self.plan.read_only_attach,
+            "There should be no CREATE(not ATTACH) TABLE plan which is READ_ONLY"
+        );
+
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
@@ -162,9 +168,31 @@ impl CreateTableInterpreter {
         if !reply.new_table {
             return Ok(PipelineBuildResult::create());
         }
+
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
+
+        // grant the ownership of the table to the current role.
+        let current_role = self.ctx.get_current_role();
+        if let Some(current_role) = current_role {
+            let db = catalog
+                .get_database(tenant.as_str(), &self.plan.database)
+                .await?;
+            let db_id = db.get_db_info().ident.db_id;
+
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            role_api
+                .grant_ownership(
+                    &GrantObjectByID::Table {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id,
+                        table_id: table.get_id(),
+                    },
+                    &current_role.name,
+                )
+                .await?;
+        }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
         // we use the definitions to create the table schema. It may happen that the "AS SELECT" query's schema doesn't
@@ -226,7 +254,29 @@ impl CreateTableInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             req.table_meta.owner = Some(Ownership::new(current_role.name));
         }
-        catalog.create_table(req.clone()).await?;
+
+        let reply = catalog.create_table(req.clone()).await?;
+
+        // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+        if let Some(current_role) = self.ctx.get_current_role() {
+            let tenant = self.ctx.get_tenant();
+            let db = catalog
+                .get_database(tenant.as_str(), &self.plan.database)
+                .await?;
+            let db_id = db.get_db_info().ident.db_id;
+
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            role_api
+                .grant_ownership(
+                    &GrantObjectByID::Table {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id,
+                        table_id: reply.table_id,
+                    },
+                    &current_role.name,
+                )
+                .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }
@@ -313,6 +363,14 @@ impl CreateTableInterpreter {
         let snapshot_loc = snapshot_loc[root.len()..].to_string();
         let mut options = self.plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+
+        if self.plan.read_only_attach {
+            // mark table as read_only attached
+            options.insert(
+                OPT_KEY_TABLE_ATTACHED_READ_ONLY.to_string(),
+                "T".to_string(),
+            );
+        }
 
         let params = LoadParams {
             location: snapshot_loc.clone(),

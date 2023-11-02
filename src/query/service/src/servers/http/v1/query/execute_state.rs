@@ -14,8 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 use std::time::SystemTime;
 
 use common_base::base::tokio::sync::RwLock;
@@ -113,13 +111,12 @@ pub struct ExecuteStopped {
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
-    pub stop_time: Instant,
     pub session_state: ExecutorSessionState,
+    pub query_duration_ms: i64,
 }
 
 pub struct Executor {
     pub query_id: String,
-    pub start_time: Instant,
     pub state: ExecuteState,
 }
 
@@ -166,10 +163,12 @@ impl Executor {
         }
     }
 
-    pub fn elapsed(&self) -> Duration {
+    pub fn get_query_duration_ms(&self) -> i64 {
         match &self.state {
-            Starting(_) | Running(_) => Instant::now() - self.start_time,
-            Stopped(f) => f.stop_time - self.start_time,
+            Starting(ExecuteStarting { ctx }) | Running(ExecuteRunning { ctx, .. }) => {
+                ctx.get_query_duration_ms()
+            }
+            Stopped(f) => f.query_duration_ms,
         }
     }
 
@@ -193,7 +192,7 @@ impl Executor {
         {
             let guard = this.read().await;
             info!(
-                "http query {}: change state to Stopped, reason {:?}",
+                "{}: http query change state to Stopped, reason {:?}",
                 &guard.query_id, reason
             );
         }
@@ -209,7 +208,7 @@ impl Executor {
                     stats: Default::default(),
                     reason,
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
-                    stop_time: Instant::now(),
+                    query_duration_ms: s.ctx.get_query_duration_ms(),
                     affect: Default::default(),
                 }))
             }
@@ -228,14 +227,14 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
-                    stop_time: Instant::now(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
+                    query_duration_ms: r.ctx.get_query_duration_ms(),
                     affect: r.ctx.get_affect(),
                 }))
             }
             Stopped(s) => {
                 info!(
-                    "http query {}: already stopped, reason {:?}, new reason {:?}",
+                    "{}: http query already stopped, reason {:?}, new reason {:?}",
                     &guard.query_id, s.reason, reason
                 );
             }
@@ -265,7 +264,7 @@ impl ExecuteState {
             session,
             ctx: ctx.clone(),
         };
-        info!("http query {}, change state to Running", &ctx.get_id());
+        info!("{}: http query change state to Running", &ctx.get_id());
         Executor::start_to_running(&executor, Running(running_state)).await;
 
         let executor_clone = executor.clone();

@@ -30,11 +30,12 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_binary_arguments;
@@ -227,20 +228,20 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        serialize_into_buf(writer, state)
+        serialize_state(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        *state = deserialize_from_slice(reader)?;
-
+        let rhs: AggregateCovarianceState = deserialize_state(reader)?;
+        state.merge(&rhs);
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let rhs = rhs.get::<AggregateCovarianceState>();
-        state.merge(rhs);
+        let other = rhs.get::<AggregateCovarianceState>();
+        state.merge(other);
         Ok(())
     }
 

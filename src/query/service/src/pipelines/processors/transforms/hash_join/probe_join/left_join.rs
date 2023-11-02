@@ -16,7 +16,6 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
@@ -25,7 +24,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
@@ -36,6 +35,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -45,11 +45,12 @@ impl HashJoinProbeState {
     {
         let input_num_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let true_validity = &probe_state.true_validity;
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
         // Safe to unwrap.
         let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
 
@@ -68,25 +69,20 @@ impl HashJoinProbeState {
             .load(Ordering::Relaxed);
 
         // Start to probe hash table.
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(
                         key,
+                        *ptr,
                         local_build_indexes_ptr,
                         matched_num,
                         max_block_size,
                     )
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        local_build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    (0, 0)
                 };
             let mut total_probe_matched = 0;
             if match_count > 0 {
@@ -117,6 +113,8 @@ impl HashJoinProbeState {
                         probe_unmatched_indexes_occupied,
                         is_probe_projected,
                         is_build_projected,
+                        &probe_state.true_validity,
+                        string_items_buf,
                     )?);
                     probe_unmatched_indexes_occupied = 0;
                 }
@@ -130,26 +128,18 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let mut probe_block =
-                            DataBlock::take(input, &probe_indexes[0..matched_num])?;
+                        let mut probe_block = DataBlock::take(
+                            input,
+                            &probe_indexes[0..matched_num],
+                            string_items_buf,
+                        )?;
                         // For full join, wrap nullable for probe block
                         if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                            let nullable_probe_columns = if matched_num == max_block_size {
-                                probe_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, max_block_size, true_validity))
-                                    .collect::<Vec<_>>()
-                            } else {
-                                let mut validity = MutableBitmap::new();
-                                validity.extend_constant(matched_num, true);
-                                let validity: Bitmap = validity.into();
-                                probe_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, matched_num, &validity))
-                                    .collect::<Vec<_>>()
-                            };
+                            let nullable_probe_columns = probe_block
+                                .columns()
+                                .iter()
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
+                                .collect::<Vec<_>>();
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num);
                         }
                         Some(probe_block)
@@ -162,43 +152,26 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             &build_num_rows,
+                            string_items_buf,
                         )?;
-                        // For left join, wrap nullable for build block
-                        let (nullable_columns, num_rows) = if build_num_rows == 0 {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| BlockEntry {
-                                        value: Value::Scalar(Scalar::Null),
-                                        data_type: c.data_type.wrap_nullable(),
-                                    })
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
-                        } else if matched_num == max_block_size {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, max_block_size, true_validity))
-                                    .collect::<Vec<_>>(),
-                                max_block_size,
-                            )
+                        // For left or full join, wrap nullable for build block.
+                        let nullable_columns = if build_num_rows == 0 {
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| BlockEntry {
+                                    value: Value::Scalar(Scalar::Null),
+                                    data_type: c.data_type.wrap_nullable(),
+                                })
+                                .collect::<Vec<_>>()
                         } else {
-                            let mut validity = MutableBitmap::new();
-                            validity.extend_constant(matched_num, true);
-                            let validity: Bitmap = validity.into();
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, matched_num, &validity))
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
+                                .collect::<Vec<_>>()
                         };
-                        Some(DataBlock::new(nullable_columns, num_rows))
+                        Some(DataBlock::new(nullable_columns, matched_num))
                     } else {
                         None
                     };
@@ -217,7 +190,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
@@ -256,6 +229,8 @@ impl HashJoinProbeState {
             probe_unmatched_indexes_occupied,
             is_probe_projected,
             is_build_projected,
+            &probe_state.true_validity,
+            string_items_buf,
         )?);
         Ok(result_blocks)
     }
@@ -265,6 +240,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -274,11 +250,12 @@ impl HashJoinProbeState {
     {
         let input_num_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let true_validity = &probe_state.true_validity;
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
         if input_num_rows > probe_state.row_state.as_ref().unwrap().len() {
             probe_state.row_state = Some(vec![0; input_num_rows]);
         }
@@ -304,25 +281,20 @@ impl HashJoinProbeState {
             .load(Ordering::Relaxed);
 
         // Start to probe hash table.
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(
                         key,
+                        *ptr,
                         local_build_indexes_ptr,
                         matched_num,
                         max_block_size,
                     )
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        local_build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    (0, 0)
                 };
             let mut total_probe_matched = 0;
             if match_count > 0 {
@@ -351,26 +323,18 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let mut probe_block =
-                            DataBlock::take(input, &probe_indexes[0..matched_num])?;
+                        let mut probe_block = DataBlock::take(
+                            input,
+                            &probe_indexes[0..matched_num],
+                            string_items_buf,
+                        )?;
                         // For full join, wrap nullable for probe block
                         if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                            let nullable_probe_columns = if matched_num == max_block_size {
-                                probe_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, max_block_size, true_validity))
-                                    .collect::<Vec<_>>()
-                            } else {
-                                let mut validity = MutableBitmap::new();
-                                validity.extend_constant(matched_num, true);
-                                let validity: Bitmap = validity.into();
-                                probe_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, matched_num, &validity))
-                                    .collect::<Vec<_>>()
-                            };
+                            let nullable_probe_columns = probe_block
+                                .columns()
+                                .iter()
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
+                                .collect::<Vec<_>>();
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num)
                         }
                         Some(probe_block)
@@ -383,43 +347,26 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             &build_num_rows,
+                            string_items_buf,
                         )?;
-                        // For left join, wrap nullable for build block
-                        let (nullable_columns, num_rows) = if build_num_rows == 0 {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| BlockEntry {
-                                        value: Value::Scalar(Scalar::Null),
-                                        data_type: c.data_type.wrap_nullable(),
-                                    })
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
-                        } else if matched_num == max_block_size {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, max_block_size, true_validity))
-                                    .collect::<Vec<_>>(),
-                                max_block_size,
-                            )
+                        // For left and full join, wrap nullable for build block.
+                        let nullable_columns = if build_num_rows == 0 {
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| BlockEntry {
+                                    value: Value::Scalar(Scalar::Null),
+                                    data_type: c.data_type.wrap_nullable(),
+                                })
+                                .collect::<Vec<_>>()
                         } else {
-                            let mut validity = MutableBitmap::new();
-                            validity.extend_constant(matched_num, true);
-                            let validity: Bitmap = validity.into();
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_validity(c, matched_num, &validity))
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
+                                .collect::<Vec<_>>()
                         };
-                        Some(DataBlock::new(nullable_columns, num_rows))
+                        Some(DataBlock::new(nullable_columns, matched_num))
                     } else {
                         None
                     };
@@ -433,6 +380,7 @@ impl HashJoinProbeState {
                                 .other_predicate
                                 .as_ref()
                                 .unwrap(),
+                            &self.func_ctx,
                         )?;
 
                         if all_true {
@@ -484,7 +432,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
@@ -530,6 +478,8 @@ impl HashJoinProbeState {
                         matched_num,
                         is_probe_projected,
                         is_build_projected,
+                        &probe_state.true_validity,
+                        string_items_buf,
                     )?);
                     matched_num = 0;
                 }
@@ -547,10 +497,13 @@ impl HashJoinProbeState {
             matched_num,
             is_probe_projected,
             is_build_projected,
+            &probe_state.true_validity,
+            string_items_buf,
         )?);
         Ok(result_blocks)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_left_join_null_block(
         &self,
         input: &DataBlock,
@@ -558,20 +511,18 @@ impl HashJoinProbeState {
         matched_num: usize,
         is_probe_projected: bool,
         is_build_projected: bool,
+        true_validity: &Bitmap,
+        string_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Result<DataBlock> {
         let probe_block = if is_probe_projected {
-            let mut probe_block = DataBlock::take(input, &indexes[0..matched_num])?;
+            let mut probe_block =
+                DataBlock::take(input, &indexes[0..matched_num], string_items_buf)?;
             // For full join, wrap nullable for probe block
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                 let nullable_probe_columns = probe_block
                     .columns()
                     .iter()
-                    .map(|c| {
-                        let mut probe_validity = MutableBitmap::new();
-                        probe_validity.extend_constant(matched_num, true);
-                        let probe_validity: Bitmap = probe_validity.into();
-                        set_validity(c, matched_num, &probe_validity)
-                    })
+                    .map(|c| wrap_true_validity(c, matched_num, true_validity))
                     .collect::<Vec<_>>();
                 probe_block = DataBlock::new(nullable_probe_columns, matched_num);
             }

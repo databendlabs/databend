@@ -183,6 +183,7 @@ impl Table for NumbersTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         if plan.parts.partitions.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;
@@ -209,7 +210,7 @@ impl Table for NumbersTable {
         Ok(())
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(Some(TableStatistics {
             num_rows: Some(self.total),
             data_size: Some(self.total * 8),

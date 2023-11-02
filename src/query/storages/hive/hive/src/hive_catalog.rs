@@ -143,7 +143,13 @@ impl HiveCatalog {
     pub fn get_client(&self) -> Result<impl TThriftHiveMetastoreSyncClient> {
         let mut c = TTcpChannel::new();
         c.open(self.client_address.as_str())
-            .map_err(from_thrift_error)?;
+            .map_err(from_thrift_error)
+            .map_err(|err| {
+                err.add_message_back(format!(
+                    "hive_metadatastore_address: {}",
+                    self.client_address.as_str()
+                ))
+            })?;
         let (i_chan, o_chan) = c.split().map_err(from_thrift_error)?;
         let i_tran = TBufferedReadTransport::new(i_chan);
         let o_tran = TBufferedWriteTransport::new(o_chan);
@@ -334,7 +340,10 @@ impl HiveCatalog {
 }
 
 fn from_thrift_error(error: thrift::Error) -> ErrorCode {
-    ErrorCode::from_std_error(error)
+    ErrorCode::Internal(format!(
+        "thrift error: {:?}, please check your thrift client config",
+        error
+    ))
 }
 
 #[async_trait::async_trait]

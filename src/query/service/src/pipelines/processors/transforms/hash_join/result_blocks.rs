@@ -15,6 +15,7 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
@@ -24,6 +25,7 @@ use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::sql::planner::plans::JoinType;
 
@@ -33,6 +35,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -45,6 +48,7 @@ impl HashJoinProbeState {
                 hash_table,
                 probe_state,
                 keys_iter,
+                pointers,
                 input,
                 is_probe_projected,
             ),
@@ -59,6 +63,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                     )
                 } else {
@@ -66,6 +71,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -82,6 +88,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                     )
                 } else {
@@ -89,6 +96,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -101,12 +109,13 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.probe_right_semi_join::<_, _>(hash_table, probe_state, keys_iter)
+                    self.probe_right_semi_join::<_, _>(hash_table, probe_state, keys_iter, pointers)
                 } else {
                     self.probe_right_semi_join_with_conjunct::<_, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -119,12 +128,13 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.probe_right_anti_join::<_, _>(hash_table, probe_state, keys_iter)
+                    self.probe_right_anti_join::<_, _>(hash_table, probe_state, keys_iter, pointers)
                 } else {
                     self.probe_right_anti_join_with_conjunct::<_, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -142,6 +152,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -150,6 +161,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -159,6 +171,7 @@ impl HashJoinProbeState {
                 hash_table,
                 probe_state,
                 keys_iter,
+                pointers,
                 input,
                 is_probe_projected,
             ),
@@ -178,11 +191,14 @@ impl HashJoinProbeState {
                 .other_predicate
                 .is_none()
             {
-                true => self.probe_left_mark_join(hash_table, probe_state, keys_iter, input),
+                true => {
+                    self.probe_left_mark_join(hash_table, probe_state, keys_iter, pointers, input)
+                }
                 false => self.probe_left_mark_join_with_conjunct(
                     hash_table,
                     probe_state,
                     keys_iter,
+                    pointers,
                     input,
                     is_probe_projected,
                 ),
@@ -197,6 +213,7 @@ impl HashJoinProbeState {
                     hash_table,
                     probe_state,
                     keys_iter,
+                    pointers,
                     input,
                     is_probe_projected,
                 ),
@@ -204,6 +221,7 @@ impl HashJoinProbeState {
                     hash_table,
                     probe_state,
                     keys_iter,
+                    pointers,
                     input,
                     is_probe_projected,
                 ),
@@ -219,6 +237,7 @@ impl HashJoinProbeState {
         &self,
         input: DataBlock,
         is_probe_projected: bool,
+        true_validity: &Bitmap,
     ) -> Result<Vec<DataBlock>> {
         if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftAnti {
             return Ok(vec![input]);
@@ -229,7 +248,19 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
         let probe_block = if is_probe_projected {
-            Some(input)
+            if matches!(
+                self.hash_join_state.hash_join_desc.join_type,
+                JoinType::Full
+            ) {
+                let nullable_columns = input
+                    .columns()
+                    .iter()
+                    .map(|c| wrap_true_validity(c, input.num_rows(), true_validity))
+                    .collect::<Vec<_>>();
+                Some(DataBlock::new(nullable_columns, input.num_rows()))
+            } else {
+                Some(input)
+            }
         } else {
             None
         };

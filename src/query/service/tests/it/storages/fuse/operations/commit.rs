@@ -103,6 +103,7 @@ use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::execute_query;
@@ -369,15 +370,31 @@ impl TableContext for CtxDelegation {
         self.ctx.get_write_progress()
     }
 
-    fn get_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_spill_progress()
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_join_spill_progress()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_aggregate_spill_progress()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_group_by_spill_progress()
     }
 
     fn get_write_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
-    fn get_spill_progress_value(&self) -> ProgressValues {
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
@@ -477,8 +494,11 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
 
-    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
 
@@ -623,6 +643,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
+        todo!()
+    }
+
+    fn get_license_key(&self) -> String {
         todo!()
     }
 }

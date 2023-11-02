@@ -99,7 +99,8 @@ impl FuseTable {
                 };
                 ctx.get_write_progress().incr(&progress_values);
                 // deleting the whole table... just a truncate
-                return self.do_truncate(ctx.clone()).await.map(|_| None);
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
             }
             Some(filters) => filters,
         };
@@ -121,7 +122,8 @@ impl FuseTable {
                 ctx.get_write_progress().incr(&progress_values);
 
                 // deleting the whole table... just a truncate
-                return self.do_truncate(ctx.clone()).await.map(|_| None);
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
             }
         }
         Ok(Some(snapshot.clone()))
@@ -169,7 +171,7 @@ impl FuseTable {
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
 
-        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false, false)?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(
@@ -197,9 +199,10 @@ impl FuseTable {
             source_col_indices.extend_from_slice(&remain_column_indices);
             Arc::new(Some(
                 (*self.create_block_reader(
+                    ctx.clone(),
                     Projection::Columns(remain_column_indices),
                     false,
-                    ctx.clone(),
+                    false,
                 )?)
                 .clone(),
             ))

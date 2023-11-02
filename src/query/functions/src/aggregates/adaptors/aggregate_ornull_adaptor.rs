@@ -87,6 +87,10 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.init_state(place)
     }
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        self.inner.serialize_size_per_row().map(|row| row + 1)
+    }
+
     #[inline]
     fn state_layout(&self) -> std::alloc::Layout {
         let layout = self.inner.state_layout();
@@ -136,6 +140,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner
             .accumulate_keys(places, offset, columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
+
         match if_cond {
             Some(v) if v.unset_bits() > 0 => {
                 // all nulls
@@ -173,16 +178,16 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let flag = reader[reader.len() - 1];
-        self.inner
-            .deserialize(place, &mut &reader[..reader.len() - 1])?;
-        self.set_flag(place, flag);
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        let flag = self.get_flag(place) > 0 || reader[reader.len() - 1] > 0;
+
+        self.inner.merge(place, &mut &reader[..reader.len() - 1])?;
+        self.set_flag(place, flag as u8);
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        self.inner.merge(place, rhs)?;
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        self.inner.merge_states(place, rhs)?;
         let flag = self.get_flag(place) > 0 || self.get_flag(rhs) > 0;
         self.set_flag(place, u8::from(flag));
         Ok(())

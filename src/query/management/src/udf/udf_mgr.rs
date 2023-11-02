@@ -56,6 +56,7 @@ impl UdfMgr {
 #[async_trait::async_trait]
 impl UdfApi for UdfMgr {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
@@ -79,6 +80,7 @@ impl UdfApi for UdfMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
@@ -107,6 +109,7 @@ impl UdfApi for UdfMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>> {
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(udf_name)?);
         let kv_api = self.kv_api.clone();
@@ -129,18 +132,22 @@ impl UdfApi for UdfMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
         let values = self.kv_api.prefix_list_kv(&self.udf_prefix).await?;
 
         let mut udfs = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || "")?;
+        for (name, value) in values {
+            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
+                format!("udf {name} is corrupt")
+            })?;
             udfs.push(udf);
         }
         Ok(udfs)
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()> {
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(udf_name)?);
         let kv_api = self.kv_api.clone();

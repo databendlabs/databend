@@ -1,4 +1,4 @@
-<h1 align="center">The Future of Cloud [Data+AI] Analytics</h1>
+<h1 align="center">Databend: The Next-Gen Cloud [Data+AI] Analytics</h1>
 
 <div align="center">
 
@@ -21,7 +21,7 @@
 
 <br>
 
-<a href="https://github.com/datafuselabs/databend/actions">
+<a href="https://github.com/datafuselabs/databend/actions/workflows/release.yml">
 <img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
 </a>
 
@@ -30,57 +30,35 @@
 </div>
 </div>
 
-<h4 align="center">
-<img src="https://github.com/datafuselabs/databend/assets/172204/0db97eea-7f25-48a6-b038-6d153378a6d4" width="600" alt="databend" />
-</h4>
+<img src="https://github.com/datafuselabs/databend/assets/172204/9997d8bc-6462-4dbd-90e3-527cf50a709c" alt="databend" />
 
-## What is Databend?
+## 🐋 Introduction
 
-Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse that focuses on Low-Cost and Low-Complexity for your massive-scale analytics needs. The open-source alternative to Snowflake, Databend is crafted in Rust, enabling superior performance and efficiency.
+**Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
-([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
+## 🚀 Why Databend
 
-- __Lakehouse Architecture__
+- **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.
 
-  Databend's Lakehouse architecture combines the scalability of data lakes with the speed of data warehouses, supporting data reads from Hive and Iceberg for streamlined accessibility and flexibility.
+- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.rs/blog/clickbench-databend-top).
 
-- __Feature-Rich__
+- **Cost-Efficient Elasticity**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance.
 
-  Support for atomic operations including `SELECT/INSERT/DELETE/UPDATE/REPLACE/COPY/ALTER` and advanced features like Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
+- **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
 
+- **Data Version Control**: Offers Git-like multi-version storage, enabling easy data querying, cloning, and reverting from any point in time.
 
-- __Instant Elasticity__
+- **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
-  Databend completely separates storage from compute, which allows you easily scale up or scale down based on your application's needs.
+- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
 
+- **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
 
-- __Blazing Performance__
+## 📐 Architecture
 
-  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering [blazing performance](https://benchmark.clickhouse.com/) data analytics.
+![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
-
-- __Git-like MVCC Storage__
-
-  [Databend stores data with snapshots](https://databend.rs/doc/sql-commands/ddl/table/optimize-table#what-are-snapshot-segment-and-block), enabling users to effortlessly query, clone, or restore data from any history timepoint.
-
-
-- __Support for Semi-Structured Data__
-
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data/load) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, TUPLE, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/), which is easy to import and operate on semi-structured.
-
-
-- __Easy to Use__
-
-  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
-
-
-## Architecture
-
-![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
-
-
-## Try Databend
+## 🚀 Try Databend
 
 ### 1. Databend Serverless Cloud
 
@@ -99,7 +77,7 @@ To run Databend quickly:
 docker run --net=host  datafuselabs/databend
 ```
 
-## Getting Started
+## 🚀 Getting Started
 
 <details>
 <summary>Deploying Databend</summary>
@@ -116,7 +94,7 @@ docker run --net=host  datafuselabs/databend
 - [Connecting to Databend with BendSQL](https://databend.rs/doc/sql-clients/bendsql)
 - [Connecting to Databend with JDBC](https://databend.rs/doc/sql-clients/jdbc)
 - [Connecting to Databend with MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
-  
+
 </details>
 
 <details>
@@ -129,7 +107,7 @@ docker run --net=host  datafuselabs/databend
 - [Querying Data in Staged Files](https://databend.rs/doc/load-data/transform/querying-stage)
 - [Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
 - [How to Unload Data from Databend](https://databend.rs/doc/load-data/unload)
- 
+
 </details>
 
 <details>
@@ -149,17 +127,15 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Visualize Tools with Databend</summary>
 
-- [Metabase](https://databend.rs/doc/integrations/metabase)
-- [Tableau](https://databend.rs/doc/integrations/tableau)
-- [Grafana](https://databend.rs/doc/integrations/grafana)
-- [Jupyter Notebook](https://databend.rs/doc/integrations/jupyter)
-- [Deepnote](https://databend.rs/doc/integrations/deepnote)
-- [MindsDB](https://databend.rs/doc/integrations/mindsdb)
-- [Redash](https://databend.rs/doc/integrations/redash)
+- [Metabase](https://databend.rs/doc/visualize/metabase)
+- [Tableau](https://databend.rs/doc/visualize/tableau)
+- [Grafana](https://databend.rs/doc/visualize/grafana)
+- [Jupyter Notebook](https://databend.rs/doc/visualize/jupyter)
+- [Deepnote](https://databend.rs/doc/visualize/deepnote)
+- [MindsDB](https://databend.rs/doc/visualize/mindsdb)
+- [Redash](https://databend.rs/doc/visualize/redash)
 
 </details>
-
-
 
 <details>
 <summary>Managing Users</summary>
@@ -170,7 +146,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Create a Role](https://databend.rs/doc/sql-commands/ddl/user/user-create-role)
 - [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
-- [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
+- [How to Revoke the Role of a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
 </details>
 
 <details>
@@ -223,7 +199,7 @@ docker run --net=host  datafuselabs/databend
 
 - [How to Create Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/create-mask-policy)
 - [How to Drop Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
- 
+
 </details>
 
 <details>
@@ -235,53 +211,60 @@ docker run --net=host  datafuselabs/databend
 
 </details>
 
-
 <details>
 <summary>Performance</summary>
-
+  
+- [Review Clickbench](https://databend.rs/blog/clickbench-databend-top)
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+  
 </details>
 
 
-## Contributing
+## 🤝 Contributing
 
-Databend is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
-Once the code is merged, your name will be stored in the **system.contributors** table forever.
+Databend thrives on community contributions! Whether it's through ideas, code, or documentation, every effort helps in enhancing our project. As a token of our appreciation, once your code is merged, your name will be eternally preserved in the **system.contributors** table.
 
-To get started with contributing:
+Here are some resources to help you get started:
 
 - [Building Databend From Source](https://databend.rs/doc/contributing/building-from-source)
 - [The First Good Pull Request](https://databend.rs/doc/contributing/good-pr)
 
 
-## Community
+## 👥 Community
 
-For general help in using Databend, please refer to the official documentation. For additional help, you can use one of these channels to ask a question:
+For guidance on using Databend, we recommend starting with the official documentation. If you need further assistance, explore the following community channels:
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
-## Roadmap
 
+## 🛣️ Roadmap
+
+Stay updated with Databend's development journey. Here are our roadmap milestones:
+
+- [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 - [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
 - [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
 - [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
-- [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 
-## License
 
-Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt). 
+## 📜 License
+
+Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt).
 
 When contributing to Databend, you can find the relevant license header in each file.
 
 For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/enterprise/license).
 
-## Acknowledgement
 
-- Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture).
-- Databend's computing model is based on [Arrow2](https://github.com/jorgecarleitao/arrow2), Arrow2 is a faster and safer implementation of the Apache Arrow Columnar Format.
-- The [documentation website](https://databend.rs) is hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+## 🙏 Acknowledgement
+
+- **Inspiration**: Databend's design draws inspiration from industry leaders [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture).
+
+- **Computing Model**: Our computing foundation is built upon [Arrow2](https://github.com/jorgecarleitao/arrow2), a faster and more secure rendition of the Apache Arrow Columnar Format.
+
+- **Documentation Hosting**: The [Databend documentation website](https://databend.rs) proudly runs on [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).

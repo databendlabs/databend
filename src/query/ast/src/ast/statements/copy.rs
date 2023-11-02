@@ -23,13 +23,49 @@ use std::io::Result;
 use itertools::Itertools;
 use url::Url;
 
-use crate::ast::write_quoted_comma_separated_list;
-use crate::ast::write_space_separated_map;
+use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
-/// CopyStmt is the parsed statement of `COPY`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableIdentifier {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl TableIdentifier {
+    pub fn from_tuple(t: (Option<Identifier>, Option<Identifier>, Identifier)) -> Self {
+        let (catalog, database, table) = t;
+        Self {
+            catalog,
+            database,
+            table,
+        }
+    }
+}
+
+impl Display for TableIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(catalog) = &self.catalog {
+            write!(
+                f,
+                "{catalog}.{}.{}",
+                self.database.as_ref().expect("database must be valid"),
+                self.table
+            )?;
+        } else if let Some(database) = &self.database {
+            write!(f, "{database}.{}", self.table)?;
+        } else {
+            write!(f, "{}", self.table)?;
+        };
+        Ok(())
+    }
+}
+
+/// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
 /// ## Examples
 ///
@@ -37,58 +73,66 @@ use crate::ast::Query;
 /// COPY INTO table from s3://bucket/path/to/x.csv
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub struct CopyStmt {
+pub struct CopyIntoTableStmt {
+    pub src: CopyIntoTableSource,
+    pub dst: TableIdentifier,
+    pub dst_columns: Option<Vec<Identifier>>,
+
     pub hints: Option<Hint>,
-    pub src: CopyUnit,
-    pub dst: CopyUnit,
+
+    pub file_format: BTreeMap<String, String>,
+
+    // files to load
     pub files: Option<Vec<String>>,
     pub pattern: Option<String>,
-    pub file_format: BTreeMap<String, String>,
+    pub force: bool,
+
+    // copy options
     /// TODO(xuanwo): parse into validation_mode directly.
     pub validation_mode: String,
     pub size_limit: usize,
     pub max_files: usize,
-    pub max_file_size: usize,
     pub split_size: usize,
-    pub single: bool,
     pub purge: bool,
-    pub force: bool,
     pub disable_variant_check: bool,
+    pub return_failed_only: bool,
     pub on_error: String,
 }
 
-impl CopyStmt {
-    pub fn apply_option(&mut self, opt: CopyOption) {
+impl CopyIntoTableStmt {
+    pub fn apply_option(&mut self, opt: CopyIntoTableOption) {
         match opt {
-            CopyOption::Files(v) => self.files = Some(v),
-            CopyOption::Pattern(v) => self.pattern = Some(v),
-            CopyOption::FileFormat(v) => self.file_format = v,
-            CopyOption::ValidationMode(v) => self.validation_mode = v,
-            CopyOption::SizeLimit(v) => self.size_limit = v,
-            CopyOption::MaxFiles(v) => self.max_files = v,
-            CopyOption::MaxFileSize(v) => self.max_file_size = v,
-            CopyOption::SplitSize(v) => self.split_size = v,
-            CopyOption::Single(v) => self.single = v,
-            CopyOption::Purge(v) => self.purge = v,
-            CopyOption::Force(v) => self.force = v,
-            CopyOption::DisableVariantCheck(v) => self.disable_variant_check = v,
-            CopyOption::OnError(v) => self.on_error = v,
+            CopyIntoTableOption::Files(v) => self.files = Some(v),
+            CopyIntoTableOption::Pattern(v) => self.pattern = Some(v),
+            CopyIntoTableOption::FileFormat(v) => self.file_format = v,
+            CopyIntoTableOption::ValidationMode(v) => self.validation_mode = v,
+            CopyIntoTableOption::SizeLimit(v) => self.size_limit = v,
+            CopyIntoTableOption::MaxFiles(v) => self.max_files = v,
+            CopyIntoTableOption::SplitSize(v) => self.split_size = v,
+            CopyIntoTableOption::Purge(v) => self.purge = v,
+            CopyIntoTableOption::Force(v) => self.force = v,
+            CopyIntoTableOption::DisableVariantCheck(v) => self.disable_variant_check = v,
+            CopyIntoTableOption::ReturnFailedOnly(v) => self.return_failed_only = v,
+            CopyIntoTableOption::OnError(v) => self.on_error = v,
         }
     }
 }
 
-impl Display for CopyStmt {
+impl Display for CopyIntoTableStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "COPY")?;
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
         }
         write!(f, " INTO {}", self.dst)?;
+        if let Some(columns) = &self.dst_columns {
+            write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))?;
+        }
         write!(f, " FROM {}", self.src)?;
 
         if let Some(files) = &self.files {
             write!(f, " FILES = (")?;
-            write_quoted_comma_separated_list(f, files)?;
+            write_comma_separated_quoted_list(f, files)?;
             write!(f, " )")?;
         }
 
@@ -98,10 +142,8 @@ impl Display for CopyStmt {
 
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
-            for (k, v) in self.file_format.iter() {
-                write!(f, " {} = '{}'", k, v)?;
-            }
-            write!(f, " )")?;
+            write_comma_separated_map(f, &self.file_format)?;
+            write!(f, ")")?;
         }
 
         if !self.validation_mode.is_empty() {
@@ -116,15 +158,10 @@ impl Display for CopyStmt {
             write!(f, " MAX_FILES = {}", self.max_files)?;
         }
 
-        if self.max_file_size != 0 {
-            write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
-        }
-
         if self.split_size != 0 {
             write!(f, " SPLIT_SIZE = {}", self.split_size)?;
         }
 
-        write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
@@ -134,64 +171,82 @@ impl Display for CopyStmt {
     }
 }
 
-/// CopyUnit is the unit that can be used in `COPY`.
+/// CopyIntoLocationStmt is the parsed statement of `COPY into <location>  from <table> ...`
 #[derive(Debug, Clone, PartialEq)]
-pub enum CopyUnit {
-    /// Table can be used in `INTO` or `FROM`.
-    ///
-    /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
-    Table {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
-        columns: Option<Vec<Identifier>>,
-    },
-    Location(FileLocation),
-    /// Query can only be used as `FROM`.
-    ///
-    /// For example:`(SELECT field_a,field_b FROM table)`
-    Query(Box<Query>),
+pub struct CopyIntoLocationStmt {
+    pub hints: Option<Hint>,
+    pub src: CopyIntoLocationSource,
+    pub dst: FileLocation,
+    pub file_format: BTreeMap<String, String>,
+    pub single: bool,
+    pub max_file_size: usize,
 }
 
-impl CopyUnit {
-    pub fn target(&self) -> &'static str {
-        match self {
-            CopyUnit::Table { .. } => "Table",
-            CopyUnit::Location { .. } => "Location",
-            CopyUnit::Query(_) => "Query",
+impl Display for CopyIntoLocationStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "COPY")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
+        write!(f, " INTO {}", self.dst)?;
+        write!(f, " FROM {}", self.src)?;
+
+        if !self.file_format.is_empty() {
+            write!(f, " FILE_FORMAT = (")?;
+            write_comma_separated_map(f, &self.file_format)?;
+            write!(f, ")")?;
+        }
+        write!(f, " SINGLE = {}", self.single)?;
+        write!(f, " MAX_FILE_SIZE= {}", self.max_file_size)?;
+
+        Ok(())
+    }
+}
+
+impl CopyIntoLocationStmt {
+    pub fn apply_option(&mut self, opt: CopyIntoLocationOption) {
+        match opt {
+            CopyIntoLocationOption::FileFormat(v) => self.file_format = v,
+            CopyIntoLocationOption::Single(v) => self.single = v,
+            CopyIntoLocationOption::MaxFileSize(v) => self.max_file_size = v,
         }
     }
 }
 
-impl Display for CopyUnit {
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyIntoTableSource {
+    Location(FileLocation),
+    /// Load with Transform
+    /// limited to `(SELECT ... FROM <location>)`
+    Query(Box<Query>),
+}
+
+impl Display for CopyIntoTableSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CopyUnit::Table {
-                catalog,
-                database,
-                table,
-                columns,
-            } => {
-                let ret = if let Some(catalog) = catalog {
-                    write!(
-                        f,
-                        "{catalog}.{}.{table}",
-                        database.as_ref().expect("database must be valid")
-                    )
-                } else if let Some(database) = database {
-                    write!(f, "{database}.{table}")
-                } else {
-                    write!(f, "{table}")
-                };
-                if let Some(columns) = columns {
-                    write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))
-                } else {
-                    ret
-                }
-            }
-            CopyUnit::Location(v) => v.fmt(f),
-            CopyUnit::Query(query) => {
+            CopyIntoTableSource::Location(v) => v.fmt(f),
+            CopyIntoTableSource::Query(query) => {
                 write!(f, "({query})")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyIntoLocationSource {
+    Query(Box<Query>),
+    /// it will be rewrite as `(SELECT * FROM table)`
+    Table(TableIdentifier),
+}
+
+impl Display for CopyIntoLocationSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CopyIntoLocationSource::Query(query) => {
+                write!(f, "({query})")
+            }
+            CopyIntoLocationSource::Table(table) => {
+                write!(f, "{}", table)
             }
         }
     }
@@ -256,7 +311,7 @@ impl Display for Connection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
-            write_space_separated_map(f, &self.conns)?;
+            write_comma_separated_map(f, &self.conns)?;
             write!(f, " )")?;
         }
         Ok(())
@@ -346,7 +401,7 @@ impl Display for UriLocation {
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
-        write!(f, "{}", self.connection)?;
+        write!(f, "{}", self.connection.mask())?;
         Ok(())
     }
 }
@@ -380,18 +435,23 @@ impl Display for FileLocation {
     }
 }
 
-pub enum CopyOption {
+pub enum CopyIntoTableOption {
     Files(Vec<String>),
     Pattern(String),
     FileFormat(BTreeMap<String, String>),
     ValidationMode(String),
     SizeLimit(usize),
     MaxFiles(usize),
-    MaxFileSize(usize),
     SplitSize(usize),
-    Single(bool),
     Purge(bool),
     Force(bool),
     DisableVariantCheck(bool),
+    ReturnFailedOnly(bool),
     OnError(String),
+}
+
+pub enum CopyIntoLocationOption {
+    FileFormat(BTreeMap<String, String>),
+    MaxFileSize(usize),
+    Single(bool),
 }

@@ -109,7 +109,7 @@ impl ClusterStatsGenerator {
 
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
-            block = block.take(&indices)?;
+            block = block.take(&indices, &mut None)?;
         }
 
         block = self
@@ -156,7 +156,7 @@ impl ClusterStatsGenerator {
         let level = if min == max
             && self
                 .block_thresholds
-                .check_perfect_block(data_block.num_rows(), data_block.memory_size())
+                .check_large_enough(data_block.num_rows(), data_block.memory_size())
         {
             -1
         } else {

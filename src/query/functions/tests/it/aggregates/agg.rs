@@ -59,6 +59,7 @@ fn test_agg() {
     test_agg_quantile_disc(file, eval_aggr);
     test_agg_quantile_cont(file, eval_aggr);
     test_agg_quantile_tdigest(file, eval_aggr);
+    test_agg_quantile_tdigest_weighted(file, eval_aggr);
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
     test_agg_array_agg(file, eval_aggr);
@@ -620,6 +621,21 @@ fn test_agg_quantile_tdigest(file: &mut impl Write, simulator: impl AggregationS
     run_agg_ast(
         file,
         "quantile_tdigest(0.8)(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_quantile_tdigest_weighted(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "quantile_tdigest_weighted(0.8)(a, b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "quantile_tdigest_weighted(0.8)(x_null, b)",
         get_example().as_slice(),
         simulator,
     );

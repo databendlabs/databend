@@ -101,7 +101,7 @@ impl FuseTable {
         let block_thresholds = self.get_block_thresholds();
         // sort
         let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, None)?;
 
         pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
@@ -174,9 +174,10 @@ impl FuseTable {
                 });
 
                 let reader = self.create_block_reader(
+                    ctx.clone(),
                     Projection::Columns(remain_col_indices),
                     false,
-                    ctx.clone(),
+                    false,
                 )?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
@@ -235,7 +236,8 @@ impl FuseTable {
             projection: offset_map.values().cloned().collect(),
         });
 
-        let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection.clone(), false, false)?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(

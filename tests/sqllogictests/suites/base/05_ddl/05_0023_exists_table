@@ -23,7 +23,7 @@ statement ok
 EXISTS TABLE db_05_0023_v2.t
 
 statement ok
-DROP TABLE t
+DROP TABLE t ALL
 
 statement ok
 EXISTS TABLE db_05_0023_v2.t

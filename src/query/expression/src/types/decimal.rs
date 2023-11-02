@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
+use ethnum::AsI256;
 use itertools::Itertools;
 use num_traits::NumCast;
 use num_traits::ToPrimitive;
@@ -270,6 +271,7 @@ pub trait Decimal:
     fn checked_sub(self, rhs: Self) -> Option<Self>;
     fn checked_div(self, rhs: Self) -> Option<Self>;
     fn checked_mul(self, rhs: Self) -> Option<Self>;
+    fn checked_rem(self, rhs: Self) -> Option<Self>;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -284,7 +286,7 @@ pub trait Decimal:
     fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
 
-    fn to_int<U: NumCast>(self, scale: u8) -> Option<U>;
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U>;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
@@ -358,6 +360,10 @@ impl Decimal for i128 {
         self.checked_mul(rhs)
     }
 
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
+    }
+
     fn min_for_precision(to_precision: u8) -> Self {
         MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
@@ -378,7 +384,34 @@ impl Decimal for i128 {
     }
 
     fn from_float(value: f64) -> Self {
-        value.to_i128().unwrap()
+        // still needs to be optimized.
+        // An implementation similar to float64_as_i256 obtained from the ethnum library
+        const M: u64 = (f64::MANTISSA_DIGITS - 1) as u64;
+        const MAN_MASK: u64 = !(!0 << M);
+        const MAN_ONE: u64 = 1 << M;
+        const EXP_MASK: u64 = !0 >> f64::MANTISSA_DIGITS;
+        const EXP_OFFSET: u64 = EXP_MASK / 2;
+        const ABS_MASK: u64 = !0 >> 1;
+        const SIG_MASK: u64 = !ABS_MASK;
+
+        let abs = f64::from_bits(value.to_bits() & ABS_MASK);
+        let sign = -(((value.to_bits() & SIG_MASK) >> (u64::BITS - 2)) as i128).wrapping_sub(1); // if self >= 0. { 1 } else { -1 }
+        if abs >= 1.0 {
+            let bits = abs.to_bits();
+            let exponent = ((bits >> M) & EXP_MASK) - EXP_OFFSET;
+            let mantissa = (bits & MAN_MASK) | MAN_ONE;
+            if exponent <= M {
+                (<i128 as From<u64>>::from(mantissa >> (M - exponent))) * sign
+            } else if exponent < 127 {
+                (<i128 as From<u64>>::from(mantissa) << (exponent - M)) * sign
+            } else if sign > 0 {
+                i128::MAX
+            } else {
+                i128::MIN
+            }
+        } else {
+            Self::zero()
+        }
     }
 
     fn from_u64(value: u64) -> Self {
@@ -407,9 +440,22 @@ impl Decimal for i128 {
         self as f64 / div
     }
 
-    fn to_int<U: NumCast>(self, scale: u8) -> Option<U> {
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
         let div = 10i128.checked_pow(scale as u32)?;
-        num_traits::cast(self / div)
+        let mut val = self / div;
+        if rounding_mode && scale > 0 {
+            // Checking whether numbers need to be added or subtracted to calculate rounding
+            if let Some(r) = self.checked_rem(div) {
+                if let Some(m) = r.checked_div(i128::e(scale as u32 - 1)) {
+                    if m >= 5i128 {
+                        val = val.checked_add(1i128)?;
+                    } else if m <= -5i128 {
+                        val = val.checked_sub(1i128)?;
+                    }
+                }
+            }
+        }
+        num_traits::cast(val)
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
@@ -507,6 +553,10 @@ impl Decimal for i256 {
         self.checked_mul(rhs)
     }
 
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
+    }
+
     fn min_for_precision(to_precision: u8) -> Self {
         MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
@@ -523,7 +573,7 @@ impl Decimal for i256 {
     }
 
     fn from_float(value: f64) -> Self {
-        i256::from(value.to_i128().unwrap())
+        value.as_i256()
     }
 
     fn from_u64(value: u64) -> Self {
@@ -552,10 +602,13 @@ impl Decimal for i256 {
         self.as_f64() / div
     }
 
-    fn to_int<U: NumCast>(self, scale: u8) -> Option<U> {
-        let div = i256::from(10).checked_pow(scale as u32)?;
-        let (h, l) = (self / div).into_words();
-        if h > 0 { None } else { l.to_int(scale) }
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
+        if !(i128::MIN..=i128::MAX).contains(&self) {
+            None
+        } else {
+            let val = self.as_i128();
+            val.to_int(scale, rounding_mode)
+        }
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
@@ -1008,7 +1061,6 @@ macro_rules! with_decimal_mapped_type {
         }
     }
 }
-
 // MAX decimal256 value of little-endian format for each precision.
 // Each element is the max value of signed 256-bit integer for the specified precision which
 // is encoded to the 32-byte width format of little-endian.

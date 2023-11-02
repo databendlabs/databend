@@ -1,14 +1,14 @@
 statement ok
-drop table if exists strings_repeat_sample_u8
+drop table if exists strings_repeat_sample_u8 all
 
 statement ok
-drop table if exists strings_repeat_sample_u16
+drop table if exists strings_repeat_sample_u16 all
 
 statement ok
-drop table if exists strings_repeat_sample_u32
+drop table if exists strings_repeat_sample_u32 all
 
 statement ok
-drop table if exists strings_repeat_sample_u64
+drop table if exists strings_repeat_sample_u64 all
 
 statement ok
 CREATE TABLE strings_repeat_sample_u8(s String, n Uint8) Engine = Fuse

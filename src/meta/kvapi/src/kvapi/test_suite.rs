@@ -40,6 +40,7 @@ use common_meta_types::TxnRequest;
 use common_meta_types::With;
 use log::debug;
 use log::info;
+use minitrace::func_name;
 
 use crate::kvapi;
 use crate::kvapi::UpsertKVReq;
@@ -483,7 +484,7 @@ impl kvapi::TestSuite {
             let resp = &responses[i];
             let expect_resp = &expected[i];
 
-            assert_eq!(resp, expect_resp);
+            assert_eq!(resp, expect_resp, "{}-th response", i);
         }
     }
 
@@ -681,7 +682,7 @@ impl kvapi::TestSuite {
             let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
                 response: Some(txn_op_response::Response::Put(TxnPutResponse {
                     key: txn_key.clone(),
-                    prev_value: Some(to_pb_seq_v(SeqV::new(1, val1.clone()))),
+                    prev_value: Some(pb::SeqV::from(SeqV::new(1, val1.clone()))),
                 })),
             }];
 
@@ -820,21 +821,25 @@ impl kvapi::TestSuite {
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: Some(to_pb_seq_v(SeqV::new(4, val1.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(4, val1.clone()))),
                     })),
                 },
                 // change k2
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key2.clone(),
-                        prev_value: Some(to_pb_seq_v(SeqV::new(5, val2.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(5, val2.clone()))),
                     })),
                 },
                 // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: Some(to_pb_seq_v(SeqV::new(6, val1_new.clone()))),
+                        value: Some(pb::SeqV::from(SeqV::with_meta(
+                            6,
+                            Some(KVMeta::default()),
+                            val1_new.clone(),
+                        ))),
                     })),
                 },
                 // delete k1
@@ -842,7 +847,11 @@ impl kvapi::TestSuite {
                     response: Some(txn_op_response::Response::Delete(TxnDeleteResponse {
                         key: txn_key1.clone(),
                         success: true,
-                        prev_value: Some(to_pb_seq_v(SeqV::new(6, val1_new.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::with_meta(
+                            6,
+                            Some(KVMeta::default()),
+                            val1_new.clone(),
+                        ))),
                     })),
                 },
                 // get k1
@@ -907,14 +916,18 @@ impl kvapi::TestSuite {
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: Some(to_pb_seq_v(SeqV::new(8, val1.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(8, val1.clone()))),
                     })),
                 },
                 // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: Some(to_pb_seq_v(SeqV::new(9, val1_new.clone()))),
+                        value: Some(pb::SeqV::from(SeqV::with_meta(
+                            9,
+                            Some(KVMeta::default()),
+                            val1_new.clone(),
+                        ))),
                     })),
                 },
             ];
@@ -947,7 +960,7 @@ impl kvapi::TestSuite {
         let expected = vec![TxnOpResponse::delete(
             key(),
             true,
-            Some(to_pb_seq_v(SeqV::new(1, val()))),
+            Some(pb::SeqV::from(SeqV::new(1, val()))),
         )];
 
         self.check_transaction_responses(&resp, &expected, true);
@@ -981,7 +994,7 @@ impl kvapi::TestSuite {
         let expected = vec![TxnOpResponse::delete(
             key(),
             false,
-            Some(to_pb_seq_v(SeqV::new(1, val()))),
+            Some(pb::SeqV::from(SeqV::new(1, val()))),
         )];
 
         self.check_transaction_responses(&resp, &expected, true);
@@ -1019,7 +1032,7 @@ impl kvapi::TestSuite {
         let expected = vec![TxnOpResponse::delete(
             key(),
             true,
-            Some(to_pb_seq_v(SeqV::new(1, val()))),
+            Some(pb::SeqV::from(SeqV::new(1, val()))),
         )];
 
         self.check_transaction_responses(&resp, &expected, true);
@@ -1093,13 +1106,5 @@ impl kvapi::TestSuite {
             );
         }
         Ok(())
-    }
-}
-
-/// Convert SeqV defined in rust types to SeqV defined in protobuf.
-fn to_pb_seq_v(seq_v: SeqV) -> pb::SeqV {
-    pb::SeqV {
-        seq: seq_v.seq,
-        data: seq_v.data,
     }
 }

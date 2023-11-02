@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -25,8 +26,10 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_matched_rows;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_split_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_unmatched_rows;
 
+use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
 
 pub struct MergeIntoSplitProcessor {
@@ -145,12 +148,29 @@ impl Processor for MergeIntoSplitProcessor {
     // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            //  for distributed execution, if one node matched all source data.
+            //  if we use right join, we will receive a empty block, but we must
+            //  give it to downstream.
+            if data_block.is_empty() {
+                self.output_data_matched_data = Some(data_block.clone());
+                // if a probe block can't match any data of hashtable, it will
+                // give an empty block here? The answer is no. so for right join,
+                // when we get an empty block, it says all source data has been matched
+                let block = data_block.add_meta(Some(Box::new(SourceFullMatched)))?;
+                self.output_data_not_matched_data = Some(block);
+                return Ok(());
+            }
+
             if self.target_table_empty {
                 self.output_data_not_matched_data = Some(data_block)
             } else {
+                let start = Instant::now();
                 let (matched_block, not_matched_block) = self
                     .merge_into_split_mutator
                     .split_data_block(&data_block)?;
+                let elapsed_time = start.elapsed().as_millis() as u64;
+                metrics_inc_merge_into_split_milliseconds(elapsed_time);
+
                 if !matched_block.is_empty() {
                     metrics_inc_merge_into_matched_rows(matched_block.num_rows() as u32);
                     self.output_data_matched_data = Some(matched_block);

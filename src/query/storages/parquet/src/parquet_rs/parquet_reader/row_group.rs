@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Buf;
 use bytes::Bytes;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
@@ -93,6 +95,9 @@ impl ChunkReader for ColumnChunkData {
 /// It's inspired by `InMemoryRowGroup` in apache `parquet` crate,
 /// but it is a private struct. Therefore, we copied the main codes here and did some optimizations.
 pub struct InMemoryRowGroup<'a> {
+    location: &'a str,
+    op: Operator,
+
     metadata: &'a RowGroupMetaData,
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
@@ -100,8 +105,15 @@ pub struct InMemoryRowGroup<'a> {
 }
 
 impl<'a> InMemoryRowGroup<'a> {
-    pub fn new(rg: &'a RowGroupMetaData, page_locations: Option<&'a [Vec<PageLocation>]>) -> Self {
+    pub fn new(
+        location: &'a str,
+        op: Operator,
+        rg: &'a RowGroupMetaData,
+        page_locations: Option<&'a [Vec<PageLocation>]>,
+    ) -> Self {
         Self {
+            location,
+            op,
             metadata: rg,
             page_locations,
             column_chunks: vec![None; rg.num_columns()],
@@ -118,8 +130,6 @@ impl<'a> InMemoryRowGroup<'a> {
     /// If call `fetch` multiple times, it will only fetch the data that has not been fetched.
     pub async fn fetch(
         &mut self,
-        loc: &str,
-        op: Operator,
         projection: &ProjectionMask,
         selection: Option<&RowSelection>,
     ) -> Result<()> {
@@ -162,16 +172,7 @@ impl<'a> InMemoryRowGroup<'a> {
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let mut handles = Vec::with_capacity(fetch_ranges.len());
-            for range in fetch_ranges {
-                let fut_read = op.read_with(loc);
-                handles.push(async move {
-                    let data = fut_read.range(range).await?;
-                    Ok::<_, ErrorCode>(Bytes::from(data))
-                });
-            }
-
-            let chunk_data = futures::future::try_join_all(handles).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?;
             let mut chunk_iter = chunk_data.into_iter();
             let mut page_start_offsets = page_start_offsets.into_iter();
 
@@ -207,15 +208,7 @@ impl<'a> InMemoryRowGroup<'a> {
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let mut handles = Vec::with_capacity(fetch_ranges.len());
-            for range in fetch_ranges {
-                let fut_read = op.read_with(loc);
-                handles.push(async move {
-                    let data = fut_read.range(range).await?;
-                    Ok::<_, ErrorCode>(Bytes::from(data))
-                });
-            }
-            let chunk_data = futures::future::try_join_all(handles).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?;
             let mut chunk_iter = chunk_data.into_iter();
 
             for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
@@ -233,6 +226,52 @@ impl<'a> InMemoryRowGroup<'a> {
         }
 
         Ok(())
+    }
+
+    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
+        if self.op.info().full_capability().blocking {
+            let blocking_op = self.op.blocking();
+            let ranges = ranges.to_vec();
+            let location = self.location.to_owned();
+
+            let f = move || -> Result<Vec<Bytes>> {
+                ranges
+                    .into_iter()
+                    .map(|range| {
+                        let data = blocking_op.read_with(&location).range(range).call()?;
+                        Ok::<_, ErrorCode>(Bytes::from(data))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            };
+
+            maybe_spawn_blocking(f).await
+        } else {
+            let mut handles = Vec::with_capacity(ranges.len());
+            for range in ranges {
+                let fut_read = self.op.read_with(self.location);
+                handles.push(async move {
+                    let data = fut_read.range(range.start..range.end).await?;
+                    Ok::<_, ErrorCode>(Bytes::from(data))
+                });
+            }
+            let chunk_data = futures::future::try_join_all(handles).await?;
+            Ok(chunk_data)
+        }
+    }
+}
+
+/// Takes a function and spawns it to a tokio blocking pool if available
+pub async fn maybe_spawn_blocking<F, T>(f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    match tokio::runtime::Handle::try_current() {
+        Ok(runtime) => runtime
+            .spawn_blocking(f)
+            .await
+            .map_err(ErrorCode::from_std_error)?,
+        Err(_) => f(),
     }
 }
 

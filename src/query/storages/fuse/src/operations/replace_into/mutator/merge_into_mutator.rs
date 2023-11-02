@@ -62,8 +62,10 @@ use crate::metrics::metrics_inc_replace_block_number_bloom_pruned;
 use crate::metrics::metrics_inc_replace_block_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_block_number_write;
 use crate::metrics::metrics_inc_replace_block_of_zero_row_deleted;
+use crate::metrics::metrics_inc_replace_deleted_blocks_rows;
 use crate::metrics::metrics_inc_replace_number_accumulated_merge_action;
 use crate::metrics::metrics_inc_replace_number_apply_deletion;
+use crate::metrics::metrics_inc_replace_replaced_blocks_rows;
 use crate::metrics::metrics_inc_replace_row_number_after_pruning;
 use crate::metrics::metrics_inc_replace_row_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_row_number_write;
@@ -150,10 +152,11 @@ impl MergeIntoOperationAggregator {
         let key_column_reader = {
             let projection = Projection::Columns(key_column_field_indexes);
             BlockReader::create(
+                ctx.clone(),
                 data_accessor.clone(),
                 table_schema.clone(),
                 projection,
-                ctx.clone(),
+                false,
                 false,
             )
         }?;
@@ -164,10 +167,11 @@ impl MergeIntoOperationAggregator {
             } else {
                 let projection = Projection::Columns(remain_column_field_ids.clone());
                 let reader = BlockReader::create(
+                    ctx.clone(),
                     data_accessor.clone(),
                     table_schema,
                     projection,
-                    ctx.clone(),
+                    false,
                     false,
                 )?;
                 Some(reader)
@@ -463,6 +467,7 @@ impl AggregationContext {
         if delete_nums == block_meta.row_count as usize {
             info!("whole block deletion");
             metrics_inc_replace_whole_block_deletion(1);
+            metrics_inc_replace_deleted_blocks_rows(num_rows as u64);
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
             let mutation = MutationLogEntry::DeletedBlock {
@@ -535,6 +540,7 @@ impl AggregationContext {
 
         metrics_inc_replace_block_number_write(1);
         metrics_inc_replace_row_number_write(new_block_meta.row_count);
+        metrics_inc_replace_replaced_blocks_rows(num_rows as u64);
         if let Some(index_state) = serialized.bloom_index_state {
             write_data(index_state.data, &data_accessor, &index_state.location.0).await?;
         }

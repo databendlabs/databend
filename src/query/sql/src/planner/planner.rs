@@ -62,6 +62,7 @@ impl Planner {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -93,9 +94,10 @@ impl Planner {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = parse_sql(&tokens, sql_dialect)?;
 
-                if matches!(stmt, Statement::Copy(_)) {
+                if matches!(stmt, Statement::CopyIntoLocation(_)) {
                     // Indicate binder there is no need to collect column statistics for the binding table.
-                    self.ctx.attach_query_str(QueryKind::Copy, String::new());
+                    self.ctx
+                        .attach_query_str(QueryKind::CopyIntoTable, String::new());
                 }
 
                 self.replace_stmt(&mut stmt, sql_dialect);

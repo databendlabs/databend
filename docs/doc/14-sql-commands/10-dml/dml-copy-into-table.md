@@ -4,7 +4,7 @@ sidebar_label: "COPY INTO <table>"
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.128"/>
+<FunctionDescription description="Introduced or updated: v1.2.148"/>
 
 COPY INTO allows you to load data from files located in one of the following locations:
 
@@ -22,7 +22,10 @@ COPY INTO [<database>.]<table_name>
      FROM { userStage | internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = (
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+       ) ]
 [ copyOptions ]
 ```
 
@@ -187,7 +190,7 @@ A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression patte
 
 ### FILE_FORMAT
 
-See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
+See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md) for details.
 
 ### copyOptions
 
@@ -201,14 +204,15 @@ copyOptions ::=
   [ MAX_FILES = <num> ]
 ```
 
-| Parameter             | Description                                                                                                                                                                                                              | Required |
-|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                                                                                           | Optional |
-| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                                                                                            | Optional |
-| FORCE                 | COPY INTO ensures idempotence by automatically tracking and preventing the reloading of files for a default period of 7 days. This can be customized using the `load_file_metadata_expire_hours` setting to control the expiration time for file metadata.<br/>This parameter defaults to `False` meaning COPY INTO will skip duplicate files when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
-| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                           | Optional |
-| ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
-| MAX_FILES             | Sets the maximum number of files to load that have not been loaded already. The value can be set up to 500; any value greater than 500 will be treated as 500.                                                                                                                                             | Optional |
+| Parameter             | Description                                                                                                                                                                                                                                                                                                                                                                                                      | Required |
+|-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                                                                                                                                                                                                                                                                                   | Optional |
+| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                                                                                                                                                                                                                                                                                    | Optional |
+| FORCE                 | COPY INTO ensures idempotence by automatically tracking and preventing the reloading of files for a default period of 7 days. This can be customized using the `load_file_metadata_expire_hours` setting to control the expiration time for file metadata.<br/>This parameter defaults to `False` meaning COPY INTO will skip duplicate files when copying data. If `True`, duplicate files will not be skipped. | Optional |
+| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                                                                                                                                                                                                                   | Optional |
+| ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files.                                                                                                                                                                                   | Optional |
+| MAX_FILES             | Sets the maximum number of files to load that have not been loaded already. The value can be set up to 500; any value greater than 500 will be treated as 500.                                                                                                                                                                                                                                                   | Optional |
+| RETURN_FAILED_ONLY    | When set to 'True', only files that failed to load will be returned in the output. Default: `False`.                                                                                                                                                                                                                                                                                          | Optional |
 
 :::tip
 When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
@@ -218,13 +222,15 @@ When importing large volumes of data, such as logs, it is recommended to set bot
 
 COPY INTO provides a summary of the data loading results with these columns:
 
-| Column           | Type     | Nullable | Description                                |
-|------------------|----------|----------|--------------------------------------------|
-| FILE             | VARCHAR  | NO       | The relative path to the source file.       |
-| ROWS_LOADED      | INT      | NO       | The number of rows loaded from the source file. |
-| ERRORS_SEEN      | INT      | NO       | Number of error rows in the source file    |
-| FIRST_ERROR      | VARCHAR  | YES      | The first error found in the source file.             |
-| FIRST_ERROR_LINE | INT      | YES      | Line number of the first error.             |
+| Column           | Type    | Nullable | Description                                     |
+|------------------|---------|----------|-------------------------------------------------|
+| FILE             | VARCHAR | NO       | The relative path to the source file.           |
+| ROWS_LOADED      | INT     | NO       | The number of rows loaded from the source file. |
+| ERRORS_SEEN      | INT     | NO       | Number of error rows in the source file         |
+| FIRST_ERROR      | VARCHAR | YES      | The first error found in the source file.       |
+| FIRST_ERROR_LINE | INT     | YES      | Line number of the first error.                 |
+
+If RETURN_FAILED_ONLY is set to True, the output will only contain the files that failed to load.
 
 ## Distributed COPY INTO
 
@@ -244,19 +250,28 @@ These examples showcase data loading into Databend from various types of stages:
   <TabItem value="user" label="User Stage" default>
 
 ```sql
-COPY INTO mytable FROM @~ PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+    FROM @~
+    PATTERN = '.*[.]parquet'
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
   </TabItem>
   <TabItem value="internal" label="Internal Stage">
 
 ```sql
-COPY INTO mytable FROM @my_internal_stage PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+    FROM @my_internal_stage
+    PATTERN = '.*[.]parquet'
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
   </TabItem>
   <TabItem value="external" label="External Stage">
 
 ```sql
-COPY INTO mytable FROM @my_external_stage PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+    FROM @my_external_stage
+    PATTERN = '.*[.]parquet'
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
   </TabItem>
 </Tabs>
@@ -273,13 +288,18 @@ This example establishes a connection to Amazon S3 using AWS access keys and sec
 ```sql
 -- Authenticated by AWS access keys and secrets.
 COPY INTO mytable
-FROM 's3://mybucket/data.csv'
-CONNECTION = (
-    ACCESS_KEY_ID = '<your-access-key-ID>'
-    SECRET_ACCESS_KEY = '<your-secret-access-key>'
-)
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
-SIZE_LIMIT = 10;
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ACCESS_KEY_ID = '<your-access-key-ID>',
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    )
+    SIZE_LIMIT = 10;
 ```
 
 This example connects to Amazon S3 using AWS IAM role authentication with an external ID and loads CSV files matching the specified pattern from 'mybucket':
@@ -287,14 +307,19 @@ This example connects to Amazon S3 using AWS IAM role authentication with an ext
 ```sql
 -- Authenticated by AWS IAM role and external ID.
 COPY INTO mytable
-FROM 's3://mybucket/'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
-    EXTERNAL_ID = '123456'
-)
-PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 's3://mybucket/'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>',
+        ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
+        EXTERNAL_ID = '123456'
+    )
+    PATTERN = '.*[.]csv'
+        FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
 ```
 
 </TabItem>
@@ -305,13 +330,13 @@ This example connects to Azure Blob Storage and loads data from 'data.csv' into 
 
 ```sql
 COPY INTO mytable
-FROM 'azblob://mybucket/data.csv'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
-    ACCOUNT_NAME = '<account_name>'
-    ACCOUNT_KEY = '<account_key>'
-)
-FILE_FORMAT = (type = CSV);
+    FROM 'azblob://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
+        ACCOUNT_NAME = '<account_name>',
+        ACCOUNT_KEY = '<account_key>'
+    )
+    FILE_FORMAT = (type = CSV);
 ```
 </TabItem>
 
@@ -321,9 +346,9 @@ This example loads data from three remote CSV files and skips a file in case of 
 
 ```sql
 COPY INTO mytable
-FROM 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv'
-FILE_FORMAT = (type = CSV)
-ON_ERROR = continue;
+    FROM 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv'
+    FILE_FORMAT = (type = CSV)
+    ON_ERROR = continue;
 ```
 </TabItem>
 
@@ -333,9 +358,16 @@ This example loads data from a CSV file on IPFS:
 
 ```sql
 COPY INTO mytable
-FROM 'ipfs://<your-ipfs-hash>'
-CONNECTION = (endpoint_url = 'https://<your-ipfs-gateway>')
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 'ipfs://<your-ipfs-hash>'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<your-ipfs-gateway>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
 ```
 </TabItem>
 </Tabs>
@@ -346,13 +378,19 @@ This example loads a GZIP-compressed CSV file on Amazon S3 into Databend:
 
 ```sql
 COPY INTO mytable
-FROM 's3://mybucket/data.csv.gz'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ACCESS_KEY_ID = '<your-access-key-ID>',
-    SECRET_ACCESS_KEY = '<your-secret-access-key>'
-)
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO);
+    FROM 's3://mybucket/data.csv.gz'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>',
+        ACCESS_KEY_ID = '<your-access-key-ID>',
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1,
+        COMPRESSION = AUTO
+    );
 ```
 
 ### Example 4: Filtering Files with Pattern
@@ -361,9 +399,14 @@ This example demonstrates how to load CSV files from Amazon S3 using pattern mat
 
 ```sql
 COPY INTO mytable
-FROM 's3://mybucket/'
-PATTERN = '.*sales.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 's3://mybucket/'
+    PATTERN = '.*sales.*[.]csv'
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
 ```
 Where `.*` is interpreted as zero or more occurrences of any character. The square brackets escape the period character `.` that precedes a file extension.
 
@@ -371,9 +414,15 @@ To load from all the CSV files:
 
 ```sql
 COPY INTO mytable
-FROM 's3://mybucket/'
-PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 's3://mybucket/'
+    PATTERN = '.*[.]csv'
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
+
 ```
 
 When specifying the pattern for a file path including multiple folders, consider your matching criteria:
@@ -413,7 +462,9 @@ CREATE TABLE books
     date VARCHAR
 );
 
-COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);
+COPY INTO books
+    FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
+    FILE_FORMAT = (TYPE = CSV);
 ```
 
 If your table has more columns than the file, you can specify the columns into which you want to load data. For example,
@@ -427,7 +478,9 @@ CREATE TABLE books_with_language
     date VARCHAR
 );
 
-COPY INTO books_with_language (title, author, date) FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);
+COPY INTO books_with_language (title, author, date)
+    FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
+    FILE_FORMAT = (TYPE = CSV);
 ```
 
 If your table has more columns than the file, and the additional columns are at the end of the table, you can load data using the [FILE_FORMAT](#file_format) option `ERROR_ON_COLUMN_COUNT_MISMATCH`. This allows you to load data without specifying each column individually. Please note that ERROR_ON_COLUMN_COUNT_MISMATCH currently works for the CSV file format.
@@ -442,9 +495,49 @@ CREATE TABLE books_with_extra_columns
     region VARCHAR
 );
 
-COPY INTO books_with_extra_columns FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV ERROR_ON_COLUMN_COUNT_MISMATCH = false);
+COPY INTO books_with_extra_columns
+    FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
+    FILE_FORMAT = (TYPE = CSV, ERROR_ON_COLUMN_COUNT_MISMATCH = false);
 ```
 
 :::note
 Extra columns in a table can have default values specified by [CREATE TABLE](../00-ddl/20-table/10-ddl-create-table.md) or [ALTER TABLE COLUMN](../00-ddl/20-table/90-alter-table-column.md). If a default value is not explicitly set for an extra column, the default value associated with its data type will be applied. For instance, an integer-type column will default to 0 if no other value is specified. 
 :::
+
+### Example 6: Loading JSON with Custom Format
+
+This example loads data from a CSV file "data.csv" with the following content:
+
+```json
+1,"U00010","{\"carPriceList\":[{\"carTypeId":10,\"distance":5860},{\"carTypeId":11,\"distance\":5861}]}"
+2,"U00011","{\"carPriceList\":[{\"carTypeId":12,\"distance":5862},{\"carTypeId":13,\"distance\":5863}]}"
+```
+
+Each line contains three columns of data, with the third column being a string containing JSON data. To load CSV data correctly with JSON fields, we need to set the correct escape character. This example uses the backslash \ as the escape character, as the JSON data contains double quotes ".
+
+#### Step 1: Create custom file format.
+
+```sql
+-- Define a custom CSV file format with the escape character set to backslash \
+CREATE FILE FORMAT my_csv_format
+    TYPE = CSV
+    ESCAPE = '\\';
+```
+
+#### Step 2: Create target table.
+
+```sql
+CREATE TABLE t
+  (
+     id       INT,
+     seq      VARCHAR,
+     p_detail VARCHAR
+  ); 
+```
+
+#### Step 3: Load with custom file format.
+
+```sql
+COPY INTO t FROM @t_stage FILES=('data.csv') 
+FILE_FORMAT=(FORMAT_NAME='my_csv_format');
+```

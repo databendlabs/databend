@@ -17,6 +17,8 @@ use std::default::Default;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,15 +44,12 @@ impl Display for CreateStageStmt {
         write!(f, " {}", self.stage_name)?;
 
         if let Some(ul) = &self.location {
-            write!(f, " URL = ")?;
-            write!(f, "{ul}")?;
+            write!(f, " {ul}")?;
         }
 
         if !self.file_format_options.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
-            for (k, v) in self.file_format_options.iter() {
-                write!(f, " {} = '{}'", k, v)?;
-            }
+            write_comma_separated_map(f, &self.file_format_options)?;
             write!(f, " )")?;
         }
 
@@ -79,7 +78,7 @@ pub enum SelectStageOption {
     Files(Vec<String>),
     Pattern(String),
     FileFormat(String),
-    Connection((String, String)),
+    Connection(BTreeMap<String, String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -118,35 +117,28 @@ impl Display for SelectStageOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, " (")?;
 
-        let mut output: Vec<String> = vec![];
-        if let Some(files) = self.files.clone() {
-            let files = files
-                .iter()
-                .map(|x| format!("'{}'", x))
-                .collect::<Vec<String>>();
-            let files = files.join(",");
-            let files = format!("FILES => ({})", files);
-            output.push(files);
+        if let Some(files) = self.files.as_ref() {
+            write!(f, " FILES => (")?;
+            write_comma_separated_quoted_list(f, files)?;
+            write!(f, "),")?;
         }
 
-        if let Some(file_format) = self.file_format.clone() {
-            let file_format = format!("FILE_FORMAT => '{}'", file_format);
-            output.push(file_format);
+        if let Some(file_format) = self.file_format.as_ref() {
+            write!(f, " FILE_FORMAT => '{}',", file_format)?;
         }
 
-        if let Some(pattern) = self.pattern.clone() {
-            let pattern = format!("PATTERN => '{}'", pattern);
-            output.push(pattern);
+        if let Some(pattern) = self.pattern.as_ref() {
+            write!(f, " PATTERN => '{}',", pattern)?;
         }
 
         if !self.connection.is_empty() {
-            for (k, v) in self.connection.iter() {
-                output.push(format!(" {} => '{}'", k, v));
-            }
+            write!(f, " CONNECTION => (")?;
+            write_comma_separated_map(f, &self.connection)?;
+            write!(f, " )")?;
         }
 
-        let output = output.join(",");
-        write!(f, "{output})")?;
+        write!(f, " )")?;
+
         Ok(())
     }
 }
@@ -159,9 +151,7 @@ impl SelectStageOptions {
                 SelectStageOption::Files(v) => options.files = Some(v),
                 SelectStageOption::Pattern(v) => options.pattern = Some(v),
                 SelectStageOption::FileFormat(v) => options.file_format = Some(v),
-                SelectStageOption::Connection((k, v)) => {
-                    options.connection.insert(k, v);
-                }
+                SelectStageOption::Connection(v) => options.connection = v,
             }
         }
         options

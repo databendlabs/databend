@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/shell_env.sh
 
 # Create Database
-echo "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}" | $MYSQL_CLIENT_CONNECT_DEFAULT
+echo "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}" | $BENDSQL_CLIENT_CONNECT_DEFAULT
 
 tables=(
     call_center   
@@ -36,13 +36,11 @@ tables=(
 # Clear Data
 for t in ${tables[@]}
 do
-    echo "DROP TABLE IF EXISTS $t" | $MYSQL_CLIENT_CONNECT
+    echo "DROP TABLE IF EXISTS $t ALL" | $BENDSQL_CLIENT_CONNECT
 done
 
-echo "VACUUM DROP TABLE retain 0 hours" | $MYSQL_CLIENT_CONNECT
-
 # Create Tables;
-cat "$CURDIR"/tpcds.sql | $MYSQL_CLIENT_CONNECT
+cat "$CURDIR"/tpcds.sql | $BENDSQL_CLIENT_CONNECT
 
 # Load Data
 for t in ${tables[@]}

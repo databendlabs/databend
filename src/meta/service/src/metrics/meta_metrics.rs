@@ -26,7 +26,7 @@
 
 use std::time::Instant;
 
-use common_metrics::counter;
+use common_metrics::count;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 
 pub mod server_metrics {
@@ -424,6 +424,14 @@ pub mod raft_metrics {
                 .observe(v);
         }
 
+        pub fn incr_snapshot_recv_status_from_peer(addr: String, success: bool) {
+            if success {
+                incr_snapshot_recv_failure_from_peer(addr);
+            } else {
+                incr_snapshot_recv_success_from_peer(addr);
+            }
+        }
+
         pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_failures
@@ -609,7 +617,7 @@ pub(crate) struct RequestInFlight {
     start: Option<Instant>,
 }
 
-impl counter::Count for RequestInFlight {
+impl count::Count for RequestInFlight {
     fn incr_count(&mut self, n: i64) {
         network_metrics::incr_request_inflights(n);
 
@@ -628,7 +636,7 @@ impl counter::Count for RequestInFlight {
 #[derive(Default)]
 pub(crate) struct ProposalPending;
 
-impl counter::Count for ProposalPending {
+impl count::Count for ProposalPending {
     fn incr_count(&mut self, n: i64) {
         server_metrics::incr_proposals_pending(n);
     }

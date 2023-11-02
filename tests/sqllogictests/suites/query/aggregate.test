@@ -58,12 +58,12 @@ DECIMAL(38, 1) NULL DECIMAL(76, 1) NULL
 query IIT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);
 ----
-3283.5 3283.5000000 DECIMAL(76, 7) NULL
+3283.5 3283.500000000000 DECIMAL(76, 12) NULL
 
 query IIT
 select avg(number),  avg( number::Decimal(36, 7) ), typeof(avg( number::Decimal(36, 7) )) from numbers(100);
 ----
-49.5 49.5000000 DECIMAL(38, 7) NULL
+49.5 49.500000000000 DECIMAL(38, 12) NULL
 
 ## chatgpt tests
 
@@ -81,3 +81,15 @@ query I
 SELECT CAST(AVG(value) AS DECIMAL(30, 10)) AS avg FROM (SELECT CAST(number AS DECIMAL(30, 10)) / 10000000000 AS value FROM numbers(5)) AS t;
 ----
 0.0000000002
+
+statement ok
+create table tc(a int, b Date)
+
+statement ok
+insert into tc values(1, '2022-02-03'),(2,'2022-02-04'),(3,'2022-02-05');
+
+statement error 1065
+select arg_min(DATE_ADD(MINUTE, COUNT(*), b), a) FROM tc ;
+
+statement ok
+drop table tc

@@ -1,9 +1,8 @@
-drop table customer;
-drop table lineitem;
-drop table nation;
-drop table orders;
-drop table partsupp;
-drop table part;
-drop table region;
-drop table supplier;
-VACUUM DROP TABLE retain 0 hours;
+drop table if exists customer;
+drop table if exists lineitem;
+drop table if exists nation;
+drop table if exists orders;
+drop table if exists partsupp;
+drop table if exists part;
+drop table if exists region;
+drop table if exists supplier;

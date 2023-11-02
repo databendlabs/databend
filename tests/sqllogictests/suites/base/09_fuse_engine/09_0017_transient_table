@@ -38,3 +38,4 @@ DROP TABLE t09_0016
 
 statement ok
 DROP DATABASE db1
+

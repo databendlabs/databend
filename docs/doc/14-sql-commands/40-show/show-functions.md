@@ -6,7 +6,7 @@ Shows the list of supported functions currently, including builtin scalar/aggreg
 
 ## Syntax
 
-```
+```sql
 SHOW FUNCTIONS  [LIKE 'pattern' | WHERE expr]
 ```
 

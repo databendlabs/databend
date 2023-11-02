@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use minitrace::prelude::*;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
@@ -32,6 +33,7 @@ pub enum Event {
     Finished,
 }
 
+#[derive(Clone)]
 pub enum EventCause {
     Other,
     // Which input of the processor triggers the event
@@ -57,6 +59,10 @@ pub trait Processor: Send {
 
     fn event_with_cause(&mut self, _cause: EventCause) -> Result<Event> {
         self.event()
+    }
+
+    fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
+        Ok(())
     }
 
     // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
@@ -118,18 +124,40 @@ impl ProcessorPtr {
     }
 
     /// # Safety
+    pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
+        (*self.inner.get()).un_reacted(cause, self.id().index())
+    }
+
+    /// # Safety
     pub unsafe fn interrupt(&self) {
         (*self.inner.get()).interrupt()
     }
 
     /// # Safety
     pub unsafe fn process(&self) -> Result<()> {
+        let mut name = self.name();
+        name.push_str("::process");
+        let _span = LocalSpan::enter_with_local_parent(name)
+            .with_property(|| ("graph-node-id", self.id().index().to_string()));
+
         (*self.inner.get()).process()
     }
 
     /// # Safety
     pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
-        (*self.inner.get()).async_process().boxed()
+        let id = self.id();
+        let mut name = self.name();
+        name.push_str("::async_process");
+
+        let task = (*self.inner.get()).async_process();
+
+        async move {
+            let span = Span::enter_with_local_parent(name)
+                .with_property(|| ("graph-node-id", id.index().to_string()));
+
+            task.in_span(span).await
+        }
+        .boxed()
     }
 }
 

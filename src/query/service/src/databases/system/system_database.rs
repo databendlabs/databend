@@ -51,6 +51,7 @@ use common_storages_system::StagesTable;
 use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
+use common_storages_system::TasksTable;
 use common_storages_system::TempFilesTable;
 use common_storages_system::TracingTable;
 use common_storages_system::UsersTable;
@@ -70,8 +71,6 @@ impl SystemDatabase {
         let mut map = HashMap::new();
         map.insert("configs".to_string(), true);
         map.insert("clusters".to_string(), true);
-        // Add 2023-08-01 by BohuTANG, due to it may leak the auth_string in the output.
-        map.insert("users".to_string(), true);
         map
     }
 
@@ -117,6 +116,7 @@ impl SystemDatabase {
             BacktraceTable::create(sys_db_meta.next_table_id()),
             TempFilesTable::create(sys_db_meta.next_table_id()),
             QuerySummaryTable::create(sys_db_meta.next_table_id()),
+            TasksTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

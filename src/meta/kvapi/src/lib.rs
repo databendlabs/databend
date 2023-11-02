@@ -13,19 +13,5 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
-
-#[macro_export]
-macro_rules! func_name {
-    () => {{
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        let n = &name[..name.len() - 3];
-        n.rsplit("::").next().unwrap()
-    }};
-}
 
 pub mod kvapi;

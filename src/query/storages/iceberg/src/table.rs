@@ -43,7 +43,7 @@ use common_storage::DataOperator;
 use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSPruner;
-use common_storages_parquet::ParquetRSReader;
+use common_storages_parquet::ParquetRSReaderBuilder;
 use icelake::catalog::Catalog;
 use opendal::Operator;
 use storages_common_pruner::RangePrunerCreator;
@@ -180,21 +180,39 @@ impl IcebergTable {
         let arrow_schema = arrow_schema::Schema::new(arrow_fields);
         let leaf_fields = Arc::new(table_schema.leaf_fields());
 
-        let options = ParquetReadOptions::default();
+        let mut read_options = ParquetReadOptions::default();
+
+        if !ctx.get_settings().get_enable_parquet_page_index()? {
+            read_options = read_options.with_prune_pages(false);
+        }
+
+        if !ctx.get_settings().get_enable_parquet_rowgroup_pruning()? {
+            read_options = read_options.with_prune_row_groups(false);
+        }
+
+        if !ctx.get_settings().get_enable_parquet_prewhere()? {
+            read_options = read_options.with_do_prewhere(false);
+        }
+
         let pruner = ParquetRSPruner::try_create(
             ctx.get_function_context()?,
             table_schema.clone(),
             leaf_fields,
             &plan.push_downs,
-            options,
+            read_options,
         )?;
 
-        let builder =
-            ParquetRSReader::builder(ctx.clone(), self.op.operator(), table_schema, &arrow_schema)?
-                .with_push_downs(plan.push_downs.as_ref())
-                .with_pruner(Some(pruner));
+        let mut builder = ParquetRSReaderBuilder::create(
+            ctx.clone(),
+            self.op.operator(),
+            table_schema,
+            &arrow_schema,
+        )?
+        .with_options(read_options)
+        .with_push_downs(plan.push_downs.as_ref())
+        .with_pruner(Some(pruner));
 
-        let praquet_reader = Arc::new(builder.build()?);
+        let praquet_reader = Arc::new(builder.build_full_reader()?);
 
         // TODO: we need to support top_k.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
@@ -316,6 +334,7 @@ impl Table for IcebergTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }

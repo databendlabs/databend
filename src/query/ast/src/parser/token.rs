@@ -232,8 +232,14 @@ pub enum TokenKind {
     RBrace,
     #[token("->")]
     RArrow,
+    #[token("->>")]
+    LongRArrow,
     #[token("=>")]
     FatRArrow,
+    #[token("#>")]
+    HashRArrow,
+    #[token("#>>")]
+    HashLongRArrow,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -415,6 +421,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_PART", ignore(ascii_case))]
+    DATE_PART,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
@@ -449,6 +457,8 @@ pub enum TokenKind {
     DOUBLE,
     #[token("DOW", ignore(ascii_case))]
     DOW,
+    #[token("WEEK", ignore(ascii_case))]
+    WEEK,
     #[token("DOY", ignore(ascii_case))]
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
@@ -732,6 +742,8 @@ pub enum TokenKind {
     RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
     RAWDEFLATE,
+    #[token("READ_ONLY", ignore(ascii_case))]
+    READ_ONLY,
     #[token("RECLUSTER", ignore(ascii_case))]
     RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
@@ -746,6 +758,8 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("RETURN_FAILED_ONLY", ignore(ascii_case))]
+    RETURN_FAILED_ONLY,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
@@ -958,8 +972,6 @@ pub enum TokenKind {
     VIEW,
     #[token("VIRTUAL", ignore(ascii_case))]
     VIRTUAL,
-    #[token("WEEK", ignore(ascii_case))]
-    WEEK,
     #[token("WHEN", ignore(ascii_case))]
     WHEN,
     #[token("WHERE", ignore(ascii_case))]
@@ -1012,6 +1024,24 @@ pub enum TokenKind {
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
+    #[token("TASK", ignore(ascii_case))]
+    TASK,
+    #[token("TASKS", ignore(ascii_case))]
+    TASKS,
+    #[token("WAREHOUSE", ignore(ascii_case))]
+    WAREHOUSE,
+    #[token("SCHEDULE", ignore(ascii_case))]
+    SCHEDULE,
+    #[token("SUSPEND_TASK_AFTER_NUM_FAILURES", ignore(ascii_case))]
+    SUSPEND_TASK_AFTER_NUM_FAILURES,
+    #[token("CRON", ignore(ascii_case))]
+    CRON,
+    #[token("EXECUTE", ignore(ascii_case))]
+    EXECUTE,
+    #[token("SUSPEND", ignore(ascii_case))]
+    SUSPEND,
+    #[token("RESUME", ignore(ascii_case))]
+    RESUME,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1066,6 +1096,9 @@ impl TokenKind {
                 | LBrace
                 | RBrace
                 | RArrow
+                | LongRArrow
+                | HashRArrow
+                | HashLongRArrow
                 | FatRArrow
                 | BitWiseXor
                 | BitWiseNot
@@ -1123,6 +1156,7 @@ impl TokenKind {
             | TokenKind::END
             | TokenKind::EXISTS
             | TokenKind::EXTRACT
+            | TokenKind::DATE_PART
             | TokenKind::FALSE
             | TokenKind::FLOAT
             // | TokenKind::FOREIGN
@@ -1352,6 +1386,7 @@ impl TokenKind {
             | TokenKind::IGNORE_RESULT
             | TokenKind::MASKING
             | TokenKind::POLICY
+            | TokenKind::TASK
             if !after_as => true,
             _ => false
         }

@@ -16,6 +16,7 @@ use std::string::FromUtf8Error;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use regex::Regex;
 
 /// Function that escapes special characters in a string.
 ///
@@ -161,4 +162,19 @@ pub fn convert_number_size(num: f64) -> String {
         * 1_f64;
     let unit = units[exponent as usize];
     format!("{}{}{}", negative, pretty_bytes, unit)
+}
+
+/// Mask the connection info in the sql.
+pub fn mask_connection_info(sql: &str) -> String {
+    let mut masked_sql = sql.to_string();
+
+    // Regular expression to find the CONNECTION block
+    let re_connection = Regex::new(r"CONNECTION\s*=\s*\([^)]+\)").unwrap();
+
+    // Replace the entire CONNECTION block with 'CONNECTION = (***masked***)'
+    masked_sql = re_connection
+        .replace_all(&masked_sql, "CONNECTION = (***masked***)")
+        .to_string();
+
+    masked_sql
 }

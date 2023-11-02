@@ -48,9 +48,9 @@ databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
 enterprise-query = { path = "../query/ee" }
 # enterprise-meta = { path = "../meta/ee" }
-background-service = { path = "../query/ee-features/background-service" }
-sharing-endpoint = { path = "../query/sharing-endpoint" }
-storages-common-table-meta = { path = "../query/storages/common/table-meta" }
+background-service = { path = "../query/ee_features/background_service" }
+sharing-endpoint = { path = "../query/sharing_endpoint" }
+storages-common-table-meta = { path = "../query/storages/common/table_meta" }
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }

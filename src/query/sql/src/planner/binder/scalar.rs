@@ -16,12 +16,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
+use common_ast::parser::parse_expr;
+use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::FunctionContext;
+use common_expression::Scalar;
 use indexmap::IndexMap;
 
+use crate::binder::wrap_cast;
 use crate::binder::CteInfo;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
@@ -92,5 +99,42 @@ impl<'a> ScalarBinder<'a> {
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
+    }
+
+    pub async fn get_default_value(
+        &mut self,
+        field: &DataField,
+        schema: &DataSchema,
+    ) -> Result<common_expression::Expr> {
+        if let Some(default_expr) = field.default_expr() {
+            let tokens = tokenize_sql(default_expr)?;
+            let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
+            let (mut scalar, _) = self.bind(&ast).await?;
+            scalar = wrap_cast(&scalar, field.data_type());
+
+            let expr = scalar
+                .as_expr()?
+                .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
+            Ok(expr)
+        } else {
+            // If field data type is nullable, then we'll fill it with null.
+            if field.data_type().is_nullable() {
+                let expr = common_expression::Expr::Constant {
+                    span: None,
+                    scalar: Scalar::Null,
+                    data_type: field.data_type().clone(),
+                };
+                Ok(expr)
+            } else {
+                let data_type = field.data_type().clone();
+                let default_value = Scalar::default_value(&data_type);
+                let expr = common_expression::Expr::Constant {
+                    span: None,
+                    scalar: default_value,
+                    data_type,
+                };
+                Ok(expr)
+            }
+        }
     }
 }

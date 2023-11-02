@@ -17,6 +17,7 @@ use chrono::Utc;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::HiveCatalogOption;
 use common_meta_app::storage::StorageS3Config;
+use minitrace::func_name;
 
 use crate::common;
 
