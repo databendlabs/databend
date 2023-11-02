@@ -76,10 +76,12 @@ impl Payload {
             state.group_columns.push(col);
         }
 
-        for i in 0..rows {
-            state.state_places[i] = unsafe {
-                StateAddr::new(load::<u64>(state.addresses[i].add(self.state_offset)) as usize)
-            };
+        if !self.aggrs.is_empty() {
+            for i in 0..rows {
+                state.state_places[i] = unsafe {
+                    StateAddr::new(load::<u64>(state.addresses[i].add(self.state_offset)) as usize)
+                };
+            }
         }
 
         state.flush_offset = flush_end;

@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::AggregateHashTable;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_hashtable::hash2bucket;
@@ -185,6 +186,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
                         unreachable!()
                     }
+                    AggregateMeta::AggregateHashTable((v, _)) => (*v, *v),
                 };
 
                 if bucket > SINGLE_LEVEL_BUCKET_NUM {
@@ -298,6 +300,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         }
 
         Ok(data_blocks)
+    }
+
+    fn partition_agg_hashtable(&self, ht: AggregateHashTable) -> Result<Vec<Option<DataBlock>>> {
+        let block =
+            DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_agg_hashtable(0, ht));
+        Ok(vec![Some(block)])
     }
 }
 
@@ -418,6 +426,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                     AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
+                    AggregateMeta::AggregateHashTable((_, payload)) => {
+                        self.partition_agg_hashtable(payload)?
+                    }
                 };
 
                 for (bucket, block) in data_blocks.into_iter().enumerate() {

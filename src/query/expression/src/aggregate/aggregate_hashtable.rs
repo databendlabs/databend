@@ -52,6 +52,9 @@ pub struct AggregateHashTable {
     capacity: usize,
 }
 
+unsafe impl Send for AggregateHashTable {}
+unsafe impl Sync for AggregateHashTable {}
+
 impl AggregateHashTable {
     pub fn new(
         arena: Arc<bumpalo::Bump>,
@@ -75,7 +78,7 @@ impl AggregateHashTable {
         unsafe { Vec::from_raw_parts(ptr as *mut Entry, len, cap) }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.payload.len()
     }
 
@@ -90,28 +93,31 @@ impl AggregateHashTable {
         let group_hashes = group_hash_columns(group_columns);
         let new_group_count = self.probe_and_create(state, group_columns, row_count, &group_hashes);
 
-        for i in 0..row_count {
-            state.state_places[i] = unsafe {
-                StateAddr::new(
-                    load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
-                )
-            };
+        if !self.payload.aggrs.is_empty() {
+            for i in 0..row_count {
+                state.state_places[i] = unsafe {
+                    StateAddr::new(
+                        load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
+                    )
+                };
+            }
+
+            for ((aggr, params), addr_offset) in self
+                .payload
+                .aggrs
+                .iter()
+                .zip(params.iter())
+                .zip(self.payload.state_addr_offsets.iter())
+            {
+                aggr.accumulate_keys(
+                    &state.state_places.as_slice()[0..row_count],
+                    *addr_offset,
+                    params,
+                    row_count,
+                )?;
+            }
         }
 
-        for ((aggr, params), addr_offset) in self
-            .payload
-            .aggrs
-            .iter()
-            .zip(params.iter())
-            .zip(self.payload.state_addr_offsets.iter())
-        {
-            aggr.accumulate_keys(
-                &state.state_places.as_slice()[0..row_count],
-                *addr_offset,
-                params,
-                row_count,
-            )?;
-        }
         Ok(new_group_count)
     }
 
@@ -164,8 +170,9 @@ impl AggregateHashTable {
                     }
 
                     state.empty_vector.set_index(new_entry_count, index);
-                    state.new_groups.set_index(new_group_count, index);
                     new_entry_count += 1;
+
+                    state.new_groups.set_index(new_group_count, index);
                     new_group_count += 1;
                 } else if entry.salt == state.hash_salts[index] {
                     state
@@ -180,13 +187,8 @@ impl AggregateHashTable {
 
             // 2. append new_group_count to payload
             if new_entry_count != 0 {
-                self.payload.append_rows(
-                    state,
-                    hashes,
-                    &select_vector,
-                    new_entry_count,
-                    group_columns,
-                );
+                self.payload
+                    .append_rows(state, hashes, new_entry_count, group_columns);
             }
 
             // 3. handle need_compare_count
@@ -224,19 +226,23 @@ impl AggregateHashTable {
                 }
             }
 
-            std::mem::swap(&mut select_vector, &mut state.no_match_vector);
-            state.no_match_vector.resize(no_match_count);
-
+            if select_vector.is_auto_increment() {
+                select_vector = state.no_match_vector.clone();
+            } else {
+                std::mem::swap(&mut select_vector, &mut state.no_match_vector);
+            }
             remaining_entries = no_match_count;
         }
 
         // set state places
-        for i in 0..row_count {
-            state.state_places[i] = unsafe {
-                StateAddr::new(
-                    load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
-                )
-            };
+        if !self.payload.aggrs.is_empty() {
+            for i in 0..row_count {
+                state.state_places[i] = unsafe {
+                    StateAddr::new(
+                        load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
+                    )
+                };
+            }
         }
 
         new_group_count

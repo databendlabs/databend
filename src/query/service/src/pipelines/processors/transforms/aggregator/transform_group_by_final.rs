@@ -17,7 +17,9 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::AggregateHashTable;
 use common_expression::DataBlock;
+use common_expression::PayloadFlushState;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
@@ -62,6 +64,9 @@ where Method: HashMethodBounds
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let arena = Arc::new(Bump::new());
             let mut hashtable = self.method.create_hash_table::<()>(arena)?;
+
+            let mut agg_hashtable: Option<AggregateHashTable> = None;
+
             'merge_hashtable: for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Spilled(_) => unreachable!(),
@@ -98,7 +103,33 @@ where Method: HashMethodBounds
                             }
                         }
                     },
+                    AggregateMeta::AggregateHashTable((_, hashtable)) => {
+                        match agg_hashtable.as_mut() {
+                            Some(ht) => {
+                                let mut flush_state = PayloadFlushState::default();
+                                ht.combine(hashtable, &mut flush_state)?;
+                            }
+                            None => agg_hashtable = Some(hashtable),
+                        }
+                    }
                 }
+            }
+
+            if let Some(mut ht) = agg_hashtable {
+                let mut flush_state = PayloadFlushState::default();
+
+                let mut blocks = vec![];
+                loop {
+                    if ht.merge_result(&mut flush_state)? {
+                        blocks.push(DataBlock::new_from_columns(
+                            flush_state.group_columns.clone(),
+                        ));
+                    } else {
+                        break;
+                    }
+                }
+
+                return DataBlock::concat(&blocks);
             }
 
             let value_size = estimated_key_size(&hashtable);

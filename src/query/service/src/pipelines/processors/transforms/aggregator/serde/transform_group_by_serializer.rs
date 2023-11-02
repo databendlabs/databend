@@ -126,6 +126,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
                     AggregateMeta::HashTable(payload) => {
                         self.input_data =
                             Some(SerializeGroupByStream::create(&self.method, payload));

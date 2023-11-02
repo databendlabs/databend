@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SelectVector {
     increment: bool,
     sel_vector: Vec<usize>,
@@ -30,6 +30,10 @@ impl Default for SelectVector {
 impl SelectVector {
     pub fn auto_increment() -> Self {
         Self::default()
+    }
+
+    pub fn is_auto_increment(&self) -> bool {
+        self.increment
     }
 
     pub fn new(size: usize) -> Self {
@@ -51,6 +55,13 @@ impl SelectVector {
     // these function did not check index boundes
     // keep in mind when using them
     pub fn set_index(&mut self, idx: usize, loc: usize) {
+        #[cfg(debug_assertions)]
+        {
+            if self.sel_vector.len() <= idx {
+                panic!("index out of bound {}, {}", self.sel_vector.len(), idx);
+            }
+        }
+
         self.sel_vector[idx] = loc;
     }
 

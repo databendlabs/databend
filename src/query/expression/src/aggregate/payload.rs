@@ -22,7 +22,6 @@ use super::payload_row::serialize_column_to_rowformat;
 use super::probe_state::ProbeState;
 use crate::get_layout_offsets;
 use crate::load;
-use crate::select_vector::SelectVector;
 use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
@@ -52,7 +51,7 @@ pub struct Payload {
     pub hash_offset: usize,
     pub state_offset: usize,
     pub state_addr_offsets: Vec<usize>,
-    pub state_layout: Layout,
+    pub state_layout: Option<Layout>,
 }
 
 // TODO FIXME
@@ -63,7 +62,11 @@ impl Payload {
         aggrs: Vec<AggregateFunctionRef>,
     ) -> Self {
         let mut state_addr_offsets = Vec::new();
-        let state_layout = get_layout_offsets(&aggrs, &mut state_addr_offsets).unwrap();
+        let state_layout = if !aggrs.is_empty() {
+            Some(get_layout_offsets(&aggrs, &mut state_addr_offsets).unwrap())
+        } else {
+            None
+        };
 
         let mut tuple_size = 0;
         let mut validity_offsets = Vec::with_capacity(group_types.len());
@@ -92,7 +95,9 @@ impl Payload {
         tuple_size += hash_size;
 
         let state_offset = tuple_size;
-        tuple_size += 8;
+        if !aggrs.is_empty() {
+            tuple_size += 8;
+        }
 
         Self {
             arena,
@@ -142,12 +147,11 @@ impl Payload {
         &mut self,
         state: &mut ProbeState,
         group_hashes: &[u64],
-        select_vector: &SelectVector,
         new_group_rows: usize,
         group_columns: &[Column],
     ) {
         self.try_reverse(new_group_rows);
-
+        let select_vector = &state.empty_vector;
         for i in 0..new_group_rows {
             let idx = select_vector.get_index(i);
 
@@ -166,7 +170,7 @@ impl Payload {
                     let idx = select_vector.get_index(i);
                     if bitmap.get_bit(idx) {
                         unsafe {
-                            let dst = address[i].add(write_offset);
+                            let dst = address[idx].add(write_offset);
                             store(&1, dst as *mut u8);
                         }
                     }
@@ -195,25 +199,26 @@ impl Payload {
         for i in 0..new_group_rows {
             let idx = select_vector.get_index(i);
             unsafe {
-                let dst = address[i].add(write_offset);
+                let dst = address[idx].add(write_offset);
                 store(&group_hashes[idx], dst as *mut u8);
             }
         }
 
         write_offset += 8;
+        if let Some(layout) = self.state_layout {
+            // write states
+            for i in 0..new_group_rows {
+                let place = self.arena.alloc_layout(layout);
+                let idx = select_vector.get_index(i);
+                unsafe {
+                    let dst = address[idx].add(write_offset);
+                    store(&(place.as_ptr() as u64), dst as *mut u8);
+                }
 
-        // write states
-        for i in 0..new_group_rows {
-            let place = self.arena.alloc_layout(self.state_layout);
-            let idx = select_vector.get_index(i);
-            unsafe {
-                let dst = address[idx].add(write_offset);
-                store(&(place.as_ptr() as u64), dst as *mut u8);
-            }
-
-            let place = StateAddr::from(place);
-            for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                aggr.init_state(place.next(*offset));
+                let place = StateAddr::from(place);
+                for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
+                    aggr.init_state(place.next(*offset));
+                }
             }
         }
     }

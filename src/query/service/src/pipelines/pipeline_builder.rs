@@ -1985,6 +1985,10 @@ impl PipelineBuilder {
         }
 
         let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
+        let enable_experimental_aggregate_hashtable = self
+            .settings
+            .get_enable_experimental_aggregate_hashtable()?
+            && self.ctx.get_cluster().is_empty();
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
@@ -1999,7 +2003,8 @@ impl PipelineBuilder {
                         method,
                         input,
                         output,
-                        params.clone()
+                        params.clone(),
+                        enable_experimental_aggregate_hashtable,
                     ),
                 }),
                 false => with_mappedhash_method!(|T| match method.clone() {
@@ -2008,7 +2013,8 @@ impl PipelineBuilder {
                         method,
                         input,
                         output,
-                        params.clone()
+                        params.clone(),
+                        enable_experimental_aggregate_hashtable,
                     ),
                 }),
             }?;

@@ -22,7 +22,10 @@ use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::AggregateHashTable;
+use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::ProbeState;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -46,6 +49,7 @@ use crate::sessions::QueryContext;
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
     HashTable(HashTableCell<Method, ()>),
+    AggregateHashTable(AggregateHashTable),
     PartitionedHashTable(HashTableCell<PartitionedHashMethod<Method>, ()>),
 }
 
@@ -100,6 +104,7 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     method: Method,
     hash_table: HashTable<Method>,
     group_columns: Vec<IndexType>,
+    probe_state: ProbeState,
     settings: GroupBySettings,
 }
 
@@ -110,11 +115,20 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
+        enable_experimental_aggregate_hashtable: bool,
     ) -> Result<Box<dyn Processor>> {
         let arena = Arc::new(Bump::new());
-        let hashtable = method.create_hash_table(arena)?;
-        let _dropper = GroupByHashTableDropper::<Method>::create();
-        let hash_table = HashTable::HashTable(HashTableCell::create(hashtable, _dropper));
+        let hash_table = if !enable_experimental_aggregate_hashtable {
+            let hashtable = method.create_hash_table(arena.clone())?;
+            let _dropper = GroupByHashTableDropper::<Method>::create();
+            HashTable::HashTable(HashTableCell::create(hashtable, _dropper))
+        } else {
+            HashTable::AggregateHashTable(AggregateHashTable::new(
+                arena,
+                params.group_data_types.clone(),
+                params.aggregate_functions.clone(),
+            ))
+        };
 
         Ok(AccumulatingTransformer::create(
             input,
@@ -122,6 +136,7 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             TransformPartialGroupBy::<Method> {
                 method,
                 hash_table,
+                probe_state: ProbeState::default(),
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
             },
@@ -147,19 +162,30 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
         unsafe {
             let rows_num = block.num_rows();
-            let state = self.method.build_keys_state(&group_columns, rows_num)?;
 
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
                         let _ = cell.hashtable.insert_and_entry(key);
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
                         let _ = cell.hashtable.insert_and_entry(key);
                     }
+                }
+                HashTable::AggregateHashTable(hashtable) => {
+                    let group_columns: Vec<Column> =
+                        group_columns.into_iter().map(|c| c.0).collect();
+                    let _ = hashtable.add_groups(
+                        &mut self.probe_state,
+                        &group_columns,
+                        &[vec![]],
+                        rows_num,
+                    )?;
                 }
             };
 
@@ -232,6 +258,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 }
 
                 blocks
+            }
+            HashTable::AggregateHashTable(hashtable) => {
+                vec![DataBlock::empty_with_meta(
+                    AggregateMeta::<Method, ()>::create_agg_hashtable(-1, hashtable),
+                )]
             }
         })
     }

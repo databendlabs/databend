@@ -18,8 +18,10 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::AggregateHashTable;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
+use common_expression::PayloadFlushState;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
@@ -68,9 +70,11 @@ where Method: HashMethodBounds
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut reach_limit = false;
             let arena = Arc::new(Bump::new());
-            let hashtable = self.method.create_hash_table::<usize>(arena)?;
+            let hashtable = self.method.create_hash_table::<usize>(arena.clone())?;
             let _dropper = AggregateHashTableDropper::create(self.params.clone());
             let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
+
+            let mut agg_hashtable: Option<AggregateHashTable> = None;
 
             for bucket_data in data {
                 match bucket_data {
@@ -176,7 +180,35 @@ where Method: HashMethodBounds
                             }
                         }
                     },
+                    AggregateMeta::AggregateHashTable((_, hashtable)) => {
+                        match agg_hashtable.as_mut() {
+                            Some(ht) => {
+                                let mut flush_state = PayloadFlushState::default();
+                                ht.combine(hashtable, &mut flush_state)?;
+                            }
+                            None => agg_hashtable = Some(hashtable),
+                        }
+                    }
                 }
+            }
+
+            if let Some(mut ht) = agg_hashtable {
+                let mut flush_state = PayloadFlushState::default();
+
+                let mut blocks = vec![];
+                loop {
+                    if ht.merge_result(&mut flush_state)? {
+                        let mut cols = flush_state.aggregate_results.clone();
+                        cols.extend_from_slice(&flush_state.group_columns);
+
+                        blocks.push(DataBlock::new_from_columns(cols));
+                    } else {
+                        break;
+                    }
+                }
+
+                // todo pipeline
+                return DataBlock::concat(&blocks);
             }
 
             let keys_len = hash_cell.hashtable.len();

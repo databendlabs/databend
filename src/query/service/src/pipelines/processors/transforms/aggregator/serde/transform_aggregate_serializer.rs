@@ -145,6 +145,7 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
                         ));
                         return Ok(Event::Sync);
                     }
+                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
                 }
             }
         }

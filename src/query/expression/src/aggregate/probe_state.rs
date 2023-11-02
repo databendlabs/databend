@@ -33,6 +33,9 @@ pub struct ProbeState {
     pub row_count: usize,
 }
 
+unsafe impl Send for ProbeState {}
+unsafe impl Sync for ProbeState {}
+
 impl ProbeState {
     pub fn adjust_group_columns(
         &mut self,
@@ -66,6 +69,7 @@ impl ProbeState {
             self.empty_vector.resize(row_count);
             self.new_groups.resize(row_count);
         }
+
         self.row_count = row_count;
     }
 }
