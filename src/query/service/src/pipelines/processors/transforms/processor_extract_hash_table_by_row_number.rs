@@ -115,9 +115,10 @@ impl Processor for ExtractHashTableByRowNumber {
                 return Ok(());
             }
 
-            let row_number_vec = get_row_number(&data_block, 0)?;
-            let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
-            assert_eq!(row_number_set.len(), row_number_vec.len());
+            let row_number_vec = get_row_number(&data_block, 0);
+            let length = row_number_vec.len();
+            let row_number_set: HashSet<u64> = row_number_vec.into_iter().collect();
+            assert_eq!(row_number_set.len(), length);
 
             // get datablocks from hashstate.
             unsafe {
@@ -126,8 +127,8 @@ impl Processor for ExtractHashTableByRowNumber {
                         block.columns()[block.num_columns() - 1].data_type,
                         DataType::Number(NumberDataType::UInt64)
                     );
-                    let mut bitmap = MutableBitmap::new();
-                    let row_numbers = get_row_number(block, block.num_columns() - 1)?;
+                    let row_numbers = get_row_number(block, block.num_columns() - 1);
+                    let mut bitmap = MutableBitmap::with_capacity(row_numbers.len());
                     for row_number in row_numbers.iter() {
                         if row_number_set.contains(row_number) {
                             bitmap.push(true);

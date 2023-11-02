@@ -21,6 +21,7 @@ use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_catalog::lock::Lock;
 use common_catalog::lock::LockExt;
 use common_catalog::table_context::TableContext;
@@ -52,7 +53,7 @@ impl LockManager {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
         let lock_manager = Self { active_locks, tx };
-        GlobalIORuntime::instance().spawn({
+        GlobalIORuntime::instance().spawn(GLOBAL_TASK, {
             let active_locks = lock_manager.active_locks.clone();
             async move {
                 while let Some(revision) = rx.recv().await {
@@ -90,14 +91,14 @@ impl LockManager {
     ) -> Result<Option<LockGuard>> {
         let user = ctx.get_current_user()?.name;
         let node = ctx.get_cluster().local_id.clone();
-        let session_id = ctx.get_current_session_id();
+        let query_id = ctx.get_current_session_id();
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
 
         let catalog = ctx.get_catalog(lock.get_catalog()).await?;
 
         // get a new table lock revision.
         let res = catalog
-            .create_lock_revision(lock.gen_create_lock_req(user, node, session_id, expire_secs))
+            .create_lock_revision(lock.gen_create_lock_req(user, node, query_id, expire_secs))
             .await?;
         let revision = res.revision;
         // metrics.
@@ -105,7 +106,7 @@ impl LockManager {
 
         let lock_holder = Arc::new(LockHolder::default());
         lock_holder
-            .start(catalog.clone(), lock, revision, expire_secs)
+            .start(ctx.get_id(), catalog.clone(), lock, revision, expire_secs)
             .await?;
 
         self.insert_lock(revision, lock_holder);

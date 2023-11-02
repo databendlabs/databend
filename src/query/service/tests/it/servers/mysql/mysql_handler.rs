@@ -20,6 +20,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -162,7 +163,10 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         let start_barrier = start_barriers.clone();
         let destroy_barrier = destroy_barriers.clone();
 
-        join_handlers.push(runtime.spawn(connect_server(port, start_barrier, destroy_barrier)));
+        join_handlers.push(runtime.spawn(
+            GLOBAL_TASK,
+            connect_server(port, start_barrier, destroy_barrier),
+        ));
     }
 
     let mut accept = 0;
