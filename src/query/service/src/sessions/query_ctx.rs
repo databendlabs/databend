@@ -285,6 +285,10 @@ impl QueryContext {
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
         self.shared.evict_table_from_cache(catalog, database, table)
     }
+
+    pub fn clean_cache(&self) {
+        self.shared.clean_cache();
+    }
 }
 
 #[async_trait::async_trait]

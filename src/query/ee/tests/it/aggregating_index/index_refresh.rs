@@ -110,9 +110,10 @@ async fn refresh_index(
 #[tokio::test(flavor = "multi_thread")]
 async fn test_refresh_agg_index() -> Result<()> {
     let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let fixture = TestFixture::new_with_ctx(_guard, ctx.clone()).await;
 
     // Create table
+    ctx.clean_cache();
     execute_sql(
         fixture.ctx(),
         "CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'",
@@ -120,6 +121,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     .await?;
 
     // Insert data
+    ctx.clean_cache();
     execute_sql(
         fixture.ctx(),
         "INSERT INTO t0 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
@@ -129,6 +131,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     // Create index
     let index_name = "index0";
 
+    ctx.clean_cache();
     let index_id = create_index(
         fixture.ctx(),
         index_name,
@@ -138,6 +141,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     .await?;
 
     // Refresh Index
+    ctx.clean_cache();
     refresh_index(fixture.ctx(), index_name, None).await?;
 
     let block_path = find_block_path(&root)?.unwrap();
@@ -156,6 +160,7 @@ async fn test_refresh_agg_index() -> Result<()> {
 
     // Check aggregating index is correct.
     {
+        ctx.clean_cache();
         let res = execute_sql(
             fixture.ctx(),
             "SELECT b, SUM_STATE(a) from t0 WHERE c > 1 GROUP BY b",
@@ -163,6 +168,7 @@ async fn test_refresh_agg_index() -> Result<()> {
         .await?;
         let data_blocks: Vec<DataBlock> = res.try_collect().await?;
 
+        ctx.clean_cache();
         let agg_res = execute_sql(
             fixture.ctx(),
             &format!(
@@ -177,6 +183,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     }
 
     // Insert more data
+    ctx.clean_cache();
     execute_sql(
         fixture.ctx(),
         "INSERT INTO t0 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
@@ -188,6 +195,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     assert!(blocks.len() > indexes.len());
 
     // Refresh Index again
+    ctx.clean_cache();
     refresh_index(fixture.ctx(), index_name, None).await?;
 
     // check the new added index is correct.
@@ -206,6 +214,7 @@ async fn test_refresh_agg_index() -> Result<()> {
             indexes[0].clone()
         };
 
+        ctx.clean_cache();
         let data_blocks: Vec<DataBlock> = execute_sql(
             fixture.ctx(),
             &format!(
@@ -217,6 +226,7 @@ async fn test_refresh_agg_index() -> Result<()> {
         .try_collect()
         .await?;
 
+        ctx.clean_cache();
         let agg_data_blocks: Vec<DataBlock> = execute_sql(
             fixture.ctx(),
             &format!(
@@ -228,6 +238,7 @@ async fn test_refresh_agg_index() -> Result<()> {
         .try_collect()
         .await?;
 
+        ctx.clean_cache();
         assert_two_blocks_sorted_eq_with_name(
             "refresh index again",
             &data_blocks,
