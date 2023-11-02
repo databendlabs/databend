@@ -45,7 +45,7 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
-    async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
+    async fn set_authed_user(&self, user: UserInfo, restricted_role: Option<String>) -> Result<()>;
 
     async fn set_current_role(&self, role: Option<String>) -> Result<()>;
 
@@ -86,7 +86,7 @@ impl SessionPrivilegeManagerImpl {
         // if CURRENT ROLE is not set, take current session's AUTH ROLE
         let mut current_role_name = self.get_current_role().map(|r| r.name);
         if current_role_name.is_none() {
-            current_role_name = self.session_ctx.get_auth_role();
+            current_role_name = self.session_ctx.get_restricted_role();
         }
 
         // if CURRENT ROLE and AUTH ROLE are not set, take current user's DEFAULT ROLE
@@ -121,13 +121,13 @@ impl SessionPrivilegeManagerImpl {
 #[async_trait::async_trait]
 impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
-    // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
+    // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
-    async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()> {
+    async fn set_authed_user(&self, user: UserInfo, restricted_role: Option<String>) -> Result<()> {
         self.session_ctx.set_current_user(user);
-        self.session_ctx.set_auth_role(auth_role);
+        self.session_ctx.set_restricted_role(restricted_role);
         self.ensure_current_role().await?;
         Ok(())
     }
@@ -152,13 +152,13 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         self.session_ctx.get_current_role()
     }
 
-    // Returns all the roles the current session has. If the user have been granted auth_role,
+    // Returns all the roles the current session has. If the user have been granted restricted_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        let roles = match self.session_ctx.get_auth_role() {
-            Some(auth_role) => vec![auth_role],
+        let roles = match self.session_ctx.get_restricted_role() {
+            Some(restricted_role) => vec![restricted_role],
             None => {
                 let current_user = self.get_current_user()?;
                 let mut roles = current_user.grants.roles();

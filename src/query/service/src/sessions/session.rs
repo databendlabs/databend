@@ -185,16 +185,16 @@ impl Session {
     }
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
-    // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
+    // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(
         self: &Arc<Self>,
         user: UserInfo,
-        auth_role: Option<String>,
+        restricted_role: Option<String>,
     ) -> Result<()> {
-        self.privilege_mgr.set_authed_user(user, auth_role).await
+        self.privilege_mgr.set_authed_user(user, restricted_role).await
     }
 
     #[async_backtrace::framed]
@@ -220,7 +220,7 @@ impl Session {
         self.privilege_mgr.set_current_role(None).await
     }
 
-    // Returns all the roles the current session has. If the user have been granted auth_role,
+    // Returns all the roles the current session has. If the user have been granted restricted_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
