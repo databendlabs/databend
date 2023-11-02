@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::base::mask_connection_info;
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
 use highway::HighwayHash;
@@ -338,7 +339,7 @@ pub(crate) async fn query_handler(
     let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
 
     async {
-        info!("new http query request: {:?}", req);
+        info!("new http query request: {:}", mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 
@@ -360,7 +361,7 @@ pub(crate) async fn query_handler(
                 };
                 info!(
                     "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    &query.id, &resp.state, rows, next_page, sql
+                    &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                 );
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
