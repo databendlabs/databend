@@ -342,14 +342,12 @@ pub fn error_hint<'a, O, F>(
 where
     F: nom::Parser<Input<'a>, O, Error<'a>>,
 {
-    move |input: Input| {
-        match match_error.parse(input) {
-            Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
-                input,
-                ErrorKind::Other(message),
-            ))),
-            Err(_) => Ok((input, ())),
-        }
+    move |input: Input| match match_error.parse(input) {
+        Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
+            input,
+            ErrorKind::Other(message),
+        ))),
+        Err(_) => Ok((input, ())),
     }
 }
 

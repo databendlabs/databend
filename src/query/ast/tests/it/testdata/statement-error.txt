@@ -367,6 +367,16 @@ error:
 
 
 ---------- Input ----------
+SELECT c a as FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT c a as FROM t
+  |            ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+
+
+---------- Input ----------
 SELECT c a as b FROM t
 ---------- Output ---------
 error: 
