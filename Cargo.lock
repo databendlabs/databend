@@ -9623,7 +9623,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -11160,9 +11160,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.15.2"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2883a176844bd22f2ded429ec6a1e16f3522f770475bf47e3494dcf22a50abd6"
+checksum = "78ea1056caa9180e7e5727eed1a377d96c9f4615303fa82d2f4c202c64736dee"
 dependencies = [
  "async-trait",
  "educe",
@@ -11176,6 +11176,7 @@ dependencies = [
  "owo-colors",
  "regex",
  "similar",
+ "subst",
  "tempfile",
  "thiserror",
  "tracing",
@@ -11482,6 +11483,16 @@ checksum = "0c2e86926081dda636c546d8c5e641661049d7562a68f5488be4a1f7f66f6086"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "subst"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca1318e5d6716d6541696727c88d9b8dfc8cfe6afd6908e186546fd4af7f5b98"
+dependencies = [
+ "memchr",
+ "unicode-width",
 ]
 
 [[package]]
@@ -12301,7 +12312,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
