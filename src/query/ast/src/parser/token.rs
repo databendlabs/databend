@@ -1323,7 +1323,7 @@ impl TokenKind {
             | TokenKind::NULL
             // | TokenKind::ONLY
             | TokenKind::OR
-            | TokenKind::OUTER
+            // | TokenKind::OUTER
             // | TokenKind::PLACING
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
