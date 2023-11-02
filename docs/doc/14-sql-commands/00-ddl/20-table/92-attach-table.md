@@ -205,8 +205,8 @@ Sign in to Databend Cloud and run the following command in a worksheet to link a
 
 ```sql title='Databend Cloud:'
 ATTACH TABLE population_readonly 's3://databend-toronto/1/556/' CONNECTION = (
-  AWS_KEY_ID = 'AKIASTQNLUZWP2UY2HSN',
-  AWS_SECRET_KEY = 'VNKrZt9PGLCco/PVkLAtK9n81Zy8Lkpjl6sqaHgD'
+  AWS_KEY_ID = '<your_aws_key_id>',
+  AWS_SECRET_KEY = '<your_aws_secret_key>'
 ) READ_ONLY;
 ```
 
