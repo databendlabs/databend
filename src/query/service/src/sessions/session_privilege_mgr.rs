@@ -47,7 +47,7 @@ pub trait SessionPrivilegeManager {
 
     async fn set_authed_user(&self, user: UserInfo, restricted_role: Option<String>) -> Result<()>;
 
-    async fn set_current_role(&self, role: Option<String>) -> Result<()>;
+    async fn set_current_role(&self, role: Option<String>, restricted: bool) -> Result<()>;
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
@@ -83,13 +83,13 @@ impl SessionPrivilegeManagerImpl {
             .await?
             .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
 
-        // if CURRENT ROLE is not set, take current session's AUTH ROLE
+        // if CURRENT ROLE is not set, take current session's RESTRICTED ROLE
         let mut current_role_name = self.get_current_role().map(|r| r.name);
         if current_role_name.is_none() {
             current_role_name = self.session_ctx.get_restricted_role();
         }
 
-        // if CURRENT ROLE and AUTH ROLE are not set, take current user's DEFAULT ROLE
+        // if CURRENT ROLE and RESTRICTED ROLE are not set, take current user's DEFAULT ROLE
         if current_role_name.is_none() {
             current_role_name = self
                 .session_ctx
@@ -98,7 +98,7 @@ impl SessionPrivilegeManagerImpl {
                 .unwrap_or(None)
         };
 
-        // if CURRENT ROLE, AUTH ROLE and DEFAULT ROLE are not set, take PUBLIC role
+        // if CURRENT ROLE, RESTRICTED ROLE and DEFAULT ROLE are not set, take PUBLIC role
         let current_role_name =
             current_role_name.unwrap_or_else(|| BUILTIN_ROLE_PUBLIC.to_string());
 
@@ -123,7 +123,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
-    // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
+    // becomes the CURRENT ROLE if not set session.role in the HTTP query.
     #[async_backtrace::framed]
     async fn set_authed_user(&self, user: UserInfo, restricted_role: Option<String>) -> Result<()> {
         self.session_ctx.set_current_user(user);
@@ -133,11 +133,14 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn set_current_role(&self, role_name: Option<String>) -> Result<()> {
-        let role = match role_name {
-            Some(role_name) => Some(self.validate_available_role(&role_name).await?),
+    async fn set_current_role(&self, role_name: Option<String>, restricted: bool) -> Result<()> {
+        let role = match &role_name {
+            Some(role_name) => Some(self.validate_available_role(role_name).await?),
             None => None,
         };
+        if restricted {
+            self.session_ctx.set_restricted_role(role_name.clone());
+        }
         self.session_ctx.set_current_role(role);
         Ok(())
     }

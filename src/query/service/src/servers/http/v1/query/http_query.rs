@@ -260,7 +260,7 @@ impl HttpQuery {
                 session.set_current_database(db.clone());
             }
             if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role).await?;
+                session.set_current_role_checked(role, true).await?;
             }
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();

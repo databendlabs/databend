@@ -203,11 +203,13 @@ impl Session {
     }
 
     // Only the available role can be set as current role. The current role can be set by the SET
-    // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
+    // ROLE statement, or by the `session.role` field in the HTTP query request body.
+    // When the `restricted` is true, this role will become the only role of the current session,
+    // only this role and its sub roles take effect.
     #[async_backtrace::framed]
-    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
+    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str, restricted: bool) -> Result<()> {
         self.privilege_mgr
-            .set_current_role(Some(role_name.to_string()))
+            .set_current_role(Some(role_name.to_string()), restricted)
             .await
     }
 
@@ -217,7 +219,7 @@ impl Session {
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
-        self.privilege_mgr.set_current_role(None).await
+        self.privilege_mgr.set_current_role(None, false).await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,
