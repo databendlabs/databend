@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
@@ -65,9 +66,10 @@ impl DeduplicateRowNumber {
             return Ok(());
         }
 
-        let row_number_vec = get_row_number(&data_block, 0)?;
-        let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
-        assert_eq!(row_number_set.len(), row_number_vec.len());
+        let row_number_vec = get_row_number(&data_block, 0);
+        let length = row_number_vec.len();
+        let row_number_set: HashSet<u64> = row_number_vec.into_iter().collect();
+        assert_eq!(row_number_set.len(), length);
 
         if !self.accepted_data {
             self.unique_row_number = row_number_set;
@@ -92,12 +94,12 @@ impl DeduplicateRowNumber {
     }
 }
 
-pub(crate) fn get_row_number(data_block: &DataBlock, row_number_idx: usize) -> Result<Vec<u64>> {
+pub(crate) fn get_row_number(data_block: &DataBlock, row_number_idx: usize) -> Buffer<u64> {
     let row_number_col = data_block.get_by_offset(row_number_idx);
     let value = row_number_col.value.try_downcast::<UInt64Type>().unwrap();
     match value {
-        common_expression::Value::Scalar(scalar) => Ok(vec![scalar]),
-        common_expression::Value::Column(column) => Ok(column.into_iter().collect_vec()),
+        common_expression::Value::Scalar(scalar) => Buffer::from(vec![scalar]),
+        common_expression::Value::Column(column) => column,
     }
 }
 
