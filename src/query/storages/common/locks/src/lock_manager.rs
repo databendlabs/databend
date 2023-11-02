@@ -81,8 +81,7 @@ impl LockManager {
     /// Otherwise, listen to the deletion event of the previous revision in a loop until get lock success.
     ///
     /// NOTICE: the lock holder is not 100% reliable.
-    /// E.g., there is a very small probability of a lock extend failure.
-    /// There is also a possibility of failure in deleting a lock.
+    /// E.g., there is a very small probability of failure in extending or deleting the lock.
     #[async_backtrace::framed]
     pub async fn try_lock<T: Lock + ?Sized>(
         self: &Arc<Self>,
