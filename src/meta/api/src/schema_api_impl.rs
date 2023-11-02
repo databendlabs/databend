@@ -3203,7 +3203,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let lock_meta = LockMeta {
                 user: req.user.clone(),
                 node: req.node.clone(),
-                session_id: req.session_id.clone(),
+                query_id: req.query_id.clone(),
                 created_on: Utc::now(),
                 acquired_on: None,
                 lock_type: lock_type.clone(),

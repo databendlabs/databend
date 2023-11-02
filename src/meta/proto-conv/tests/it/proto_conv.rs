@@ -275,7 +275,7 @@ pub(crate) fn new_lock_meta() -> mt::LockMeta {
     mt::LockMeta {
         user: "root".to_string(),
         node: "node".to_string(),
-        session_id: "session".to_string(),
+        query_id: "query".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
         lock_type: LockType::TABLE,

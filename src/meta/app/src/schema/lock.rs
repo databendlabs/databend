@@ -26,7 +26,7 @@ use common_meta_kvapi::kvapi::KeyError;
 pub struct LockMeta {
     pub user: String,
     pub node: String,
-    pub session_id: String,
+    pub query_id: String,
 
     pub created_on: DateTime<Utc>,
     pub acquired_on: Option<DateTime<Utc>>,
@@ -112,7 +112,7 @@ pub struct CreateLockRevReq {
     pub expire_at: u64,
     pub user: String,
     pub node: String,
-    pub session_id: String,
+    pub query_id: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
