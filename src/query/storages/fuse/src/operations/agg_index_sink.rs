@@ -50,6 +50,7 @@ pub struct AggIndexSink {
 }
 
 impl AggIndexSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,

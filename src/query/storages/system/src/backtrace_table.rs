@@ -74,12 +74,12 @@ impl SyncSystemTable for BacktraceTable {
                     if let Some(_pos) = frame.find(matcher) {
                         let task_matcher = " spawn task";
                         if let Some(pos) = frame.find(task_matcher) {
-                            query_id = (&frame[matcher.len()..pos]).to_string();
+                            query_id = frame[matcher.len()..pos].to_string();
 
                             frame = format!(
                                 "╼ {}::spawn{}",
                                 type_name::<Runtime>(),
-                                (&frame[pos + task_matcher.len()..]).to_string()
+                                &frame[pos + task_matcher.len()..]
                             );
                         }
                     } else if let Some(_pos) = frame.find("╼ Global spawn task") {
@@ -95,7 +95,7 @@ impl SyncSystemTable for BacktraceTable {
 
                     let regex = regex::Regex::new("<(.+) as .+>").unwrap();
                     let frame = regex
-                        .replace(&frame, |caps: &Captures| format!("{}", &caps[1]))
+                        .replace(&frame, |caps: &Captures| caps[1].to_string())
                         .to_string();
 
                     writeln!(stack_frames, "{}", frame).unwrap();
