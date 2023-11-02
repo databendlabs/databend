@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ unexpected `1`, expected `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
+  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ unexpected `(`, expected `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
+  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
   | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -29,7 +29,7 @@ error:
   --> SQL:1:19
   |
 1 | create table a (c varch)
-  | ------          - ^^^^^ unexpected `varch`, expected `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `TEXT`, or `JSON`
+  | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `TEXT`, or `JSON`
   | |               |  
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
@@ -42,7 +42,7 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ unexpected `)`, expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, `NULLABLE`, <Ident>, or <QuotedString>
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, `NULLABLE`, <Ident>, or <QuotedString>
   | |               | |      
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
@@ -56,7 +56,7 @@ error:
   --> SQL:1:26
   |
 1 | create table a (c decimal)
-  | ------          - -------^ unexpected `)`, expected `(`
+  | ------          - -------^ unexpected `)`, expecting `(`
   | |               | |       
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
@@ -70,7 +70,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a (b tuple(c int, uint64));
-  | ------          - -----              ^ unexpected `)`, expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, or `NULLABLE`
+  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, or `NULLABLE`
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
@@ -97,7 +97,7 @@ error:
   --> SQL:1:15
   |
 1 | drop table if a.b
-  | ----          ^ unexpected `a`, expected `EXISTS`
+  | ----          ^ unexpected `a`, expecting `EXISTS`
   | |              
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
@@ -109,7 +109,7 @@ error:
   --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                     ^ unexpected `.`, expected `FORMAT` or `;`
+  |                     ^ unexpected `.`, expecting `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -119,7 +119,7 @@ error:
   --> SQL:1:10
   |
 1 | truncate a
-  | -------- ^ unexpected `a`, expected `TABLE`
+  | -------- ^ unexpected `a`, expecting `TABLE`
   | |         
   | while parsing `TRUNCATE TABLE [<database>.]<table>`
 
@@ -131,7 +131,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expected `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `VIRTUAL`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, or `SHARE`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `VIRTUAL`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, or `SHARE`
 
 
 ---------- Input ----------
@@ -141,7 +141,7 @@ error:
   --> SQL:1:21
   |
 1 | insert into t format
-  | ------              ^ unexpected end of line, expected <Ident> or <QuotedString>
+  | ------              ^ unexpected end of line, expecting <Ident> or <QuotedString>
   | |                   
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 
@@ -153,7 +153,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected end of line, expected <Ident> or <QuotedString>
+  |                   ^ unexpected end of line, expecting <Ident> or <QuotedString>
 
 
 ---------- Input ----------
@@ -163,7 +163,7 @@ error:
   --> SQL:1:23
   |
 1 | alter database system x rename to db
-  | -----                 ^ unexpected `x`, expected `RENAME` or `.`
+  | -----                 ^ unexpected `x`, expecting `RENAME` or `.`
   | |                      
   | while parsing `ALTER DATABASE [IF EXISTS] <action>`
 
@@ -175,7 +175,7 @@ error:
   --> SQL:1:33
   |
 1 | create user 'test-e' identified bi 'password';
-  |                                 ^^ unexpected `bi`, expected `BY`, `WITH`, `FORMAT`, or `;`
+  |                                 ^^ unexpected `bi`, expecting `BY`, `WITH`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -185,7 +185,7 @@ error:
   --> SQL:1:22
   |
 1 | create user 'test-e'@'localhost' identified by 'password';
-  | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expected `'%'` or `IDENTIFIED`
+  | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expecting `'%'` or `IDENTIFIED`
   | |                     
   | while parsing `CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
 
@@ -197,7 +197,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expected `USER`, `SHARE`, `STAGE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `TASK`, `MASKING`, `VIEW`, or `FILE`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STAGE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `TASK`, `MASKING`, `VIEW`, or `FILE`
 
 
 ---------- Input ----------
@@ -207,7 +207,7 @@ error:
   --> SQL:1:21
   |
 1 | alter user 'test-e' identifies by 'new-password';
-  |                     ^^^^^^^^^^ unexpected `identifies`, expected `IDENTIFIED`, `WITH`, `FORMAT`, `@`, or `;`
+  |                     ^^^^^^^^^^ unexpected `identifies`, expecting `IDENTIFIED`, `WITH`, `FORMAT`, `@`, or `;`
 
 
 ---------- Input ----------
@@ -217,7 +217,7 @@ error:
   --> SQL:1:19
   |
 1 | create role 'test'@'%';
-  |                   ^ unexpected `@`, expected `FORMAT` or `;`
+  |                   ^ unexpected `@`, expecting `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -227,7 +227,7 @@ error:
   --> SQL:1:17
   |
 1 | drop role 'test'@'%';
-  |                 ^ unexpected `@`, expected `FORMAT` or `;`
+  |                 ^ unexpected `@`, expecting `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -237,7 +237,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expected `GRANTS`, `CREATE`, `NETWORK`, `CATALOGS`, `FUNCTIONS`, `DATABASES`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `SCHEMAS`, `FIELDS`, `USERS`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `CATALOGS`, `FUNCTIONS`, `DATABASES`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `SCHEMAS`, `FIELDS`, `USERS`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -247,7 +247,7 @@ error:
   --> SQL:1:31
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  |                               ^ unexpected `-`, expected `FORMAT` or `;`
+  |                               ^ unexpected `-`, expecting `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -257,7 +257,7 @@ error:
   --> SQL:1:15
   |
 1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
-  | ----- ------  ^^^ unexpected `ALL`, expected `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, `SET`, or `OWNERSHIP`
+  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, `SET`, or `OWNERSHIP`
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -270,7 +270,7 @@ error:
   --> SQL:1:27
   |
 1 | GRANT SELECT, CREATE ON *.c TO 'test-grant';
-  | -----                     ^ unexpected `c`, expected `TO` or `*`
+  | -----                     ^ unexpected `c`, expecting `TO` or `*`
   | |                          
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
 
@@ -282,7 +282,7 @@ error:
   --> SQL:1:24
   |
 1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
-  | ------ ------          ^^^ unexpected `ALL`, expected `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, `SET`, or `OWNERSHIP`
+  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, `SET`, or `OWNERSHIP`
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
@@ -295,7 +295,7 @@ error:
   --> SQL:1:28
   |
 1 | REVOKE SELECT, CREATE ON * TO 'test-grant';
-  | ------                     ^^ unexpected `TO`, expected `FROM` or `.`
+  | ------                     ^^ unexpected `TO`, expecting `FROM` or `.`
   | |                           
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -307,7 +307,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ unexpected `CREDENTIAL`, expected `CREDENTIALS`, `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `CONNECTION`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `LOCATION_PREFIX`, `FORMAT`, `PATTERN`, `FILES`, `MAX_FILES`, `SIZE_LIMIT`, `FILE_FORMAT`, `ON_ERROR`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^^ unexpected `CREDENTIAL`, expecting `CREDENTIALS`, `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `CONNECTION`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `LOCATION_PREFIX`, `FORMAT`, `PATTERN`, `FILES`, `MAX_FILES`, `SIZE_LIMIT`, `FILE_FORMAT`, `ON_ERROR`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -317,7 +317,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ unexpected `CREDENTIALS`, expected `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `MAX_FILES`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `FORMAT`, `PATTERN`, `FILES`, `SIZE_LIMIT`, `SPLIT_SIZE`, `FILE_FORMAT`, `ON_ERROR`, or `;`
+  |                                 ^^^^^^^^^^^ unexpected `CREDENTIALS`, expecting `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `MAX_FILES`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `FORMAT`, `PATTERN`, `FILES`, `SIZE_LIMIT`, `SPLIT_SIZE`, `FILE_FORMAT`, `ON_ERROR`, or `;`
 
 
 ---------- Input ----------
@@ -327,7 +327,7 @@ error:
   --> SQL:1:17
   |
 1 | CALL system$test
-  | ----            ^ unexpected end of line, expected `(`
+  | ----            ^ unexpected end of line, expecting `(`
   | |               
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
@@ -339,7 +339,7 @@ error:
   --> SQL:1:19
   |
 1 | CALL system$test(a
-  | ----              ^ unexpected end of line, expected `)` or `,`
+  | ----              ^ unexpected end of line, expecting `)` or `,`
   | |                 
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
@@ -351,7 +351,7 @@ error:
   --> SQL:1:15
   |
 1 | show settings ilike 'enable%'
-  |               ^^^^^ unexpected `ilike`, expected `LIKE`, `LIMIT`, `WHERE`, `FORMAT`, or `;`
+  |               ^^^^^ unexpected `ilike`, expecting `LIKE`, `LIMIT`, `WHERE`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -361,7 +361,7 @@ error:
   --> SQL:1:9
   |
 1 | PRESIGN INVALID @my_stage/path/to/file
-  | ------- ^^^^^^^ unexpected `INVALID`, expected `DOWNLOAD`, `AtString`, `UPLOAD`, or <QuotedString>
+  | ------- ^^^^^^^ unexpected `INVALID`, expecting `DOWNLOAD`, `AtString`, `UPLOAD`, or <QuotedString>
   | |        
   | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
 
@@ -373,7 +373,7 @@ error:
   --> SQL:1:12
   |
 1 | SELECT c a as b FROM t
-  |            ^^ unexpected `as`, expected `HAVING`, `SELECT`, `VALUES`, `OFFSET`, `,`, `FROM`, `WHERE`, `GROUP`, `WINDOW`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `ORDER`, `LIMIT`, `IGNORE_RESULT`, `FORMAT`, or `;`
+  |            ^^ unexpected `as`, expecting `HAVING`, `SELECT`, `VALUES`, `OFFSET`, `,`, `FROM`, `WHERE`, `GROUP`, `WINDOW`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `ORDER`, `LIMIT`, `IGNORE_RESULT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -383,7 +383,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ unexpected `SETS`, expected `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `(`, `UNION`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
+  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `(`, `UNION`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -393,7 +393,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ unexpected `)`, expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, `::`, `EXTRACT`, `DATE_PART`, `POSITION`, `SUBSTRING`, `SUBSTR`, `TRIM`, `COUNT`, or 19 more ...
+  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, `::`, `EXTRACT`, `DATE_PART`, `POSITION`, `SUBSTRING`, `SUBSTR`, `TRIM`, `COUNT`, or 19 more ...
   | |                                        
   | while parsing `SELECT ...`
 
@@ -513,7 +513,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -532,7 +532,7 @@ error:
   --> SQL:1:57
   |
 1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
-  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expected `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
+  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
   | |                                                        
   | while parsing `SELECT ...`
 
@@ -544,7 +544,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -563,7 +563,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = 
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -582,7 +582,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -601,7 +601,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -620,7 +620,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -639,7 +639,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -658,7 +658,7 @@ error:
   --> SQL:1:19
   |
 1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
-  | ----              ^^ unexpected `""`, expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -694,6 +694,6 @@ error:
 3 |                 FILE_FORMAT = (
 4 |                     type = CSV,
 5 |                     error_on_column_count_mismatch = 1
-  |                                                      ^ unexpected `1`, expected `TRUE` or `FALSE`
+  |                                                      ^ unexpected `1`, expecting `TRUE` or `FALSE`
 
 

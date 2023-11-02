@@ -231,7 +231,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
                 write!(msg, ", or {} more ...", more).unwrap();
                 break;
             } else if i == 0 {
-                msg += ", expected ";
+                msg += ", expecting ";
             } else if iter.peek().is_none() && i == 1 {
                 msg += " or ";
             } else if iter.peek().is_none() {
