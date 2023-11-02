@@ -33,6 +33,7 @@ use common_expression::SendableDataBlockStream;
 use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::bind_one_table;
 use common_sql::executor::CommitSink;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind::Merge;
@@ -227,13 +228,7 @@ impl MergeIntoInterpreter {
         };
 
         let optimized_input = self
-            .build_static_filter(
-                &input,
-                meta_data,
-                self.ctx.clone(),
-                check_table,
-                *bind_context.clone(),
-            )
+            .build_static_filter(&input, meta_data, self.ctx.clone(), check_table)
             .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
@@ -491,7 +486,6 @@ impl MergeIntoInterpreter {
         metadata: &MetadataRef,
         ctx: Arc<QueryContext>,
         table: Arc<dyn Table>,
-        mut bind_context: BindContext,
     ) -> Result<Box<SExpr>> {
         // 1. collect statistics from the source side
         // plan of source table is extended to:
@@ -526,6 +520,7 @@ impl MergeIntoInterpreter {
             let sql_dialect = Dialect::MySQL;
             let tokens = tokenize_sql(cluster_key_str)?;
             let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+            let (mut bind_context, metadata) = bind_one_table(table)?;
             if !ast_exprs.is_empty() {
                 let ast_expr = &ast_exprs[0];
                 let name_resolution_ctx =
