@@ -40,10 +40,7 @@ pub fn group_hash_columns(cols: &[Column]) -> Vec<u64> {
 
     if cols.len() > 1 {
         for col in &cols[1..] {
-            let col_values = group_hash_column(col);
-            for (val, v) in values.iter_mut().zip(col_values) {
-                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ v;
-            }
+            combine_roup_hash_column(&col, &mut values);
         }
     }
     values
@@ -100,8 +97,80 @@ pub fn group_hash_column(c: &Column) -> Vec<u64> {
     }
 }
 
+pub fn combine_roup_hash_column(c: &Column, values: &mut Vec<u64>) {
+    match c.data_type() {
+        DataType::Null => {}
+        DataType::EmptyArray => {}
+        DataType::EmptyMap => {}
+        DataType::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
+            NumberDataType::NUM_TYPE => {
+                combine_group_hash_type_column::<NumberType<NUM_TYPE>>(c, values)
+            }
+        }),
+        DataType::Decimal(v) => match v {
+            DecimalDataType::Decimal128(_) => {
+                combine_group_hash_type_column::<DecimalType<i128>>(c, values)
+            }
+            DecimalDataType::Decimal256(_) => {
+                combine_group_hash_type_column::<DecimalType<i256>>(c, values)
+            }
+        },
+        DataType::Boolean => combine_group_hash_type_column::<BooleanType>(c, values),
+
+        DataType::String => {
+            let c = StringType::try_downcast_column(c).unwrap();
+            for (x, val) in StringType::iter_column(&c).zip(values.iter_mut()) {
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
+            }
+        }
+        DataType::Bitmap => {
+            let c = BitmapType::try_downcast_column(c).unwrap();
+            for (x, val) in StringType::iter_column(&c).zip(values.iter_mut()) {
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
+            }
+        }
+        DataType::Variant => {
+            let c = VariantType::try_downcast_column(c).unwrap();
+            for (x, val) in StringType::iter_column(&c).zip(values.iter_mut()) {
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
+            }
+        }
+
+        DataType::Timestamp => combine_group_hash_type_column::<TimestampType>(c, values),
+        DataType::Date => combine_group_hash_type_column::<DateType>(c, values),
+        DataType::Nullable(_) => {
+            let col = c.as_nullable().unwrap();
+            let values2 = group_hash_column(&col.column);
+
+            for ((x, val), ok) in values2
+                .iter()
+                .zip(values.iter_mut())
+                .zip(col.validity.iter())
+            {
+                if ok {
+                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x;
+                } else {
+                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ NULL_HASH_VAL;
+                }
+            }
+        }
+        DataType::Tuple(_) => todo!(),
+        DataType::Array(_) => todo!(),
+        DataType::Map(_) => todo!(),
+        DataType::Generic(_) => unreachable!(),
+    }
+}
+
 fn group_hash_type_column<T: ArgType>(col: &Column) -> Vec<u64>
 where for<'a> T::ScalarRef<'a>: FastHash {
     let c = T::try_downcast_column(col).unwrap();
     T::iter_column(&c).map(|x| x.fast_hash()).collect()
+}
+
+fn combine_group_hash_type_column<T: ArgType>(col: &Column, values: &mut Vec<u64>)
+where for<'a> T::ScalarRef<'a>: FastHash {
+    let c = T::try_downcast_column(col).unwrap();
+    for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
+    }
 }

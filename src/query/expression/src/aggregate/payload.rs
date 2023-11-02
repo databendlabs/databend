@@ -98,13 +98,15 @@ impl Payload {
             tuple_size += 8;
         }
 
+        let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
+
         Self {
             arena,
-            pages: vec![],
+            pages: vec![vec![0; row_per_page * tuple_size]],
             group_types,
             aggrs,
             tuple_size,
-            row_per_page: (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1),
+            row_per_page,
             current_row: 0,
             group_offsets,
             group_sizes,
@@ -131,6 +133,13 @@ impl Payload {
             self.pages
                 .push(vec![0; self.row_per_page * self.tuple_size]);
             row_capacity += self.row_per_page;
+        }
+    }
+
+    pub fn try_extend_page(&mut self, page_nr: usize) {
+        while page_nr >= self.pages.len() {
+            self.pages
+                .push(vec![0; self.row_per_page * self.tuple_size]);
         }
     }
 

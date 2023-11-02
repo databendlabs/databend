@@ -135,7 +135,7 @@ impl AggregateHashTable {
             self.resize(new_capacity);
         }
 
-        state.adjust_group_columns(hashes, row_count, self.capacity);
+        state.adjust_vector(row_count);
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -143,7 +143,7 @@ impl AggregateHashTable {
         let mut payload_page_offset = self.len() % self.payload.row_per_page;
         let mut payload_page_nr = (self.len() / self.payload.row_per_page) + 1;
 
-        let mut is_increment = true;
+        let mut iter_times = 0;
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
@@ -151,17 +151,20 @@ impl AggregateHashTable {
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
             for i in 0..remaining_entries {
-                let index = if is_increment {
+                let index = if iter_times == 0 {
                     i
                 } else {
                     state.no_match_vector[i]
                 };
 
-                let entry = &mut self.entries[state.ht_offsets[index]];
+                let ht_offset = (hashes[index] as usize + iter_times) & (self.capacity - 1);
+                let salt = (hashes[index] >> (64 - 16)) as u16;
+
+                let entry = &mut self.entries[ht_offset];
 
                 // cell is empty, could be occupied
                 if entry.page_nr == 0 {
-                    entry.salt = state.hash_salts[index];
+                    entry.salt = salt;
                     entry.page_nr = payload_page_nr as u32;
                     entry.page_offset = payload_page_offset as u16;
 
@@ -169,11 +172,17 @@ impl AggregateHashTable {
                     if payload_page_offset == self.payload.row_per_page {
                         payload_page_offset = 0;
                         payload_page_nr += 1;
+
+                        self.payload.try_extend_page(payload_page_nr - 1);
                     }
 
                     state.empty_vector[new_entry_count] = index;
                     new_entry_count += 1;
-                } else if entry.salt == state.hash_salts[index] {
+                } else if entry.salt == salt {
+                    let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
+                    let page_offset = entry.page_offset as usize * self.payload.tuple_size;
+                    state.addresses[index] = unsafe { page_ptr.add(page_offset) };
+
                     state.group_compare_vector[need_compare_count] = index;
                     need_compare_count += 1;
                 } else {
@@ -190,19 +199,7 @@ impl AggregateHashTable {
             }
 
             // 3. handle need_compare_count
-            for index in state
-                .group_compare_vector
-                .iter()
-                .take(need_compare_count)
-                .copied()
-            {
-                let entry = &mut self.entries[state.ht_offsets[index]];
-
-                let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
-                let page_offset = entry.page_offset as usize * self.payload.tuple_size;
-
-                state.addresses[index] = unsafe { page_ptr.add(page_offset) };
-            }
+            // already inject addresses to state.addresses
 
             // 4. compare
             unsafe {
@@ -218,16 +215,8 @@ impl AggregateHashTable {
                 );
             }
 
-            // 5. Linear probing
-            for index in state.no_match_vector.iter().take(no_match_count).copied() {
-                state.ht_offsets[index] += 1;
-
-                if state.ht_offsets[index] >= self.capacity {
-                    state.ht_offsets[index] = 0;
-                }
-            }
-
-            is_increment = false;
+            // 5. Linear probing, just increase iter_times
+            iter_times += 1;
             remaining_entries = no_match_count;
         }
 

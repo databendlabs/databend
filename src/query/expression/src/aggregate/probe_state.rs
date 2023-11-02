@@ -19,8 +19,6 @@ use crate::StateAddr;
 /// It could be reuse during multiple probe process
 #[derive(Debug)]
 pub struct ProbeState {
-    pub ht_offsets: Vec<usize>,
-    pub hash_salts: Vec<u16>,
     pub addresses: Vec<*const u8>,
     pub state_places: Vec<StateAddr>,
     pub group_compare_vector: SelectVector,
@@ -36,8 +34,6 @@ unsafe impl Sync for ProbeState {}
 impl ProbeState {
     pub fn with_capacity(len: usize) -> Self {
         Self {
-            ht_offsets: vec![0; len],
-            hash_salts: vec![0; len],
             addresses: vec![std::ptr::null::<u8>(); len],
             state_places: vec![StateAddr::new(0); len],
             group_compare_vector: vec![0; len],
@@ -46,23 +42,9 @@ impl ProbeState {
             row_count: 0,
         }
     }
-    pub fn adjust_group_columns(&mut self, hashes: &[u64], row_count: usize, ht_size: usize) {
-        self.adjust_vector(row_count);
-
-        for ((hash, salt), ht_offset) in hashes
-            .iter()
-            .zip(self.hash_salts.iter_mut())
-            .zip(self.ht_offsets.iter_mut())
-        {
-            *salt = (*hash >> (64 - 16)) as u16;
-            *ht_offset = (*hash & (ht_size as u64 - 1)) as usize;
-        }
-    }
 
     pub fn adjust_vector(&mut self, row_count: usize) {
-        if self.ht_offsets.len() < row_count {
-            self.ht_offsets.resize(row_count, 0);
-            self.hash_salts.resize(row_count, 0);
+        if self.no_match_vector.len() < row_count {
             self.addresses.resize(row_count, std::ptr::null::<u8>());
             self.state_places.resize(row_count, StateAddr::new(0));
 
