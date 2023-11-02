@@ -15,7 +15,10 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -117,17 +120,46 @@ impl StorageParams {
     /// auto_detect is used to do auto detect for some storage params under async context.
     ///
     /// - This action should be taken before storage params been passed out.
-    /// - This action should not return errors, we will return it as is if any error happened.
-    pub async fn auto_detect(self) -> Self {
-        match self {
+    pub async fn auto_detect(self) -> Result<Self> {
+        let sp = match self {
             StorageParams::S3(mut s3) if s3.region.is_empty() => {
+                // TODO: endpoint related logic should be moved out from opendal as a new API.
+                // Remove the possible trailing `/` in endpoint.
+                let endpoint = s3.endpoint_url.trim_end_matches('/');
+
+                // Make sure the endpoint contains the scheme.
+                let endpoint = if endpoint.starts_with("http") {
+                    endpoint.to_string()
+                } else {
+                    // Prefix https if endpoint doesn't start with scheme.
+                    format!("https://{}", endpoint)
+                };
+
+                // We should not return error if client create failed, just ignore it.
+                if let Ok(client) = opendal::raw::HttpClient::new() {
+                    // The response itself doesn't important.
+                    let _ = client
+                        .client()
+                        .get(&endpoint)
+                        .timeout(Duration::from_secs(10))
+                        .send()
+                        .await
+                        .map_err(|err| {
+                            ErrorCode::InvalidConfig(format!(
+                                "input endpoint_url {} is invalid or incomplete: {err:?}",
+                                s3.endpoint_url
+                            ))
+                        })?;
+                }
                 s3.region = opendal::services::S3::detect_region(&s3.endpoint_url, &s3.bucket)
                     .await
                     .unwrap_or_default();
                 StorageParams::S3(s3)
             }
             v => v,
-        }
+        };
+
+        Ok(sp)
     }
 }
 
