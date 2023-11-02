@@ -928,6 +928,41 @@ async fn assert_auth_current_role(
     Ok(())
 }
 
+async fn assert_auth_current_role_with_restricted_role(
+    ep: &EndpointType,
+    role_name: &str,
+    restricted_role: &str,
+    header: impl Header,
+) -> Result<()> {
+    let sql = "select current_role()";
+
+    let json = serde_json::json!({"sql": sql.to_string(), "session": {"role": restricted_role.to_string()}});
+
+    let path = "/v1/query";
+    let uri = format!("{}?wait_time_secs={}", path, 3);
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+
+    let response = ep
+        .call(
+            Request::builder()
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, content_type)
+                .typed_header(header)
+                .body(body),
+        )
+        .await
+        .unwrap();
+
+    let (_, resp) = check_response(response).await?;
+    let v = resp.data;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
+    Ok(())
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn test_auth_jwt_with_create_user() -> Result<()> {
     let user_name = "user1";
@@ -984,7 +1019,8 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let token = key_pair.sign(claims)?;
     let bearer = headers::Authorization::bearer(&token).unwrap();
     assert_auth_current_user(&ep, user_name, bearer.clone(), "%").await?;
-    assert_auth_current_role(&ep, "account_admin", bearer).await?;
+    assert_auth_current_role(&ep, "account_admin", bearer.clone()).await?;
+    assert_auth_current_role_with_restricted_role(&ep, "public", "public", bearer).await?;
     Ok(())
 }
 
@@ -1217,6 +1253,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1233,6 +1270,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1245,6 +1283,7 @@ async fn test_affect() -> Result<()> {
             None,
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1259,6 +1298,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),

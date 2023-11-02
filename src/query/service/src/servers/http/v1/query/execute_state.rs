@@ -126,6 +126,7 @@ pub struct Executor {
 #[derive(Debug, Clone)]
 pub struct ExecutorSessionState {
     pub current_database: String,
+    pub current_role: Option<String>,
     pub settings: HashMap<String, ChangeValue>,
 }
 
@@ -133,6 +134,7 @@ impl ExecutorSessionState {
     pub fn new(session: Arc<Session>) -> Self {
         Self {
             current_database: session.get_current_database(),
+            current_role: session.get_current_role().map(|r| r.name.clone()),
             settings: session.get_changed_settings(),
         }
     }

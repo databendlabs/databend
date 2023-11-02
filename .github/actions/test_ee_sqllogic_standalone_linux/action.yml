@@ -22,8 +22,6 @@ runs:
   using: "composite"
   steps:
     - uses: ./.github/actions/setup_bendsql
-      env:
-        GH_TOKEN: ${{ github.token }}
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
