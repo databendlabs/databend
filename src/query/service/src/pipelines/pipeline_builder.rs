@@ -1965,6 +1965,7 @@ impl PipelineBuilder {
             aggregate.input.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            self.settings.get_max_block_size()?,
             None,
         )?;
 
@@ -2090,6 +2091,7 @@ impl PipelineBuilder {
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            self.settings.get_max_block_size()?,
             aggregate.limit,
         )?;
 
@@ -2188,6 +2190,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
+        max_block_size: u64,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
@@ -2227,6 +2230,7 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
+            max_block_size as usize,
             limit,
         )?;
 

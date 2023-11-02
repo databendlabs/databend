@@ -16,7 +16,6 @@ use ethnum::i256;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use crate::load;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -34,7 +33,6 @@ use crate::StateAddr;
 
 const FLUSH_BATCH_SIZE: usize = 8192;
 
-#[derive(Default)]
 pub struct PayloadFlushState {
     pub probe_state: ProbeState,
     pub group_hashes: Vec<u64>,
@@ -47,6 +45,36 @@ pub struct PayloadFlushState {
     pub state_places: Vec<StateAddr>,
 }
 
+unsafe impl Send for PayloadFlushState {}
+unsafe impl Sync for PayloadFlushState {}
+
+impl PayloadFlushState {
+    pub fn with_capacity(len: usize) -> PayloadFlushState {
+        PayloadFlushState {
+            probe_state: ProbeState::with_capacity(len),
+            group_hashes: vec![0; len],
+            group_columns: Vec::new(),
+            aggregate_results: Vec::new(),
+            row_count: 0,
+            flush_offset: 0,
+            addresses: vec![std::ptr::null::<u8>(); len],
+            state_places: vec![StateAddr::new(0); len],
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.row_count = 0;
+        self.flush_offset = 0;
+    }
+
+    pub fn take_group_columns(&mut self) -> Vec<Column> {
+        std::mem::take(&mut self.group_columns)
+    }
+    pub fn take_aggregate_results(&mut self) -> Vec<Column> {
+        std::mem::take(&mut self.aggregate_results)
+    }
+}
+
 impl Payload {
     pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
         let flush_end = (state.flush_offset + FLUSH_BATCH_SIZE).min(self.len());
@@ -56,7 +84,7 @@ impl Payload {
             return false;
         }
 
-        if state.row_count < rows {
+        if state.group_hashes.len() < rows {
             state.group_hashes.resize(rows, 0);
             state.addresses.resize(rows, std::ptr::null::<u8>());
             state.state_places.resize(rows, StateAddr::new(0));
@@ -64,7 +92,7 @@ impl Payload {
 
         state.group_columns.clear();
         state.row_count = rows;
-        state.probe_state.adjust_row_count(rows);
+        state.probe_state.adjust_vector(rows);
 
         for row in state.flush_offset..flush_end {
             state.addresses[row - state.flush_offset] = self.get_row_ptr(row);
@@ -79,7 +107,9 @@ impl Payload {
         if !self.aggrs.is_empty() {
             for i in 0..rows {
                 state.state_places[i] = unsafe {
-                    StateAddr::new(load::<u64>(state.addresses[i].add(self.state_offset)) as usize)
+                    StateAddr::new(core::ptr::read::<u64>(
+                        state.addresses[i].add(self.state_offset) as _
+                    ) as usize)
                 };
             }
         }
@@ -93,7 +123,7 @@ impl Payload {
 
         for i in 0..len {
             state.group_hashes[i] =
-                unsafe { load::<u64>(state.addresses[i].add(self.hash_offset)) };
+                unsafe { core::ptr::read::<u64>(state.addresses[i].add(self.hash_offset) as _) };
         }
     }
 
@@ -150,8 +180,9 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> Column {
         let len = state.probe_state.row_count;
-        let iter =
-            (0..len).map(|idx| unsafe { load::<T::Scalar>(state.addresses[idx].add(col_offset)) });
+        let iter = (0..len).map(|idx| unsafe {
+            core::ptr::read::<T::Scalar>(state.addresses[idx].add(col_offset) as _)
+        });
         let col = T::column_from_iter(iter, &[]);
         T::upcast_column(col)
     }
@@ -166,9 +197,11 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = load::<u32>(state.addresses[idx].add(col_offset)) as usize;
+                let str_len =
+                    core::ptr::read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
                 let data_address =
-                    load::<u64>(state.addresses[idx].add(col_offset + 4)) as usize as *const u8;
+                    core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _) as usize
+                        as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 

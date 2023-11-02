@@ -145,6 +145,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             ))
         };
 
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
+
         Ok(AccumulatingTransformer::create(
             input,
             output,
@@ -152,7 +154,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 method,
                 params,
                 hash_table,
-                probe_state: ProbeState::default(),
+                probe_state: ProbeState::with_capacity(max_block_size),
                 settings: AggregateSettings::try_from(ctx)?,
             },
         ))

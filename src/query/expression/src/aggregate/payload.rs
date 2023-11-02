@@ -21,7 +21,6 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::probe_state::ProbeState;
 use crate::get_layout_offsets;
-use crate::load;
 use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
@@ -152,9 +151,7 @@ impl Payload {
     ) {
         self.try_reverse(new_group_rows);
         let select_vector = &state.empty_vector;
-        for i in 0..new_group_rows {
-            let idx = select_vector.get_index(i);
-
+        for idx in select_vector.iterator(new_group_rows) {
             state.addresses[idx] = self.get_row_ptr(self.current_row);
             self.current_row += 1;
         }
@@ -166,12 +163,11 @@ impl Payload {
         for col in group_columns {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
-                for i in 0..new_group_rows {
-                    let idx = select_vector.get_index(i);
+                for idx in select_vector.iterator(new_group_rows) {
                     if bitmap.get_bit(idx) {
                         unsafe {
                             let dst = address[idx].add(write_offset);
-                            store(&1, dst as *mut u8);
+                            store(1, dst as *mut u8);
                         }
                     }
                 }
@@ -196,23 +192,21 @@ impl Payload {
         }
 
         // write group hashes
-        for i in 0..new_group_rows {
-            let idx = select_vector.get_index(i);
+        for idx in select_vector.iterator(new_group_rows) {
             unsafe {
                 let dst = address[idx].add(write_offset);
-                store(&group_hashes[idx], dst as *mut u8);
+                store(group_hashes[idx], dst as *mut u8);
             }
         }
 
         write_offset += 8;
         if let Some(layout) = self.state_layout {
             // write states
-            for i in 0..new_group_rows {
+            for idx in select_vector.iterator(new_group_rows) {
                 let place = self.arena.alloc_layout(layout);
-                let idx = select_vector.get_index(i);
                 unsafe {
                     let dst = address[idx].add(write_offset);
-                    store(&(place.as_ptr() as u64), dst as *mut u8);
+                    store(place.as_ptr() as u64, dst as *mut u8);
                 }
 
                 let place = StateAddr::from(place);
@@ -233,7 +227,7 @@ impl Drop for Payload {
                     let row_ptr = self.get_row_ptr(row);
 
                     unsafe {
-                        let state_addr: u64 = load(row_ptr.add(self.state_offset));
+                        let state_addr: u64 = core::ptr::read(row_ptr.add(self.state_offset) as _);
                         aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
                     };
                 }

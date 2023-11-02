@@ -54,6 +54,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 fn test_agg_hashtable() {
     let factory = AggregateFunctionFactory::instance();
     let m: usize = 4;
+    const BATCH_SIZE: usize = 8192;
     for n in [100, 1000, 10_000, 100_000] {
         let columns = vec![
             StringType::from_data((0..n).map(|x| format!("{}", x % m).as_bytes().to_vec())),
@@ -89,7 +90,7 @@ fn test_agg_hashtable() {
         let arena1 = Arc::new(Bump::new());
         let mut hashtable = AggregateHashTable::new(arena1, group_types.clone(), aggrs.clone());
 
-        let mut state = ProbeState::default();
+        let mut state = ProbeState::with_capacity(BATCH_SIZE);
         let _ = hashtable
             .add_groups(&mut state, &group_columns, &params, n)
             .unwrap();
@@ -97,15 +98,15 @@ fn test_agg_hashtable() {
         let arena2 = Arc::new(Bump::new());
         let mut hashtable2 = AggregateHashTable::new(arena2, group_types.clone(), aggrs.clone());
 
-        let mut state2 = ProbeState::default();
+        let mut state2 = ProbeState::with_capacity(BATCH_SIZE);
         let _ = hashtable2
             .add_groups(&mut state2, &group_columns, &params, n)
             .unwrap();
 
-        let mut flush_state = PayloadFlushState::default();
+        let mut flush_state = PayloadFlushState::with_capacity(BATCH_SIZE);
         let _ = hashtable.combine(hashtable2, &mut flush_state);
 
-        let mut merge_state = PayloadFlushState::default();
+        let mut merge_state = PayloadFlushState::with_capacity(BATCH_SIZE);
 
         let mut blocks = Vec::new();
         loop {

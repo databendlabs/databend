@@ -44,6 +44,7 @@ use crate::pipelines::processors::AggregatorParams;
 pub struct TransformFinalAggregate<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
+    flush_state: PayloadFlushState,
 }
 
 impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
@@ -53,10 +54,15 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
+        let max_block_size = params.max_block_size;
         Ok(Box::new(BlockMetaTransformer::create(
             input,
             output,
-            TransformFinalAggregate::<Method> { method, params },
+            TransformFinalAggregate::<Method> {
+                method,
+                params,
+                flush_state: PayloadFlushState::with_capacity(max_block_size),
+            },
         )))
     }
 }
@@ -183,8 +189,7 @@ where Method: HashMethodBounds
                     AggregateMeta::AggregateHashTable((_, hashtable)) => {
                         match agg_hashtable.as_mut() {
                             Some(ht) => {
-                                let mut flush_state = PayloadFlushState::default();
-                                ht.combine(hashtable, &mut flush_state)?;
+                                ht.combine(hashtable, &mut self.flush_state)?;
                             }
                             None => agg_hashtable = Some(hashtable),
                         }
@@ -193,13 +198,12 @@ where Method: HashMethodBounds
             }
 
             if let Some(mut ht) = agg_hashtable {
-                let mut flush_state = PayloadFlushState::default();
-
                 let mut blocks = vec![];
+                self.flush_state.reset();
                 loop {
-                    if ht.merge_result(&mut flush_state)? {
-                        let mut cols = flush_state.aggregate_results.clone();
-                        cols.extend_from_slice(&flush_state.group_columns);
+                    if ht.merge_result(&mut self.flush_state)? {
+                        let mut cols = self.flush_state.take_aggregate_results();
+                        cols.extend_from_slice(&self.flush_state.group_columns);
 
                         blocks.push(DataBlock::new_from_columns(cols));
                     } else {

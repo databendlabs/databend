@@ -130,13 +130,14 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             ))
         };
 
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(AccumulatingTransformer::create(
             input,
             output,
             TransformPartialGroupBy::<Method> {
                 method,
                 hash_table,
-                probe_state: ProbeState::default(),
+                probe_state: ProbeState::with_capacity(max_block_size),
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
             },

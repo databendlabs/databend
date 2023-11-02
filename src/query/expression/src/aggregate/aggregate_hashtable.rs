@@ -23,7 +23,6 @@ use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
-use crate::load;
 use crate::select_vector::SelectVector;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
@@ -96,9 +95,9 @@ impl AggregateHashTable {
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
                 state.state_places[i] = unsafe {
-                    StateAddr::new(
-                        load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
-                    )
+                    StateAddr::new(core::ptr::read::<u64>(
+                        state.addresses[i].add(self.payload.state_offset) as _,
+                    ) as usize)
                 };
             }
 
@@ -137,13 +136,12 @@ impl AggregateHashTable {
             self.resize(new_capacity);
         }
 
-        state.adjust_group_columns(group_columns, hashes, row_count, self.capacity);
+        state.adjust_group_columns(hashes, row_count, self.capacity);
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
 
         let mut select_vector = SelectVector::auto_increment();
-
         let mut payload_page_offset = self.len() % self.payload.row_per_page;
         let mut payload_page_nr = (self.len() / self.payload.row_per_page) + 1;
 
@@ -153,8 +151,7 @@ impl AggregateHashTable {
             let mut no_match_count = 0;
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
-            for i in 0..remaining_entries {
-                let index = select_vector.get_index(i);
+            for index in select_vector.iterator(remaining_entries) {
                 let entry = &mut self.entries[state.ht_offsets[index]];
 
                 // cell is empty, could be occupied
@@ -171,9 +168,6 @@ impl AggregateHashTable {
 
                     state.empty_vector.set_index(new_entry_count, index);
                     new_entry_count += 1;
-
-                    state.new_groups.set_index(new_group_count, index);
-                    new_group_count += 1;
                 } else if entry.salt == state.hash_salts[index] {
                     state
                         .group_compare_vector
@@ -187,13 +181,13 @@ impl AggregateHashTable {
 
             // 2. append new_group_count to payload
             if new_entry_count != 0 {
+                new_group_count += new_entry_count;
                 self.payload
                     .append_rows(state, hashes, new_entry_count, group_columns);
             }
 
             // 3. handle need_compare_count
-            for need_compare_idx in 0..need_compare_count {
-                let index = state.group_compare_vector.get_index(need_compare_idx);
+            for index in state.group_compare_vector.iterator(need_compare_count) {
                 let entry = &mut self.entries[state.ht_offsets[index]];
 
                 let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
@@ -217,8 +211,7 @@ impl AggregateHashTable {
             }
 
             // 5. Linear probing
-            for i in 0..no_match_count {
-                let index = state.no_match_vector.get_index(i);
+            for index in state.no_match_vector.iterator(no_match_count) {
                 state.ht_offsets[index] += 1;
 
                 if state.ht_offsets[index] >= self.capacity {
@@ -238,9 +231,9 @@ impl AggregateHashTable {
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
                 state.state_places[i] = unsafe {
-                    StateAddr::new(
-                        load::<u64>(state.addresses[i].add(self.payload.state_offset)) as usize,
-                    )
+                    StateAddr::new(core::ptr::read::<u64>(
+                        state.addresses[i].add(self.payload.state_offset) as _,
+                    ) as usize)
                 };
             }
         }
@@ -249,6 +242,7 @@ impl AggregateHashTable {
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
+        flush_state.reset();
         while other.payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 
@@ -313,7 +307,7 @@ impl AggregateHashTable {
         // iterate over payloads and copy to new entries
         for row in 0..self.len() {
             let row_ptr = self.payload.get_row_ptr(row);
-            let hash: u64 = unsafe { load(row_ptr.add(self.payload.hash_offset)) };
+            let hash: u64 = unsafe { core::ptr::read(row_ptr.add(self.payload.hash_offset) as _) };
             let mut hash_slot = hash & mask;
 
             while entries[hash_slot as usize].page_nr != 0 {

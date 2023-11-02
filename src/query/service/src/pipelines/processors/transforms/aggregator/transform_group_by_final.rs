@@ -38,6 +38,7 @@ use crate::pipelines::processors::AggregatorParams;
 pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
+    flush_state: PayloadFlushState,
 }
 
 impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
@@ -47,10 +48,15 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
+        let max_block_size = params.max_block_size;
         Ok(Box::new(BlockMetaTransformer::create(
             input,
             output,
-            TransformFinalGroupBy::<Method> { method, params },
+            TransformFinalGroupBy::<Method> {
+                method,
+                params,
+                flush_state: PayloadFlushState::with_capacity(max_block_size),
+            },
         )))
     }
 }
@@ -106,8 +112,7 @@ where Method: HashMethodBounds
                     AggregateMeta::AggregateHashTable((_, hashtable)) => {
                         match agg_hashtable.as_mut() {
                             Some(ht) => {
-                                let mut flush_state = PayloadFlushState::default();
-                                ht.combine(hashtable, &mut flush_state)?;
+                                ht.combine(hashtable, &mut self.flush_state)?;
                             }
                             None => agg_hashtable = Some(hashtable),
                         }
@@ -116,13 +121,12 @@ where Method: HashMethodBounds
             }
 
             if let Some(mut ht) = agg_hashtable {
-                let mut flush_state = PayloadFlushState::default();
-
                 let mut blocks = vec![];
+                self.flush_state.reset();
                 loop {
-                    if ht.merge_result(&mut flush_state)? {
+                    if ht.merge_result(&mut self.flush_state)? {
                         blocks.push(DataBlock::new_from_columns(
-                            flush_state.group_columns.clone(),
+                            self.flush_state.take_group_columns(),
                         ));
                     } else {
                         break;

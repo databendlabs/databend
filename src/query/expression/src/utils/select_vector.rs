@@ -54,23 +54,30 @@ impl SelectVector {
 
     // these function did not check index boundes
     // keep in mind when using them
+    #[inline]
     pub fn set_index(&mut self, idx: usize, loc: usize) {
-        #[cfg(debug_assertions)]
-        {
-            if self.sel_vector.len() <= idx {
-                panic!("index out of bound {}, {}", self.sel_vector.len(), idx);
-            }
-        }
-
         self.sel_vector[idx] = loc;
     }
 
+    #[inline]
     pub fn get_index(&self, idx: usize) -> usize {
         if self.increment {
             idx
         } else {
             self.sel_vector[idx]
         }
+    }
+
+    pub fn iterator(&self, count: usize) -> Box<dyn Iterator<Item = usize> + '_> {
+        if self.increment {
+            Box::new(0..count)
+        } else {
+            Box::new(self.sel_vector.iter().take(count).copied())
+        }
+    }
+
+    pub fn sel_vec_mut(&mut self, count: usize) -> &mut [usize] {
+        &mut self.sel_vector.as_mut_slice()[0..count]
     }
 
     pub fn swap(&mut self, i: usize, j: usize) {
