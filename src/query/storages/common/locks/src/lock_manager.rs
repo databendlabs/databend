@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_channel::Sender;
+use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
@@ -44,18 +44,18 @@ use crate::LockHolder;
 
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
-    tx: Sender<u64>,
+    tx: mpsc::UnboundedSender<u64>,
 }
 
 impl LockManager {
     pub fn init() -> Result<()> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, mut rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
         let lock_manager = Self { active_locks, tx };
         GlobalIORuntime::instance().spawn({
             let active_locks = lock_manager.active_locks.clone();
             async move {
-                while let Ok(revision) = rx.recv().await {
+                while let Some(revision) = rx.recv().await {
                     metrics_inc_shutdown_lock_holder_nums();
                     if let Some(lock) = active_locks.write().remove(&revision) {
                         lock.shutdown();
@@ -81,8 +81,8 @@ impl LockManager {
     /// Otherwise, listen to the deletion event of the previous revision in a loop until get lock success.
     ///
     /// NOTICE: the lock holder is not 100% reliable.
-    /// E.g., there is a very small probability of a lock renewal failure.
-    /// There is also a possibility of failure in deleting a lease.
+    /// E.g., there is a very small probability of a lock extend failure.
+    /// There is also a possibility of failure in deleting a lock.
     #[async_backtrace::framed]
     pub async fn try_lock<T: Lock + ?Sized>(
         self: &Arc<Self>,
@@ -182,6 +182,6 @@ impl LockManager {
 
 impl UnlockApi for LockManager {
     fn unlock(&self, revision: u64) {
-        let _ = self.tx.send_blocking(revision);
+        let _ = self.tx.send(revision);
     }
 }

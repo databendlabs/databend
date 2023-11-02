@@ -34,6 +34,7 @@ use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use storages_common_locks::set_backoff;
 use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -164,7 +165,7 @@ where F: SnapshotGenerator + Send + 'static
 
         self.abort_operation = meta.abort_operation;
 
-        self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
+        self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
         self.snapshot_gen
             .set_conflict_resolve_context(meta.conflict_resolve_context);

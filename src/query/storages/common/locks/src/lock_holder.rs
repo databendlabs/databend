@@ -16,7 +16,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
+use backoff::backoff::Backoff;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::sleep;
 use common_base::runtime::GlobalIORuntime;
@@ -26,10 +28,14 @@ use common_catalog::lock::Lock;
 use common_catalog::lock::LockExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::DeleteLockRevReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use futures::future::select;
 use futures::future::Either;
 use rand::thread_rng;
 use rand::Rng;
+
+use crate::set_backoff;
 
 #[derive(Default)]
 pub struct LockHolder {
@@ -60,21 +66,31 @@ impl LockHolder {
                         let mut rng = thread_rng();
                         rng.gen_range(sleep_range.clone())
                     };
-                    let sleep = Box::pin(sleep(Duration::from_millis(mills)));
-                    match select(notified, sleep).await {
+                    let sleep_range = Box::pin(sleep(Duration::from_millis(mills)));
+                    match select(notified, sleep_range).await {
                         Either::Left((_, _)) => {
+                            // shutdown.
                             break;
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
-                            catalog
-                                .extend_lock_revision(extend_table_lock_req.clone())
+                            self_clone
+                                .try_extend_lock(
+                                    catalog.clone(),
+                                    extend_table_lock_req.clone(),
+                                    Some(Duration::from_millis(expire_secs * 1000 - mills)),
+                                )
                                 .await?;
                         }
                     }
                 }
-                catalog.delete_lock_revision(delete_table_lock_req).await?;
-                Ok::<_, ErrorCode>(())
+
+                Self::try_delete_lock(
+                    catalog,
+                    delete_table_lock_req,
+                    Some(Duration::from_millis(expire_secs * 1000)),
+                )
+                .await
             }
         });
 
@@ -84,5 +100,97 @@ impl LockHolder {
     pub fn shutdown(&self) {
         self.shutdown_flag.store(true, Ordering::SeqCst);
         self.shutdown_notify.notify_waiters();
+    }
+}
+
+impl LockHolder {
+    async fn try_extend_lock(
+        self: &Arc<Self>,
+        catalog: Arc<dyn Catalog>,
+        req: ExtendLockRevReq,
+        max_retry_elapsed: Option<Duration>,
+    ) -> Result<()> {
+        let mut backoff = set_backoff(Some(Duration::from_millis(2)), None, max_retry_elapsed);
+        let mut extend_notified = Box::pin(self.shutdown_notify.notified());
+        while !self.shutdown_flag.load(Ordering::SeqCst) {
+            match catalog.extend_lock_revision(req.clone()).await {
+                Ok(_) => {
+                    break;
+                }
+                Err(e) if e.code() == ErrorCode::TABLE_LOCK_EXPIRED => {
+                    log::error!("failed to extend the lock. cause {:?}", e);
+                    return Err(e);
+                }
+                Err(e) => match backoff.next_backoff() {
+                    Some(duration) => {
+                        log::debug!(
+                            "failed to extend the lock, tx will be retried {} ms later. table id {}, revision {}",
+                            duration.as_millis(),
+                            req.lock_key.get_table_id(),
+                            req.revision,
+                        );
+                        let sleep_gap = Box::pin(sleep(duration));
+                        match select(extend_notified, sleep_gap).await {
+                            Either::Left((_, _)) => {
+                                // shutdown.
+                                break;
+                            }
+                            Either::Right((_, new_notified)) => {
+                                extend_notified = new_notified;
+                            }
+                        }
+                    }
+                    None => {
+                        let error_info = format!(
+                            "failed to extend the lock after retries {} ms, aborted. cause {:?}",
+                            Instant::now()
+                                .duration_since(backoff.start_time)
+                                .as_millis(),
+                            e,
+                        );
+                        log::error!("{}", error_info);
+                        return Err(ErrorCode::OCCRetryFailure(error_info));
+                    }
+                },
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn try_delete_lock(
+        catalog: Arc<dyn Catalog>,
+        req: DeleteLockRevReq,
+        max_retry_elapsed: Option<Duration>,
+    ) -> Result<()> {
+        let mut backoff = set_backoff(Some(Duration::from_millis(2)), None, max_retry_elapsed);
+        loop {
+            match catalog.delete_lock_revision(req.clone()).await {
+                Ok(_) => break,
+                Err(e) => match backoff.next_backoff() {
+                    Some(duration) => {
+                        log::debug!(
+                            "failed to delete the lock, tx will be retried {} ms later. table id {}, revision {}",
+                            duration.as_millis(),
+                            req.lock_key.get_table_id(),
+                            req.revision,
+                        );
+                        sleep(duration).await;
+                    }
+                    None => {
+                        let error_info = format!(
+                            "failed to delete the lock after retries {} ms, aborted. cause {:?}",
+                            Instant::now()
+                                .duration_since(backoff.start_time)
+                                .as_millis(),
+                            e,
+                        );
+                        log::error!("{}", error_info);
+                        return Err(ErrorCode::OCCRetryFailure(error_info));
+                    }
+                },
+            }
+        }
+        Ok(())
     }
 }
