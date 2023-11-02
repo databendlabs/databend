@@ -1768,6 +1768,7 @@ dependencies = [
  "pin-project-lite",
  "pprof",
  "rand 0.8.5",
+ "regex",
  "semver",
  "serde",
  "state",
