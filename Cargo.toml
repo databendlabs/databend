@@ -53,6 +53,7 @@ members = [
     "src/query/storages/common/cache",
     "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
+    "src/query/storages/common/locks",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
     "src/query/storages/factory",
@@ -74,7 +75,6 @@ members = [
     "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
-    "src/query/ee_features/table_lock",
     "src/query/ee_features/storage_encryption",
     # databend-query
     "src/query/service",

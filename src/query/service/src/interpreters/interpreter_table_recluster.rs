@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_catalog::lock::LockExt;
 use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableExt;
@@ -35,6 +36,7 @@ use common_storages_fuse::FuseTable;
 use log::error;
 use log::info;
 use log::warn;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -122,12 +124,11 @@ impl Interpreter for ReclusterTableInterpreter {
                 return Err(err);
             }
 
+            let table_info = table.get_table_info().clone();
+
             // check if the table is locked.
-            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-            let reply = catalog
-                .list_table_lock_revs(table.get_table_info().ident.table_id)
-                .await?;
-            if !reply.is_empty() {
+            let table_lock = LockManager::create_table_lock(table_info.clone())?;
+            if table_lock.check_lock(catalog.clone()).await? {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table '{}' is locked, please retry recluster later",
                     self.plan.table
@@ -156,7 +157,7 @@ impl Interpreter for ReclusterTableInterpreter {
             block_count += mutator.recluster_blocks_count;
             let physical_plan = build_recluster_physical_plan(
                 mutator.tasks,
-                table.get_table_info().clone(),
+                table_info,
                 catalog.info(),
                 mutator.snapshot,
                 mutator.remained_blocks,
@@ -180,6 +181,8 @@ impl Interpreter for ReclusterTableInterpreter {
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
+            // make sure the executor is dropped before the next loop.
+            drop(complete_executor);
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;

@@ -2782,11 +2782,11 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "storages-common-index",
+ "storages-common-locks",
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
  "sys-info",
- "table-lock",
  "typetag",
  "uuid",
 ]
@@ -3971,10 +3971,10 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "storages-common-index",
+ "storages-common-locks",
  "storages-common-table-meta",
  "strength_reduce",
  "sysinfo",
- "table-lock",
  "temp-env",
  "tempfile",
  "time",
@@ -4417,9 +4417,7 @@ dependencies = [
  "common-license",
  "common-meta-api",
  "common-meta-app",
- "common-meta-kvapi",
  "common-meta-store",
- "common-meta-types",
  "common-sql",
  "common-storages-fuse",
  "common-tracing",
@@ -4436,7 +4434,6 @@ dependencies = [
  "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
- "table-lock",
  "tempfile",
  "vacuum-handler",
  "virtual-column",
@@ -11285,6 +11282,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "storages-common-locks"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "backoff",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-users",
+ "futures",
+ "futures-util",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "storages-common-pruner"
 version = "0.1.0"
 dependencies = [
@@ -11633,22 +11654,6 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
-]
-
-[[package]]
-name = "table-lock"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "common-base",
- "common-catalog",
- "common-exception",
- "common-license",
- "common-meta-app",
- "futures",
- "log",
- "rand 0.8.5",
 ]
 
 [[package]]
