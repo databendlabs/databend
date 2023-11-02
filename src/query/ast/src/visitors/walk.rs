@@ -348,13 +348,17 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Update(update) => visitor.visit_update(update),
         Statement::CopyIntoTable(stmt) => visitor.visit_copy_into_table(stmt),
         Statement::CopyIntoLocation(stmt) => visitor.visit_copy_into_location(stmt),
-        Statement::ShowSettings { like } => visitor.visit_show_settings(like),
-        Statement::ShowProcessList => visitor.visit_show_process_list(),
-        Statement::ShowMetrics => visitor.visit_show_metrics(),
-        Statement::ShowEngines => visitor.visit_show_engines(),
-        Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
-        Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
-        Statement::ShowIndexes => visitor.visit_show_indexes(),
+        Statement::ShowSettings { show_options } => visitor.visit_show_settings(show_options),
+        Statement::ShowProcessList { show_options } => {
+            visitor.visit_show_process_list(show_options)
+        }
+        Statement::ShowMetrics { show_options } => visitor.visit_show_metrics(show_options),
+        Statement::ShowEngines { show_options } => visitor.visit_show_engines(show_options),
+        Statement::ShowFunctions { show_options } => visitor.visit_show_functions(show_options),
+        Statement::ShowTableFunctions { show_options } => {
+            visitor.visit_show_table_functions(show_options)
+        }
+        Statement::ShowIndexes { show_options } => visitor.visit_show_indexes(show_options),
         Statement::KillStmt {
             kill_target,
             object_id,
