@@ -22,7 +22,7 @@ mod range_merger;
 mod runtime;
 mod runtime_tracker;
 mod stoppable;
-mod string_func;
+mod string;
 mod thread_pool;
 
 // runtime tests depends on the memory stat collector.

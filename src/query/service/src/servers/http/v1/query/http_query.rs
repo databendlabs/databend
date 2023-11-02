@@ -356,7 +356,7 @@ impl HttpQuery {
                         affect: ctx_clone.get_affect(),
                     };
                     info!(
-                        "http query {}, change state to Stopped, fail to start {:?}",
+                        "{}: http query change state to Stopped, fail to start {:?}",
                         &query_id_clone, e
                     );
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
@@ -476,6 +476,12 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
+
+        info!(
+            "{}: http query update duration to {:?}, expire at {:?}",
+            self.id, duration, deadline
+        );
+
         let mut t = self.expire_state.lock().await;
         *t = ExpireState::ExpireAt(deadline);
     }
