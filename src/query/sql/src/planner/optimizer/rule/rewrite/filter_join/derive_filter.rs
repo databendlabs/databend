@@ -124,9 +124,19 @@ fn replace_column(
     equi_conditions_map: &mut HashMap<&ScalarExpr, &ScalarExpr>,
 ) {
     match scalar {
-        ScalarExpr::BoundColumnRef(_) => {
+        ScalarExpr::BoundColumnRef(col) => {
+            let cloned_col = col.clone();
             if let Some(s) = equi_conditions_map.get(scalar) {
                 *scalar = (**s).clone();
+            } else {
+                for (key, val) in equi_conditions_map.iter() {
+                    if let ScalarExpr::BoundColumnRef(key_col) = key {
+                        if key_col.column.index.eq(&cloned_col.column.index) {
+                            *scalar = (**val).clone();
+                            break;
+                        }
+                    }
+                }
             }
         }
         ScalarExpr::WindowFunction(expr) => {
