@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
@@ -184,16 +185,18 @@ impl Session {
     }
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
-    // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
+    // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(
         self: &Arc<Self>,
         user: UserInfo,
-        auth_role: Option<String>,
+        restricted_role: Option<String>,
     ) -> Result<()> {
-        self.privilege_mgr.set_authed_user(user, auth_role).await
+        self.privilege_mgr
+            .set_authed_user(user, restricted_role)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -202,11 +205,17 @@ impl Session {
     }
 
     // Only the available role can be set as current role. The current role can be set by the SET
-    // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
+    // ROLE statement, or by the `session.role` field in the HTTP query request body.
+    // When the `restricted` is true, this role will become the only role of the current session,
+    // only this role and its sub roles take effect.
     #[async_backtrace::framed]
-    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
+    pub async fn set_current_role_checked(
+        self: &Arc<Self>,
+        role_name: &str,
+        restricted: bool,
+    ) -> Result<()> {
         self.privilege_mgr
-            .set_current_role(Some(role_name.to_string()))
+            .set_current_role(Some(role_name.to_string()), restricted)
             .await
     }
 
@@ -216,10 +225,10 @@ impl Session {
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
-        self.privilege_mgr.set_current_role(None).await
+        self.privilege_mgr.set_current_role(None, false).await
     }
 
-    // Returns all the roles the current session has. If the user have been granted auth_role,
+    // Returns all the roles the current session has. If the user have been granted restricted_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
@@ -232,14 +241,21 @@ impl Session {
         self: &Arc<Self>,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr
-            .validate_privilege(object, privilege, verify_ownership)
+            .validate_privilege(object, privilege)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn validate_ownership(self: &Arc<Self>, object: &GrantObjectByID) -> Result<()> {
+        if matches!(self.get_type(), SessionType::Local) {
+            return Ok(());
+        }
+        self.privilege_mgr.validate_ownership(object).await
     }
 
     #[async_backtrace::framed]

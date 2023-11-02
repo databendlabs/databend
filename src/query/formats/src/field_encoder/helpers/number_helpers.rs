@@ -14,7 +14,7 @@
 
 use std::num::FpCategory;
 
-use crate::CommonSettings;
+use crate::OutputCommonSettings;
 
 // 30% faster lexical_core::write to tmp buf and extend_from_slice
 #[inline]
@@ -32,13 +32,13 @@ pub fn extend_lexical<N: lexical_core::ToLexical>(n: N, out_buf: &mut Vec<u8>) {
 }
 
 pub trait PrimitiveWithFormat {
-    fn write_field(self, buf: &mut Vec<u8>, settings: &CommonSettings);
+    fn write_field(self, buf: &mut Vec<u8>, settings: &OutputCommonSettings);
 }
 
 macro_rules! impl_float {
     ($ty:ident) => {
         impl PrimitiveWithFormat for $ty {
-            fn write_field(self: $ty, buf: &mut Vec<u8>, settings: &CommonSettings) {
+            fn write_field(self: $ty, buf: &mut Vec<u8>, settings: &OutputCommonSettings) {
                 match self.classify() {
                     FpCategory::Nan => {
                         buf.extend_from_slice(&settings.nan_bytes);
@@ -58,7 +58,7 @@ macro_rules! impl_float {
 macro_rules! impl_int {
     ($ty:ident) => {
         impl PrimitiveWithFormat for $ty {
-            fn write_field(self: $ty, out_buf: &mut Vec<u8>, _settings: &CommonSettings) {
+            fn write_field(self: $ty, out_buf: &mut Vec<u8>, _settings: &OutputCommonSettings) {
                 extend_lexical(self, out_buf);
             }
         }

@@ -8,6 +8,8 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - uses: ./.github/actions/setup_bendsql
+
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:

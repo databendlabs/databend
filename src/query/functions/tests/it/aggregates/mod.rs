@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod agg;
+mod agg_hashtable;
 
 use std::io::Write;
 

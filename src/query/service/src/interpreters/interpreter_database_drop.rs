@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_management::RoleApi;
+use common_meta_app::principal::GrantObjectByID;
 use common_sql::plans::DropDatabasePlan;
 use common_storages_share::save_share_spec;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -42,8 +45,25 @@ impl Interpreter for DropDatabaseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+
+        // unset the ownership of the database, the database may not exists.
+        let db = catalog.get_database(&tenant, &self.plan.database).await;
+        if let Ok(db) = db {
+            role_api
+                .drop_ownership(&GrantObjectByID::Database {
+                    catalog_name: self.plan.catalog.clone(),
+                    db_id: db.get_db_info().ident.db_id,
+                })
+                .await?;
+        }
+
+        // actual drop database
         let resp = catalog.drop_database(self.plan.clone().into()).await?;
+
+        // handle share cleanups with the DropDatabaseReply
         if let Some(spec_vec) = resp.spec_vec {
             let mut share_table_into = Vec::with_capacity(spec_vec.len());
             for share_spec in &spec_vec {

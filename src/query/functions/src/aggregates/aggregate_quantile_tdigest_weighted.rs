@@ -25,7 +25,7 @@ use common_expression::type_check::check_number;
 use common_expression::types::number::*;
 use common_expression::types::*;
 use common_expression::with_number_mapped_type;
-use common_expression::with_unsigned_number_mapped_type;
+use common_expression::with_unsigned_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Expr;
@@ -270,7 +270,7 @@ pub fn try_create_aggregate_quantile_tdigest_weighted_function<const TYPE: u8>(
                 DataType::Number(NumberDataType::Float64)
             };
 
-            with_unsigned_number_mapped_type!(|NUM_TYPE_1| match &arguments[1] {
+            with_unsigned_integer_mapped_type!(|NUM_TYPE_1| match &arguments[1] {
                 DataType::Number(NumberDataType::NUM_TYPE_1) => {
                     AggregateQuantileTDigestWeightedFunction::<NUM_TYPE_0, NUM_TYPE_1>::try_create(
                         display_name,

@@ -308,29 +308,47 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_settings = map(
         rule! {
-            SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
+            SHOW ~ SETTINGS ~ #show_options?
         },
-        |(_, _, opt_like)| Statement::ShowSettings {
-            like: opt_like.map(|(_, like)| like),
-        },
+        |(_, _, show_options)| Statement::ShowSettings { show_options },
     );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
-    let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
-    let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
-    let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
+    let show_process_list = map(
+        rule! {
+            SHOW ~ PROCESSLIST ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowProcessList { show_options },
+    );
+    let show_metrics = map(
+        rule! {
+            SHOW ~ METRICS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowMetrics { show_options },
+    );
+    let show_engines = map(
+        rule! {
+            SHOW ~ ENGINES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowEngines { show_options },
+    );
     let show_functions = map(
         rule! {
-            SHOW ~ FUNCTIONS ~ #show_limit?
+            SHOW ~ FUNCTIONS ~ #show_options?
         },
-        |(_, _, limit)| Statement::ShowFunctions { limit },
+        |(_, _, show_options)| Statement::ShowFunctions { show_options },
     );
     let show_table_functions = map(
         rule! {
-            SHOW ~ TABLE_FUNCTIONS ~ #show_limit?
+            SHOW ~ TABLE_FUNCTIONS ~ #show_options?
         },
-        |(_, _, limit)| Statement::ShowTableFunctions { limit },
+        |(_, _, show_options)| Statement::ShowTableFunctions { show_options },
     );
-    let show_indexes = value(Statement::ShowIndexes, rule! { SHOW ~ INDEXES });
+    let show_indexes = map(
+        rule! {
+            SHOW ~ INDEXES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowIndexes { show_options },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -1110,7 +1128,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
-            ~ ( URL ~ ^"=" ~ ^#uri_location )?
+            ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
             ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
             ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
@@ -1132,7 +1150,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             Ok(Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
-                location: url_opt.map(|v| v.2),
+                location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
                 on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
                 size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
@@ -2574,6 +2592,18 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
+pub fn show_options(i: Input) -> IResult<ShowOptions> {
+    map(
+        rule! {
+            #show_limit? ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(show_limit, opt_limit)| ShowOptions {
+            show_limit,
+            limit: opt_limit.map(|(_, limit)| limit),
+        },
+    )(i)
+}
+
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
@@ -2850,12 +2880,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
-        rule! { ( #dot_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
-        |((catalog, table, name), _, expr)| MergeUpdateExpr {
-            catalog,
-            table,
-            name,
-            expr,
-        },
+        rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
+        |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
     )(i)
 }

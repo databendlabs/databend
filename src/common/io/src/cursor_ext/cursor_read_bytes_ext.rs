@@ -19,6 +19,7 @@ use std::io::Result;
 
 pub trait ReadBytesExt {
     fn peek(&self) -> Option<char>;
+    fn peek_byte(&self) -> Option<u8>;
     fn ignore(&mut self, f: impl Fn(u8) -> bool) -> bool;
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> usize;
     fn ignore_byte(&mut self, b: u8) -> bool;
@@ -72,6 +73,11 @@ where T: AsRef<[u8]>
         } else {
             Some(buf[0] as char)
         }
+    }
+
+    fn peek_byte(&self) -> Option<u8> {
+        let buf = self.remaining_slice();
+        if buf.is_empty() { None } else { Some(buf[0]) }
     }
 
     fn eof(&mut self) -> bool {

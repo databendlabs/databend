@@ -18,6 +18,7 @@ enable-histogram-metrics = ["common-metrics/enable-histogram"]
 common-ast = { path = "../../ast" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-cloud-control = { path = "../../../common/cloud_control" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
@@ -47,6 +48,7 @@ log = { workspace = true }
 once_cell = { workspace = true }
 opendal = { workspace = true }
 parking_lot = "0.12.1"
+regex = "1.8.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"

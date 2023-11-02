@@ -285,11 +285,74 @@ ShowColumns(
 
 
 ---------- Input ----------
-show processlist;
+show processlist like 't%' limit 2;
 ---------- Output ---------
-SHOW PROCESSLIST
+SHOW PROCESSLIST LIKE 't%' LIMIT 2
 ---------- AST ------------
-ShowProcessList
+ShowProcessList {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "t%",
+                },
+            ),
+            limit: Some(
+                2,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show processlist where database='default' limit 2;
+---------- Output ---------
+SHOW PROCESSLIST WHERE (database = 'default') LIMIT 2
+---------- AST ------------
+ShowProcessList {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            31..32,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                23..31,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "database",
+                                    quote: None,
+                                    span: Some(
+                                        23..31,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                32..41,
+                            ),
+                            lit: String(
+                                "default",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                2,
+            ),
+        },
+    ),
+}
 
 
 ---------- Input ----------
@@ -1309,7 +1372,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32)
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1380,7 +1443,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32)
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -7016,9 +7079,46 @@ CreateStage(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "1a2b3c",
+                        "aws_secret_key": "4x5y6z",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7055,7 +7155,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -10228,13 +10328,427 @@ Call(
 
 
 ---------- Input ----------
-show settings like 'enable%'
+show settings like 'enable%' limit 1
 ---------- Output ---------
-SHOW SETTINGS LIKE 'enable%'
+SHOW SETTINGS LIKE 'enable%' LIMIT 1
 ---------- AST ------------
 ShowSettings {
-    like: Some(
-        "enable%",
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "enable%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show settings where name='max_memory_usage' limit 1
+---------- Output ---------
+SHOW SETTINGS WHERE (name = 'max_memory_usage') LIMIT 1
+---------- AST ------------
+ShowSettings {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            24..25,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                20..24,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        20..24,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                25..43,
+                            ),
+                            lit: String(
+                                "max_memory_usage",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show functions like 'today%' limit 1
+---------- Output ---------
+SHOW FUNCTIONS LIKE 'today%' LIMIT 1
+---------- AST ------------
+ShowFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "today%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show functions where name='to_day_of_year' limit 1
+---------- Output ---------
+SHOW FUNCTIONS WHERE (name = 'to_day_of_year') LIMIT 1
+---------- AST ------------
+ShowFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            25..26,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                21..25,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        21..25,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                26..42,
+                            ),
+                            lit: String(
+                                "to_day_of_year",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show engines like 'FU%' limit 1
+---------- Output ---------
+SHOW ENGINES LIKE 'FU%' LIMIT 1
+---------- AST ------------
+ShowEngines {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "FU%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show engines where engine='MEMORY' limit 1
+---------- Output ---------
+SHOW ENGINES WHERE (engine = 'MEMORY') LIMIT 1
+---------- AST ------------
+ShowEngines {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            25..26,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                19..25,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "engine",
+                                    quote: None,
+                                    span: Some(
+                                        19..25,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                26..34,
+                            ),
+                            lit: String(
+                                "MEMORY",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show metrics like '%parse%' limit 1
+---------- Output ---------
+SHOW METRICS LIKE '%parse%' LIMIT 1
+---------- AST ------------
+ShowMetrics {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "%parse%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show metrics where metric='session_connect_numbers' limit 1
+---------- Output ---------
+SHOW METRICS WHERE (metric = 'session_connect_numbers') LIMIT 1
+---------- AST ------------
+ShowMetrics {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            25..26,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                19..25,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "metric",
+                                    quote: None,
+                                    span: Some(
+                                        19..25,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                26..51,
+                            ),
+                            lit: String(
+                                "session_connect_numbers",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show table_functions like 'fuse%' limit 1
+---------- Output ---------
+SHOW TABLE_FUNCTIONS LIKE 'fuse%' LIMIT 1
+---------- AST ------------
+ShowTableFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "fuse%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show table_functions where name='fuse_snapshot' limit 1
+---------- Output ---------
+SHOW TABLE_FUNCTIONS WHERE (name = 'fuse_snapshot') LIMIT 1
+---------- AST ------------
+ShowTableFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            31..32,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                27..31,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        27..31,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                32..47,
+                            ),
+                            lit: String(
+                                "fuse_snapshot",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show indexes like 'test%' limit 1
+---------- Output ---------
+SHOW INDEXES LIKE 'test%' LIMIT 1
+---------- AST ------------
+ShowIndexes {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "test%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show indexes where name='test_idx' limit 1
+---------- Output ---------
+SHOW INDEXES WHERE (name = 'test_idx') LIMIT 1
+---------- AST ------------
+ShowIndexes {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            23..24,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                19..23,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        19..23,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                24..34,
+                            ),
+                            lit: String(
+                                "test_idx",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
     ),
 }
 

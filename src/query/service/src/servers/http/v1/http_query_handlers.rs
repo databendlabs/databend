@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::base::mask_connection_info;
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
 use highway::HighwayHash;
@@ -226,7 +227,7 @@ async fn query_final_handler(
     );
 
     async {
-        info!("final http query: {}", query_id);
+        info!("{}: final http query", query_id);
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.remove_query(&query_id).await {
             Some(query) => {
@@ -259,7 +260,7 @@ async fn query_cancel_handler(
     );
 
     async {
-        info!("kill http query: {}", query_id);
+        info!("{}: http query is killed", query_id);
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id).await {
             Some(query) => {
@@ -338,7 +339,7 @@ pub(crate) async fn query_handler(
     let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
 
     async {
-        info!("new http query request: {:?}", req);
+        info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 
@@ -359,14 +360,14 @@ pub(crate) async fn query_handler(
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
                 };
                 info!(
-                    "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    &query.id, &resp.state, rows, next_page, sql
+                    "http query initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                    &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                 );
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
             }
             Err(e) => {
-                error!("Fail to start sql, Error: {:?}", e);
+                error!("{}: http query fail to start sql, error: {:?}", &ctx.query_id, e);
                 Ok(QueryResponse::fail_to_start_sql(&e).into_response())
             }
         }

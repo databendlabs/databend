@@ -183,6 +183,7 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
         mutation_kind: MutationKind,
         merge_meta: bool,
+        need_lock: bool,
     ) -> Result<()> {
         let cluster_key_id = self.cluster_key_id();
         pipeline.try_resize(1)?;
@@ -219,7 +220,7 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
-                false,
+                need_lock,
                 None,
             )
         })
