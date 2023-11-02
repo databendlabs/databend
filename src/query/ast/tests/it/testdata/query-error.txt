@@ -53,7 +53,7 @@ error:
   --> SQL:1:15
   |
 1 | select * order
-  | ------        ^ unexpected ``, expected `BY`
+  | ------        ^ unexpected end of line, expected `BY`
   | |             
   | while parsing `SELECT ...`
 

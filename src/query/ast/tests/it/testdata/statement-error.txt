@@ -141,7 +141,7 @@ error:
   --> SQL:1:21
   |
 1 | insert into t format
-  | ------              ^ unexpected ``, expected <Ident> or <QuotedString>
+  | ------              ^ unexpected end of line, expected <Ident> or <QuotedString>
   | |                   
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 
@@ -153,7 +153,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected ``, expected <Ident> or <QuotedString>
+  |                   ^ unexpected end of line, expected <Ident> or <QuotedString>
 
 
 ---------- Input ----------
@@ -327,7 +327,7 @@ error:
   --> SQL:1:17
   |
 1 | CALL system$test
-  | ----            ^ unexpected ``, expected `(`
+  | ----            ^ unexpected end of line, expected `(`
   | |               
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
@@ -339,7 +339,7 @@ error:
   --> SQL:1:19
   |
 1 | CALL system$test(a
-  | ----              ^ unexpected ``, expected `)` or `,`
+  | ----              ^ unexpected end of line, expected `)` or `,`
   | |                 
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
