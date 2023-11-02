@@ -194,7 +194,9 @@ impl Session {
         user: UserInfo,
         restricted_role: Option<String>,
     ) -> Result<()> {
-        self.privilege_mgr.set_authed_user(user, restricted_role).await
+        self.privilege_mgr
+            .set_authed_user(user, restricted_role)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -207,7 +209,11 @@ impl Session {
     // When the `restricted` is true, this role will become the only role of the current session,
     // only this role and its sub roles take effect.
     #[async_backtrace::framed]
-    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str, restricted: bool) -> Result<()> {
+    pub async fn set_current_role_checked(
+        self: &Arc<Self>,
+        role_name: &str,
+        restricted: bool,
+    ) -> Result<()> {
         self.privilege_mgr
             .set_current_role(Some(role_name.to_string()), restricted)
             .await

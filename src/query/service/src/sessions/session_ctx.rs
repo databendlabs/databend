@@ -47,7 +47,7 @@ pub struct SessionContext {
     // roles will not take effect. The user can switch to another available role by `SET ROLE`.
     // If the current_role is not set, it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    // The role restricted by external auth provider or sql client. When restricted_role is 
+    // The role restricted by external auth provider or sql client. When restricted_role is
     // provided, the current user's all other roles are overridden by this role, all the other
     // roles' privileges will not take effect.
     // The difference between current_role and restricted_role is that current_role could be set
