@@ -146,7 +146,7 @@ impl StorageParams {
                         .await
                         .map_err(|err| {
                             ErrorCode::InvalidConfig(format!(
-                                "input endpoint_url {} is invalid or incomplete: {err:?}",
+                                "s3 endpoint_url {} is invalid or incomplete: {err:?}",
                                 s3.endpoint_url
                             ))
                         })?;
