@@ -20,6 +20,7 @@ use crate::request::SessionConfig;
 pub struct QueryError {
     pub code: u16,
     pub message: String,
+    pub detail: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

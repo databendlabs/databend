@@ -35,9 +35,12 @@ impl std::fmt::Display for Error {
             Error::Request(msg) => write!(f, "RequestError: {msg}"),
             Error::IO(msg) => write!(f, "IOError: {msg}"),
             Error::SessionTimeout(msg) => write!(f, "SessionExpired: {msg}"),
-            Error::InvalidResponse(e) => {
-                write!(f, "ResponseError with {}: {}", e.code, e.message)
-            }
+            Error::InvalidResponse(e) => match &e.detail {
+                Some(d) if !d.is_empty() => {
+                    write!(f, "ResponseError with {}: {}\n{}", e.code, e.message, d)
+                }
+                _ => write!(f, "ResponseError with {}: {}", e.code, e.message),
+            },
             Error::InvalidPage(e) => write!(f, "PageError with {}: {}", e.code, e.message),
         }
     }
