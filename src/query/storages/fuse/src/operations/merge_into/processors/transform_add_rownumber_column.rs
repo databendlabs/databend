@@ -34,7 +34,7 @@ const PREFIX_OFFSET: usize = 48;
 
 pub struct TransformAddRowNumberColumnProcessor {
     // node_id
-    prefix: u16,
+    prefix: u64,
     // current row number, row_number shouldn't be overflow 48bits
     row_number: Arc<AtomicU64>,
 }
@@ -50,7 +50,7 @@ impl TransformAddRowNumberColumnProcessor {
             input,
             output,
             TransformAddRowNumberColumnProcessor {
-                prefix: node_id,
+                prefix: (node_id as u64) << PREFIX_OFFSET,
                 row_number,
             },
         )))
@@ -60,9 +60,7 @@ impl TransformAddRowNumberColumnProcessor {
 impl TransformAddRowNumberColumnProcessor {
     fn generate_row_number(&mut self, num_rows: u64) -> u64 {
         let row_number = self.row_number.fetch_add(num_rows, Ordering::SeqCst);
-        let mut prefix_u64 = self.prefix as u64;
-        prefix_u64 <<= PREFIX_OFFSET;
-        prefix_u64 | row_number
+        self.prefix | row_number
     }
 }
 
