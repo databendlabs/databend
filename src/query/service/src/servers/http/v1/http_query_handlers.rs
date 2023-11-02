@@ -227,7 +227,7 @@ async fn query_final_handler(
     );
 
     async {
-        info!("final http query: {}", query_id);
+        info!("{}: final http query", query_id);
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.remove_query(&query_id).await {
             Some(query) => {
@@ -260,7 +260,7 @@ async fn query_cancel_handler(
     );
 
     async {
-        info!("kill http query: {}", query_id);
+        info!("{}: http query is killed", query_id);
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id).await {
             Some(query) => {
