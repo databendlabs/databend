@@ -67,21 +67,20 @@ impl DeduplicateRowNumber {
         }
 
         let row_number_vec = get_row_number(&data_block, 0);
-        let length = row_number_vec.len();
-        let row_number_set: HashSet<u64> = row_number_vec.into_iter().collect();
-        assert_eq!(row_number_set.len(), length);
 
         if !self.accepted_data {
-            self.unique_row_number = row_number_set;
+            self.unique_row_number = row_number_vec.into_iter().collect();
             self.accepted_data = true;
             return Ok(());
         }
 
-        self.unique_row_number = self
-            .unique_row_number
-            .intersection(&row_number_set)
-            .cloned()
-            .collect();
+        let mut new_set = HashSet::with_capacity(self.unique_row_number.len());
+        for number in row_number_vec {
+            if self.unique_row_number.contains(&number) {
+                new_set.insert(number);
+            }
+        }
+        self.unique_row_number = new_set;
         Ok(())
     }
 
