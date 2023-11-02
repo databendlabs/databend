@@ -50,6 +50,7 @@ fn test_string() {
     test_unhex(file);
     test_pad(file);
     test_replace(file);
+    test_translate(file);
     test_strcmp(file);
     test_locate(file);
     test_char(file);
@@ -500,6 +501,20 @@ fn test_replace(file: &mut impl Write) {
         ("c", StringType::from_data(&["?", "x", "bb", "q"])),
     ];
     run_ast(file, "replace(a, b, c)", &table);
+}
+
+fn test_translate(file: &mut impl Write) {
+    run_ast(file, "translate('abcdefabcdef', 'dc', 'zy')", &[]);
+    run_ast(file, "translate('abcdefabcdef', '', 'zy')", &[]);
+    run_ast(file, "translate('abcdefabcdef', 'dc', '')", &[]);
+    run_ast(file, "translate('abcdefabcdef', 'dc', 'dc')", &[]);
+
+    let table = [
+        ("a", StringType::from_data(&["abcdef", "abcdef", "abcdef", "abcdef"])),
+        ("b", StringType::from_data(&["dc", "", "dc", "dc"])),
+        ("c", StringType::from_data(&["zy", "zy", "", "dc"])),
+    ];
+    run_ast(file, "translate(a, b, c)", &table);
 }
 
 fn test_strcmp(file: &mut impl Write) {
