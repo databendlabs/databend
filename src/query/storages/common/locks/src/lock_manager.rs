@@ -21,6 +21,7 @@ use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_catalog::lock::Lock;
 use common_catalog::lock::LockExt;
 use common_catalog::table_context::TableContext;
@@ -52,7 +53,7 @@ impl LockManager {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
         let lock_manager = Self { active_locks, tx };
-        GlobalIORuntime::instance().spawn({
+        GlobalIORuntime::instance().spawn(GLOBAL_TASK, {
             let active_locks = lock_manager.active_locks.clone();
             async move {
                 while let Some(revision) = rx.recv().await {
@@ -105,7 +106,7 @@ impl LockManager {
 
         let lock_holder = Arc::new(LockHolder::default());
         lock_holder
-            .start(catalog.clone(), lock, revision, expire_secs)
+            .start(ctx.get_id(), catalog.clone(), lock, revision, expire_secs)
             .await?;
 
         self.insert_lock(revision, lock_holder);
