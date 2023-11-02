@@ -527,9 +527,9 @@ impl MergeIntoInterpreter {
         let mut group_exprs = vec![];
         if let Some(cluster_key_str) = fuse_table.cluster_key_str() {
             let sql_dialect = Dialect::MySQL;
-            let tokens = tokenize_sql(&cluster_key_str)?;
+            let tokens = tokenize_sql(cluster_key_str)?;
             let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-            if ast_exprs.len() > 0 {
+            if !ast_exprs.is_empty() {
                 let ast_expr = &ast_exprs[0];
                 let name_resolution_ctx =
                     NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
