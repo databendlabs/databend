@@ -22,7 +22,6 @@ use crate::data_mask::RealDatamaskHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
-use crate::table_lock::RealTableLockHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct EnterpriseServices;
@@ -33,7 +32,6 @@ impl EnterpriseServices {
         RealStorageEncryptionHandler::init(&cfg)?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
-        RealTableLockHandler::init()?;
         RealDatamaskHandler::init()?;
         RealBackgroundService::init(&cfg).await?;
         RealVirtualColumnHandler::init()?;

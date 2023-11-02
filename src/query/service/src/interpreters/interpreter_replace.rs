@@ -119,6 +119,7 @@ impl Interpreter for ReplaceInterpreter {
                 &mut pipeline.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
+                true,
             )
             .await;
         }
@@ -323,6 +324,7 @@ impl ReplaceInterpreter {
             catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
             merge_meta: false,
+            need_lock: false,
         })));
         Ok((root, purge_info))
     }

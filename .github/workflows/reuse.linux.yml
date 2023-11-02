@@ -74,7 +74,7 @@ jobs:
 
   build_address_sanitizer:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}_asan
-    runs-on: [ self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}" ]
+    runs-on: [ self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}" ]
     strategy:
       matrix:
         include:
@@ -88,7 +88,6 @@ jobs:
       - uses: ./.github/actions/build_linux_sanitizer
         timeout-minutes: 60
         with:
-          sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: query
 

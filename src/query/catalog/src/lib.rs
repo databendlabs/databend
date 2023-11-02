@@ -18,6 +18,7 @@ pub mod catalog;
 pub mod catalog_kind;
 pub mod cluster_info;
 pub mod database;
+pub mod lock;
 pub mod plan;
 pub mod query_kind;
 pub mod statistics;

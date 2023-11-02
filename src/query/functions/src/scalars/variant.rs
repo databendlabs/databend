@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashSet;
+use std::iter::once;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
@@ -30,6 +31,7 @@ use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::variant::cast_scalar_to_variant;
 use common_expression::types::variant::cast_scalars_to_variants;
 use common_expression::types::AnyType;
+use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
@@ -64,6 +66,8 @@ use jsonb::as_i64;
 use jsonb::as_str;
 use jsonb::build_array;
 use jsonb::build_object;
+use jsonb::exists_all_keys;
+use jsonb::exists_any_keys;
 use jsonb::get_by_index;
 use jsonb::get_by_keypath;
 use jsonb::get_by_name;
@@ -1169,6 +1173,57 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.register_passthrough_nullable_2_arg(
+        "json_exists_any_keys",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
+            |val, keys, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = exists_any_keys(val, keys.iter());
+                output.push(result);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "json_exists_all_keys",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
+            |val, keys, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = exists_all_keys(val, keys.iter());
+                output.push(result);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "json_exists_key",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
+            |val, key, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = exists_all_keys(val, once(key));
+                output.push(result);
+            },
+        ),
+    );
 }
 
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

@@ -51,9 +51,10 @@ pub async fn hook_compact(
     pipeline: &mut Pipeline,
     compact_target: CompactTargetTableDescription,
     trace_ctx: CompactHookTraceCtx,
+    need_lock: bool,
 ) {
     let op_name = trace_ctx.operation_name.clone();
-    if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx).await {
+    if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx, need_lock).await {
         info!("compact hook ({}) with error (ignored): {}", op_name, e);
     }
 }
@@ -63,6 +64,7 @@ async fn do_hook_compact(
     pipeline: &mut Pipeline,
     compact_target: CompactTargetTableDescription,
     trace_ctx: CompactHookTraceCtx,
+    need_lock: bool,
 ) -> Result<()> {
     if pipeline.is_empty() {
         return Ok(());
@@ -78,7 +80,7 @@ async fn do_hook_compact(
             if err.is_none() {
                 info!("execute {op_name} finished successfully. running table optimization job.");
                 match  GlobalIORuntime::instance().block_on({
-                    compact_table(ctx, compact_target)
+                    compact_table(ctx, compact_target, need_lock)
                 }) {
                     Ok(_) => {
                         info!("execute {op_name} finished successfully. table optimization job finished.");
@@ -97,6 +99,7 @@ async fn do_hook_compact(
 async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
+    need_lock: bool,
 ) -> Result<()> {
     // build the compact pipeline
     ctx.evict_table_from_cache(
@@ -111,6 +114,7 @@ async fn compact_table(
             table: compact_target.table,
             action: OptimizeTableAction::CompactBlocks,
             limit: None,
+            need_lock,
         })?;
 
     let mut build_res = optimize_interpreter.execute2().await?;

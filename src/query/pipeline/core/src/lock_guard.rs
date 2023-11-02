@@ -12,9 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod table_lock_handler;
-mod table_lock_heartbeat;
+use std::sync::Arc;
 
-pub use table_lock_handler::TableLockHandler;
-pub use table_lock_handler::TableLockHandlerWrapper;
-pub use table_lock_heartbeat::TableLockHeartbeat;
+pub trait UnlockApi: Sync + Send {
+    fn unlock(&self, revision: u64);
+}
+
+pub struct LockGuard {
+    lock_mgr: Arc<dyn UnlockApi>,
+    revision: u64,
+}
+
+impl LockGuard {
+    pub fn new(lock_mgr: Arc<dyn UnlockApi>, revision: u64) -> Self {
+        LockGuard { lock_mgr, revision }
+    }
+}
+
+impl Drop for LockGuard {
+    fn drop(&mut self) {
+        self.lock_mgr.unlock(self.revision);
+    }
+}
