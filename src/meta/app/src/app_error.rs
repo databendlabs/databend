@@ -648,6 +648,22 @@ impl UnknownShareEndpointId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("TableLockExpired: `{table_id}` while `{context}`")]
+pub struct TableLockExpired {
+    table_id: u64,
+    context: String,
+}
+
+impl TableLockExpired {
+    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            table_id,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error(
     "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
 )]
@@ -893,6 +909,9 @@ pub enum AppError {
     UnknownShareEndpointId(#[from] UnknownShareEndpointId),
 
     #[error(transparent)]
+    TableLockExpired(#[from] TableLockExpired),
+
+    #[error(transparent)]
     CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
 
     #[error(transparent)]
@@ -1117,6 +1136,15 @@ impl AppErrorMessage for UnknownShareEndpointId {
     }
 }
 
+impl AppErrorMessage for TableLockExpired {
+    fn message(&self) -> String {
+        format!(
+            "the acquired table lock in '{}' has been expired",
+            self.table_id
+        )
+    }
+}
+
 impl AppErrorMessage for CannotShareDatabaseCreatedFromShare {
     fn message(&self) -> String {
         format!(
@@ -1292,6 +1320,7 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownShareEndpointId(err) => {
                 ErrorCode::UnknownShareEndpointId(err.message())
             }
+            AppError::TableLockExpired(err) => ErrorCode::TableLockExpired(err.message()),
             AppError::CannotShareDatabaseCreatedFromShare(err) => {
                 ErrorCode::CannotShareDatabaseCreatedFromShare(err.message())
             }

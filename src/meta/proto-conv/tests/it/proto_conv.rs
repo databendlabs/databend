@@ -30,6 +30,7 @@ use common_meta_app::schema as mt;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::schema::IndexType;
+use common_meta_app::schema::LockType;
 use common_meta_app::share;
 use common_meta_app::storage::StorageS3Config;
 use common_proto_conv::FromToProto;
@@ -270,6 +271,18 @@ pub(crate) fn new_empty_proto() -> mt::EmptyProto {
     mt::EmptyProto {}
 }
 
+pub(crate) fn new_lock_meta() -> mt::LockMeta {
+    mt::LockMeta {
+        user: "root".to_string(),
+        node: "node".to_string(),
+        session_id: "session".to_string(),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+        acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
+        lock_type: LockType::TABLE,
+        extra_info: BTreeMap::from([("key".to_string(), "val".to_string())]),
+    }
+}
+
 fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
     common_meta_app::data_mask::DatamaskMeta {
         args: vec![("a".to_string(), "String".to_string())],
@@ -462,6 +475,15 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("empty_proto:{:?}", buf);
+    }
+
+    // LockMeta
+    {
+        let table_lock_meta = new_lock_meta();
+        let p = table_lock_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
     }
 
     // schema

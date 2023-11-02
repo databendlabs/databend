@@ -486,6 +486,12 @@ pub enum JsonOperator {
     HashArrow,
     /// #>> Extracts JSON sub-object at the specified path as text
     HashLongArrow,
+    /// ? Checks whether text key exist as top-level key or array element.
+    Question,
+    /// ?| Checks whether any of the text keys exist as top-level keys or array elements.
+    QuestionOr,
+    /// ?& Checks whether all of the text keys exist as top-level keys or array elements.
+    QuestionAnd,
 }
 
 impl JsonOperator {
@@ -495,6 +501,9 @@ impl JsonOperator {
             JsonOperator::LongArrow => "get_string".to_string(),
             JsonOperator::HashArrow => "get_by_keypath".to_string(),
             JsonOperator::HashLongArrow => "get_by_keypath_string".to_string(),
+            JsonOperator::Question => "json_exists_key".to_string(),
+            JsonOperator::QuestionOr => "json_exists_any_keys".to_string(),
+            JsonOperator::QuestionAnd => "json_exists_all_keys".to_string(),
         }
     }
 }
@@ -749,6 +758,15 @@ impl Display for JsonOperator {
             }
             JsonOperator::HashLongArrow => {
                 write!(f, "#>>")
+            }
+            JsonOperator::Question => {
+                write!(f, "?")
+            }
+            JsonOperator::QuestionOr => {
+                write!(f, "?|")
+            }
+            JsonOperator::QuestionAnd => {
+                write!(f, "?&")
             }
         }
     }
