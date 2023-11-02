@@ -163,7 +163,7 @@ impl Executor {
         {
             let guard = this.read().await;
             info!(
-                "http query {}: change state to Stopped, reason {:?}",
+                "{}: http query change state to Stopped, reason {:?}",
                 &guard.query_id, reason
             );
         }
@@ -203,7 +203,7 @@ impl Executor {
             }
             Stopped(s) => {
                 info!(
-                    "http query {}: already stopped, reason {:?}, new reason {:?}",
+                    "{}: http query already stopped, reason {:?}, new reason {:?}",
                     &guard.query_id, s.reason, reason
                 );
             }
@@ -233,7 +233,7 @@ impl ExecuteState {
             session,
             ctx: ctx.clone(),
         };
-        info!("http query {}, change state to Running", &ctx.get_id());
+        info!("{}: http query change state to Running", &ctx.get_id());
         Executor::start_to_running(&executor, Running(running_state)).await;
 
         let executor_clone = executor.clone();
