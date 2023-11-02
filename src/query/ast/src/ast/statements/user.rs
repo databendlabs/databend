@@ -202,7 +202,7 @@ impl Display for AccountMgrSource {
                         }
                     }
                     AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
-                    AccountMgrLevel::Stage(stage) => write!(f, " Stage {stage}")?,
+                    AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
                 }
             }
             AccountMgrSource::ALL { level, .. } => {
@@ -225,7 +225,7 @@ impl Display for AccountMgrSource {
                         }
                     }
                     AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
-                    AccountMgrLevel::Stage(stage) => write!(f, " Stage {stage}")?,
+                    AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
                 }
             }
         }

@@ -202,26 +202,9 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DropDatabase(_)
             | Plan::UndropDatabase(_)
+            | Plan::DropUDF(_)
             | Plan::DropIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop], true)
-                    .await?;
-            }
-            Plan::DropUDF(plan) => {
-                self
-                    .validate_access(
-                        &GrantObject::UDF(plan.udf.clone()),
-                        vec![UserPrivilegeType::UsageUDF],
-                        true,
-                    )
-                    .await?;
-            }
-            Plan::AlterUDF(plan) => {
-                self
-                    .validate_access(
-                        &GrantObject::UDF(plan.udf.name.clone()),
-                        vec![UserPrivilegeType::Alter],
-                        true,
-                    )
                     .await?;
             }
             Plan::UseDatabase(plan) => {
@@ -643,6 +626,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
+            | Plan::AlterUDF(_)
             | Plan::RevokeRole(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Grant], false)
                     .await?;
@@ -689,7 +673,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
                 let from = plan.from.clone();
-                return self.check(ctx, &from).await?
+                return self.check(ctx, &from).await
             }
 
             Plan::CreateShareEndpoint(_)

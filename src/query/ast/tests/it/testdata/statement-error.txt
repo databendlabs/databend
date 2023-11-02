@@ -276,6 +276,30 @@ error:
 
 
 ---------- Input ----------
+GRANT all ON UDF a TO 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:18
+  |
+1 | GRANT all ON UDF a TO 'test-grant';
+  | -----            ^ expected `TO` or `.`
+  | |                 
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT usage ON UDF a TO 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:20
+  |
+1 | GRANT usage ON UDF a TO 'test-grant';
+  | -----              ^ expected `TO` or `.`
+  | |                   
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
 REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
 ---------- Output ---------
 error: 

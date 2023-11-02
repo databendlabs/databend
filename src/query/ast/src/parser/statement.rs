@@ -1930,25 +1930,26 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
-    let udf_privs = map(
-        rule! {
-            USAGEUDF ~ ON ~ UDF ~ #ident
-        },
-        |(_, _, _, udf)| AccountMgrSource::Privs {
-            privileges: vec![UserPrivilegeType::UsageUDF],
-            level: AccountMgrLevel::UDF(udf.to_string()),
-        },
-    );
-
-    let udf_all_privs = map(
-        rule! {
-            ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
-        },
-        |(_, _, _, _, udf)| AccountMgrSource::Privs {
-            privileges: vec![UserPrivilegeType::UsageUDF],
-            level: AccountMgrLevel::UDF(udf.to_string()),
-        },
-    );
+    // TODO(TCeason): next pr, add a priv to control query UDF query
+    // let udf_privs = map(
+    // rule! {
+    // USAGEUDF ~ ON ~ UDF ~ #ident
+    // },
+    // |(_, _, _, udf)| AccountMgrSource::Privs {
+    // privileges: vec![UserPrivilegeType::UsageUDF],
+    // level: AccountMgrLevel::UDF(udf.to_string()),
+    // },
+    // );
+    //
+    // let udf_all_privs = map(
+    // rule! {
+    // ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+    // },
+    // |(_, _, _, _, udf)| AccountMgrSource::Privs {
+    // privileges: vec![UserPrivilegeType::UsageUDF],
+    // level: AccountMgrLevel::UDF(udf.to_string()),
+    // },
+    // );
 
     let stage_privs = map(
         rule! {
@@ -1963,8 +1964,6 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
     rule!(
         #role : "ROLE <role_name>"
         | #privs : "<privileges> ON <privileges_level>"
-        | #udf_privs : "USAGEUDF ON UDF <udf_name>"
-        | #udf_all_privs : "ALL [ PRIVILEGES ] ON UDF <udf_name>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
