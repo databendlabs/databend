@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::select_vector::SelectVector;
+use crate::SelectVector;
 use crate::StateAddr;
 
 /// ProbeState is the state to probe HT
@@ -40,9 +40,9 @@ impl ProbeState {
             hash_salts: vec![0; len],
             addresses: vec![std::ptr::null::<u8>(); len],
             state_places: vec![StateAddr::new(0); len],
-            group_compare_vector: SelectVector::new(len),
-            no_match_vector: SelectVector::new(len),
-            empty_vector: SelectVector::new(len),
+            group_compare_vector: vec![0; len],
+            no_match_vector: vec![0; len],
+            empty_vector: vec![0; len],
             row_count: 0,
         }
     }
@@ -66,9 +66,9 @@ impl ProbeState {
             self.addresses.resize(row_count, std::ptr::null::<u8>());
             self.state_places.resize(row_count, StateAddr::new(0));
 
-            self.group_compare_vector.resize(row_count);
-            self.no_match_vector.resize(row_count);
-            self.empty_vector.resize(row_count);
+            self.group_compare_vector.resize(row_count, 0);
+            self.no_match_vector.resize(row_count, 0);
+            self.empty_vector.resize(row_count, 0);
         }
 
         self.row_count = row_count;

@@ -16,7 +16,6 @@ use bumpalo::Bump;
 use common_arrow::arrow::bitmap::Bitmap;
 use ethnum::i256;
 
-use crate::select_vector::SelectVector;
 use crate::store;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
@@ -33,6 +32,7 @@ use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::SelectVector;
 
 pub fn rowformat_size(data_type: &DataType) -> usize {
     match data_type {
@@ -69,7 +69,7 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
-                for index in select_vector.iterator(rows) {
+                for index in select_vector.iter().take(rows).copied() {
                     store(buffer[index], address[index].add(offset) as *mut u8);
                 }
             }
@@ -77,19 +77,19 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Decimal(v) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
-                    for index in select_vector.iterator(rows) {
+                    for index in select_vector.iter().take(rows).copied() {
                         store(buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
             })
         }
         Column::Boolean(v) => {
-            for index in select_vector.iterator(rows) {
+            for index in select_vector.iter().take(rows).copied() {
                 store(v.get_bit(index), address[index].add(offset) as *mut u8);
             }
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
-            for index in select_vector.iterator(rows) {
+            for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
 
                 store(data.len() as u32, address[index].add(offset) as *mut u8);
@@ -101,12 +101,12 @@ pub unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Timestamp(buffer) => {
-            for index in select_vector.iterator(rows) {
+            for index in select_vector.iter().take(rows).copied() {
                 store(buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Date(buffer) => {
-            for index in select_vector.iterator(rows) {
+            for index in select_vector.iter().take(rows).copied() {
                 store(buffer[index], address[index].add(offset) as *mut u8);
             }
         }
@@ -307,19 +307,20 @@ unsafe fn row_match_string_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        for idx in select_vector.sel_vec_mut(*count).iter_mut() {
-            let isnull = !validity.get_bit(*idx);
+        for i in 0..*count {
+            let idx = select_vector[i];
+            let isnull = !validity.get_bit(idx);
 
-            let validity_address = address[*idx].add(validity_offset);
+            let validity_address = address[idx].add(validity_offset);
             let isnull2 = core::ptr::read::<u8>(validity_address as _) != 0;
 
             equal = isnull == isnull2;
             if !isnull && !isnull2 {
-                let len_address = address[*idx].add(col_offset);
-                let address = address[*idx].add(col_offset + 4);
+                let len_address = address[idx].add(col_offset);
+                let address = address[idx].add(col_offset + 4);
                 let len = core::ptr::read::<u32>(len_address as _) as usize;
 
-                let value = StringType::index_column_unchecked(col, *idx);
+                let value = StringType::index_column_unchecked(col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
@@ -330,21 +331,22 @@ unsafe fn row_match_string_column(
             }
 
             if equal {
-                *idx = match_count;
+                select_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, *idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
     } else {
-        for idx in select_vector.sel_vec_mut(*count).iter_mut() {
-            let len_address = address[*idx].add(col_offset);
-            let address = address[*idx].add(col_offset + 4);
+        for i in 0..*count {
+            let idx = select_vector[i];
+            let len_address = address[idx].add(col_offset);
+            let address = address[idx].add(col_offset + 4);
 
             let len = core::ptr::read::<u32>(len_address as _) as usize;
 
-            let value = StringType::index_column_unchecked(col, *idx);
+            let value = StringType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {
@@ -354,10 +356,10 @@ unsafe fn row_match_string_column(
             }
 
             if equal {
-                *idx = match_count;
+                select_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, *idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
@@ -383,41 +385,43 @@ unsafe fn row_match_column_type<T: ArgType>(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        for idx in select_vector.sel_vec_mut(*count).iter_mut() {
-            let isnull = !validity.get_bit(*idx);
+        for i in 0..*count {
+            let idx = select_vector[i];
+            let isnull = !validity.get_bit(idx);
 
-            let validity_address = address[*idx].add(validity_offset);
+            let validity_address = address[idx].add(validity_offset);
             let isnull2 = core::ptr::read::<u8>(validity_address as _) != 0;
 
             equal = isnull == isnull2;
             if !isnull && !isnull2 {
-                let address = address[*idx].add(col_offset);
+                let address = address[idx].add(col_offset);
                 let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
-                let value = T::index_column_unchecked(&col, *idx);
+                let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
                 equal = scalar.eq(&value);
             }
 
             if equal {
-                *idx = match_count;
+                select_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, *idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
     } else {
-        for idx in select_vector.sel_vec_mut(*count).iter_mut() {
-            let value = T::index_column_unchecked(&col, *idx);
-            let address = address[*idx].add(col_offset);
+        for i in 0..*count {
+            let idx = select_vector[i];
+            let value = T::index_column_unchecked(&col, idx);
+            let address = address[idx].add(col_offset);
             let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
             let value = T::to_owned_scalar(value);
 
             if scalar.eq(&value) {
-                *idx = match_count;
+                select_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, *idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }

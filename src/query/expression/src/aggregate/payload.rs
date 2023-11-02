@@ -151,7 +151,7 @@ impl Payload {
     ) {
         self.try_reverse(new_group_rows);
         let select_vector = &state.empty_vector;
-        for idx in select_vector.iterator(new_group_rows) {
+        for idx in select_vector.iter().take(new_group_rows).copied() {
             state.addresses[idx] = self.get_row_ptr(self.current_row);
             self.current_row += 1;
         }
@@ -163,7 +163,7 @@ impl Payload {
         for col in group_columns {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
-                for idx in select_vector.iterator(new_group_rows) {
+                for idx in select_vector.iter().take(new_group_rows).copied() {
                     if bitmap.get_bit(idx) {
                         unsafe {
                             let dst = address[idx].add(write_offset);
@@ -192,7 +192,7 @@ impl Payload {
         }
 
         // write group hashes
-        for idx in select_vector.iterator(new_group_rows) {
+        for idx in select_vector.iter().take(new_group_rows).copied() {
             unsafe {
                 let dst = address[idx].add(write_offset);
                 store(group_hashes[idx], dst as *mut u8);
@@ -202,7 +202,7 @@ impl Payload {
         write_offset += 8;
         if let Some(layout) = self.state_layout {
             // write states
-            for idx in select_vector.iterator(new_group_rows) {
+            for idx in select_vector.iter().take(new_group_rows).copied() {
                 let place = self.arena.alloc_layout(layout);
                 unsafe {
                     let dst = address[idx].add(write_offset);

@@ -30,3 +30,5 @@ pub use aggregate_hashtable::*;
 pub use group_hash::*;
 pub use payload_flush::*;
 pub use probe_state::*;
+
+pub type SelectVector = Vec<usize>;

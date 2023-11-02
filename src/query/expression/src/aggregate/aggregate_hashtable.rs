@@ -23,7 +23,6 @@ use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
-use crate::select_vector::SelectVector;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
@@ -141,17 +140,23 @@ impl AggregateHashTable {
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
 
-        let mut select_vector = SelectVector::auto_increment();
         let mut payload_page_offset = self.len() % self.payload.row_per_page;
         let mut payload_page_nr = (self.len() / self.payload.row_per_page) + 1;
 
+        let mut is_increment = true;
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
             let mut no_match_count = 0;
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
-            for index in select_vector.iterator(remaining_entries) {
+            for i in 0..remaining_entries {
+                let index = if is_increment {
+                    i
+                } else {
+                    state.no_match_vector[i]
+                };
+
                 let entry = &mut self.entries[state.ht_offsets[index]];
 
                 // cell is empty, could be occupied
@@ -166,15 +171,13 @@ impl AggregateHashTable {
                         payload_page_nr += 1;
                     }
 
-                    state.empty_vector.set_index(new_entry_count, index);
+                    state.empty_vector[new_entry_count] = index;
                     new_entry_count += 1;
                 } else if entry.salt == state.hash_salts[index] {
-                    state
-                        .group_compare_vector
-                        .set_index(need_compare_count, index);
+                    state.group_compare_vector[need_compare_count] = index;
                     need_compare_count += 1;
                 } else {
-                    state.no_match_vector.set_index(no_match_count, index);
+                    state.no_match_vector[no_match_count] = index;
                     no_match_count += 1;
                 }
             }
@@ -187,7 +190,12 @@ impl AggregateHashTable {
             }
 
             // 3. handle need_compare_count
-            for index in state.group_compare_vector.iterator(need_compare_count) {
+            for index in state
+                .group_compare_vector
+                .iter()
+                .take(need_compare_count)
+                .copied()
+            {
                 let entry = &mut self.entries[state.ht_offsets[index]];
 
                 let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
@@ -211,7 +219,7 @@ impl AggregateHashTable {
             }
 
             // 5. Linear probing
-            for index in state.no_match_vector.iterator(no_match_count) {
+            for index in state.no_match_vector.iter().take(no_match_count).copied() {
                 state.ht_offsets[index] += 1;
 
                 if state.ht_offsets[index] >= self.capacity {
@@ -219,11 +227,7 @@ impl AggregateHashTable {
                 }
             }
 
-            if select_vector.is_auto_increment() {
-                select_vector = state.no_match_vector.clone();
-            } else {
-                std::mem::swap(&mut select_vector, &mut state.no_match_vector);
-            }
+            is_increment = false;
             remaining_entries = no_match_count;
         }
 
