@@ -218,7 +218,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         });
 
         let mut msg = if span_text.is_empty() {
-            format!("unexpected end of line")
+            "unexpected end of line".to_string()
         } else {
             format!("unexpected `{span_text}`")
         };
