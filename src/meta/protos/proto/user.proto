@@ -57,10 +57,20 @@ message GrantObject {
     string table = 3;
   }
 
+  message GrantUdfObject {
+    string udf = 1;
+  }
+
+  message GrantStageObject {
+    string stage = 1;
+  }
+
   oneof object {
     GrantGlobalObject global = 1;
     GrantDatabaseObject database = 2;
     GrantTableObject table = 3;
+    GrantUdfObject udf = 4;
+    GrantStageObject stage = 5;
   }
 }
 
