@@ -1,0 +1,11 @@
+statement ok
+SHOW INDEXES
+
+statement ok
+SHOW INDEXES LIKE 'test%' LIMIT 2
+
+statement ok
+SHOW INDEXES WHERE name='test_idx' LIMIT 2
+
+statement error
+SHOW INDEXES WHERE index='test_idx' LIMIT 2

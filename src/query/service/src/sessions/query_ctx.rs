@@ -506,6 +506,10 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_available_roles().await
     }
 
+    fn get_current_session_id(&self) -> String {
+        self.get_current_session().get_id()
+    }
+
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         self.shared.session.get_visibility_checker().await
     }

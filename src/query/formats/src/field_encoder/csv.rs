@@ -12,88 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::array::ArrayColumn;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_io::constants::FALSE_BYTES_LOWER;
+use common_io::constants::FALSE_BYTES_NUM;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_LOWER;
+use common_io::constants::TRUE_BYTES_NUM;
 use common_meta_app::principal::CsvFileFormatParams;
+use common_meta_app::principal::TsvFileFormatParams;
 
-use crate::field_encoder::FieldEncoderRowBased;
+use crate::field_encoder::write_tsv_escaped_string;
 use crate::field_encoder::FieldEncoderValues;
-use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
+use crate::OutputCommonSettings;
 
-pub struct FieldEncoderCSV {
-    pub nested: FieldEncoderValues,
-    pub common_settings: CommonSettings,
-    pub quote_char: u8,
+pub enum StringFormatter {
+    Csv { quote_char: u8 },
+    Tsv { record_delimiter: u8 },
 }
 
-impl FieldEncoderCSV {
-    pub fn create(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
-        FieldEncoderCSV {
-            nested: FieldEncoderValues::create(options_ext),
-            common_settings: CommonSettings {
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-                nan_bytes: params.nan_display.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options_ext.timezone,
-                disable_variant_check: options_ext.disable_variant_check,
-            },
-            quote_char: params.quote.as_bytes()[0],
+impl StringFormatter {
+    fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
+        match self {
+            StringFormatter::Csv { quote_char } => write_csv_string(bytes, buf, *quote_char),
+            StringFormatter::Tsv { record_delimiter } => {
+                write_tsv_escaped_string(bytes, buf, *record_delimiter)
+            }
         }
     }
 }
 
-impl FieldEncoderRowBased for FieldEncoderCSV {
-    fn common_settings(&self) -> &CommonSettings {
-        &self.common_settings
-    }
-
-    fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, raw: bool) {
-        if raw {
-            out_buf.extend_from_slice(in_buf);
-        } else {
-            write_csv_string(in_buf, out_buf, self.quote_char);
-        }
-    }
-
-    fn write_array<T: ValueType>(
-        &self,
-        column: &ArrayColumn<T>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
-        let mut buf = vec![];
-        self.nested.write_array(column, row_index, &mut buf, false);
-        self.write_string_inner(&buf, out_buf, raw)
-    }
-
-    fn write_map<T: ValueType>(
-        &self,
-        column: &ArrayColumn<T>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
-        let mut buf = vec![];
-        self.nested.write_map(column, row_index, &mut buf, false);
-        self.write_string_inner(&buf, out_buf, raw)
-    }
-
-    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
-        let mut buf = vec![];
-        self.nested.write_tuple(columns, row_index, &mut buf, false);
-        self.write_string_inner(&buf, out_buf, raw)
-    }
-}
-
+// todo(youngsofun): support quote style
 pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
     buf.push(quote);
     let mut start = 0;
@@ -113,4 +65,89 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
         buf.extend_from_slice(&bytes[start..]);
     }
     buf.push(quote);
+}
+
+pub struct FieldEncoderCSV {
+    pub simple: FieldEncoderValues,
+    pub nested: FieldEncoderValues,
+    pub string_formatter: StringFormatter,
+}
+
+impl FieldEncoderCSV {
+    pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+        Self {
+            nested: FieldEncoderValues::create(options_ext),
+            simple: FieldEncoderValues {
+                common_settings: OutputCommonSettings {
+                    true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+                    false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+                    null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                    nan_bytes: params.nan_display.as_bytes().to_vec(),
+                    inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                    timezone: options_ext.timezone,
+                },
+                quote_char: 0, // not used
+            },
+            string_formatter: StringFormatter::Csv {
+                quote_char: params.quote.as_bytes()[0],
+            },
+        }
+    }
+
+    pub fn create_tsv(params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+        Self {
+            nested: FieldEncoderValues::create(options_ext),
+            simple: FieldEncoderValues {
+                common_settings: OutputCommonSettings {
+                    true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
+                    false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
+                    null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                    nan_bytes: params.nan_display.as_bytes().to_vec(),
+                    inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                    timezone: options_ext.timezone,
+                },
+                quote_char: 0, // not used
+            },
+            string_formatter: StringFormatter::Tsv {
+                record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
+            },
+        }
+    }
+
+    pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
+        match &column {
+            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+            Column::String(c) => {
+                let buf = unsafe { c.index_unchecked(row_index) };
+                self.string_formatter.write_string(buf, out_buf);
+            }
+
+            Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) | Column::Variant(..) => {
+                let mut buf = Vec::new();
+                self.simple.write_field(column, row_index, &mut buf, false);
+                self.string_formatter.write_string(&buf, out_buf);
+            }
+
+            Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {
+                let mut buf = Vec::new();
+                self.nested.write_field(column, row_index, &mut buf, false);
+                self.string_formatter.write_string(&buf, out_buf);
+            }
+            // null, bool, number
+            _ => self.simple.write_field(column, row_index, out_buf, false),
+        }
+    }
+
+    fn write_nullable<T: ValueType>(
+        &self,
+        column: &NullableColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) {
+        if !column.validity.get_bit(row_index) {
+            self.simple.write_null(out_buf)
+        } else {
+            self.write_field(&T::upcast_column(column.column.clone()), row_index, out_buf)
+        }
+    }
 }

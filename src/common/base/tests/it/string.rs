@@ -75,3 +75,35 @@ fn test_unescape_string() {
         assert_eq!(unescape_string(c[0]).unwrap(), c[1]);
     }
 }
+
+#[test]
+fn test_mask_connection_info() {
+    let sql = r#"COPY INTO table1 
+        FROM 's3://xx/yy
+        CONNECTION = (
+            ACCESS_KEY_ID = 'aaa' ,
+            SECRET_ACCESS_KEY = 'sss' ,
+            REGION = 'us-east-2'
+        )
+        PATTERN = '.*[.]csv'
+            FILE_FORMAT = (
+            TYPE = CSV,
+            FIELD_DELIMITER = '\t',
+            RECORD_DELIMITER = '\n',
+            SKIP_HEADER = 1
+        );"#;
+
+    let actual = mask_connection_info(sql);
+    let expect = r#"COPY INTO table1 
+        FROM 's3://xx/yy
+        CONNECTION = (***masked***)
+        PATTERN = '.*[.]csv'
+            FILE_FORMAT = (
+            TYPE = CSV,
+            FIELD_DELIMITER = '\t',
+            RECORD_DELIMITER = '\n',
+            SKIP_HEADER = 1
+        );"#;
+
+    assert_eq!(expect, actual);
+}

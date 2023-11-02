@@ -38,7 +38,7 @@ use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReq;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DBIdTableName;
@@ -50,17 +50,18 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
-use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IcebergCatalogOption;
@@ -74,9 +75,10 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListTableLockRevReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockKey;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::SetLVTReq;
@@ -1455,9 +1457,15 @@ impl SchemaApiTestSuite {
         {
             let time = 1024;
             let req = SetLVTReq { table_id, time };
+            let get_req = GetLVTReq { table_id };
+
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert!(res.time.is_none());
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert_eq!(res.time.unwrap(), 1024);
 
             // test lvt never fall back
             let time = 102;
@@ -1465,12 +1473,16 @@ impl SchemaApiTestSuite {
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
+            let res = mt.get_table_lvt(get_req.clone()).await?;
+            assert_eq!(res.time.unwrap(), 1024);
 
             let time = 1025;
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1025);
+            let res = mt.get_table_lvt(get_req).await?;
+            assert_eq!(res.time.unwrap(), 1025);
         }
 
         Ok(())
@@ -5223,52 +5235,65 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- create table lock revision 1");
-            let req1 = CreateTableLockRevReq {
-                table_id,
+            let req1 = CreateLockRevReq {
+                lock_key: LockKey::Table { table_id },
                 expire_at: (Utc::now().timestamp() + 2) as u64,
+                user: "root".to_string(),
+                node: "node1".to_string(),
+                session_id: "session1".to_string(),
             };
-            let res1 = mt.create_table_lock_rev(req1).await?;
+            let res1 = mt.create_lock_revision(req1).await?;
 
             info!("--- create table lock revision 2");
-            let req2 = CreateTableLockRevReq {
-                table_id,
+            let req2 = CreateLockRevReq {
+                lock_key: LockKey::Table { table_id },
                 expire_at: (Utc::now().timestamp() + 2) as u64,
+                user: "root".to_string(),
+                node: "node1".to_string(),
+                session_id: "session1".to_string(),
             };
-            let res2 = mt.create_table_lock_rev(req2).await?;
+            let res2 = mt.create_lock_revision(req2).await?;
             assert!(res2.revision > res1.revision);
 
             info!("--- list table lock revisiosn");
-            let req3 = ListTableLockRevReq { table_id };
-            let res3 = mt.list_table_lock_revs(req3).await?;
+            let req3 = ListLockRevReq {
+                lock_key: LockKey::Table { table_id },
+            };
+            let res3 = mt.list_lock_revisions(req3).await?;
             assert_eq!(res3.len(), 2);
-            assert_eq!(res3[0], res1.revision);
-            assert_eq!(res3[1], res2.revision);
+            assert_eq!(res3[0].0, res1.revision);
+            assert_eq!(res3[1].0, res2.revision);
 
             info!("--- extend table lock revision 2 expire");
-            let req4 = ExtendTableLockRevReq {
-                table_id,
+            let req4 = ExtendLockRevReq {
+                lock_key: LockKey::Table { table_id },
                 expire_at: (Utc::now().timestamp() + 4) as u64,
                 revision: res2.revision,
+                acquire_lock: true,
             };
-            mt.extend_table_lock_rev(req4).await?;
+            mt.extend_lock_revision(req4).await?;
 
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
-            let req5 = ListTableLockRevReq { table_id };
-            let res5 = mt.list_table_lock_revs(req5).await?;
+            let req5 = ListLockRevReq {
+                lock_key: LockKey::Table { table_id },
+            };
+            let res5 = mt.list_lock_revisions(req5).await?;
             assert_eq!(res5.len(), 1);
-            assert_eq!(res5[0], res2.revision);
+            assert_eq!(res5[0].0, res2.revision);
 
             info!("--- delete table lock revision 2");
-            let req6 = DeleteTableLockRevReq {
-                table_id,
+            let req6 = DeleteLockRevReq {
+                lock_key: LockKey::Table { table_id },
                 revision: res2.revision,
             };
-            mt.delete_table_lock_rev(req6).await?;
+            mt.delete_lock_revision(req6).await?;
 
             info!("--- check table locks is empty");
-            let req7 = ListTableLockRevReq { table_id };
-            let res7 = mt.list_table_lock_revs(req7).await?;
+            let req7 = ListLockRevReq {
+                lock_key: LockKey::Table { table_id },
+            };
+            let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);
         }
 

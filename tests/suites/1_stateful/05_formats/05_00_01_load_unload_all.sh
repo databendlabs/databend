@@ -40,7 +40,7 @@ test_format() {
 
 	curl -sH "insert_sql:insert into test_load_unload file_format = (type = ${1})" \
 	-F "upload=@/tmp/test_load_unload.txt" \
-	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
+	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq -r '.state, .error'
 
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.txt

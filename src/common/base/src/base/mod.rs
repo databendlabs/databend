@@ -42,6 +42,7 @@ pub use stoppable::Stoppable;
 pub use string::convert_byte_size;
 pub use string::convert_number_size;
 pub use string::escape_for_key;
+pub use string::mask_connection_info;
 pub use string::mask_string;
 pub use string::unescape_for_key;
 pub use string::unescape_string;

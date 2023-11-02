@@ -291,6 +291,10 @@ impl Settings {
         self.try_get_u64("table_lock_expire_secs")
     }
 
+    pub fn get_acquire_lock_timeout(&self) -> Result<u64> {
+        self.try_get_u64("acquire_lock_timeout")
+    }
+
     pub fn get_enterprise_license(&self) -> Result<String> {
         self.try_get_string("enterprise_license")
     }

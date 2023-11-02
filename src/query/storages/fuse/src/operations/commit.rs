@@ -17,8 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::backoff::Backoff;
-use backoff::ExponentialBackoff;
-use backoff::ExponentialBackoffBuilder;
 use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
@@ -41,6 +39,7 @@ use log::warn;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
+use storages_common_locks::set_backoff;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
@@ -66,10 +65,6 @@ use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
-
-const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
-const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
-const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -289,7 +284,7 @@ impl FuseTable {
         max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
-        let mut backoff = Self::set_backoff(max_retry_elapsed);
+        let mut backoff = set_backoff(None, None, max_retry_elapsed);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
@@ -344,6 +339,7 @@ impl FuseTable {
                                 self.table_info.ident
                             );
 
+                            common_base::base::tokio::time::sleep(d).await;
                             latest_table_ref = self.refresh(ctx.as_ref()).await?;
                             let latest_fuse_table =
                                 FuseTable::try_from_table(latest_table_ref.as_ref())?;
@@ -463,31 +459,6 @@ impl FuseTable {
         // currently, the only error that we know,  which indicates there are no side effects
         // is TABLE_VERSION_MISMATCHED
         e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
-    }
-
-    #[inline]
-    pub fn set_backoff(max_retry_elapsed: Option<Duration>) -> ExponentialBackoff {
-        // The initial retry delay in millisecond. By default,  it is 5 ms.
-        let init_delay = OCC_DEFAULT_BACKOFF_INIT_DELAY_MS;
-
-        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
-        // By default, it is 20 seconds.
-        let max_delay = OCC_DEFAULT_BACKOFF_MAX_DELAY_MS;
-
-        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
-        // By default, it is 2 minutes
-        let max_elapsed = max_retry_elapsed.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS);
-
-        // TODO(xuanwo): move to backon instead.
-        //
-        // To simplify the settings, using fixed common values for randomization_factor and multiplier
-        ExponentialBackoffBuilder::new()
-            .with_initial_interval(init_delay)
-            .with_max_interval(max_delay)
-            .with_randomization_factor(0.5)
-            .with_multiplier(2.0)
-            .with_max_elapsed_time(Some(max_elapsed))
-            .build()
     }
 
     // check if there are any fuse table legacy options

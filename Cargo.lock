@@ -1768,6 +1768,7 @@ dependencies = [
  "pin-project-lite",
  "pprof",
  "rand 0.8.5",
+ "regex",
  "semver",
  "serde",
  "state",
@@ -1947,6 +1948,7 @@ dependencies = [
  "arrow-select",
  "async-backtrace",
  "base64 0.21.0",
+ "bumpalo",
  "chrono",
  "chrono-tz",
  "comfy-table 6.1.4",
@@ -1965,7 +1967,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "lexical-core",
  "log",
  "match-template",
@@ -1999,7 +2001,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -2046,7 +2048,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "lexical-core",
  "libm",
  "match-template",
@@ -2529,7 +2531,7 @@ dependencies = [
  "common-expression",
  "common-pipeline-core",
  "common-profile",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "match-template",
 ]
 
@@ -2763,7 +2765,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "lazy_static",
  "log",
  "metrics",
@@ -2779,11 +2781,11 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "storages-common-index",
+ "storages-common-locks",
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
  "sys-info",
- "table-lock",
  "typetag",
  "uuid",
 ]
@@ -3059,7 +3061,7 @@ dependencies = [
  "common-users",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "log",
  "once_cell",
  "opendal",
@@ -3859,6 +3861,7 @@ dependencies = [
  "base64 0.21.0",
  "bincode 1.3.3",
  "bumpalo",
+ "byte-unit",
  "byteorder",
  "chrono",
  "chrono-tz",
@@ -3928,7 +3931,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "jwt-simple",
  "lazy_static",
  "log",
@@ -3968,10 +3971,10 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "storages-common-index",
+ "storages-common-locks",
  "storages-common-table-meta",
  "strength_reduce",
  "sysinfo",
- "table-lock",
  "temp-env",
  "tempfile",
  "time",
@@ -4048,7 +4051,7 @@ dependencies = [
  "databend-sql",
  "ethnum",
  "itertools 0.11.0",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -4414,9 +4417,7 @@ dependencies = [
  "common-license",
  "common-meta-api",
  "common-meta-app",
- "common-meta-kvapi",
  "common-meta-store",
- "common-meta-types",
  "common-sql",
  "common-storages-fuse",
  "common-tracing",
@@ -4426,14 +4427,13 @@ dependencies = [
  "databend-query",
  "futures",
  "futures-util",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
  "jwt-simple",
  "log",
  "opendal",
  "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
- "table-lock",
  "tempfile",
  "vacuum-handler",
  "virtual-column",
@@ -7219,7 +7219,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.3.0"
-source = "git+https://github.com/datafuselabs/jsonb?rev=14143b5#14143b567086225c64729c233ce4dbc0f15d9868"
+source = "git+https://github.com/datafuselabs/jsonb?rev=d11c9a9#d11c9a9442ea0efbdb98321479c5c50d34e5f606"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -9623,7 +9623,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -11160,9 +11160,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.15.2"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2883a176844bd22f2ded429ec6a1e16f3522f770475bf47e3494dcf22a50abd6"
+checksum = "78ea1056caa9180e7e5727eed1a377d96c9f4615303fa82d2f4c202c64736dee"
 dependencies = [
  "async-trait",
  "educe",
@@ -11176,6 +11176,7 @@ dependencies = [
  "owo-colors",
  "regex",
  "similar",
+ "subst",
  "tempfile",
  "thiserror",
  "tracing",
@@ -11278,6 +11279,30 @@ dependencies = [
  "storages-common-table-meta",
  "thiserror",
  "xorfilter-rs",
+]
+
+[[package]]
+name = "storages-common-locks"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "backoff",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-users",
+ "futures",
+ "futures-util",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -11461,6 +11486,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "subst"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca1318e5d6716d6541696727c88d9b8dfc8cfe6afd6908e186546fd4af7f5b98"
+dependencies = [
+ "memchr",
+ "unicode-width",
+]
+
+[[package]]
 name = "subtle"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11619,22 +11654,6 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
-]
-
-[[package]]
-name = "table-lock"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "common-base",
- "common-catalog",
- "common-exception",
- "common-license",
- "common-meta-app",
- "futures",
- "log",
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -12293,7 +12312,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

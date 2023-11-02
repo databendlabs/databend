@@ -47,7 +47,7 @@ async fn test_spill_with_partition() -> Result<()> {
         Int32Type::from_data((1..101).collect::<Vec<_>>()),
     ]);
 
-    let res = spiller.spill_with_partition(&(0_u8), &data, 0).await;
+    let res = spiller.spill_with_partition(0_u8, data, 0).await;
 
     assert!(res.is_ok());
     assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
