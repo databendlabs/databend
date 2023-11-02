@@ -236,21 +236,21 @@ impl MatchedAggregator {
                     "multi rows from source match one and the same row in the target_table multi times",
                 ));
             }
-            let handle = io_runtime.spawn(async_backtrace::location!().frame({
-                async move {
-                    let mutation_log_entry = aggregation_ctx
-                        .apply_update_and_deletion_to_data_block(
-                            segment_idx,
-                            block_idx,
-                            &block_meta,
-                            modified_offsets,
-                        )
-                        .await?;
 
-                    drop(permit);
-                    Ok::<_, ErrorCode>(mutation_log_entry)
-                }
-            }));
+            let query_id = aggregation_ctx.ctx.get_id();
+            let handle = io_runtime.spawn(query_id, async move {
+                let mutation_log_entry = aggregation_ctx
+                    .apply_update_and_deletion_to_data_block(
+                        segment_idx,
+                        block_idx,
+                        &block_meta,
+                        modified_offsets,
+                    )
+                    .await?;
+
+                drop(permit);
+                Ok::<_, ErrorCode>(mutation_log_entry)
+            });
             mutation_log_handlers.push(handle);
         }
 

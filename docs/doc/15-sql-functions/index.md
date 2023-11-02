@@ -7,9 +7,6 @@ title: SQL Function Reference
 All Functions (Alphabetical) — alphabetical list of all builtin functions (scalar, aggregate, table, etc.).
 
 ### Scalar Functions
-- [Arithmetic Operators](01-arithmetics-operators/index.md)
-- [Comparisons Operators](02-comparisons-operators/index.md)
-- [Logic Operators](03-logic-operators/index.md)
 - [Array Functions](04-array-functions/index.md)
 - [Bitmap Functions](05-bitmap-functions/index.md)
 - [Numeric Functions](20-numeric-functions/index.md)

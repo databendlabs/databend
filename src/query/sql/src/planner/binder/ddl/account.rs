@@ -141,6 +141,8 @@ impl Binder {
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 GrantObject::Database(catalog_name, database_name)
             }
+            AccountMgrLevel::UDF(udf) => GrantObject::UDF(udf.clone()),
+            AccountMgrLevel::Stage(stage) => GrantObject::Stage(stage.clone()),
         }
     }
 

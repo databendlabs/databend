@@ -2,7 +2,6 @@
 title: 'Logical/Boolean Operators'
 ---
 
-SQL Logical/Boolean Operators.
 
 | Operator | Description                            | Example       | Result |
 |----------|----------------------------------------|---------------|--------|

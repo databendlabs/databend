@@ -21,6 +21,7 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
+use common_sql::plans::PresignAction;
 use common_sql::plans::RewriteKind;
 use common_users::RoleCacheManager;
 
@@ -625,6 +626,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
+            | Plan::AlterUDF(_)
             | Plan::RevokeRole(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Grant], false)
                     .await?;
@@ -634,7 +636,6 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterUser(_)
-            | Plan::AlterUDF(_)
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::RefreshIndex(_) => {
@@ -642,21 +643,39 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                self.validate_access(
-                    &GrantObject::Table(
-                        plan.catalog_info.catalog_name().to_string(),
-                        plan.database_name.to_string(),
-                        plan.table_name.to_string(),
-                    ),
-                    vec![UserPrivilegeType::Insert],
-                    true,
-                )
-                .await?;
-            }
-            Plan::CopyIntoLocation(_plan) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                let stage_name = &plan.stage_table_info.stage_info.stage_name;
+                self
+                    .validate_access(
+                        &GrantObject::Stage(stage_name.clone()),
+                        vec![UserPrivilegeType::Read],
+                        false,
+                    )
+                    .await?;
+                self
+                    .validate_access(
+                        &GrantObject::Table(
+                            plan.catalog_info.catalog_name().to_string(),
+                            plan.database_name.to_string(),
+                            plan.table_name.to_string(),
+                        ),
+                        vec![UserPrivilegeType::Insert],
+                        true,
+                    )
                     .await?;
             }
+            Plan::CopyIntoLocation(plan) => {
+                let stage_name = &plan.stage.stage_name;
+                self
+                    .validate_access(
+                        &GrantObject::Stage(stage_name.clone()),
+                        vec![UserPrivilegeType::Write],
+                        false,
+                    )
+                    .await?;
+                let from = plan.from.clone();
+                return self.check(ctx, &from).await
+            }
+
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
             | Plan::DropShareEndpoint(_)
@@ -699,7 +718,30 @@ impl AccessChecker for PrivilegeAccess {
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
             Plan::SetRole(_) => {}
             Plan::ShowRoles(_) => {}
-            Plan::Presign(_) => {}
+            Plan::Presign(plan) => {
+                let stage_name = &plan.stage.stage_name;
+                let action = &plan.action;
+                match action {
+                    PresignAction::Upload => {
+                        self
+                            .validate_access(
+                                &GrantObject::Stage(stage_name.clone()),
+                                vec![UserPrivilegeType::Write],
+                                false,
+                            )
+                            .await?
+                    }
+                    PresignAction::Download => {
+                        self
+                            .validate_access(
+                                &GrantObject::Stage(stage_name.clone()),
+                                vec![UserPrivilegeType::Read],
+                                false,
+                            )
+                            .await?
+                    }
+                }
+            }
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check
@@ -738,6 +780,7 @@ async fn has_priv(
                         ldb == database
                     }
                 }
+                _ => false,
             }
         }))
 }

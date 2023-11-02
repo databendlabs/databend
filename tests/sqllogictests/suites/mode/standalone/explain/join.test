@@ -803,3 +803,132 @@ HashJoin
 
 statement ok
 set disable_join_reorder = 0;
+
+
+statement ok
+create table t1(create_time Date, ext String);
+
+statement ok
+create table t2(status int, city_id String, wms_id String);
+
+query T
+explain select 1 from (select t1.* from t1) t1 inner join (select * from t2 ) t6 on replace(t1.ext, '33', '44') = t6.wms_id where substr(replace(t1.ext, '33', '44'), 1) = 'R006';
+----
+EvalScalar
+├── output columns: [1 (#5)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: []
+    ├── join type: INNER
+    ├── build keys: [t6.wms_id (#4)]
+    ├── probe keys: [replace(t1.ext (#1), '33', '44')]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [t2.wms_id (#4)]
+    │   ├── filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── output columns: [wms_id (#4)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')], limit: NONE]
+    │       └── estimated rows: 0.00
+    └── Filter(Probe)
+        ├── output columns: [t1.ext (#1)]
+        ├── filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [ext (#1)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')], limit: NONE]
+            └── estimated rows: 0.00
+
+query T
+explain select 1 from (select t1.* from t1) t1 inner join (select * from t2 ) t6 on replace(t1.ext, '33', '44') = t6.wms_id where replace(t1.ext, '33', '44') = 'R006';
+----
+EvalScalar
+├── output columns: [1 (#5)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: []
+    ├── join type: INNER
+    ├── build keys: [t6.wms_id (#4)]
+    ├── probe keys: [replace(t1.ext (#1), '33', '44')]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [t2.wms_id (#4)]
+    │   ├── filters: [is_true(t2.wms_id (#4) = 'R006')]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── output columns: [wms_id (#4)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [is_true(t2.wms_id (#4) = 'R006')], limit: NONE]
+    │       └── estimated rows: 0.00
+    └── Filter(Probe)
+        ├── output columns: [t1.ext (#1)]
+        ├── filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [ext (#1)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')], limit: NONE]
+            └── estimated rows: 0.00
+
+query T
+explain select 1 from (select t1.* from t1) t1 inner join (select * from t2 ) t6 on replace(t1.ext, '33', '44') = t6.wms_id where replace(substr(t1.ext, 1), '33', '44') = 'R006';
+----
+EvalScalar
+├── output columns: [1 (#5)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: []
+    ├── join type: INNER
+    ├── build keys: [t6.wms_id (#4)]
+    ├── probe keys: [replace(t1.ext (#1), '33', '44')]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── output columns: [wms_id (#4)]
+    │   ├── read rows: 0
+    │   ├── read bytes: 0
+    │   ├── partitions total: 0
+    │   ├── partitions scanned: 0
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── Filter(Probe)
+        ├── output columns: [t1.ext (#1)]
+        ├── filters: [is_true(replace(substr(t1.ext (#1), 1), '33', '44') = 'R006')]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [ext (#1)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [is_true(replace(substr(t1.ext (#1), 1), '33', '44') = 'R006')], limit: NONE]
+            └── estimated rows: 0.00
+
+statement ok
+drop table t1;

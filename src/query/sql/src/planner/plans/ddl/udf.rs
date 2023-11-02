@@ -28,5 +28,5 @@ pub struct AlterUDFPlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropUDFPlan {
     pub if_exists: bool,
-    pub name: String,
+    pub udf: String,
 }
