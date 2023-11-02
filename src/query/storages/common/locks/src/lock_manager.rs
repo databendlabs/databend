@@ -90,14 +90,14 @@ impl LockManager {
     ) -> Result<Option<LockGuard>> {
         let user = ctx.get_current_user()?.name;
         let node = ctx.get_cluster().local_id.clone();
-        let session_id = ctx.get_current_session_id();
+        let query_id = ctx.get_current_session_id();
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
 
         let catalog = ctx.get_catalog(lock.get_catalog()).await?;
 
         // get a new table lock revision.
         let res = catalog
-            .create_lock_revision(lock.gen_create_lock_req(user, node, session_id, expire_secs))
+            .create_lock_revision(lock.gen_create_lock_req(user, node, query_id, expire_secs))
             .await?;
         let revision = res.revision;
         // metrics.

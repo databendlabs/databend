@@ -43,7 +43,7 @@ message LockMeta {
 
   string user = 1;
   string node = 2;
-  string session_id = 3;
+  string query_id = 3;
   string created_on = 4;
   optional string acquired_on = 5;
   LockType lock_type = 6;
