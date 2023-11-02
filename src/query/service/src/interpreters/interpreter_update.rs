@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
+use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,7 +29,7 @@ use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::Visibility;
 use log::debug;
-use table_lock::TableLockHandlerWrapper;
+use storages_common_locks::LockManager;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_refresh_agg_index;
@@ -74,18 +74,18 @@ impl Interpreter for UpdateInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
         // refresh table.
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
+        let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
         // check mutability
         tbl.check_mutable()?;
 
-        let table_info = tbl.get_table_info().clone();
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -169,12 +169,6 @@ impl Interpreter for UpdateInterpreter {
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
             self.ctx.clone(),
@@ -203,18 +197,7 @@ impl Interpreter for UpdateInterpreter {
             .await?;
         }
 
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 }

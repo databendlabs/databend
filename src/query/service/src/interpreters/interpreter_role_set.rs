@@ -63,7 +63,7 @@ impl Interpreter for SetRoleInterpreter {
                 .await?;
         } else {
             session
-                .set_current_role_checked(&self.plan.role_name)
+                .set_current_role_checked(&self.plan.role_name, false)
                 .await?;
         }
         Ok(PipelineBuildResult::create())

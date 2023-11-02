@@ -21,6 +21,7 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -71,8 +72,8 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLockHandlerWrapper;
 use tokio_stream::StreamExt;
 
 use super::Interpreter;
@@ -154,22 +155,10 @@ impl Interpreter for MergeIntoInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
-        // Add table lock heartbeat before execution.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler.try_lock(self.ctx.clone(), table_info).await?;
-
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
+        // Add table lock before execution.
+        let table_lock = LockManager::create_table_lock(table_info)?;
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -189,6 +178,7 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
+                false,
             )
             .await;
         }
@@ -290,7 +280,7 @@ impl MergeIntoInterpreter {
                     table.get_table_info().engine(),
                 )))?;
 
-        let table_info = fuse_table.get_table_info();
+        let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
@@ -475,9 +465,10 @@ impl MergeIntoInterpreter {
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
             merge_meta: false,
+            need_lock: false,
         }));
 
-        Ok((physical_plan, table_info.clone()))
+        Ok((physical_plan, table_info))
     }
 
     async fn build_static_filter(

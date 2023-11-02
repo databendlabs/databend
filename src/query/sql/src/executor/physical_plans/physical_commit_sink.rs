@@ -30,4 +30,5 @@ pub struct CommitSink {
     pub catalog_info: CatalogInfo,
     pub mutation_kind: MutationKind,
     pub merge_meta: bool,
+    pub need_lock: bool,
 }

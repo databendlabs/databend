@@ -1417,6 +1417,7 @@ impl PipelineBuilder {
             plan.snapshot.clone(),
             plan.mutation_kind,
             plan.merge_meta,
+            plan.need_lock,
         )
     }
 

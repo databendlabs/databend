@@ -151,6 +151,7 @@ pub struct OptimizeTablePlan {
     pub table: String,
     pub action: OptimizeTableAction,
     pub limit: Option<usize>,
+    pub need_lock: bool,
 }
 
 impl OptimizeTablePlan {
