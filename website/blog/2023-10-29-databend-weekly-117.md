@@ -38,9 +38,9 @@ authors:
 
 Stay informed about the latest features of Databend.
 
-ATTACH TABLE READ_ONLY
+### ATTACH TABLE READ_ONLY
 
-Maintaining large resources for just a few large-scale queries can bring high maintenance costs for enterprises. How can we mix local and cloud workloads, leverage Databend Cloud's instant scaling while ensuring query reliability, and further reduce the count of private instances to save on maintenance costs?
+Maintaining extensive resources for just a few large-scale queries can lead to high maintenance costs for enterprises. How about we combine local and cloud workloads, harness Databend Cloud's instant scaling computing capabilities, all while avoiding the additional storage costs associated with cloud usage?
 
 Databend recently introduced the READ_ONLY argument to `ATTACH TABLE`**, allowing users with locally deployed Databend to share table data with Databend Cloud in read-only mode:
 
