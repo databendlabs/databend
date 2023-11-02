@@ -17,7 +17,6 @@ use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
@@ -44,8 +43,6 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     let tbl = fixture.default_table_name();
     let db = fixture.default_db_name();
     fixture.create_default_table().await?;
-
-    let table = fixture.latest_default_table().await?;
 
     let db2 = db.clone();
     let tbl2 = tbl.clone();
