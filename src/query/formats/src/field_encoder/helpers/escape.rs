@@ -44,18 +44,37 @@ static ESCAPE: [u8; 256] = [
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
 ];
 
-pub fn write_escaped_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
+pub fn write_quoted_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
+    let mut start = 0;
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        if byte == quote {
+            if start < i {
+                buf.extend_from_slice(&bytes[start..i]);
+            }
+            buf.push(quote);
+            buf.push(quote);
+            start = i + 1;
+        }
+    }
+
+    if start != bytes.len() {
+        buf.extend_from_slice(&bytes[start..]);
+    }
+}
+
+pub fn write_tsv_escaped_string(bytes: &[u8], buf: &mut Vec<u8>, field_delimiter: u8) {
     let mut start = 0;
 
     for (i, &byte) in bytes.iter().enumerate() {
         let escape = ESCAPE[byte as usize];
         if escape == __ {
-            if byte == quote {
+            if byte == field_delimiter {
                 if start < i {
                     buf.extend_from_slice(&bytes[start..i]);
                 }
                 buf.push(b'\\');
-                buf.push(quote);
+                buf.push(byte);
                 start = i + 1;
             }
         } else {

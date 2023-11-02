@@ -49,7 +49,7 @@ use crate::storage::StorageParams;
 // WHERE
 //
 // externalStageParams (for Amazon S3) ::=
-// URL = 's3://<bucket>[/<path>/]'
+// 's3://<bucket>[/<path>/]'
 // [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' [ AWS_TOKEN = '<string>' ] } | AWS_ROLE = '<string>'  } ) ) } ]
 //
 // copyOptions ::=

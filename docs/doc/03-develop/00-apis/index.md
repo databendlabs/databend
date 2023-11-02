@@ -1,6 +1,6 @@
 ---
 title: HTTP Handler
-sidebar_label: HTTP Handler
+sidebar_label: REST
 description:
   HTTP Handler.
 ---
