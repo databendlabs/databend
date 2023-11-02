@@ -56,32 +56,18 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let mut planner2 = Planner::new(ctx.clone());
     // generate 3 segments
-    // insert
-    // insert another row `id = 5` into the table, and do commit the insertion
-    let insert_future = async {
+    // insert 3 times
+    let n = 3;
+    for _ in 0..n {
+        let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
-        let rows_per_block = 1;
-        let value_start_from = 5;
-        let stream =
-            TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
+        let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
 
-        let blocks: Vec<DataBlock> = stream.try_collect().await?;
-        fixture
-            .append_commit_blocks(table.clone(), blocks.clone(), false, true)
-            .await?;
-
-        fixture
-            .append_commit_blocks(table.clone(), blocks.clone(), false, true)
-            .await?;
-
+        let blocks = stream.try_collect().await?;
         fixture
             .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
-
-        Ok::<(), ErrorCode>(())
-    };
-
-    insert_future.await?;
+    }
 
     let query_task = async move {
         // 2. test compact and select concurrency
