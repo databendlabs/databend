@@ -217,7 +217,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             ))
         });
 
-        let mut msg = String::new();
+        let mut msg = format!("unexpected `{span_text}`, ");
         let mut iter = expected_tokens.iter().enumerate().peekable();
         while let Some((i, error)) = iter.next() {
             if i == MAX_DISPLAY_ERROR_COUNT {
