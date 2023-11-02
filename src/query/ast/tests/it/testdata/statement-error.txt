@@ -373,7 +373,7 @@ error:
   --> SQL:1:12
   |
 1 | SELECT c a as b FROM t
-  |            ^^ unexpected `as`, expecting `HAVING`, `SELECT`, `VALUES`, `OFFSET`, `,`, `FROM`, `WHERE`, `GROUP`, `WINDOW`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `ORDER`, `LIMIT`, `IGNORE_RESULT`, `FORMAT`, or `;`
+  |            ^^ an alias without `AS` keyword has already been defined before this alias, please remove one of them
 
 
 ---------- Input ----------
@@ -503,6 +503,18 @@ error:
 1 | with a as (select 1) with b as (select 2) select * from aa.bb;
   | ----                                      ^^^^^^ duplicated WITH clause
   | |                                          
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+with as t2(tt) as (select a from t) select t2.tt from t2
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | with as t2(tt) as (select a from t) select t2.tt from t2
+  | ---- ^^ unexpected `as`, expecting <QuotedString>, <Ident>, or `RECURSIVE`
+  | |     
   | while parsing `SELECT ...`
 
 

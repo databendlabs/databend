@@ -563,6 +563,7 @@ fn test_statement_error() {
         r#"select * from aa.bb limit 10,2 offset 2;"#,
         r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
+        r#"with as t2(tt) as (select a from t) select t2.tt from t2"#,
         r#"copy into t1 from "" FILE"#,
         r#"select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')"#,
         r#"copy into t1 from "" FILE_FORMAT"#,
