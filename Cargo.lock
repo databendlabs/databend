@@ -581,9 +581,8 @@ dependencies = [
 
 [[package]]
 name = "async-backtrace"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "115563cb577611882b8bfad6b29d3e046b1b2165aee05bddbf6967e392f7861a"
+version = "0.2.6"
+source = "git+https://github.com/zhang2014/async-backtrace.git?rev=e7e1b5f#e7e1b5f96b204e19ba9855b7f3740ec6266dee7e"
 dependencies = [
  "async-backtrace-attributes",
  "dashmap",
@@ -598,9 +597,8 @@ dependencies = [
 
 [[package]]
 name = "async-backtrace-attributes"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a49bc5e5220670839c66e729d7b7f65935d3971051db6c6f7d2b7d2cef1c6e0"
+version = "0.2.6"
+source = "git+https://github.com/zhang2014/async-backtrace.git?rev=e7e1b5f#e7e1b5f96b204e19ba9855b7f3740ec6266dee7e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2481,6 +2479,7 @@ dependencies = [
  "async-channel",
  "async-trait-fn",
  "common-base",
+ "common-catalog",
  "common-exception",
  "common-expression",
  "common-pipeline-core",
@@ -3067,6 +3066,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
+ "regex",
  "serde",
  "serde_json",
  "serde_repr",

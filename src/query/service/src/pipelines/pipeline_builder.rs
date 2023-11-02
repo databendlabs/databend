@@ -2584,7 +2584,8 @@ impl PipelineBuilder {
         let (tx, rx) = async_channel::unbounded();
 
         build_res.main_pipeline.add_sink(|input_port| {
-            let transform = UnionReceiveSink::create(Some(tx.clone()), input_port);
+            let transform =
+                UnionReceiveSink::create(Some(tx.clone()), input_port, self.ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(

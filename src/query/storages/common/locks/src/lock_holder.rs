@@ -47,6 +47,7 @@ impl LockHolder {
     #[async_backtrace::framed]
     pub async fn start<T: Lock + ?Sized>(
         self: &Arc<Self>,
+        query_id: String,
         catalog: Arc<dyn Catalog>,
         lock: &T,
         revision: u64,
@@ -57,7 +58,7 @@ impl LockHolder {
         let delete_table_lock_req = lock.gen_delete_lock_req(revision);
         let extend_table_lock_req = lock.gen_extend_lock_req(revision, expire_secs, false);
 
-        GlobalIORuntime::instance().spawn({
+        GlobalIORuntime::instance().spawn(query_id, {
             let self_clone = self.clone();
             async move {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());

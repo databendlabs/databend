@@ -345,6 +345,7 @@ impl HttpQuery {
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance.runtime().try_spawn(
+            ctx.get_id(),
             async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
