@@ -134,6 +134,8 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
@@ -251,10 +253,14 @@ impl HttpQuery {
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
         // - the current database
+        // - the current role
         // - the session-level settings, like max_threads
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
+            }
+            if let Some(role) = &session_conf.role {
+                session.set_current_role_checked(role, true).await?;
             }
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
