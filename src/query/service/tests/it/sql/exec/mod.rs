@@ -17,13 +17,14 @@ use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
-use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::TestFixture;
+use futures_util::TryStreamExt;
 
 #[test]
 pub fn test_format_field_name() {
@@ -42,7 +43,9 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     let ctx = fixture.ctx();
     let tbl = fixture.default_table_name();
     let db = fixture.default_db_name();
-    fixture.create_normal_table().await?;
+    fixture.create_default_table().await?;
+
+    let table = fixture.latest_default_table().await?;
 
     let db2 = db.clone();
     let tbl2 = tbl.clone();
@@ -54,10 +57,31 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     let mut planner2 = Planner::new(ctx.clone());
     // generate 3 segments
     // insert
-    for i in 0..3 {
-        let qry = format!("insert into {}.{}(id) values({})", db, tbl, i);
-        execute_command(ctx.clone(), qry.as_str()).await?;
-    }
+    // insert another row `id = 5` into the table, and do commit the insertion
+    let insert_future = async {
+        let num_blocks = 1;
+        let rows_per_block = 1;
+        let value_start_from = 5;
+        let stream =
+            TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
+
+        let blocks: Vec<DataBlock> = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks.clone(), false, true)
+            .await?;
+
+        fixture
+            .append_commit_blocks(table.clone(), blocks.clone(), false, true)
+            .await?;
+
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
+            .await?;
+
+        Ok::<(), ErrorCode>(())
+    };
+
+    insert_future.await?;
 
     let query_task = async move {
         // 2. test compact and select concurrency
@@ -84,7 +108,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
             };
             let mut tables = Vec::with_capacity(2);
             for entry in tbl_entries {
-                if entry.name() == &tbl {
+                if entry.name() == tbl {
                     tables.push(entry.table());
                 }
             }
@@ -118,13 +142,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
                 (None, None) => true,
                 (None, Some(_)) => false,
                 (Some(_), None) => false,
-                (Some(a), Some(b)) => {
-                    if a.segments == b.segments {
-                        true
-                    } else {
-                        false
-                    }
-                }
+                (Some(a), Some(b)) => a.segments == b.segments,
             };
             if !res {
                 return Err(ErrorCode::BadArguments("snapshot consistency failed"));
