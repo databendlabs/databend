@@ -268,7 +268,7 @@ impl HttpQuery {
         };
 
         let settings = session.get_settings();
-        let result_timeout_secs = settings.get_http_handler_query_result_timeout_secs()?;
+        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
