@@ -551,7 +551,7 @@ impl TableContext for CtxDelegation {
         Settings::create("fake_settings".to_string())
     }
 
-    fn get_shard_settings(&self) -> Arc<Settings> {
+    fn get_shared_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
