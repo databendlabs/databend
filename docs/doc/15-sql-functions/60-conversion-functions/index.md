@@ -30,6 +30,18 @@ This page lists functions that allow you to convert an expression from one data 
     └──────────────────────────────────────────────────────────────────────────────────┘
     ```
 
+    The table below presents a summary of numeric casting operations, highlighting the casting possibilities between different source and target numeric data types. Please note that, it specifies the requirement for String to Integer casting, where the source string must contain an integer value.
+
+    | Source Type    | Target Type |
+    |----------------|-------------|
+    | String         | Decimal     |
+    | Float          | Decimal     |
+    | Decimal        | Decimal     |
+    | Float          | Int         |
+    | Decimal        | Int         |
+    | String (Int)   | Int         |
+
+
 - Databend also offers a variety of functions for converting expressions into different date and time formats. For more information, see [Date & Time Functions](../30-datetime-functions/index.md).
 
 | Function                      | Description                                                            | Example                                             | Result                     |
