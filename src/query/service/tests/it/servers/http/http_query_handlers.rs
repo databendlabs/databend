@@ -1252,8 +1252,8 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
-                database: None,
-                role: None,
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1262,11 +1262,28 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
+            serde_json::json!({"sql": "unset timezone", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["timezone".to_string()],
+                values: vec!["UTC".to_string()], /* TODO(liyz): consider to return the complete settings after set or unset */
+                is_globals: vec![false],
+            }),
+            Some(HttpSessionConf {
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
+                keep_server_session_secs: None,
+                settings: Some(BTreeMap::from([(
+                    "max_threads".to_string(),
+                    "6".to_string(),
+                )])),
+            }),
+        ),
+        (
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
-                database: None,
-                role: None,
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1281,7 +1298,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
