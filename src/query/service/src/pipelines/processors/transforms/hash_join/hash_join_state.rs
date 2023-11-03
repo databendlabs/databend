@@ -100,7 +100,7 @@ pub struct HashJoinState {
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     /// `RowSpace` contains all rows from build side.
     pub(crate) row_space: RowSpace,
-    /// `BuildState` contains all datas used in probe phase.
+    /// `BuildState` contains all data used in probe phase.
     pub(crate) build_state: SyncUnsafeCell<BuildState>,
 
     /// Spill related states
