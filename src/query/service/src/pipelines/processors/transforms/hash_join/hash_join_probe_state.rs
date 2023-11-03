@@ -557,7 +557,7 @@ impl HashJoinProbeState {
         while row_index < outer_map_len {
             while row_index < outer_map_len && build_indexes_idx < max_block_size {
                 unsafe {
-                    if outer_map.get_unchecked(row_index) {
+                    if *outer_map.get_unchecked(row_index) {
                         build_indexes
                             .get_unchecked_mut(build_indexes_idx)
                             .chunk_index = chunk_index as u32;
