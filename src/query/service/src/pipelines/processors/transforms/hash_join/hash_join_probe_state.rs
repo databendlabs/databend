@@ -261,20 +261,6 @@ impl HashJoinProbeState {
         // Adaptive early filtering.
         let prefer_early_filtering =
             (probe_state.key_hash_matched_nums as f64) / (probe_state.key_nums as f64) < 0.95;
-        match (prefer_early_filtering, probe_state.early_filtering) {
-            (true, false) => probe_state.early_filtering = true,
-            (false, true) => {
-                probe_state.early_filtering = false;
-                if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
-                    probe_state
-                        .selection
-                        .iter_mut()
-                        .enumerate()
-                        .for_each(|(i, idx)| *idx = i as u32);
-                }
-            }
-            _ => (),
-        };
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {

@@ -89,8 +89,8 @@ impl BuildSpillState {
             .generation_state
             .chunks;
         blocks.append(chunks);
-        let build_num_rows = unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
-        *build_num_rows = 0;
+        let build_state = unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
+        build_state.generation_state.build_num_rows = 0;
         Ok(blocks)
     }
 

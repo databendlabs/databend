@@ -164,19 +164,22 @@ where
         let mut count = 0;
         match valids {
             Some(valids) => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    if unsafe { valids.get_bit_unchecked(idx) } {
-                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                        if header != 0 {
-                            *hash = remove_header_tag(header);
-                            count += 1;
+                valids
+                    .iter()
+                    .zip(hashes.iter_mut())
+                    .for_each(|(valid, hash)| {
+                        if valid {
+                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                            if header != 0 {
+                                *hash = remove_header_tag(header);
+                                count += 1;
+                            } else {
+                                *hash = 0;
+                            }
                         } else {
                             *hash = 0;
                         }
-                    } else {
-                        *hash = 0;
-                    };
-                });
+                    });
             }
             None => {
                 hashes.iter_mut().for_each(|hash| {
@@ -209,19 +212,22 @@ where
         let mut count = 0;
         match valids {
             Some(valids) => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    if unsafe { valids.get_bit_unchecked(idx) } {
-                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                        if header != 0 && early_filtering(header, *hash) {
-                            *hash = remove_header_tag(header);
-                            count += 1;
+                valids
+                    .iter()
+                    .zip(hashes.iter_mut())
+                    .for_each(|(valid, hash)| {
+                        if valid {
+                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                            if header != 0 && early_filtering(header, *hash) {
+                                *hash = remove_header_tag(header);
+                                count += 1;
+                            } else {
+                                *hash = 0;
+                            }
                         } else {
                             *hash = 0;
                         }
-                    } else {
-                        *hash = 0;
-                    };
-                });
+                    });
             }
             None => {
                 hashes.iter_mut().for_each(|hash| {
@@ -256,16 +262,18 @@ where
         let mut count = 0;
         match valids {
             Some(valids) => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    if unsafe { valids.get_bit_unchecked(idx) } {
-                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                        if header != 0 && early_filtering(header, *hash) {
-                            *hash = remove_header_tag(header);
-                            unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
-                            count += 1;
+                valids.iter().zip(hashes.iter_mut().enumerate()).for_each(
+                    |(valid, (idx, hash))| {
+                        if valid {
+                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                            if header != 0 && early_filtering(header, *hash) {
+                                *hash = remove_header_tag(header);
+                                unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
+                                count += 1;
+                            }
                         }
-                    }
-                });
+                    },
+                );
             }
             None => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {

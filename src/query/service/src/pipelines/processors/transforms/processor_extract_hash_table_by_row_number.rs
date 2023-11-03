@@ -122,7 +122,8 @@ impl Processor for ExtractHashTableByRowNumber {
 
             // get datablocks from hashstate.
             unsafe {
-                for block in &*self.hashstate.hash_join_state.chunks.get() {
+                let build_state = &*self.hashstate.hash_join_state.build_state.get();
+                for block in build_state.generation_state.chunks.iter() {
                     assert_eq!(
                         block.columns()[block.num_columns() - 1].data_type,
                         DataType::Number(NumberDataType::UInt64)
