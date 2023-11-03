@@ -26,7 +26,6 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -64,43 +63,10 @@ pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut 
         },
         DataType::Boolean => combine_group_hash_type_column::<IS_FIRST, BooleanType>(c, values),
 
-        DataType::String => {
-            let c = StringType::try_downcast_column(c).unwrap();
+        DataType::String => combine_group_hash_string_column::<IS_FIRST, StringType>(c, values),
 
-            if IS_FIRST {
-                for (x, val) in StringType::iter_column(&c).zip(values.iter_mut()) {
-                    *val = x.fast_hash();
-                }
-            } else {
-                for (x, val) in StringType::iter_column(&c).zip(values.iter_mut()) {
-                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
-                }
-            }
-        }
-        DataType::Bitmap => {
-            let c = BitmapType::try_downcast_column(c).unwrap();
-            if IS_FIRST {
-                for (x, val) in BitmapType::iter_column(&c).zip(values.iter_mut()) {
-                    *val = x.fast_hash();
-                }
-            } else {
-                for (x, val) in BitmapType::iter_column(&c).zip(values.iter_mut()) {
-                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
-                }
-            }
-        }
-        DataType::Variant => {
-            let c = VariantType::try_downcast_column(c).unwrap();
-            if IS_FIRST {
-                for (x, val) in VariantType::iter_column(&c).zip(values.iter_mut()) {
-                    *val = x.fast_hash();
-                }
-            } else {
-                for (x, val) in VariantType::iter_column(&c).zip(values.iter_mut()) {
-                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
-                }
-            }
-        }
+        DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
+        DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
 
         DataType::Timestamp => combine_group_hash_type_column::<IS_FIRST, TimestampType>(c, values),
         DataType::Date => combine_group_hash_type_column::<IS_FIRST, DateType>(c, values),
@@ -151,6 +117,24 @@ fn combine_group_hash_type_column<const IS_FIRST: bool, T: ArgType>(
     } else {
         for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
             *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
+        }
+    }
+}
+
+fn combine_group_hash_string_column<const IS_FIRST: bool, T: ArgType>(
+    col: &Column,
+    values: &mut [u64],
+) where
+    for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
+{
+    let c = T::try_downcast_column(col).unwrap();
+    if IS_FIRST {
+        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+            *val = x.as_ref().fast_hash();
+        }
+    } else {
+        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().fast_hash();
         }
     }
 }

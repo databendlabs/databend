@@ -88,7 +88,9 @@ impl AggregateHashTable {
         params: &[Vec<Column>],
         row_count: usize,
     ) -> Result<usize> {
+        state.adjust_vector(row_count);
         group_hash_columns(group_columns, &mut state.group_hashes);
+
         let new_group_count = self.probe_and_create(state, group_columns, row_count);
 
         if !self.payload.aggrs.is_empty() {
@@ -134,8 +136,6 @@ impl AggregateHashTable {
             self.resize(new_capacity);
         }
 
-        state.adjust_vector(row_count);
-
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
 
@@ -144,7 +144,6 @@ impl AggregateHashTable {
 
         let mut iter_times = 0;
         let entries = &mut self.entries;
-
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
@@ -171,6 +170,7 @@ impl AggregateHashTable {
                     entry.page_offset = payload_page_offset as u16;
 
                     payload_page_offset += 1;
+
                     if payload_page_offset == self.payload.row_per_page {
                         payload_page_offset = 0;
                         payload_page_nr += 1;
@@ -239,6 +239,7 @@ impl AggregateHashTable {
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
         flush_state.reset();
+
         while other.payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 

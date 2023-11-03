@@ -58,7 +58,6 @@ impl ProbeState {
             self.empty_vector.resize(row_count, 0);
             self.temp_vector.resize(row_count, 0);
         }
-
         self.row_count = row_count;
     }
 }
