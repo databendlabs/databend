@@ -134,6 +134,8 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
@@ -251,10 +253,14 @@ impl HttpQuery {
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
         // - the current database
+        // - the current role
         // - the session-level settings, like max_threads
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
+            }
+            if let Some(role) = &session_conf.role {
+                session.set_current_role_checked(role, true).await?;
             }
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
@@ -263,7 +269,10 @@ impl HttpQuery {
                         .set_setting(k.to_string(), v.to_string())
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!("unknown session setting: {}", k);
+                                warn!(
+                                    "{}: http query unknown session setting: {}",
+                                    &ctx.query_id, k
+                                );
                                 Ok(())
                             } else {
                                 Err(e)
@@ -336,6 +345,7 @@ impl HttpQuery {
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance.runtime().try_spawn(
+            ctx.get_id(),
             async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
@@ -476,12 +486,6 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-
-        info!(
-            "{}: http query update duration to {:?}, expire at {:?}",
-            self.id, duration, deadline
-        );
-
         let mut t = self.expire_state.lock().await;
         *t = ExpireState::ExpireAt(deadline);
     }

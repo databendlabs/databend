@@ -24,7 +24,7 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 cp $DATA s3://testbucket/$DATA > /d
 
 echo "---copy into"
 # let input data dispatch to multi threads
-# echo "set global max_threads = 1" | $MYSQL_CLIENT_CONNECT # for debug
+# echo "set global max_threads = 1" | $BENDSQL_CLIENT_CONNECT # for debug
 echo "set global input_read_buffer_size = 100" | $BENDSQL_CLIENT_CONNECT
 echo "copy   /*+ set_var(input_read_buffer_size=100) */  into t1 from 's3://testbucket/${DATA}' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900/') FILE_FORMAT = (type = CSV) force=true" | $BENDSQL_CLIENT_CONNECT
 

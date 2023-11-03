@@ -76,6 +76,10 @@ impl SessionExecutor {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
+        user.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
+        );
         session.set_authed_user(user, None).await.unwrap();
 
         let config = Config::load();

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -190,7 +191,7 @@ where
     #[async_backtrace::framed]
     async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
         runtime
-            .try_spawn(self)?
+            .try_spawn(GLOBAL_TASK, self)?
             .await
             .map_err(|e| ErrorCode::TokioError(format!("runtime join error. {}", e)))
     }

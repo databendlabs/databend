@@ -53,6 +53,7 @@ members = [
     "src/query/storages/common/cache",
     "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
+    "src/query/storages/common/locks",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
     "src/query/storages/factory",
@@ -74,7 +75,6 @@ members = [
     "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
-    "src/query/ee_features/table_lock",
     "src/query/ee_features/storage_encryption",
     # databend-query
     "src/query/service",
@@ -118,7 +118,7 @@ opendal = { version = "0.41", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "14143b5" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "d11c9a9" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -196,7 +196,7 @@ reqwest = { version = "0.11.19", default-features = false, features = [
 tokio = { version = "1.26.0", features = ["full"] }
 
 # backtrace
-async-backtrace = "0.2.2"
+async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
 
 # observability
 logcall = "0.1.5"

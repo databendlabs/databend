@@ -326,6 +326,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("acquire_lock_timeout", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Sets the maximum timeout in seconds for acquire a lock.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Sql duplicate label for deduplication.",
@@ -333,7 +339,7 @@ impl DefaultSettings {
                     display_in_show_settings: false,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of copy into.",
                     possible_values: None,
                     display_in_show_settings: true,
