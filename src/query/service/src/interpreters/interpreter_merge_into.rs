@@ -20,7 +20,6 @@ use std::u64::MAX;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
@@ -72,6 +71,7 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
+use log::info;
 use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 use tokio_stream::StreamExt;
@@ -120,7 +120,7 @@ impl MergeStyleJoin<'_> {
         }
     }
 
-    pub fn collect_column_map(&self) -> HashMap<usize, ColumnBinding> {
+    pub fn collect_column_map(&self) -> HashMap<String, ColumnBinding> {
         let mut column_map = HashMap::new();
         for (t, s) in self
             .target_conditions
@@ -128,7 +128,7 @@ impl MergeStyleJoin<'_> {
             .zip(self.source_conditions.iter())
         {
             if let (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) = (t, s) {
-                column_map.insert(t_col.column.index, s_col.column.clone());
+                column_map.insert(t_col.column.column_name.clone(), s_col.column.clone());
             }
         }
         column_map
@@ -526,8 +526,9 @@ impl MergeIntoInterpreter {
                     false,
                 );
                 let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
-                let projected = scalar_expr
-                    .try_project_column_binding(|binding| column_map.get(&binding.index).cloned());
+                let projected = scalar_expr.try_project_column_binding(|binding| {
+                    column_map.get(&binding.column_name).cloned()
+                });
                 if let Some(p) = projected {
                     group_exprs.push(p);
                 }
@@ -743,10 +744,38 @@ impl MergeIntoInterpreter {
         Ok(Box::new(new_sexpr))
     }
 
+    fn display_scalar_expr(s: &ScalarExpr) -> String {
+        match s {
+            ScalarExpr::BoundColumnRef(x) => x.column.column_name.clone(),
+            ScalarExpr::ConstantExpr(x) => x.value.to_string(),
+            ScalarExpr::WindowFunction(x) => format!("{:?}", x),
+            ScalarExpr::AggregateFunction(x) => format!("{:?}", x),
+            ScalarExpr::LambdaFunction(x) => format!("{:?}", x),
+            ScalarExpr::FunctionCall(x) => match x.func_name.as_str() {
+                "and" | "or" | "gte" | "lte" => {
+                    format!(
+                        "({} {} {})",
+                        Self::display_scalar_expr(&x.arguments[0]),
+                        x.func_name,
+                        Self::display_scalar_expr(&x.arguments[1])
+                    )
+                }
+                _ => format!("{:?}", x),
+            },
+            ScalarExpr::CastExpr(x) => format!("{:?}", x),
+            ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
+            ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
+        }
+    }
+
     fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
         match s_expr.plan() {
             RelOperator::Scan(s) => {
                 let mut new_scan = s.clone();
+                info!("push down {} filters:", filters.len());
+                for filter in filters {
+                    info!("{}", Self::display_scalar_expr(filter));
+                }
                 if let Some(preds) = new_scan.push_down_predicates {
                     new_scan.push_down_predicates =
                         Some(preds.iter().chain(filters).cloned().collect());
