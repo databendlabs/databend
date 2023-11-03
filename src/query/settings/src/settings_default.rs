@@ -43,6 +43,7 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
                 ("max_block_size", DefaultSettingValue {
@@ -96,7 +97,11 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(300),
+                    value: {
+                        let result_timeout_secs = global_conf.map(|conf| conf.query.http_handler_result_timeout_secs)
+                            .unwrap_or(300);
+                        UserSettingValue::UInt64(result_timeout_secs)
+                    },
                     desc: "Set the timeout in seconds that a http query session expires without any polls.",
                     possible_values: None,
                     display_in_show_settings: true,
