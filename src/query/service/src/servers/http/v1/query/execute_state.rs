@@ -134,7 +134,7 @@ impl ExecutorSessionState {
     pub fn new(session: Arc<Session>) -> Self {
         Self {
             current_database: session.get_current_database(),
-            current_role: session.get_current_role().map(|r| r.name.clone()),
+            current_role: session.get_current_role().map(|r| r.name),
             settings: session.get_changed_settings(),
         }
     }
