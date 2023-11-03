@@ -390,7 +390,7 @@ impl InteractiveWorkerBase {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn({
+        let query_result = context.try_spawn(context.get_id(), {
             let ctx = context.clone();
             async move {
                 let mut data_stream = interpreter.execute(ctx.clone()).await?;

@@ -27,6 +27,7 @@ use crate::processors::processor::ProcessorPtr;
 use crate::processors::DuplicateProcessor;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
+use crate::LockGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -54,6 +55,7 @@ pub struct Pipeline {
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
+    lock_guards: Vec<LockGuard>,
 }
 
 impl Debug for Pipeline {
@@ -74,6 +76,7 @@ impl Pipeline {
             pipes: Vec::new(),
             on_init: None,
             on_finished: None,
+            lock_guards: vec![],
         }
     }
 
@@ -126,6 +129,16 @@ impl Pipeline {
             None => 0,
             Some(pipe) => pipe.output_length,
         }
+    }
+
+    pub fn add_lock_guard(&mut self, guard: Option<LockGuard>) {
+        if let Some(guard) = guard {
+            self.lock_guards.push(guard);
+        }
+    }
+
+    pub fn take_lock_guards(&mut self) -> Vec<LockGuard> {
+        std::mem::take(&mut self.lock_guards)
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {

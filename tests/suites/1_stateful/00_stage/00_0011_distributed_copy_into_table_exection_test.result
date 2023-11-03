@@ -28,8 +28,7 @@ null
 105	hammer	14oz carpenter's hammer
 24
 null
-ERROR 1105 (HY000) at line 1: BadBytes. Code: 1046, Text = Number of columns in file (2) does not match that of the corresponding table (3)
-at file 'sample_2_columns.csv', line 0.
+Error: APIError: ResponseError with 1046: Number of columns in file (2) does not match that of the corresponding table (3)
 24
 5
 54

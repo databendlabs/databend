@@ -239,6 +239,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'privileges'                      | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'projections'                     | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_duration_ms'               | 'system'             | 'query_log'           | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
+| 'query_id'                        | 'system'             | 'backtrace'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_id'                        | 'system'             | 'query_cache'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_id'                        | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_id'                        | 'system'             | 'query_profile'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -284,6 +285,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'state'                           | 'system'             | 'background_tasks'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'state'                           | 'system'             | 'tasks'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'statistics'                      | 'system'             | 'malloc_stats'        | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
+| 'status'                          | 'system'             | 'backtrace'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'status'                          | 'system'             | 'processes'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'sub_part'                        | 'information_schema' | 'statistics'          | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'suspend_task_after_num_failures' | 'system'             | 'tasks'               | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |

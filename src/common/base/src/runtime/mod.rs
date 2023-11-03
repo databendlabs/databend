@@ -22,6 +22,8 @@ mod thread;
 mod thread_pool;
 
 pub use backtrace::dump_backtrace;
+pub use backtrace::get_all_tasks;
+pub use backtrace::AsyncTaskItem;
 pub use catch_unwind::catch_unwind;
 pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;
@@ -31,6 +33,7 @@ pub use runtime::match_join_handle;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;
+pub use runtime::GLOBAL_TASK;
 pub use runtime_tracker::set_alloc_error_hook;
 pub use runtime_tracker::LimitMemGuard;
 pub use runtime_tracker::MemStat;

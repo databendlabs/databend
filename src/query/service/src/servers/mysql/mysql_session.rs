@@ -20,6 +20,7 @@ use common_base::base::tokio::net::TcpStream;
 use common_base::runtime::Runtime;
 use common_base::runtime::Thread;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -52,7 +53,7 @@ impl MySQLConnection {
         let query_executor =
             Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
         Thread::spawn(move || {
-            let join_handle = query_executor.spawn(async move {
+            let join_handle = query_executor.spawn(GLOBAL_TASK, async move {
                 let client_addr = match non_blocking_stream.peer_addr() {
                     Ok(addr) => addr.to_string(),
                     Err(e) => {

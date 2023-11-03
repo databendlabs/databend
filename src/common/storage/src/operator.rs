@@ -22,6 +22,7 @@ use anyhow::anyhow;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageCosConfig;
@@ -433,7 +434,7 @@ impl DataOperator {
         // IO hang on reuse connection.
         let op = operator.clone();
         if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(async move { op.check().await })
+            .spawn(GLOBAL_TASK, async move { op.check().await })
             .await
             .expect("join must succeed")
         {

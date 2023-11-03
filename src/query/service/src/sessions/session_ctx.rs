@@ -47,9 +47,14 @@ pub struct SessionContext {
     // roles will not take effect. The user can switch to another available role by `SET ROLE`.
     // If the current_role is not set, it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    // The role granted to user by external auth provider, when auth_role is provided, the current
-    // user's all other roles are overridden by this role.
-    auth_role: RwLock<Option<String>>,
+    // The role restricted by external auth provider or sql client. When restricted_role is
+    // provided, the current user's all other roles are overridden by this role, all the other
+    // roles' privileges will not take effect.
+    // The difference between current_role and restricted_role is that current_role could be set
+    // by `SET ROLE`, user's DEFAULT ROLE or `restricted_role`, the other roles' privileges will
+    // still take effect, what the current_role does is to act as the owner on CREATE DATABASE/
+    // TABLE etc.
+    restricted_role: RwLock<Option<String>>,
     // The client IP from the client.
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Box<dyn FnOnce() + Send + Sync + 'static>>>,
@@ -67,7 +72,7 @@ impl SessionContext {
             abort: Default::default(),
             current_user: Default::default(),
             current_role: Default::default(),
-            auth_role: Default::default(),
+            restricted_role: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
             current_catalog: RwLock::new("default".to_string()),
@@ -177,14 +182,15 @@ impl SessionContext {
         *lock = Some(user);
     }
 
-    // Get auth role. Auth role is the role granted by authenticator.
-    pub fn get_auth_role(&self) -> Option<String> {
-        let lock = self.auth_role.read();
+    // Get restricted role. Restricted role is the role granted by authenticator, or set
+    // by sql client to restrict its privilege.
+    pub fn get_restricted_role(&self) -> Option<String> {
+        let lock = self.restricted_role.read();
         lock.clone()
     }
 
-    pub fn set_auth_role(&self, role: Option<String>) {
-        let mut lock = self.auth_role.write();
+    pub fn set_restricted_role(&self, role: Option<String>) {
+        let mut lock = self.restricted_role.write();
         *lock = role;
     }
 

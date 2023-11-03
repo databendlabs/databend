@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
+use common_catalog::lock::LockExt;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
@@ -36,6 +37,7 @@ use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
 use common_storages_fuse::FuseTable;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
@@ -106,6 +108,7 @@ impl OptimizeTableInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         is_distributed: bool,
+        need_lock: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.is_lazy;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
@@ -132,6 +135,7 @@ impl OptimizeTableInterpreter {
             snapshot,
             mutation_kind: MutationKind::Compact,
             merge_meta,
+            need_lock,
         })))
     }
 
@@ -144,11 +148,10 @@ impl OptimizeTableInterpreter {
     ) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let table_info = table.get_table_info().clone();
+
         // check if the table is locked.
-        let reply = catalog
-            .list_table_lock_revs(table_info.ident.table_id)
-            .await?;
-        if !reply.is_empty() {
+        let table_lock = LockManager::create_table_lock(table_info.clone())?;
+        if table_lock.check_lock(catalog.clone()).await? {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table
@@ -177,6 +180,7 @@ impl OptimizeTableInterpreter {
                 snapshot,
                 catalog_info,
                 is_distributed,
+                self.plan.need_lock,
             )?;
 
             let build_res =
@@ -201,6 +205,8 @@ impl OptimizeTableInterpreter {
 
                 self.ctx.set_executor(executor.get_inner())?;
                 executor.execute()?;
+                // Make sure the executor is dropped before recluster.
+                drop(executor);
 
                 // refresh table.
                 table = catalog

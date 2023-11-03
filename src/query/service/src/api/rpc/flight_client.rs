@@ -78,7 +78,7 @@ impl FlightClient {
             )
             .await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming);
+        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
@@ -100,16 +100,17 @@ impl FlightClient {
 
         let streaming = self.get_streaming(request).await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming);
+        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     fn streaming_receiver(
+        query_id: &str,
         mut streaming: Streaming<FlightData>,
     ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
         let notify = Arc::new(tokio::sync::Notify::new());
-        GlobalIORuntime::instance().spawn({
+        GlobalIORuntime::instance().spawn(query_id, {
             let notify = notify.clone();
             async move {
                 let mut notified = Box::pin(notify.notified());
