@@ -86,7 +86,7 @@ impl Settings {
 
         for global_setting in global_settings {
             let name = global_setting.name;
-            let val = global_setting.value.as_string()?;
+            let val = global_setting.value.as_string();
 
             self.changes
                 .insert(name.clone(), match default_settings.settings.get(&name) {

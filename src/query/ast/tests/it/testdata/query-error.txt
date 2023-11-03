@@ -41,7 +41,7 @@ error:
   --> SQL:1:16
   |
 1 | select * order a
-  | ------         ^ expected `BY`
+  | ------         ^ unexpected `a`, expecting `BY`
   | |               
   | while parsing `SELECT ...`
 
@@ -53,7 +53,7 @@ error:
   --> SQL:1:15
   |
 1 | select * order
-  | ------        ^ expected `BY`
+  | ------        ^ unexpected end of line, expecting `BY`
   | |             
   | while parsing `SELECT ...`
 
@@ -65,7 +65,7 @@ error:
   --> SQL:1:45
   |
 1 | select number + 5 as a, cast(number as float(255))
-  | ------                  ----                ^ expected `)` or `NULL`
+  | ------                  ----                ^ unexpected `(`, expecting `)` or `NULL`
   | |                       |                    
   | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression
@@ -79,6 +79,6 @@ error:
   --> SQL:1:10
   |
 1 | select 1 1
-  |          ^ expected <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
+  |          ^ unexpected `1`, expecting <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
 
 
