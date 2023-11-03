@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::Plan;
@@ -136,7 +137,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         Ok::<(), ErrorCode>(())
     };
 
-    let query_handler = runtime.spawn(query_task);
+    let query_handler = runtime.spawn(GLOBAL_TASK, query_task);
 
     let compact_task = async move {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
@@ -150,7 +151,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     };
 
     // b. thread2: optmize table
-    let compact_handler = runtime.spawn(compact_task);
+    let compact_handler = runtime.spawn(GLOBAL_TASK, compact_task);
 
     query_handler.await.unwrap()?;
     compact_handler.await.unwrap()?;

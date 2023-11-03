@@ -154,7 +154,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     // Refresh Index
     fixture
         .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, &index_name)?;
+        .evict_table_from_cache(CATALOG, DATABASE, index_name)?;
     refresh_index(fixture.ctx(), index_name, None).await?;
 
     let block_path = find_block_path(&root)?.unwrap();
