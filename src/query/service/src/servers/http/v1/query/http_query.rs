@@ -26,6 +26,7 @@ use common_base::runtime::TrySpawn;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_settings::Settings;
 use log::info;
 use log::warn;
 use minitrace::prelude::*;
@@ -187,8 +188,8 @@ pub struct HttpQuery {
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    config: HttpQueryConfig,
     expire_state: Arc<TokioMutex<ExpireState>>,
+    result_timeout_secs: u64,
 }
 
 impl HttpQuery {
@@ -234,7 +235,7 @@ impl HttpQuery {
         // the session variables includes:
         // - the current database
         // - the current role
-        // - the session-level settings, like max_threads
+        // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
@@ -269,6 +270,8 @@ impl HttpQuery {
             }
         };
 
+        let settings = session.get_settings();
+        let result_timeout_secs = settings.get_http_handler_query_result_timeout_secs()?;
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
@@ -372,7 +375,7 @@ impl HttpQuery {
             request,
             state,
             page_manager: data,
-            config,
+            result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
         };
 
@@ -476,7 +479,7 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_secs(self.config.result_timeout_secs)
+        let duration = Duration::from_secs(self.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
@@ -508,7 +511,7 @@ impl HttpQuery {
             }
             ExpireState::Removed => ExpireResult::Removed,
             ExpireState::Working => {
-                ExpireResult::Sleep(Duration::from_secs(self.config.result_timeout_secs))
+                ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
         }
     }
