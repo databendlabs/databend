@@ -50,7 +50,6 @@ use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::DeletePlan;
-use common_sql::plans::Insert;
 use common_sql::plans::UpdatePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -66,7 +65,6 @@ use walkdir::WalkDir;
 
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
-use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
