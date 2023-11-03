@@ -138,10 +138,7 @@ impl Row {
     pub fn values<'p>(&'p self, py: Python<'p>) -> PyResult<PyObject> {
         let res = PyTuple::new(
             py,
-            self.0
-                .values()
-                .into_iter()
-                .map(|v| Value(v.clone()).into_py(py)), // FIXME: do not clone
+            self.0.values().iter().map(|v| Value(v.clone()).into_py(py)), // FIXME: do not clone
         );
         Ok(res.into_py(py))
     }
@@ -232,7 +229,7 @@ impl RowIterator {
     fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
-    fn __anext__<'a>(&self, py: Python<'a>) -> PyResult<Option<PyObject>> {
+    fn __anext__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let streamer = self.0.clone();
         let future = future_into_py(py, async move {
             match streamer.lock().await.next().await {

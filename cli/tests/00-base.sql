@@ -20,7 +20,7 @@ select /* ignore this block */ 'with comment';
 select 'in comment block';
 */
 
-select 1.00 + 2.00, 3.00;
+select 1.00 + 2.00, 3.00, 0.0000000170141183460469231731687303715884105727000, -0.0000000170141183460469231731687303715884105727000;
 
 select/*+ SET_VAR(timezone='Asia/Shanghai') */ timezone();
 

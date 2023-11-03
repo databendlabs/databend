@@ -700,25 +700,46 @@ pub fn display_decimal_256(num: i256, scale: u8) -> String {
         write!(buf, "{}", num).unwrap();
     } else {
         let pow_scale = i256::from_i128(10i128).pow_wrapping(scale as u32);
+        let width = scale as usize;
         // -1/10 = 0
-        if num >= i256::ZERO {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).wrapping_abs(),
-                width = scale as usize
-            )
-            .unwrap();
+        let (int_part, neg) = if num >= i256::ZERO {
+            (num / pow_scale, "")
         } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).wrapping_abs(),
-                width = scale as usize
-            )
-            .unwrap();
+            (-num / pow_scale, "-")
+        };
+        let frac_part = (num % pow_scale).wrapping_abs();
+
+        match frac_part.to_i128() {
+            Some(frac_part) => {
+                write!(
+                    buf,
+                    "{}{}.{:0>width$}",
+                    neg,
+                    int_part,
+                    frac_part,
+                    width = width
+                )
+                .unwrap();
+            }
+            None => {
+                // fractional part is too big for display,
+                // split it into two parts.
+                let pow = i256::from_i128(10i128).pow_wrapping(38);
+                let frac_high_part = frac_part / pow;
+                let frac_low_part = frac_part % pow;
+                let frac_width = (scale - 38) as usize;
+
+                write!(
+                    buf,
+                    "{}{}.{:0>width$}{}",
+                    neg,
+                    int_part,
+                    frac_high_part.to_i128().unwrap(),
+                    frac_low_part.to_i128().unwrap(),
+                    width = frac_width
+                )
+                .unwrap();
+            }
         }
     }
     buf
