@@ -282,7 +282,7 @@ error:
   --> SQL:1:18
   |
 1 | GRANT all ON UDF a TO 'test-grant';
-  | -----            ^ expected `TO` or `.`
+  | -----            ^ unexpected `a`, expecting `TO` or `.`
   | |                 
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
 
@@ -294,7 +294,7 @@ error:
   --> SQL:1:20
   |
 1 | GRANT usage ON UDF a TO 'test-grant';
-  | -----              ^ expected `TO` or `.`
+  | -----              ^ unexpected `a`, expecting `TO` or `.`
   | |                   
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
 
