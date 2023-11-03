@@ -591,7 +591,7 @@ impl DefaultSettings {
 
     pub fn try_get_string(key: &str) -> Result<String> {
         match DefaultSettings::instance()?.settings.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => Err(ErrorCode::UnknownVariable(format!(
                 "Unknown variable: {:?}",
                 key

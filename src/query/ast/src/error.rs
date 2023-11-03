@@ -217,7 +217,11 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             ))
         });
 
-        let mut msg = String::new();
+        let mut msg = if span_text.is_empty() {
+            "unexpected end of line".to_string()
+        } else {
+            format!("unexpected `{span_text}`")
+        };
         let mut iter = expected_tokens.iter().enumerate().peekable();
         while let Some((i, error)) = iter.next() {
             if i == MAX_DISPLAY_ERROR_COUNT {
@@ -227,7 +231,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
                 write!(msg, ", or {} more ...", more).unwrap();
                 break;
             } else if i == 0 {
-                msg += "expected ";
+                msg += ", expecting ";
             } else if iter.peek().is_none() && i == 1 {
                 msg += " or ";
             } else if iter.peek().is_none() {
