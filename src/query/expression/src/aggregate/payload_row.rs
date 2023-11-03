@@ -84,8 +84,17 @@ pub unsafe fn serialize_column_to_rowformat(
             })
         }
         Column::Boolean(v) => {
-            for index in select_vector.iter().take(rows).copied() {
-                store(v.get_bit(index), address[index].add(offset) as *mut u8);
+            if v.unset_bits() == 0 {
+                // faster path
+                for index in select_vector.iter().take(rows).copied() {
+                    store(1, address[index].add(offset) as *mut u8);
+                }
+            } else if v.unset_bits() != v.len() {
+                for index in select_vector.iter().take(rows).copied() {
+                    if v.get_bit(index) {
+                        store(1, address[index].add(offset) as *mut u8);
+                    }
+                }
             }
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
@@ -133,6 +142,7 @@ pub unsafe fn row_match_columns(
     cols: &[Column],
     address: &[*const u8],
     select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: usize,
     validity_offset: &[usize],
     col_offsets: &[usize],
@@ -149,6 +159,7 @@ pub unsafe fn row_match_columns(
             col,
             address,
             select_vector,
+            temp_vector,
             &mut count,
             *validity_offset,
             *col_offset,
@@ -162,6 +173,7 @@ pub unsafe fn row_match_column(
     col: &Column,
     address: &[*const u8],
     select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: &mut usize,
     validity_offset: usize,
     col_offset: usize,
@@ -186,6 +198,7 @@ pub unsafe fn row_match_column(
                     validity,
                     address,
                     select_vector,
+                    temp_vector,
                     count,
                     validity_offset,
                     col_offset,
@@ -200,6 +213,7 @@ pub unsafe fn row_match_column(
                 validity,
                 address,
                 select_vector,
+                temp_vector,
                 count,
                 validity_offset,
                 col_offset,
@@ -211,6 +225,7 @@ pub unsafe fn row_match_column(
                 validity,
                 address,
                 select_vector,
+                temp_vector,
                 count,
                 validity_offset,
                 col_offset,
@@ -223,6 +238,7 @@ pub unsafe fn row_match_column(
             validity,
             address,
             select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -234,6 +250,7 @@ pub unsafe fn row_match_column(
             validity,
             address,
             select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -245,6 +262,7 @@ pub unsafe fn row_match_column(
             validity,
             address,
             select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -256,6 +274,7 @@ pub unsafe fn row_match_column(
             validity,
             address,
             select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -268,6 +287,7 @@ pub unsafe fn row_match_column(
             validity,
             address,
             select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -279,6 +299,7 @@ pub unsafe fn row_match_column(
             validity,
             address,
             select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -297,6 +318,7 @@ unsafe fn row_match_string_column(
     validity: Option<&Bitmap>,
     address: &[*const u8],
     select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: &mut usize,
     validity_offset: usize,
     col_offset: usize,
@@ -307,15 +329,16 @@ unsafe fn row_match_string_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        for i in 0..*count {
-            let idx = select_vector[i];
-            let isnull = !validity.get_bit(idx);
-
+        for (idx, is_set) in select_vector
+            .iter()
+            .take(*count)
+            .copied()
+            .zip(validity.iter())
+        {
             let validity_address = address[idx].add(validity_offset);
-            let isnull2 = core::ptr::read::<u8>(validity_address as _) != 0;
+            let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
 
-            equal = isnull == isnull2;
-            if !isnull && !isnull2 {
+            if is_set && is_set2 {
                 let len_address = address[idx].add(col_offset);
                 let address = address[idx].add(col_offset + 4);
                 let len = core::ptr::read::<u32>(len_address as _) as usize;
@@ -328,10 +351,12 @@ unsafe fn row_match_string_column(
                     let scalar = std::slice::from_raw_parts(data_address, len);
                     equal = scalar.eq(value);
                 }
+            } else {
+                equal = is_set == is_set2;
             }
 
             if equal {
-                select_vector[match_count] = idx;
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
                 no_match[*no_match_count] = idx;
@@ -339,8 +364,7 @@ unsafe fn row_match_string_column(
             }
         }
     } else {
-        for i in 0..*count {
-            let idx = select_vector[i];
+        for idx in select_vector.iter().take(*count).copied() {
             let len_address = address[idx].add(col_offset);
             let address = address[idx].add(col_offset + 4);
 
@@ -356,7 +380,7 @@ unsafe fn row_match_string_column(
             }
 
             if equal {
-                select_vector[match_count] = idx;
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
                 no_match[*no_match_count] = idx;
@@ -364,6 +388,8 @@ unsafe fn row_match_string_column(
             }
         }
     }
+
+    std::mem::swap(select_vector, temp_vector);
 
     *count = match_count;
 }
@@ -373,6 +399,7 @@ unsafe fn row_match_column_type<T: ArgType>(
     validity: Option<&Bitmap>,
     address: &[*const u8],
     select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: &mut usize,
     validity_offset: usize,
     col_offset: usize,
@@ -385,24 +412,27 @@ unsafe fn row_match_column_type<T: ArgType>(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        for i in 0..*count {
-            let idx = select_vector[i];
-            let isnull = !validity.get_bit(idx);
-
+        for (idx, is_set) in select_vector
+            .iter()
+            .take(*count)
+            .copied()
+            .zip(validity.iter())
+        {
             let validity_address = address[idx].add(validity_offset);
-            let isnull2 = core::ptr::read::<u8>(validity_address as _) != 0;
+            let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
 
-            equal = isnull == isnull2;
-            if !isnull && !isnull2 {
+            if is_set && is_set {
                 let address = address[idx].add(col_offset);
                 let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
                 let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
                 equal = scalar.eq(&value);
+            } else {
+                equal = is_set == is_set2;
             }
 
             if equal {
-                select_vector[match_count] = idx;
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
                 no_match[*no_match_count] = idx;
@@ -410,15 +440,14 @@ unsafe fn row_match_column_type<T: ArgType>(
             }
         }
     } else {
-        for i in 0..*count {
-            let idx = select_vector[i];
+        for idx in select_vector.iter().take(*count).copied() {
             let value = T::index_column_unchecked(&col, idx);
             let address = address[idx].add(col_offset);
             let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
             let value = T::to_owned_scalar(value);
 
             if scalar.eq(&value) {
-                select_vector[match_count] = idx;
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
                 no_match[*no_match_count] = idx;
@@ -427,5 +456,6 @@ unsafe fn row_match_column_type<T: ArgType>(
         }
     }
 
+    std::mem::swap(select_vector, temp_vector);
     *count = match_count;
 }

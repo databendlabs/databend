@@ -172,11 +172,21 @@ impl Payload {
         for col in group_columns {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
-                for idx in select_vector.iter().take(new_group_rows).copied() {
-                    if bitmap.get_bit(idx) {
+                if bitmap.unset_bits() == 0 {
+                    // faster path
+                    for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
                             let dst = address[idx].add(write_offset);
                             store(1, dst as *mut u8);
+                        }
+                    }
+                } else if bitmap.unset_bits() != bitmap.len() {
+                    for idx in select_vector.iter().take(new_group_rows).copied() {
+                        if bitmap.get_bit(idx) {
+                            unsafe {
+                                let dst = address[idx].add(write_offset);
+                                store(1, dst as *mut u8);
+                            }
                         }
                     }
                 }

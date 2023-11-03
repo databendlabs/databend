@@ -24,6 +24,7 @@ pub struct ProbeState {
     pub group_compare_vector: SelectVector,
     pub no_match_vector: SelectVector,
     pub empty_vector: SelectVector,
+    pub temp_vector: SelectVector,
 
     pub row_count: usize,
 }
@@ -39,6 +40,7 @@ impl ProbeState {
             group_compare_vector: vec![0; len],
             no_match_vector: vec![0; len],
             empty_vector: vec![0; len],
+            temp_vector: vec![0; len],
             row_count: 0,
         }
     }
@@ -51,6 +53,7 @@ impl ProbeState {
             self.group_compare_vector.resize(row_count, 0);
             self.no_match_vector.resize(row_count, 0);
             self.empty_vector.resize(row_count, 0);
+            self.temp_vector.resize(row_count, 0);
         }
 
         self.row_count = row_count;

@@ -144,6 +144,8 @@ impl AggregateHashTable {
         let mut payload_page_nr = (self.len() / self.payload.row_per_page) + 1;
 
         let mut iter_times = 0;
+        let entries = &mut self.entries;
+
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
@@ -160,7 +162,7 @@ impl AggregateHashTable {
                 let ht_offset = (hashes[index] as usize + iter_times) & (self.capacity - 1);
                 let salt = (hashes[index] >> (64 - 16)) as u16;
 
-                let entry = &mut self.entries[ht_offset];
+                let entry = &mut entries[ht_offset];
 
                 // cell is empty, could be occupied
                 if entry.page_nr == 0 {
@@ -207,6 +209,7 @@ impl AggregateHashTable {
                     group_columns,
                     &state.addresses,
                     &mut state.group_compare_vector,
+                    &mut state.temp_vector,
                     need_compare_count,
                     &self.payload.validity_offsets,
                     &self.payload.group_offsets,
