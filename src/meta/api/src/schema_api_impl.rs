@@ -32,6 +32,7 @@ use common_meta_app::app_error::GetIndexWithDropTime;
 use common_meta_app::app_error::IndexAlreadyExists;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
+use common_meta_app::app_error::TableLockExpired;
 use common_meta_app::app_error::TableVersionMismatched;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UndropDbHasNoHistory;
@@ -62,8 +63,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
-use common_meta_app::schema::CreateTableLockRevReq;
+use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -79,7 +80,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropCatalogReply;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -91,8 +92,7 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
-use common_meta_app::schema::EmptyProto;
-use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetCatalogReq;
@@ -116,9 +116,10 @@ use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListTableLockRevReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -137,7 +138,6 @@ use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableInfoFilter;
-use common_meta_app::schema::TableLockKey;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TruncateTableReply;
@@ -3152,34 +3152,46 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 
     #[minitrace::trace]
-    async fn list_table_lock_revs(&self, req: ListTableLockRevReq) -> Result<Vec<u64>, KVAppError> {
-        let prefix = format!("{}/{}", TableLockKey::PREFIX, req.table_id);
-        let reply = self.prefix_list_kv(&prefix).await?;
+    async fn list_lock_revisions(
+        &self,
+        req: ListLockRevReq,
+    ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
+        let lock_key = &req.lock_key;
+        let lock_type = lock_key.lock_type();
 
-        let mut revisions = vec![];
-        for (k, _) in reply.into_iter() {
-            let lock_key = TableLockKey::from_str_key(&k).map_err(|e| {
-                let inv = InvalidReply::new("list_table_lock_revs", &e);
+        let prefix = lock_key.gen_prefix();
+        let list = self.prefix_list_kv(&prefix).await?;
+
+        let mut reply = vec![];
+        for (k, seq) in list.into_iter() {
+            let revision = lock_type.revision_from_str(&k).map_err(|e| {
+                let inv = InvalidReply::new("list_lock_revisions", &e);
                 let meta_net_err = MetaNetworkError::InvalidReply(inv);
                 MetaError::NetworkError(meta_net_err)
             })?;
+            let lock_meta: LockMeta = deserialize_struct(&seq.data)?;
 
-            revisions.push(lock_key.revision);
+            reply.push((revision, lock_meta));
         }
-        Ok(revisions)
+        Ok(reply)
     }
 
     #[minitrace::trace]
-    async fn create_table_lock_rev(
+    async fn create_lock_revision(
         &self,
-        req: CreateTableLockRevReq,
-    ) -> Result<CreateTableLockRevReply, KVAppError> {
+        req: CreateLockRevReq,
+    ) -> Result<CreateLockRevReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let table_id = req.table_id;
+        let lock_key = &req.lock_key;
+        let lock_type = lock_key.lock_type();
+        let extra_info = lock_key.get_extra_info();
+
+        let table_id = lock_key.get_table_id();
         let tbid = TableId { table_id };
 
         let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
+        let key = lock_key.gen_key(revision);
 
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
@@ -3187,20 +3199,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?;
 
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-            let lock_key = TableLockKey { table_id, revision };
 
-            let lock = EmptyProto {};
+            let lock_meta = LockMeta {
+                user: req.user.clone(),
+                node: req.node.clone(),
+                query_id: req.query_id.clone(),
+                created_on: Utc::now(),
+                acquired_on: None,
+                lock_type: lock_type.clone(),
+                extra_info: extra_info.clone(),
+            };
 
             let condition = vec![
                 // table is not changed
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
                 // assumes lock are absent.
-                txn_cond_seq(&lock_key, Eq, 0),
+                txn_cond_seq(&key, Eq, 0),
             ];
 
             let if_then = vec![txn_op_put_with_expire(
-                &lock_key,
-                serialize_struct(&lock)?,
+                &key,
+                serialize_struct(&lock_meta)?,
                 req.expire_at,
             )];
 
@@ -3215,7 +3234,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(
                 ident = as_display!(&tbid),
                 succ = succ;
-                "create_table_lock_rev"
+                "create_lock_revision"
             );
 
             if succ {
@@ -3223,15 +3242,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         }
 
-        Ok(CreateTableLockRevReply { revision })
+        Ok(CreateLockRevReply { revision })
     }
 
     #[minitrace::trace]
-    async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError> {
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let table_id = req.table_id;
+        let lock_key = &req.lock_key;
+        let table_id = lock_key.get_table_id();
+        let tbid = TableId { table_id };
+
         let revision = req.revision;
+        let key = lock_key.gen_key(revision);
 
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
@@ -3239,23 +3262,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let tbid = TableId { table_id };
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
-            let lock_key = TableLockKey { table_id, revision };
-            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
-
-            let lock = EmptyProto {};
+            let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
+            table_lock_has_to_exist(lock_seq, table_id, ctx)?;
+            let mut lock_meta = lock_meta_opt.unwrap();
+            // Set `acquire_lock = true` to initialize `acquired_on` when the
+            // first time this lock is acquired. Before the lock is
+            // acquired(becoming the first in lock queue), or after being
+            // acquired, this argument is always `false`.
+            if req.acquire_lock {
+                lock_meta.acquired_on = Some(Utc::now());
+            }
 
             let condition = vec![
                 // table is not changed
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+                txn_cond_seq(&key, Eq, lock_seq),
             ];
 
             let if_then = vec![txn_op_put_with_expire(
-                &lock_key,
-                serialize_struct(&lock)?,
+                &key,
+                serialize_struct(&lock_meta)?,
                 req.expire_at,
             )];
 
@@ -3270,7 +3298,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(
                 ident = as_display!(&tbid),
                 succ = succ;
-                "extend_table_lock_rev"
+                "extend_lock_revision"
             );
 
             if succ {
@@ -3281,11 +3309,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 
     #[minitrace::trace]
-    async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError> {
+    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let table_id = req.table_id;
+        let lock_key = &req.lock_key;
+
         let revision = req.revision;
+        let key = lock_key.gen_key(revision);
+
+        let table_id = lock_key.get_table_id();
+        let tbid = TableId { table_id };
 
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
@@ -3293,14 +3326,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let lock_key = TableLockKey { table_id, revision };
-            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
-            if lock_key_seq == 0 {
-                return Ok(());
+            let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
+            if lock_seq == 0 {
+                // The lock has been deleted.
+                break;
             }
 
-            let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
-            let if_then = vec![txn_op_del(&lock_key)];
+            let condition = vec![txn_cond_seq(&key, Eq, lock_seq)];
+            let if_then = vec![txn_op_del(&key)];
 
             let txn_req = TxnRequest {
                 condition,
@@ -3310,11 +3343,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
-            let tbid = TableId { table_id };
             debug!(
                 ident = as_display!(&tbid),
                 succ = succ;
-                "delete_table_lock_rev"
+                "delete_lock_revision"
             );
 
             if succ {
@@ -4488,4 +4520,19 @@ async fn update_mask_policy(
     }
 
     Ok(())
+}
+
+/// Return OK if a table lock exists by checking the seq.
+///
+/// Otherwise returns TableLockExpired error
+fn table_lock_has_to_exist(seq: u64, table_id: u64, msg: impl Display) -> Result<(), KVAppError> {
+    if seq == 0 {
+        debug!(seq = seq, table_id = table_id; "table lock does not exist");
+
+        Err(KVAppError::AppError(AppError::TableLockExpired(
+            TableLockExpired::new(table_id, format!("{}: {}", msg, table_id)),
+        )))
+    } else {
+        Ok(())
+    }
 }

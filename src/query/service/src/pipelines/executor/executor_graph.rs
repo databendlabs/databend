@@ -372,6 +372,7 @@ impl ScheduleQueue {
             workers_condvar.inc_active_async_worker();
             let process_future = proc.async_process();
             executor.async_runtime.spawn(
+                query_id.as_ref().clone(),
                 TrackedFuture::create(ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,

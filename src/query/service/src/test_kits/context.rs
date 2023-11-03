@@ -59,6 +59,11 @@ pub async fn create_query_context_with_session(
         UserPrivilegeSet::available_privileges_on_global(),
     );
 
+    user_info.grants.grant_privileges(
+        &GrantObject::Global,
+        UserPrivilegeSet::available_privileges_on_stage(),
+    );
+
     dummy_session.set_authed_user(user_info, None).await?;
 
     let dummy_query_context = dummy_session.create_query_context().await?;
@@ -88,6 +93,11 @@ pub async fn create_query_context_with_config(
         user_info.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
         );
 
         current_user = Some(user_info);

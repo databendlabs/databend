@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
@@ -49,8 +50,10 @@ pub struct AggIndexSink {
 }
 
 impl AggIndexSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
+        ctx: Arc<dyn TableContext>,
         data_accessor: Operator,
         index_id: u64,
         write_settings: WriteSettings,
@@ -58,7 +61,7 @@ impl AggIndexSink {
         block_name_offset: usize,
         keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, AggIndexSink {
+        let sinker = AsyncSinker::create(input, ctx, AggIndexSink {
             data_accessor,
             index_id,
             write_settings,

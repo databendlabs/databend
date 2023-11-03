@@ -66,3 +66,4 @@ mod v058_udf;
 mod v059_csv_format_params;
 mod v060_copy_options;
 mod v061_oss_sse_options;
+mod v062_table_lock_meta;
