@@ -87,6 +87,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                     db_name: self.plan.database.clone(),
                 },
                 filter,
+                limit: self.plan.option.limit,
             })
             .await?;
 
@@ -133,7 +134,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         match files_opt {
             None => return Ok(PipelineBuildResult::create()),
             Some(purge_files) => {
-                let len = min(purge_files.len(), DRY_RUN_LIMIT);
+                let mut len = min(purge_files.len(), DRY_RUN_LIMIT);
+                if let Some(limit) = self.plan.option.limit {
+                    len = min(len, limit);
+                }
                 let mut tables: Vec<Vec<u8>> = Vec::with_capacity(len);
                 let mut files: Vec<Vec<u8>> = Vec::with_capacity(len);
                 let purge_files = &purge_files[0..len];

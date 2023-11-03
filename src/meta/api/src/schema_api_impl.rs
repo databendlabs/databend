@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -2967,7 +2966,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })
                 .await?;
 
-            let mut db_fliters = Vec::with_capacity(db_infos.len());
+            let mut db_filters = Vec::with_capacity(db_infos.len());
             for db_info in db_infos {
                 // ignore db create from share
                 if db_info.meta.from_share.is_some() {
@@ -3004,9 +3003,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         db_info.name_ident.db_name.clone(),
                     ));
                 }
-                db_fliters.push((filter, db_info));
+                db_filters.push((filter, db_info));
             }
-            let table_infos = do_get_table_history(self, db_fliters, None).await?;
+            let table_infos = do_get_table_history(self, db_filters, req.limit).await?;
             table_infos.iter().for_each(|(table_info, db_id, drop_db)| {
                 if !drop_db {
                     drop_ids.push(DroppedId::Table(
@@ -3059,8 +3058,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             name_ident: req.inner.clone(),
             meta: db_meta,
         });
-        let db_fliters = vec![(req.filter, db_info)];
-        let table_infos = do_get_table_history(self, db_fliters, None).await?;
+        let db_filters = vec![(req.filter, db_info)];
+        let table_infos = do_get_table_history(self, db_filters, req.limit).await?;
         let mut drop_ids = vec![];
         table_infos.iter().for_each(|(table_info, db_id, _)| {
             drop_ids.push(DroppedId::Table(
@@ -3990,7 +3989,7 @@ async fn batch_filter_table_info(
     )],
     filter_tb_infos: &mut Vec<(Arc<TableInfo>, u64, bool)>,
 ) -> Result<(), KVAppError> {
-    let tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(kv_api, &inner_keys).await?;
+    let tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(kv_api, inner_keys).await?;
     for (i, (tb_meta_seq, tb_meta)) in tb_meta_vec.iter().enumerate() {
         let (filter, db_info, table_id, table_name) = filter_db_info_with_table_name_list[i];
         if *tb_meta_seq == 0 || tb_meta.is_none() {
@@ -4009,10 +4008,8 @@ async fn batch_filter_table_info(
                 } else {
                     continue;
                 }
-            } else {
-                if tb_meta.drop_on.is_none() {
-                    continue;
-                }
+            } else if tb_meta.drop_on.is_none() {
+                continue;
             }
         }
 
@@ -4047,7 +4044,7 @@ async fn batch_filter_table_info(
 #[minitrace::trace]
 async fn do_get_table_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_fliters: Vec<(TableInfoFilter, Arc<DatabaseInfo>)>,
+    db_filters: Vec<(TableInfoFilter, Arc<DatabaseInfo>)>,
     limit: Option<usize>,
 ) -> Result<Vec<(Arc<TableInfo>, u64, bool)>, KVAppError> {
     let mut filter_tb_infos = vec![];
@@ -4058,7 +4055,7 @@ async fn do_get_table_history(
         &Arc<DatabaseInfo>,
         TableIdListKey,
     )> = vec![];
-    for (filter, db_info) in db_fliters.iter() {
+    for (filter, db_info) in db_filters.iter() {
         let db_id = db_info.ident.db_id;
 
         // List tables by tenant, db_id, table_name.
@@ -4087,10 +4084,11 @@ async fn do_get_table_history(
             .to_string_key()
         })
         .collect();
-    let mut filter_db_info_with_table_id_list_map: HashMap<
+    #[allow(clippy::type_complexity)]
+    let mut filter_db_info_with_table_id_list_map: BTreeMap<
         u64,
         Vec<(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)>,
-    > = HashMap::new();
+    > = BTreeMap::new();
     let mut table_id_list_keys_iter = filter_db_info_with_table_id_key_list.into_iter();
     for c in keys.chunks(DEFAULT_MGET_SIZE) {
         let tb_id_list_seq_vec: Vec<(u64, Option<TableIdList>)> = mget_pb_values(kv_api, c).await?;
@@ -4110,7 +4108,7 @@ async fn do_get_table_history(
             let id_list: Vec<(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)> = tb_id_list
                 .id_list
                 .iter()
-                .map(|id| ((filter, db_info, *id, table_id_list_key.table_name.clone())))
+                .map(|id| (filter, db_info, *id, table_id_list_key.table_name.clone()))
                 .collect();
 
             let db_id = db_info.ident.db_id;
@@ -4131,7 +4129,7 @@ async fn do_get_table_history(
         &u64,
         &String,
     )> = vec![];
-    for (_db_id, filter_db_info_with_table_id_list) in &filter_db_info_with_table_id_list_map {
+    for filter_db_info_with_table_id_list in filter_db_info_with_table_id_list_map.values() {
         for (filter, db_info, table_id, table_name) in filter_db_info_with_table_id_list {
             filter_db_info_with_table_name_list.push((filter, db_info, table_id, table_name));
             inner_keys.push(
