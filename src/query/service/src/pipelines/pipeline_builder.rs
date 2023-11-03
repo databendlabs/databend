@@ -2166,6 +2166,7 @@ impl PipelineBuilder {
                     }
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
+                    let query_id = self.ctx.get_id();
                     build_partition_bucket::<_, usize>(
                         v,
                         &mut self.main_pipeline,
