@@ -116,6 +116,8 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;
 
+type MetaType = (String, String, String);
+
 #[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
@@ -344,7 +346,7 @@ impl Catalog for FakedCatalog {
 struct CtxDelegation {
     ctx: Arc<QueryContext>,
     cat: FakedCatalog,
-    cache: Mutex<HashMap<(String, String, String), Arc<dyn Table>>>,
+    cache: Mutex<HashMap<MetaType, Arc<dyn Table>>>,
     table_from_cache: AtomicUsize,
     table_without_cache: AtomicUsize,
 }
