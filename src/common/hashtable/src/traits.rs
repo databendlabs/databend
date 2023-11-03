@@ -20,8 +20,8 @@ use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
-use ethnum::i256;
 use common_arrow::arrow::bitmap::Bitmap;
+use ethnum::i256;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
