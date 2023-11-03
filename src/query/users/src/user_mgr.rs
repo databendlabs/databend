@@ -39,6 +39,10 @@ impl UserApiProvider {
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_global(),
             );
+            user_info.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_stage(),
+            );
             // Grant admin role to all configured users.
             user_info
                 .grants

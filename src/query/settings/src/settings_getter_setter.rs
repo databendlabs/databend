@@ -291,6 +291,10 @@ impl Settings {
         self.try_get_u64("table_lock_expire_secs")
     }
 
+    pub fn get_acquire_lock_timeout(&self) -> Result<u64> {
+        self.try_get_u64("acquire_lock_timeout")
+    }
+
     pub fn get_enterprise_license(&self) -> Result<String> {
         self.try_get_string("enterprise_license")
     }
@@ -318,6 +322,10 @@ impl Settings {
 
     pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
+    }
+
+    pub fn get_enable_distributed_merge_into(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_merge_into")? != 0)
     }
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
@@ -406,5 +414,9 @@ impl Settings {
 
     pub fn get_enable_parquet_prewhere(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
+    }
+
+    pub fn get_numeric_cast_option(&self) -> Result<String> {
+        self.try_get_string("numeric_cast_option")
     }
 }

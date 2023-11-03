@@ -3,4 +3,4 @@
 ---escape
 "ac	"bc
 1a\nb	c\td
-2a b	cd
+2a b	c\\Nd

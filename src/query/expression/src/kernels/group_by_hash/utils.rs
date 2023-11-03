@@ -26,7 +26,7 @@ use crate::with_number_mapped_type;
 use crate::Column;
 
 /// The serialize_size is equal to the number of bytes required by serialization.
-pub fn serialize_column(
+pub fn serialize_group_columns(
     columns: &[Column],
     num_rows: usize,
     serialize_size: usize,

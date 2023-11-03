@@ -3,6 +3,9 @@ title: Developing with Databend using Golang
 sidebar_label: Golang
 ---
 
+import StepsWrap from '@site/src/components/StepsWrap';
+import StepContent from '@site/src/components/Steps/step-content';
+
 Databend offers a driver (databend-go) written in Golang, which facilitates the development of applications using the Golang programming language and establishes connectivity with Databend.
 
 For installation instructions, examples, and the source code, see the GitHub [databend-go](https://github.com/databendcloud/databend-go) repo.
@@ -28,7 +31,9 @@ GRANT ALL on *.* TO user1;
 
 In this step, you'll create a simple Golang program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
-1. Copy and paste the following code to the file `main.go`:
+<StepsWrap> 
+
+<StepContent number="1" title="Copy and paste the following code to the file main.go"> 
 
 :::note
 The value of `hostname` in the code below must align with your HTTP handler settings for Databend query service.
@@ -124,7 +129,10 @@ func main() {
 }
 ```
 
-2. Install dependencies. 
+
+</StepContent>
+
+<StepContent number="2" title="Install dependencies. "> 
 
 ```shell
 go mod init databend-golang
@@ -147,7 +155,9 @@ require (
 )
 ```
 
-3. Run the program. 
+</StepContent>
+
+<StepContent number="3" title="Run the program. ">
 
 ```shell
 go run main.go
@@ -160,3 +170,8 @@ go run main.go
 2023/02/24 23:57:31 Insert 1 row
 2023/02/24 23:57:31 Select:{mybook author 2022}
 ```
+
+
+</StepContent>
+
+</StepsWrap>

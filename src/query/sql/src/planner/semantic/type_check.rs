@@ -60,7 +60,6 @@ use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
-use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -951,19 +950,9 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::CountAll { span, window } => {
-                let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
-
-                let (new_agg_func, data_type) = (
-                    AggregateFunction {
-                        display_name: format!("{:#}", expr),
-                        func_name: "count".to_string(),
-                        distinct: false,
-                        params: vec![],
-                        args: vec![],
-                        return_type: Box::new(agg_func.return_type()?),
-                    },
-                    agg_func.return_type()?,
-                );
+                let (new_agg_func, data_type) = self
+                    .resolve_aggregate_function(*span, "count", expr, false, &[], &[])
+                    .await?;
 
                 if let Some(window) = window {
                     // aggregate window function

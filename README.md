@@ -30,7 +30,7 @@
 </div>
 </div>
 
-<img src="https://user-images.githubusercontent.com/172204/219559279-ab7a11a4-9437-4a0a-85e8-cedf9ba0e24b.svg" alt="databend" />
+<img src="https://github.com/datafuselabs/databend/assets/172204/9997d8bc-6462-4dbd-90e3-527cf50a709c" alt="databend" />
 
 ## 🐋 Introduction
 
@@ -56,7 +56,7 @@
 
 ## 📐 Architecture
 
-![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/0b1db46c-4900-497c-ab7a-d7949d0ce096)
+![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
 ## 🚀 Try Databend
 

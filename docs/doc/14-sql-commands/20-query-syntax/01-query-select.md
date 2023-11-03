@@ -2,6 +2,8 @@
 title: SELECT
 ---
 
+import DetailsWrap from '@site/src/components/DetailsWrap';
+
 Retrieves data from a table.
 
 ## Syntax
@@ -383,10 +385,14 @@ SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 
 For optimizing query performance with large result sets, Databend has enabled the lazy_read_threshold option by default with a default value of 1,000. This option is specifically designed for queries that involve a LIMIT clause. When the lazy_read_threshold is enabled, the optimization is activated for queries where the specified LIMIT number is smaller than or equal to the threshold value you set. To disable the option, set it to 0.
 
+<DetailsWrap>
+
 <details>
   <summary>How it works</summary>
     <div>The optimization improves performance for queries with an ORDER BY clause and a LIMIT clause. When enabled and the LIMIT number in the query is smaller than the specified threshold, only the columns involved in the ORDER BY clause are retrieved and sorted, instead of the entire result set.</div><br/><div>After the system retrieves and sorts the columns involved in the ORDER BY clause, it applies the LIMIT constraint to select the desired number of rows from the sorted result set. The system then returns the limited set of rows as the query result. This approach reduces resource usage by fetching and sorting only the necessary columns, and it further optimizes query execution by limiting the processed rows to the required subset.</div>
 </details>
+
+</DetailsWrap>
 
 ```sql
 SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;

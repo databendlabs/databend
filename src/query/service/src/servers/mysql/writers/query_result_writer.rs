@@ -23,7 +23,6 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;
-use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
 use futures_util::StreamExt;
@@ -78,7 +77,7 @@ fn write_field<W: AsyncWrite + Unpin>(
     row_index: usize,
 ) -> Result<()> {
     buf.clear();
-    encoder.write_field(column, row_index, buf, true);
+    encoder.write_field(column, row_index, buf, false);
     row_writer.write_col(&buf[..])?;
     Ok(())
 }

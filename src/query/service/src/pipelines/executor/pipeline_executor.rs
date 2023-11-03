@@ -23,8 +23,10 @@ use common_base::runtime::Runtime;
 use common_base::runtime::Thread;
 use common_base::runtime::ThreadJoinHandle;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::LockGuard;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -59,6 +61,8 @@ pub struct PipelineExecutor {
     settings: ExecutorSettings,
     finished_notify: Arc<Notify>,
     finished_error: Mutex<Option<ErrorCode>>,
+    #[allow(unused)]
+    lock_guards: Vec<LockGuard>,
 }
 
 impl PipelineExecutor {
@@ -76,6 +80,7 @@ impl PipelineExecutor {
 
         let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
+        let lock_guards = pipeline.take_lock_guards();
 
         match RunningGraph::create(pipeline) {
             Err(cause) => {
@@ -88,6 +93,7 @@ impl PipelineExecutor {
                 Mutex::new(Some(on_init_callback)),
                 Mutex::new(Some(on_finished_callback)),
                 settings,
+                lock_guards,
             ),
         }
     }
@@ -141,6 +147,11 @@ impl PipelineExecutor {
             })
         };
 
+        let lock_guards = pipelines
+            .iter_mut()
+            .flat_map(|x| x.take_lock_guards())
+            .collect::<Vec<_>>();
+
         match RunningGraph::from_pipelines(pipelines) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
@@ -155,6 +166,7 @@ impl PipelineExecutor {
                 Mutex::new(on_init_callback),
                 Mutex::new(on_finished_callback),
                 settings,
+                lock_guards,
             ),
         }
     }
@@ -165,6 +177,7 @@ impl PipelineExecutor {
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_callback: Mutex<Option<FinishedCallback>>,
         settings: ExecutorSettings,
+        lock_guards: Vec<LockGuard>,
     ) -> Result<Arc<PipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
@@ -180,6 +193,7 @@ impl PipelineExecutor {
             settings,
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(Notify::new()),
+            lock_guards,
         }))
     }
 
@@ -301,7 +315,7 @@ impl PipelineExecutor {
             let this = Arc::downgrade(self);
             let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
             let finished_notify = self.finished_notify.clone();
-            self.async_runtime.spawn(async move {
+            self.async_runtime.spawn(GLOBAL_TASK, async move {
                 let finished_future = Box::pin(finished_notify.notified());
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {

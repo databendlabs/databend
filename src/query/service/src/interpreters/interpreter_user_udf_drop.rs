@@ -50,7 +50,7 @@ impl Interpreter for DropUserUDFInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .drop_udf(&tenant, plan.name.as_str(), plan.if_exists)
+            .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

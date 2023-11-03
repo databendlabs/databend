@@ -59,12 +59,12 @@ use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 use once_cell::sync::Lazy;
 
-use crate::CommonSettings;
 use crate::FieldDecoder;
+use crate::InputCommonSettings;
 
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
-    pub common_settings: CommonSettings,
+    pub common_settings: InputCommonSettings,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -76,10 +76,13 @@ impl FieldDecoder for FastFieldDecoderValues {
 impl FastFieldDecoderValues {
     pub fn create_for_insert(format: FormatSettings) -> Self {
         FastFieldDecoderValues {
-            common_settings: CommonSettings {
+            common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+                null_if: vec![
+                    NULL_BYTES_UPPER.as_bytes().to_vec(),
+                    NAN_BYTES_LOWER.as_bytes().to_vec(),
+                ],
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
@@ -88,7 +91,7 @@ impl FastFieldDecoderValues {
         }
     }
 
-    fn common_settings(&self) -> &CommonSettings {
+    fn common_settings(&self) -> &InputCommonSettings {
         &self.common_settings
     }
 
@@ -219,7 +222,7 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
-        let (n, n_read) = read_decimal_with_size(buf, size, false)?;
+        let (n, n_read) = read_decimal_with_size(buf, size, false, true)?;
         column.push(n);
         reader.consume(n_read);
         Ok(())

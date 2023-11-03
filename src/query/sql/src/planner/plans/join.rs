@@ -150,6 +150,9 @@ pub struct Join {
     pub from_correlated_subquery: bool,
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
+    // if we execute distributed merge into, we need to hold the
+    // hash table to get not match data from source.
+    pub need_hold_hash_table: bool,
 }
 
 impl Default for Join {
@@ -162,6 +165,7 @@ impl Default for Join {
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         }
     }
 }

@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::FastHash;
 
-use super::utils::serialize_column;
+use super::utils::serialize_group_columns;
 use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
@@ -62,7 +62,7 @@ impl HashMethod for HashMethodDictionarySerializer {
             for column in serialize_columns.iter() {
                 serialize_size += column.serialize_size();
             }
-            dictionary_columns.push(serialize_column(
+            dictionary_columns.push(serialize_group_columns(
                 &serialize_columns,
                 num_rows,
                 serialize_size,

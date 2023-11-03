@@ -253,6 +253,7 @@ impl DPhpy {
                 Ok((new_s_expr, optimized))
             }
             RelOperator::Exchange(_)
+            | RelOperator::AddRowNumber(_)
             | RelOperator::Pattern(_)
             | RelOperator::RuntimeFilterSource(_) => unreachable!(),
             RelOperator::DummyTableScan(_)

@@ -181,10 +181,10 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
     ...
 ) ENGINE = `ICEBERG`
 ENGINE_OPTIONS = (
-URL = 's3://path/to/iceberg'
-DATABASE = <iceberg_db>
-TABLE = <iceberg_tbl>
-[ SNAPSHOT = { SNAPSHOT_ID => <snapshot_id> | TIMESTAMP => <timestamp> } ]
+  URL = 's3://path/to/iceberg'
+  DATABASE = <iceberg_db>
+  TABLE = <iceberg_tbl>
+  [ SNAPSHOT = { SNAPSHOT_ID => <snapshot_id> | TIMESTAMP => <timestamp> } ]
 )
 ```
 

@@ -459,6 +459,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 Ok((
@@ -526,6 +527,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -555,6 +557,7 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: false,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         }
         .into();
 
