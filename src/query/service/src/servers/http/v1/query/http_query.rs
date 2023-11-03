@@ -26,7 +26,6 @@ use common_base::runtime::TrySpawn;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_settings::Settings;
 use log::info;
 use log::warn;
 use minitrace::prelude::*;
@@ -41,7 +40,6 @@ use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
-use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
@@ -189,7 +187,7 @@ pub struct HttpQuery {
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
     expire_state: Arc<TokioMutex<ExpireState>>,
-    result_timeout_secs: u64,
+    pub(crate) result_timeout_secs: u64,
 }
 
 impl HttpQuery {
@@ -198,7 +196,6 @@ impl HttpQuery {
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = HttpQueryManager::instance();
 
