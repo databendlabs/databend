@@ -95,6 +95,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("http_handler_result_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(300),
+                    desc: "Set the timeout in seconds that a http query session expires without any polls.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("storage_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),
                     desc: "Sets the byte size of the buffer used for reading data into memory.",
