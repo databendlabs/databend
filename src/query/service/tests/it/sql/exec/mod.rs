@@ -158,3 +158,5 @@ pub async fn test_snapshot_consistency() -> Result<()> {
 
     Ok(())
 }
+
+mod get_table_bind_test;
