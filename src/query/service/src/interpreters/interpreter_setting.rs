@@ -58,7 +58,7 @@ impl Interpreter for SettingInterpreter {
                     let _ = tz.parse::<Tz>().map_err(|_| {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
-                    let settings = self.ctx.get_shard_settings();
+                    let settings = self.ctx.get_shared_settings();
 
                     match var.is_global {
                         true => {
@@ -72,7 +72,7 @@ impl Interpreter for SettingInterpreter {
                     true
                 }
                 _ => {
-                    let settings = self.ctx.get_shard_settings();
+                    let settings = self.ctx.get_shared_settings();
 
                     match var.is_global {
                         true => {

@@ -4,13 +4,9 @@ title: 'Conversion Functions'
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.150"/>
+<FunctionDescription description="Introduced or updated: v1.2.187"/>
 
-Below is a list of functions that allow you to convert an expression from one data type to another.
-
-:::tip
-Databend also offers a variety of functions for converting expressions into different date and time formats. Check out the **SQL Functions** > **Date & Time Functions** section to explore them.
-:::
+This page lists functions that allow you to convert an expression from one data type to another.
 
 | Function                      | Description                                                            | Example                                             | Result                     |
 |-------------------------------|------------------------------------------------------------------------|-----------------------------------------------------|----------------------------|
@@ -34,3 +30,38 @@ Databend also offers a variety of functions for converting expressions into diff
 | TO_UINT64( expr )             | Converts a value to UINT64 data type                                   | TO_UINT64('123')                                    | 123                        |
 | TO_VARIANT( expr )            | Converts a value to VARIANT data type | TO_VARIANT(TO_BITMAP('100,200,300')) | [100,200,300] |
 
+- When converting from floating-point, decimal numbers, or strings to integers or decimal numbers with fractional parts, Databend rounds the values to the nearest integer. This is determined by the setting `numeric_cast_option` (defaults to 'rounding') which controls the behavior of numeric casting operations. When `numeric_cast_option` is explicitly set to 'truncating', Databend will truncate the decimal part, discarding any fractional values.
+
+    ```sql title='Example:'
+    SELECT CAST('0.6' AS DECIMAL(10, 0)), CAST(0.6 AS DECIMAL(10, 0)), CAST(1.5 AS INT);
+
+    ┌──────────────────────────────────────────────────────────────────────────────────┐
+    │ cast('0.6' as decimal(10, 0)) │ cast(0.6 as decimal(10, 0)) │ cast(1.5 as int32) │
+    ├───────────────────────────────┼─────────────────────────────┼────────────────────┤
+    │                             1 │                           1 │                  2 │
+    └──────────────────────────────────────────────────────────────────────────────────┘
+
+    SET numeric_cast_option = 'truncating';
+
+    SELECT CAST('0.6' AS DECIMAL(10, 0)), CAST(0.6 AS DECIMAL(10, 0)), CAST(1.5 AS INT);
+
+    ┌──────────────────────────────────────────────────────────────────────────────────┐
+    │ cast('0.6' as decimal(10, 0)) │ cast(0.6 as decimal(10, 0)) │ cast(1.5 as int32) │
+    ├───────────────────────────────┼─────────────────────────────┼────────────────────┤
+    │                             0 │                           0 │                  1 │
+    └──────────────────────────────────────────────────────────────────────────────────┘
+    ```
+
+    The table below presents a summary of numeric casting operations, highlighting the casting possibilities between different source and target numeric data types. Please note that, it specifies the requirement for String to Integer casting, where the source string must contain an integer value.
+
+    | Source Type    | Target Type |
+    |----------------|-------------|
+    | String         | Decimal     |
+    | Float          | Decimal     |
+    | Decimal        | Decimal     |
+    | Float          | Int         |
+    | Decimal        | Int         |
+    | String (Int)   | Int         |
+
+
+- Databend also offers a variety of functions for converting expressions into different date and time formats. For more information, see [Date & Time Functions](../30-datetime-functions/index.md).

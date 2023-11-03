@@ -25,6 +25,7 @@ async fn test_computed_column() -> Result<()> {
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
 
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let catalog = fixture.default_catalog_name();
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();
@@ -66,6 +67,7 @@ async fn test_computed_column() -> Result<()> {
 
     // update
     {
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let update = format!("update {}.{} set c = 'abc', d = 100 where id = 0", db, tbl);
         let _res = execute_query(ctx.clone(), &update).await?;
 
@@ -82,6 +84,7 @@ async fn test_computed_column() -> Result<()> {
             "| 5        | '2-1-s'  | 'S-1-2'  | 14       | 39       | 's-1-2'  | 12       |",
             "+----------+----------+----------+----------+----------+----------+----------+",
         ];
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         expects_ok(
             "check update computed columns",
             execute_query(ctx.clone(), query.as_str()).await,
@@ -89,9 +92,11 @@ async fn test_computed_column() -> Result<()> {
         )
         .await?;
 
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let update = format!("update {}.{} set c = 'xyz', d = 30 where b1 = 12", db, tbl);
         let _res = execute_query(ctx.clone(), &update).await?;
 
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+----------+",
@@ -115,9 +120,11 @@ async fn test_computed_column() -> Result<()> {
 
     // delete
     {
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let delete = format!("delete from {}.{} where id >= 4", db, tbl);
         let _res = execute_query(ctx.clone(), &delete).await?;
 
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+----------+",
@@ -136,9 +143,11 @@ async fn test_computed_column() -> Result<()> {
         )
         .await?;
 
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let delete = format!("delete from {}.{} where b1 = 3 or b2 = 9", db, tbl);
         let _res = execute_query(ctx.clone(), &delete).await?;
 
+        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+----------+",
