@@ -70,6 +70,11 @@ impl AsyncSystemTable for FunctionsTable {
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;
+        // let visibility_checker = ctx.get_visibility_checker().await?;
+        // let udfs = udfs
+        //     .into_iter()
+        //     .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
+        //     .collect::<Vec<_>>();
 
         let names: Vec<&str> = scalar_func_names
             .iter()
