@@ -22,7 +22,8 @@ use common_expression::KeyAccessor;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
-use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
+use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
@@ -39,7 +40,8 @@ impl HashJoinProbeState {
     {
         // Probe states.
         let max_block_size = probe_state.max_block_size;
-        let build_indexes = &mut probe_state.build_indexes;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
 
@@ -102,7 +104,7 @@ impl HashJoinProbeState {
                 if match_count == 0 {
                     continue;
                 }
-                
+
                 matched_idx += match_count;
                 while matched_idx == max_block_size {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -155,8 +157,9 @@ impl HashJoinProbeState {
     {
         // Probe states.
         let max_block_size = probe_state.max_block_size;
-        let probe_indexes = &mut probe_state.probe_indexes;
-        let build_indexes = &mut probe_state.build_indexes;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let probe_indexes = &mut mutable_indexes.probe_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
 
@@ -189,21 +192,20 @@ impl HashJoinProbeState {
 
                 // Fill probe_indexes.
                 for _ in 0..match_count {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx as u32 };
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
-                    Self::update_outer_scan_map(
-                        &self,
+                    self.update_outer_scan_map(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
-                        probe_state,
-                        build_state,
-                        other_predicate,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
                         outer_scan_map,
+                        other_predicate,
                     )?;
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -214,15 +216,15 @@ impl HashJoinProbeState {
                         max_block_size,
                     );
                     for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx as u32 };
+                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                         matched_idx += 1;
                     }
                 }
             }
         } else {
             for idx in 0..input.num_rows() {
-                let key = unsafe { keys.key_unchecked(idx as usize) };
-                let ptr = unsafe { *pointers.get_unchecked(idx as usize) };
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
@@ -235,16 +237,15 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    Self::update_outer_scan_map(
-                        &self,
+                    self.update_outer_scan_map(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
-                        probe_state,
-                        build_state,
-                        other_predicate,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
                         outer_scan_map,
+                        other_predicate,
                     )?;
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -263,16 +264,15 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            Self::update_outer_scan_map(
-                &self,
+            self.update_outer_scan_map(
                 matched_idx,
                 input,
                 probe_indexes,
                 build_indexes,
-                probe_state,
-                build_state,
-                other_predicate,
+                &mut probe_state.generation_state,
+                &build_state.generation_state,
                 outer_scan_map,
+                other_predicate,
             )?;
         }
 
@@ -280,16 +280,17 @@ impl HashJoinProbeState {
     }
 
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     fn update_outer_scan_map(
         &self,
         matched_idx: usize,
         input: &DataBlock,
         probe_indexes: &[u32],
         build_indexes: &[RowPtr],
-        probe_state: &mut ProbeState,
-        build_state: &BuildState,
+        probe_state: &mut ProbeBlockGenerationState,
+        build_state: &BuildBlockGenerationState,
+        outer_scan_map: &mut [Vec<bool>],
         other_predicate: &Expr,
-        outer_scan_map: &mut Vec<Vec<bool>>,
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(

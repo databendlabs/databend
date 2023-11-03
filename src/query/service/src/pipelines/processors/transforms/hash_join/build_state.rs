@@ -12,22 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
-
 use common_expression::types::DataType;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 
-pub struct BuildState {
+pub struct BuildBlockGenerationState {
     pub(crate) build_num_rows: usize,
     /// Data of the build side.
     pub(crate) chunks: Vec<DataBlock>,
     pub(crate) build_columns: Vec<ColumnVec>,
     pub(crate) build_columns_data_type: Vec<DataType>,
     pub(crate) is_build_projected: bool,
+}
+
+impl BuildBlockGenerationState {
+    fn new() -> Self {
+        Self {
+            build_num_rows: 0,
+            chunks: Vec::new(),
+            build_columns: Vec::new(),
+            build_columns_data_type: Vec::new(),
+            is_build_projected: true,
+        }
+    }
+}
+
+pub struct BuildState {
+    pub(crate) generation_state: BuildBlockGenerationState,
     /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) outer_scan_map: Vec<Vec<bool>>,
-    pub(crate) right_single_scan_map: Vec<*mut AtomicBool>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Vec<Vec<u8>>,
 }
@@ -35,13 +48,8 @@ pub struct BuildState {
 impl BuildState {
     pub fn new() -> Self {
         Self {
-            build_num_rows: 0,
-            chunks: Vec::new(),
-            build_columns: Vec::new(),
-            build_columns_data_type: Vec::new(),
-            is_build_projected: true,
+            generation_state: BuildBlockGenerationState::new(),
             outer_scan_map: Vec::new(),
-            right_single_scan_map: Vec::new(),
             mark_scan_map: Vec::new(),
         }
     }

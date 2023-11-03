@@ -26,8 +26,9 @@ use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
+use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
+use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
@@ -44,8 +45,9 @@ impl HashJoinProbeState {
     {
         // Probe states.
         let max_block_size = probe_state.max_block_size;
-        let probe_indexes = &mut probe_state.probe_indexes;
-        let build_indexes = &mut probe_state.build_indexes;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let probe_indexes = &mut mutable_indexes.probe_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
 
@@ -77,14 +79,13 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    result_blocks.push(Self::new_inner_data_block(
-                        &self,
+                    result_blocks.push(self.new_inner_data_block(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
-                        probe_state,
-                        build_state,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
                     )?);
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -119,14 +120,13 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    result_blocks.push(Self::new_inner_data_block(
-                        &self,
+                    result_blocks.push(self.new_inner_data_block(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
-                        probe_state,
-                        build_state,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
                     )?);
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -145,14 +145,13 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            result_blocks.push(Self::new_inner_data_block(
-                &self,
+            result_blocks.push(self.new_inner_data_block(
                 matched_idx,
                 input,
                 probe_indexes,
                 build_indexes,
-                probe_state,
-                build_state,
+                &mut probe_state.generation_state,
+                &build_state.generation_state,
             )?);
         }
 
@@ -195,8 +194,8 @@ impl HashJoinProbeState {
         input: &DataBlock,
         probe_indexes: &[u32],
         build_indexes: &[RowPtr],
-        probe_state: &mut ProbeState,
-        build_state: &BuildState,
+        probe_state: &mut ProbeBlockGenerationState,
+        build_state: &BuildBlockGenerationState,
     ) -> Result<DataBlock> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(

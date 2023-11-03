@@ -171,7 +171,13 @@ impl HashJoinProbeState {
             let nullable_columns = input
                 .columns()
                 .iter()
-                .map(|c| wrap_true_validity(c, input_num_rows, &probe_state.true_validity))
+                .map(|c| {
+                    wrap_true_validity(
+                        c,
+                        input_num_rows,
+                        &probe_state.generation_state.true_validity,
+                    )
+                })
                 .collect::<Vec<_>>();
             _nullable_data_block = Some(DataBlock::new(nullable_columns, input_num_rows));
             Evaluator::new(
@@ -232,7 +238,7 @@ impl HashJoinProbeState {
         }
 
         let input = input.project(&self.probe_projections);
-        probe_state.is_probe_projected = input.num_columns() > 0;
+        probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
 
         if self.hash_join_state.fast_return.load(Ordering::Relaxed)
             && matches!(
@@ -242,8 +248,8 @@ impl HashJoinProbeState {
         {
             return self.left_fast_return(
                 input,
-                probe_state.is_probe_projected,
-                &probe_state.true_validity,
+                probe_state.generation_state.is_probe_projected,
+                &probe_state.generation_state.true_validity,
             );
         }
 
@@ -391,7 +397,10 @@ impl HashJoinProbeState {
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {
-        let task_num = unsafe { &*self.hash_join_state.chunks.get() }.len();
+        let task_num = unsafe { &*self.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks
+            .len();
         if task_num == 0 {
             return Ok(());
         }
@@ -422,24 +431,18 @@ impl HashJoinProbeState {
     pub fn right_and_full_outer_scan(
         &self,
         task: usize,
-        state: &mut ProbeState,
+        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let true_validity = &state.true_validity;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
 
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-        let is_build_projected = self
-            .hash_join_state
-            .is_build_projected
-            .load(Ordering::Relaxed);
-
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
         let mut projected_probe_fields = vec![];
         for (i, field) in self.probe_schema.fields().iter().enumerate() {
             if self.probe_projections.contains(&i) {
@@ -447,22 +450,31 @@ impl HashJoinProbeState {
             }
         }
 
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let outer_scan_map = &build_state.outer_scan_map;
         let chunk_index = task;
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
         let outer_map = &outer_scan_map[chunk_index];
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_occupied = 0;
+        let mut result_blocks = vec![];
+
         while row_index < outer_map_len {
             while row_index < outer_map_len && build_indexes_occupied < max_block_size {
-                if !outer_map[row_index] {
-                    build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                    build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                    build_indexes_occupied += 1;
+                unsafe {
+                    if !outer_map.get_unchecked(row_index) {
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_occupied)
+                            .chunk_index = chunk_index as u32;
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_occupied)
+                            .row_index = row_index as u32;
+                        build_indexes_occupied += 1;
+                    }
                 }
                 row_index += 1;
             }
@@ -487,13 +499,13 @@ impl HashJoinProbeState {
             } else {
                 None
             };
-            let build_block = if is_build_projected {
+            let build_block = if build_state.generation_state.is_build_projected {
                 let mut unmatched_build_block = self.hash_join_state.row_space.gather(
                     &build_indexes[0..build_indexes_occupied],
-                    build_columns,
-                    build_columns_data_type,
-                    &build_num_rows,
-                    string_items_buf,
+                    &generation_state.build_columns,
+                    &generation_state.build_columns_data_type,
+                    &generation_state.build_num_rows,
+                    &mut probe_state.generation_state.string_items_buf,
                 )?;
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
@@ -501,7 +513,13 @@ impl HashJoinProbeState {
                     let nullable_unmatched_build_columns = unmatched_build_block
                         .columns()
                         .iter()
-                        .map(|c| wrap_true_validity(c, num_rows, true_validity))
+                        .map(|c| {
+                            wrap_true_validity(
+                                c,
+                                num_rows,
+                                &probe_state.generation_state.true_validity,
+                            )
+                        })
                         .collect::<Vec<_>>();
                     unmatched_build_block =
                         DataBlock::new(nullable_unmatched_build_columns, num_rows);
@@ -524,35 +542,43 @@ impl HashJoinProbeState {
     pub fn right_semi_outer_scan(
         &self,
         task: usize,
-        state: &mut ProbeState,
+        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let chunk_index = task;
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let outer_scan_map = &build_state.outer_scan_map;
+        let chunk_index = task;
         let outer_map = &outer_scan_map[chunk_index];
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_idx = 0;
+        let mut result_blocks = vec![];
+
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
-                if outer_map[row_index] {
-                    build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                    build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                    build_indexes_occupied += 1;
+            while row_index < outer_map_len && build_indexes_idx < max_block_size {
+                unsafe {
+                    if !outer_map.get_unchecked(row_index) {
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_idx)
+                            .chunk_index = chunk_index as u32;
+                        build_indexes.get_unchecked_mut(build_indexes_idx).row_index =
+                            row_index as u32;
+                        build_indexes_idx += 1;
+                    }
                 }
                 row_index += 1;
             }
@@ -564,13 +590,13 @@ impl HashJoinProbeState {
             }
 
             result_blocks.push(self.hash_join_state.row_space.gather(
-                &build_indexes[0..build_indexes_occupied],
-                build_columns,
-                build_columns_data_type,
-                &build_num_rows,
-                string_items_buf,
+                &build_indexes[0..build_indexes_idx],
+                &generation_state.build_columns,
+                &generation_state.build_columns_data_type,
+                &generation_state.build_num_rows,
+                &mut probe_state.generation_state.string_items_buf,
             )?);
-            build_indexes_occupied = 0;
+            build_indexes_idx = 0;
         }
         Ok(result_blocks)
     }
@@ -578,35 +604,43 @@ impl HashJoinProbeState {
     pub fn right_anti_outer_scan(
         &self,
         task: usize,
-        state: &mut ProbeState,
+        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let chunk_index = task;
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let outer_scan_map = &build_state.outer_scan_map;
+        let chunk_index = task;
         let outer_map = &outer_scan_map[chunk_index];
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_idx = 0;
+        let mut result_blocks = vec![];
+
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
-                if !outer_map[row_index] {
-                    build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                    build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                    build_indexes_occupied += 1;
+            while row_index < outer_map_len && build_indexes_idx < max_block_size {
+                unsafe {
+                    if !outer_map.get_unchecked(row_index) {
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_idx)
+                            .chunk_index = chunk_index as u32;
+                        build_indexes.get_unchecked_mut(build_indexes_idx).row_index =
+                            row_index as u32;
+                        build_indexes_idx += 1;
+                    }
                 }
                 row_index += 1;
             }
@@ -618,36 +652,38 @@ impl HashJoinProbeState {
             }
 
             result_blocks.push(self.hash_join_state.row_space.gather(
-                &build_indexes[0..build_indexes_occupied],
-                build_columns,
-                build_columns_data_type,
-                &build_num_rows,
-                string_items_buf,
+                &build_indexes[0..build_indexes_idx],
+                &generation_state.build_columns,
+                &generation_state.build_columns_data_type,
+                &generation_state.build_num_rows,
+                &mut probe_state.generation_state.string_items_buf,
             )?);
-            build_indexes_occupied = 0;
+            build_indexes_idx = 0;
         }
         Ok(result_blocks)
     }
 
-    pub fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-
-        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
-        let chunk_index = task;
+    pub fn left_mark_scan(
+        &self,
+        task: usize,
+        probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let mark_scan_map = &build_state.mark_scan_map;
+        let chunk_index = task;
         let markers = &mark_scan_map[chunk_index];
         let has_null = *self
             .hash_join_state
@@ -655,18 +691,24 @@ impl HashJoinProbeState {
             .marker_join_desc
             .has_null
             .read();
-
         let markers_len = markers.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_idx = 0;
+        let mut result_blocks = vec![];
+
         while row_index < markers_len {
             let block_size = std::cmp::min(markers_len - row_index, max_block_size);
             let mut validity = MutableBitmap::with_capacity(block_size);
             let mut boolean_bit_map = MutableBitmap::with_capacity(block_size);
-            while build_indexes_occupied < block_size {
-                let marker = if markers[row_index] == MARKER_KIND_FALSE && has_null {
+            while build_indexes_idx < block_size {
+                let marker = if unsafe { *markers.get_unchecked(row_index) } == MARKER_KIND_FALSE
+                    && has_null
+                {
                     MARKER_KIND_NULL
                 } else {
-                    markers[row_index]
+                    unsafe { *markers.get_unchecked(row_index) }
                 };
                 if marker == MARKER_KIND_NULL {
                     validity.push(false);
@@ -678,9 +720,13 @@ impl HashJoinProbeState {
                 } else {
                     boolean_bit_map.push(false);
                 }
-                build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                build_indexes_occupied += 1;
+                unsafe {
+                    build_indexes
+                        .get_unchecked_mut(build_indexes_idx)
+                        .chunk_index = chunk_index as u32;
+                    build_indexes.get_unchecked_mut(build_indexes_idx).row_index = row_index as u32;
+                }
+                build_indexes_idx += 1;
                 row_index += 1;
             }
 
@@ -697,19 +743,19 @@ impl HashJoinProbeState {
             }));
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.row_space.gather(
-                &build_indexes[0..build_indexes_occupied],
-                build_columns,
-                build_columns_data_type,
-                &build_num_rows,
-                string_items_buf,
+                &build_indexes[0..build_indexes_idx],
+                &generation_state.build_columns,
+                &generation_state.build_columns_data_type,
+                &generation_state.build_num_rows,
+                &mut probe_state.generation_state.string_items_buf,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),
                 Some(marker_block),
-                build_indexes_occupied,
+                build_indexes_idx,
             ));
 
-            build_indexes_occupied = 0;
+            build_indexes_idx = 0;
         }
         Ok(result_blocks)
     }

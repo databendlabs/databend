@@ -164,7 +164,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
-        let build_block = if build_state.is_build_projected {
+        let build_block = if build_state.generation_state.is_build_projected {
             let null_build_block = DataBlock::new(
                 self.hash_join_state
                     .row_space

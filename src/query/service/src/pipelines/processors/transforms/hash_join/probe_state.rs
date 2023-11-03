@@ -19,18 +19,56 @@ use common_hashtable::RowPtr;
 use super::desc::MARKER_KIND_FALSE;
 use crate::sql::plans::JoinType;
 
+pub struct MutableIndexes {
+    pub(crate) probe_indexes: Vec<u32>,
+    pub(crate) build_indexes: Vec<RowPtr>,
+}
+
+impl MutableIndexes {
+    fn new(size: usize) -> Self {
+        Self {
+            probe_indexes: vec![0; size],
+            build_indexes: vec![
+                RowPtr {
+                    chunk_index: 0,
+                    row_index: 0,
+                };
+                size
+            ],
+        }
+    }
+}
+
+pub struct ProbeBlockGenerationState {
+    pub(crate) is_probe_projected: bool,
+    pub(crate) true_validity: Bitmap,
+    pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
+}
+
+impl ProbeBlockGenerationState {
+    fn new(size: usize, has_string_column: bool) -> Self {
+        Self {
+            is_probe_projected: false,
+            true_validity: Bitmap::new_constant(true, size),
+            string_items_buf: if has_string_column {
+                Some(vec![(0, 0); size])
+            } else {
+                None
+            },
+        }
+    }
+}
+
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
     pub(crate) max_block_size: usize,
-    pub(crate) probe_indexes: Vec<u32>,
-    pub(crate) build_indexes: Vec<RowPtr>,
+    pub(crate) mutable_indexes: MutableIndexes,
+    pub(crate) generation_state: ProbeBlockGenerationState,
     pub(crate) selection: Vec<u32>,
     pub(crate) hashes: Vec<u64>,
-    pub(crate) true_validity: Bitmap,
     pub(crate) func_ctx: FunctionContext,
     pub(crate) selection_count: usize,
-    pub(crate) is_probe_projected: bool,
     pub(crate) early_filtering: bool,
     pub(crate) key_nums: u64,
     pub(crate) key_hash_matched_nums: u64,
@@ -43,7 +81,6 @@ pub struct ProbeState {
     pub(crate) row_state_indexes: Option<Vec<usize>>,
     pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
     pub(crate) markers: Option<Vec<u8>>,
-    pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
 }
 
 impl ProbeState {
@@ -59,7 +96,6 @@ impl ProbeState {
         has_string_column: bool,
         func_ctx: FunctionContext,
     ) -> Self {
-        let true_validity = Bitmap::new_constant(true, max_block_size);
         let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunct {
@@ -83,50 +119,29 @@ impl ProbeState {
         } else {
             None
         };
-        let string_items_buf = if has_string_column {
-            Some(vec![(0, 0); max_block_size])
-        } else {
-            None
-        };
         ProbeState {
             max_block_size,
-            probe_indexes: vec![0; max_block_size],
-            build_indexes: vec![
-                RowPtr {
-                    chunk_index: 0,
-                    row_index: 0,
-                };
-                max_block_size
-            ],
+            mutable_indexes: MutableIndexes::new(max_block_size),
+            generation_state: ProbeBlockGenerationState::new(max_block_size, has_string_column),
             selection: vec![0; max_block_size],
             hashes: vec![0; max_block_size],
             selection_count: 0,
-            is_probe_projected: false,
             probe_with_selection: false,
             early_filtering: true,
             key_nums: 1,
             key_hash_matched_nums: 1,
-            true_validity,
             func_ctx,
             row_state,
             row_state_indexes,
             probe_unmatched_indexes,
             markers,
-            string_items_buf,
         }
     }
 
     // Reset some states which changed during probe.
     // Only be called when spill is enabled.
     pub fn reset(&mut self) {
-        self.probe_indexes = vec![0; self.max_block_size];
-        self.build_indexes = vec![
-            RowPtr {
-                chunk_index: 0,
-                row_index: 0,
-            };
-            self.max_block_size
-        ];
+        self.mutable_indexes = MutableIndexes::new(self.max_block_size);
         self.row_state = None;
         self.row_state_indexes = None;
         self.probe_unmatched_indexes = None;

@@ -481,8 +481,10 @@ impl Processor for TransformHashJoinProbe {
                         .await?;
                     // Use `non_matched_data` to probe the first round hashtable (if the hashtable isn't empty)
                     if !non_matched_data.is_empty()
-                        && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
-                            != &(0_usize)
+                        && unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
+                            .generation_state
+                            .build_num_rows
+                            != 0
                     {
                         self.input_data.push_back(non_matched_data);
                         self.need_spill = false;

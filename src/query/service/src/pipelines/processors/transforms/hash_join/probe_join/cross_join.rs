@@ -26,7 +26,8 @@ impl HashJoinProbeState {
         input: DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let build_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let build_blocks = &build_state.generation_state.chunks;
         let build_num_rows = build_blocks
             .iter()
             .fold(0, |acc, block| acc + block.num_rows());
