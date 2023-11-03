@@ -105,7 +105,7 @@ WHERE EXISTS (
     WHERE EMPLOYEES.DEPARTMENT = DEPARTMENTS.DEPARTMENT
 );
 
--- Delete employees using an alias 'e' whose department matches any department in the 'departments' table with an alias 'd'.
+-- Alternatively, you can delete employees using the alias 'e' for the 'EMPLOYEES' table and 'd' for the 'DEPARTMENTS' table when their department matches.
 DELETE FROM EMPLOYEES AS e
 WHERE EXISTS (
     SELECT *
