@@ -99,7 +99,7 @@ impl DefaultSettings {
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
                     value: {
                         let result_timeout_secs = global_conf.map(|conf| conf.query.http_handler_result_timeout_secs)
-                            .unwrap_or(300);
+                            .unwrap_or(60);
                         UserSettingValue::UInt64(result_timeout_secs)
                     },
                     desc: "Set the timeout in seconds that a http query session expires without any polls.",
