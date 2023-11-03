@@ -47,7 +47,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         },
         DataType::Timestamp => 8,
         DataType::Date => 4,
-        DataType::Nullable(_) => 4,
+        DataType::Nullable(x) => rowformat_size(&x),
         DataType::Array(_) => todo!(),
         DataType::Map(_) => todo!(),
         DataType::Tuple(_) => todo!(),
@@ -102,7 +102,6 @@ pub unsafe fn serialize_column_to_rowformat(
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
 
                 store(data.len() as u32, address[index].add(offset) as *mut u8);
-
                 store(
                     data.as_ptr() as u64,
                     address[index].add(offset + 4) as *mut u8,

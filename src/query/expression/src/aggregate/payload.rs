@@ -195,6 +195,8 @@ impl Payload {
 
         let mut scratch = vec![];
         for (idx, col) in group_columns.iter().enumerate() {
+            debug_assert!(write_offset == self.group_offsets[idx]);
+
             unsafe {
                 serialize_column_to_rowformat(
                     &self.arena,
@@ -210,6 +212,7 @@ impl Payload {
         }
 
         // write group hashes
+        debug_assert!(write_offset == self.hash_offset);
         for idx in select_vector.iter().take(new_group_rows).copied() {
             unsafe {
                 let dst = address[idx].add(write_offset);
