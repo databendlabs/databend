@@ -316,7 +316,7 @@ impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
     }
 }
 
-pub fn validate_args(args: &Vec<Scalar>, table_func_name: &str) -> Result<()> {
+fn validate_args(args: &Vec<Scalar>, table_func_name: &str) -> Result<()> {
     // Check args len.
     validate_function_arg(table_func_name, args.len(), Some((2, 3)), 2)?;
 

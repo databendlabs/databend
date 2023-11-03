@@ -178,7 +178,13 @@ impl Binder {
     }
 }
 
-async fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<StorageParams>> {
+async fn parse_catalog_url(options: BTreeMap<String, String>) -> Result<Option<StorageParams>> {
+    // Make sure options has been lower cases.
+    let mut options = options
+        .into_iter()
+        .map(|(k, v)| (k.to_lowercase(), v))
+        .collect::<BTreeMap<_, _>>();
+
     // has to be removed, or UriLocation will complain about unknown field
     let uri = if let Some(v) = options.remove("url") {
         v

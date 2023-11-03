@@ -119,6 +119,13 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    /// JSON operation
+    JsonOp {
+        span: Span,
+        op: JsonOperator,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     /// Unary operation
     UnaryOp {
         span: Span,
@@ -433,7 +440,6 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
-
     L2Distance,
 }
 
@@ -466,6 +472,38 @@ impl BinaryOperator {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JsonOperator {
+    /// -> keeps the value as json
+    Arrow,
+    /// ->> keeps the value as text or int.
+    LongArrow,
+    /// #> Extracts JSON sub-object at the specified path
+    HashArrow,
+    /// #>> Extracts JSON sub-object at the specified path as text
+    HashLongArrow,
+    /// ? Checks whether text key exist as top-level key or array element.
+    Question,
+    /// ?| Checks whether any of the text keys exist as top-level keys or array elements.
+    QuestionOr,
+    /// ?& Checks whether all of the text keys exist as top-level keys or array elements.
+    QuestionAnd,
+}
+
+impl JsonOperator {
+    pub fn to_func_name(&self) -> String {
+        match self {
+            JsonOperator::Arrow => "get".to_string(),
+            JsonOperator::LongArrow => "get_string".to_string(),
+            JsonOperator::HashArrow => "get_by_keypath".to_string(),
+            JsonOperator::HashLongArrow => "get_by_keypath_string".to_string(),
+            JsonOperator::Question => "json_exists_key".to_string(),
+            JsonOperator::QuestionOr => "json_exists_any_keys".to_string(),
+            JsonOperator::QuestionAnd => "json_exists_all_keys".to_string(),
         }
     }
 }
@@ -506,6 +544,7 @@ impl Expr {
             | Expr::InSubquery { span, .. }
             | Expr::Between { span, .. }
             | Expr::BinaryOp { span, .. }
+            | Expr::JsonOp { span, .. }
             | Expr::UnaryOp { span, .. }
             | Expr::Cast { span, .. }
             | Expr::TryCast { span, .. }
@@ -700,6 +739,34 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::L2Distance => {
                 write!(f, "<->")
+            }
+        }
+    }
+}
+
+impl Display for JsonOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JsonOperator::Arrow => {
+                write!(f, "->")
+            }
+            JsonOperator::LongArrow => {
+                write!(f, "->>")
+            }
+            JsonOperator::HashArrow => {
+                write!(f, "#>")
+            }
+            JsonOperator::HashLongArrow => {
+                write!(f, "#>>")
+            }
+            JsonOperator::Question => {
+                write!(f, "?")
+            }
+            JsonOperator::QuestionOr => {
+                write!(f, "?|")
+            }
+            JsonOperator::QuestionAnd => {
+                write!(f, "?&")
             }
         }
     }
@@ -1025,6 +1092,11 @@ impl Display for Expr {
                 }
             }
             Expr::BinaryOp {
+                op, left, right, ..
+            } => {
+                write!(f, "({left} {op} {right})")?;
+            }
+            Expr::JsonOp {
                 op, left, right, ..
             } => {
                 write!(f, "({left} {op} {right})")?;

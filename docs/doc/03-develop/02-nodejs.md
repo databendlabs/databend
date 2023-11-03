@@ -3,6 +3,9 @@ title: Developing with Databend using Node.js
 sidebar_label: Node.js
 ---
 
+import StepsWrap from '@site/src/components/StepsWrap';
+import StepContent from '@site/src/components/Steps/step-content';
+
 Databend enables you to develop Node.js programs that interact with Databend using Databend Driver Node.js Binding. This driver provides an interface for connecting to Databend and performing operations such as executing SQL queries and retrieving results. With the Databend driver, you can take advantage of the powerful distributed computing capabilities of Databend and build scalable data processing applications. Visit https://www.npmjs.com/package/databend-driver for more information about the driver.
 
 To install the Databend driver for Node.js:
@@ -35,7 +38,9 @@ GRANT ALL on *.* TO user1;
 
 ### Step 2. Write a Node.js Program
 
-1. Copy and paste the following code to a file named `databend.js`:
+<StepsWrap>
+
+<StepContent number="1" title="Copy and paste the following code to a file named databend.js:">
 
 ```js title='databend.js'
 const { Client } = require('databend-driver');
@@ -83,7 +88,9 @@ create_conn().then(conn => {
 });
 ```
 
-2. Run `node databend.js`:
+</StepContent>
+
+<StepContent number="2" title="Run node databend.js">
 
 ```text
 Connected to Databend Server!
@@ -93,3 +100,8 @@ Table created
 1 record inserted
 [ [ 'Readings in Database Systems', 'Michael Stonebraker', '2004' ] ]
 ```
+
+</StepContent>
+
+</StepsWrap>
+

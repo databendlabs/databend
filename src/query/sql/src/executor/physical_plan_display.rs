@@ -18,6 +18,8 @@ use std::fmt::Formatter;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::physical_plans::physical_add_row_number::AddRowNumber;
+use super::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
@@ -44,6 +46,8 @@ use crate::executor::physical_plans::physical_merge_into::MergeIntoSource;
 use crate::executor::physical_plans::physical_project::Project;
 use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
+use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
+use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
@@ -100,9 +104,15 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::MergeIntoSource(merge_into_source) => write!(f, "{}", merge_into_source)?,
             PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
+            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
+                write!(f, "{}", merge_into_row_id_apply)?
+            }
+            PhysicalPlan::AddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -470,6 +480,18 @@ impl Display for MergeInto {
     }
 }
 
+impl Display for AddRowNumber {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AddRowNumber")
+    }
+}
+
+impl Display for MergeIntoAppendNotMatched {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MergeIntoAppendNotMatched")
+    }
+}
+
 impl Display for MergeIntoSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MergeIntoSource")
@@ -492,5 +514,17 @@ impl Display for Lambda {
             })
             .collect::<Vec<String>>();
         write!(f, "Lambda functions: {}", scalars.join(", "))
+    }
+}
+
+impl Display for ReclusterSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ReclusterSource")
+    }
+}
+
+impl Display for ReclusterSink {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ReclusterSink")
     }
 }

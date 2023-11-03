@@ -42,6 +42,7 @@ pub(crate) struct HttpQueryConfig {
 }
 
 pub struct HttpQueryManager {
+    #[allow(clippy::type_complexity)]
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
     pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     pub(crate) config: HttpQueryConfig,
@@ -91,7 +92,7 @@ impl HttpQueryManager {
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
         let query_clone = query.clone();
-        GlobalIORuntime::instance().spawn(async move {
+        GlobalIORuntime::instance().spawn(query_id, async move {
             loop {
                 match query_clone.check_expire().await {
                     ExpireResult::Expired => {

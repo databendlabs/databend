@@ -502,6 +502,13 @@ impl TableContext for QueryContext {
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_available_roles().await
+    }
+
+    fn get_current_session_id(&self) -> String {
+        self.get_current_session().get_id()
+    }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         self.shared.session.get_visibility_checker().await
@@ -536,11 +543,14 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
+        let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
 
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
             tz,
+            rounding_mode,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),
@@ -565,7 +575,7 @@ impl TableContext for QueryContext {
         self.query_settings.clone()
     }
 
-    fn get_shard_settings(&self) -> Arc<Settings> {
+    fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
 
@@ -795,12 +805,12 @@ impl TableContext for QueryContext {
 impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, name: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.shared.try_get_runtime()?.spawn(task))
+        Ok(self.shared.try_get_runtime()?.spawn(name, task))
     }
 }
 

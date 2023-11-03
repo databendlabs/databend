@@ -32,7 +32,7 @@ use tonic::transport::Channel;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
-use crate::meta_service::raftmeta::MetaRaft;
+use crate::meta_service::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::request_handling::Forwarder;
 use crate::store::RaftStore;

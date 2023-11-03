@@ -33,11 +33,13 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -46,6 +48,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -53,7 +56,9 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -143,7 +148,13 @@ impl HiveCatalog {
     pub fn get_client(&self) -> Result<impl TThriftHiveMetastoreSyncClient> {
         let mut c = TTcpChannel::new();
         c.open(self.client_address.as_str())
-            .map_err(from_thrift_error)?;
+            .map_err(from_thrift_error)
+            .map_err(|err| {
+                err.add_message_back(format!(
+                    "hive_metadatastore_address: {}",
+                    self.client_address.as_str()
+                ))
+            })?;
         let (i_chan, o_chan) = c.split().map_err(from_thrift_error)?;
         let i_tran = TBufferedReadTransport::new(i_chan);
         let o_tran = TBufferedWriteTransport::new(o_chan);
@@ -334,7 +345,10 @@ impl HiveCatalog {
 }
 
 fn from_thrift_error(error: thrift::Error) -> ErrorCode {
-    ErrorCode::from_std_error(error)
+    ErrorCode::Internal(format!(
+        "thrift error: {:?}, please check your thrift client config",
+        error
+    ))
 }
 
 #[async_trait::async_trait]
@@ -555,31 +569,22 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
+    async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn create_table_lock_rev(
-        &self,
-        _expire_sec: u64,
-        _table_info: &TableInfo,
-    ) -> Result<CreateTableLockRevReply> {
+    async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(
-        &self,
-        _expire_sec: u64,
-        _table_info: &TableInfo,
-        _revision: u64,
-    ) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         unimplemented!()
     }
 

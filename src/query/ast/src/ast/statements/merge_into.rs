@@ -31,7 +31,6 @@ use crate::ast::TableReference;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeUpdateExpr {
-    pub catalog: Option<Identifier>,
     pub table: Option<Identifier>,
     pub name: Identifier,
     pub expr: Expr,
@@ -39,10 +38,6 @@ pub struct MergeUpdateExpr {
 
 impl Display for MergeUpdateExpr {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.catalog.is_some() {
-            write!(f, "{}.", self.catalog.clone().unwrap())?;
-        }
-
         if self.table.is_some() {
             write!(f, "{}.", self.table.clone().unwrap())?;
         }

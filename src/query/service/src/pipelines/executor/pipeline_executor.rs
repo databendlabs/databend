@@ -23,13 +23,17 @@ use common_base::runtime::Runtime;
 use common_base::runtime::Thread;
 use common_base::runtime::ThreadJoinHandle;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::LockGuard;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
 use log::LevelFilter;
+use minitrace::full_name;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
@@ -57,6 +61,8 @@ pub struct PipelineExecutor {
     settings: ExecutorSettings,
     finished_notify: Arc<Notify>,
     finished_error: Mutex<Option<ErrorCode>>,
+    #[allow(unused)]
+    lock_guards: Vec<LockGuard>,
 }
 
 impl PipelineExecutor {
@@ -74,6 +80,7 @@ impl PipelineExecutor {
 
         let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
+        let lock_guards = pipeline.take_lock_guards();
 
         match RunningGraph::create(pipeline) {
             Err(cause) => {
@@ -86,10 +93,12 @@ impl PipelineExecutor {
                 Mutex::new(Some(on_init_callback)),
                 Mutex::new(Some(on_finished_callback)),
                 settings,
+                lock_guards,
             ),
         }
     }
 
+    #[minitrace::trace]
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -138,6 +147,11 @@ impl PipelineExecutor {
             })
         };
 
+        let lock_guards = pipelines
+            .iter_mut()
+            .flat_map(|x| x.take_lock_guards())
+            .collect::<Vec<_>>();
+
         match RunningGraph::from_pipelines(pipelines) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
@@ -152,6 +166,7 @@ impl PipelineExecutor {
                 Mutex::new(on_init_callback),
                 Mutex::new(on_finished_callback),
                 settings,
+                lock_guards,
             ),
         }
     }
@@ -162,6 +177,7 @@ impl PipelineExecutor {
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_callback: Mutex<Option<FinishedCallback>>,
         settings: ExecutorSettings,
+        lock_guards: Vec<LockGuard>,
     ) -> Result<Arc<PipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
@@ -177,6 +193,7 @@ impl PipelineExecutor {
             settings,
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(Notify::new()),
+            lock_guards,
         }))
     }
 
@@ -208,6 +225,7 @@ impl PipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
+    #[minitrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         self.init()?;
 
@@ -235,6 +253,11 @@ impl PipelineExecutor {
                 self.on_finished(&may_error)?;
                 return Err(may_error.unwrap());
             }
+        }
+
+        if let Err(error) = self.graph.assert_finished_graph() {
+            self.on_finished(&Some(error.clone()))?;
+            return Err(error);
         }
 
         self.on_finished(&None)?;
@@ -292,7 +315,7 @@ impl PipelineExecutor {
             let this = Arc::downgrade(self);
             let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
             let finished_notify = self.finished_notify.clone();
-            self.async_runtime.spawn(async move {
+            self.async_runtime.spawn(GLOBAL_TASK, async move {
                 let finished_future = Box::pin(finished_notify.notified());
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
@@ -314,19 +337,22 @@ impl PipelineExecutor {
         for thread_num in 0..threads {
             let this = self.clone();
             #[allow(unused_mut)]
-            let mut name = Some(format!("PipelineExecutor-{}", thread_num));
+            let mut name = format!("PipelineExecutor-{}", thread_num);
 
             #[cfg(debug_assertions)]
             {
                 // We need to pass the thread name in the unit test, because the thread name is the test name
                 if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
                     if let Some(cur_thread_name) = std::thread::current().name() {
-                        name = Some(cur_thread_name.to_string());
+                        name = cur_thread_name.to_string();
                     }
                 }
             }
 
-            thread_join_handles.push(Thread::named_spawn(name, move || unsafe {
+            let span = Span::enter_with_local_parent(full_name!())
+                .with_property(|| ("thread_name", name.clone()));
+            thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
+                let _g = span.set_local_parent();
                 let this_clone = this.clone();
                 let try_result = catch_unwind(move || -> Result<()> {
                     match this_clone.execute_single_thread(thread_num) {

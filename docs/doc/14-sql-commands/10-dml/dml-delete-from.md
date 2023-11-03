@@ -15,7 +15,7 @@ Databend ensures data integrity with atomic operations. Inserts, updates, replac
 ## Syntax
 
 ```sql
-DELETE FROM <table_name>
+DELETE FROM <table_name> [[AS] alias]
 [WHERE <condition>]
 ```
 
@@ -62,7 +62,7 @@ SELECT * FROM bookstore;
 
 ### Subquery-Based Deletions
 
-When using a subquery to identify the rows to be deleted, [Subquery Operators](../30-query-operators/operators-subquery.md) and [Comparison Operators](../../15-sql-functions/02-comparisons-operators/index.md) can be utilized to achieve the desired deletion.
+When using a subquery to identify the rows to be deleted, [Subquery Operators](../30-query-operators/subquery.md) and [Comparison Operators](../30-query-operators/comparisons/index.md) can be utilized to achieve the desired deletion.
 
 The examples in this section are based on the following two tables:
 

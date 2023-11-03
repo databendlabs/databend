@@ -62,7 +62,7 @@ function HomepageHeader() {
           <div className={clsx('cloud-banner', styles.cloudBanner)}>
             <div style={{ textAlign: 'center' }}>
               <h5>🎉 Databend Cloud Now Available</h5>
-              <p>Register now and get a $200 coupon.</p>
+              <p style={{marginBottom: 0}}>Register now and get a $200 coupon.</p>
             </div>
             <Link
               className={clsx("button", styles.Button, styles.White)}

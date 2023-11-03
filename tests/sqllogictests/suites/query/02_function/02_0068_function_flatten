@@ -1,0 +1,49 @@
+query ITTTTT
+select * from flatten(input => parse_json('[1,77]'))
+----
+1 NULL [0] 0 1 [1,77]
+1 NULL [1] 1 77 [1,77]
+
+query ITTTTT
+select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)
+----
+1 a a NULL 1 {"a":1,"b":[77,88]}
+1 b b NULL [77,88] {"a":1,"b":[77,88]}
+
+query ITTTTT
+select * from flatten(input => parse_json('[]'))
+----
+
+query ITTTTT
+select * from flatten(input => parse_json('[]'), outer => true)
+----
+1 NULL NULL NULL NULL NULL
+
+query ITTTTT
+select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'))
+----
+1 a a NULL 1 {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 b b NULL [77,88] {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 c c NULL {"d":"X"} {"a":1,"b":[77,88],"c":{"d":"X"}}
+
+query ITTTTT
+select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'), recursive => true)
+----
+1 a a NULL 1 {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 b b NULL [77,88] {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 NULL b[0] 0 77 [77,88]
+1 NULL b[1] 1 88 [77,88]
+1 c c NULL {"d":"X"} {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 d c.d NULL "X" {"d":"X"}
+
+query ITTTTT
+select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'), recursive => true, mode => 'object')
+----
+1 a a NULL 1 {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 b b NULL [77,88] {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 c c NULL {"d":"X"} {"a":1,"b":[77,88],"c":{"d":"X"}}
+1 d c.d NULL "X" {"d":"X"}
+
+query ITTTTT
+select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'), recursive => true, mode => 'array')
+----

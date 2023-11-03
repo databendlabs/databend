@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_meta_app::schema as mt;
+use minitrace::func_name;
 
 use crate::common;
 

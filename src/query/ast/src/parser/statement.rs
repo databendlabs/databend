@@ -278,13 +278,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_only
+            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, _, table_reference, opt_selection)| Statement::Delete {
-            hints: opt_hints,
-            table_reference,
-            selection: opt_selection.map(|(_, selection)| selection),
+        |(_, hints, _, table, opt_selection)| {
+            Statement::Delete(DeleteStmt {
+                hints,
+                table,
+                selection: opt_selection.map(|(_, selection)| selection),
+            })
         },
     );
 
@@ -294,9 +296,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, table, _, update_list, opt_selection)| {
+        |(_, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
-                hints: opt_hints,
+                hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
@@ -306,29 +308,47 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_settings = map(
         rule! {
-            SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
+            SHOW ~ SETTINGS ~ #show_options?
         },
-        |(_, _, opt_like)| Statement::ShowSettings {
-            like: opt_like.map(|(_, like)| like),
-        },
+        |(_, _, show_options)| Statement::ShowSettings { show_options },
     );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
-    let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
-    let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
-    let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
+    let show_process_list = map(
+        rule! {
+            SHOW ~ PROCESSLIST ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowProcessList { show_options },
+    );
+    let show_metrics = map(
+        rule! {
+            SHOW ~ METRICS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowMetrics { show_options },
+    );
+    let show_engines = map(
+        rule! {
+            SHOW ~ ENGINES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowEngines { show_options },
+    );
     let show_functions = map(
         rule! {
-            SHOW ~ FUNCTIONS ~ #show_limit?
+            SHOW ~ FUNCTIONS ~ #show_options?
         },
-        |(_, _, limit)| Statement::ShowFunctions { limit },
+        |(_, _, show_options)| Statement::ShowFunctions { show_options },
     );
     let show_table_functions = map(
         rule! {
-            SHOW ~ TABLE_FUNCTIONS ~ #show_limit?
+            SHOW ~ TABLE_FUNCTIONS ~ #show_options?
         },
-        |(_, _, limit)| Statement::ShowTableFunctions { limit },
+        |(_, _, show_options)| Statement::ShowTableFunctions { show_options },
     );
-    let show_indexes = value(Statement::ShowIndexes, rule! { SHOW ~ INDEXES });
+    let show_indexes = map(
+        rule! {
+            SHOW ~ INDEXES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowIndexes { show_options },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -615,14 +635,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location ~ READ_ONLY?
         },
-        |(_, _, (catalog, database, table), uri_location)| {
+        |(_, _, (catalog, database, table), uri_location, opt_read_only)| {
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
                 uri_location,
+                read_only: opt_read_only.is_some(),
             })
         },
     );
@@ -1107,7 +1128,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
-            ~ ( URL ~ ^"=" ~ ^#uri_location )?
+            ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
             ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
             ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
@@ -1129,7 +1150,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             Ok(Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
-                location: url_opt.map(|v| v.2),
+                location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
                 on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
                 size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
@@ -1923,13 +1944,45 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
     let all = map(
-        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_all_level },
         |(_, _, _, level)| AccountMgrSource::ALL { level },
+    );
+
+    // TODO(TCeason): next pr, add a priv to control query UDF query
+    // let udf_privs = map(
+    // rule! {
+    // USAGEUDF ~ ON ~ UDF ~ #ident
+    // },
+    // |(_, _, _, udf)| AccountMgrSource::Privs {
+    // privileges: vec![UserPrivilegeType::UsageUDF],
+    // level: AccountMgrLevel::UDF(udf.to_string()),
+    // },
+    // );
+    //
+    // let udf_all_privs = map(
+    // rule! {
+    // ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+    // },
+    // |(_, _, _, _, udf)| AccountMgrSource::Privs {
+    // privileges: vec![UserPrivilegeType::UsageUDF],
+    // level: AccountMgrLevel::UDF(udf.to_string()),
+    // },
+    // );
+
+    let stage_privs = map(
+        rule! {
+            #comma_separated_list1(stage_priv_type) ~ ON ~ STAGE ~ #ident
+        },
+        |(privileges, _, _, stage_name)| AccountMgrSource::Privs {
+            privileges,
+            level: AccountMgrLevel::Stage(stage_name.to_string()),
+        },
     );
 
     rule!(
         #role : "ROLE <role_name>"
         | #privs : "<privileges> ON <privileges_level>"
+        | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
 }
@@ -1953,6 +2006,13 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
         value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
+    ))(i)
+}
+
+pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(UserPrivilegeType::Read, rule! { READ }),
+        value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
 }
 
@@ -2021,6 +2081,39 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
+    )(i)
+}
+
+pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
+    // *.*
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
+        AccountMgrLevel::Stage(stage_name.to_string())
+    });
+    rule!(
+        #global : "*.*"
+        | #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #stage : "STAGE <stage_name>"
     )(i)
 }
 
@@ -2571,6 +2664,18 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
+pub fn show_options(i: Input) -> IResult<ShowOptions> {
+    map(
+        rule! {
+            #show_limit? ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(show_limit, opt_limit)| ShowOptions {
+            show_limit,
+            limit: opt_limit.map(|(_, limit)| limit),
+        },
+    )(i)
+}
+
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
@@ -2747,6 +2852,27 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
     ))(i)
 }
 
+pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #dot_separated_idents_1_to_3 ~ #alias_name?
+        }),
+        |(span, ((catalog, database, table), alias))| TableReference::Table {
+            span: transform_span(span.0),
+            catalog,
+            database,
+            table,
+            alias: alias.map(|v| TableAlias {
+                name: v,
+                columns: vec![],
+            }),
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+    )(i)
+}
+
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
     map(
         consumed(rule! {
@@ -2826,12 +2952,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
-        rule! { ( #dot_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
-        |((catalog, table, name), _, expr)| MergeUpdateExpr {
-            catalog,
-            table,
-            name,
-            expr,
-        },
+        rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
+        |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
     )(i)
 }

@@ -231,6 +231,10 @@ pub enum ExprElement {
     BinaryOp {
         op: BinaryOperator,
     },
+    /// JSON operation
+    JsonOp {
+        op: JsonOperator,
+    },
     /// Unary operation
     UnaryOp {
         op: UnaryOperator,
@@ -423,6 +427,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
             },
+            ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
         };
@@ -597,6 +602,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 not,
+            },
+            ExprElement::JsonOp { op } => Expr::JsonOp {
+                span: transform_span(elem.span.0),
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+                op,
             },
             _ => unreachable!(),
         };
@@ -952,6 +963,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
+    let json_op = map(json_op, |op| ExprElement::JsonOp { op });
+
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
     // Floating point literal with leading dot will be parsed as a period map access,
@@ -1054,6 +1067,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #exists : "`[NOT] EXISTS (SELECT ...)`"
             | #between : "`[NOT] BETWEEN ... AND ...`"
             | #binary_op : "<operator>"
+            | #json_op : "<operator>"
             | #unary_op : "<operator>"
             | #cast : "`CAST(... AS ...)`"
             | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
@@ -1140,6 +1154,18 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::BitwiseShiftLeft, rule! { ShiftLeft }),
             value(BinaryOperator::BitwiseShiftRight, rule! { ShiftRight }),
         )),
+    ))(i)
+}
+
+pub fn json_op(i: Input) -> IResult<JsonOperator> {
+    alt((
+        value(JsonOperator::Arrow, rule! { "->" }),
+        value(JsonOperator::LongArrow, rule! { "->>" }),
+        value(JsonOperator::HashArrow, rule! { "#>" }),
+        value(JsonOperator::HashLongArrow, rule! { "#>>" }),
+        value(JsonOperator::Question, rule! { "?" }),
+        value(JsonOperator::QuestionOr, rule! { "?|" }),
+        value(JsonOperator::QuestionAnd, rule! { "?&" }),
     ))(i)
 }
 

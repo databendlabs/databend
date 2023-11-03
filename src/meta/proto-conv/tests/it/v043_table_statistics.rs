@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use minitrace::func_name;
+
 use crate::common;
 
 // These bytes are built when a new version in introduced,

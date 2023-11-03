@@ -45,14 +45,14 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
+use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[minitrace::trace(name = "do_read_partitions")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
@@ -123,7 +123,7 @@ impl FuseTable {
         }
     }
 
-    #[minitrace::trace(name = "prune_snapshot_blocks")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
         &self,

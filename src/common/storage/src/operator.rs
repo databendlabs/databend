@@ -22,6 +22,7 @@ use anyhow::anyhow;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageCosConfig;
@@ -38,7 +39,6 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
-use common_metrics::load_global_prometheus_registry;
 use log::warn;
 use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
@@ -122,9 +122,9 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     Ok(op)
 }
 
-fn load_prometheus_client_layer() -> &PrometheusClientLayer {
+fn load_prometheus_client_layer() -> PrometheusClientLayer {
     PROMETHEUS_CLIENT_LAYER_INSTANCE
-        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
+        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut())).clone()
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
@@ -242,9 +242,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Try to load region from env if not set.
         builder.region(&region);
     } else {
+        // FIXME: we should return error here but keep those logic for compatibility.
         warn!(
             "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
-        )
+        );
+        builder.region("us-east-1");
     }
 
     // Credential.
@@ -439,7 +441,7 @@ impl DataOperator {
         // IO hang on reuse connection.
         let op = operator.clone();
         if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(async move { op.check().await })
+            .spawn(GLOBAL_TASK, async move { op.check().await })
             .await
             .expect("join must succeed")
         {

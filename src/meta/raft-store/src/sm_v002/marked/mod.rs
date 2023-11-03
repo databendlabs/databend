@@ -193,7 +193,6 @@ impl<T> Marked<T> {
         matches!(self, Marked::TombStone { .. })
     }
 
-    #[allow(dead_code)]
     pub(crate) fn is_normal(&self) -> bool {
         matches!(self, Marked::Normal { .. })
     }
@@ -218,6 +217,10 @@ impl From<ExpireValue> for Marked<String> {
     }
 }
 
+/// Convert internally used expire-index value `Marked<String>` to externally used type `ExpireValue`.
+///
+/// `ExpireValue.seq` equals to the seq of the str-map record,
+/// i.e., when a expire-index is inserted, the seq does not increase.
 impl From<Marked<String>> for Option<ExpireValue> {
     fn from(value: Marked<String>) -> Self {
         match value {

@@ -169,9 +169,10 @@ impl SubqueryRewriter {
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) | RelOperator::CteScan(_) => {
-                Ok(s_expr.clone())
-            }
+            RelOperator::DummyTableScan(_)
+            | RelOperator::Scan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::ConstantTableScan(_) => Ok(s_expr.clone()),
 
             _ => Err(ErrorCode::Internal("Invalid plan type")),
         }
@@ -458,6 +459,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 Ok((
@@ -525,6 +527,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -554,6 +557,7 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: false,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         }
         .into();
 
@@ -708,6 +712,15 @@ pub fn check_child_expr_in_subquery(
 ) -> Result<(ScalarExpr, bool)> {
     match child_expr {
         ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        ScalarExpr::FunctionCall(func) => {
+            if func.func_name.eq("tuple") {
+                return Ok((child_expr.clone(), op != &ComparisonOp::Equal));
+            }
+            Err(ErrorCode::Internal(format!(
+                "Invalid child expr in subquery: {:?}",
+                child_expr
+            )))
+        }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {
             let arg = &cast.argument;

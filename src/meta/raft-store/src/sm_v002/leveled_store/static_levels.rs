@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
-
-use futures_util::stream::BoxStream;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
+use crate::sm_v002::leveled_store::map_api::KVResultStream;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::ref_::Ref;
@@ -69,7 +69,7 @@ where
     K: MapKey,
     Level: MapApiRO<K>,
 {
-    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
+    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -78,7 +78,7 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
+    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,

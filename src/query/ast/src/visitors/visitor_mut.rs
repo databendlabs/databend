@@ -150,6 +150,17 @@ pub trait VisitorMut: Sized {
         Self::visit_expr(self, right);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        _op: &mut JsonOperator,
+        left: &mut Expr,
+        right: &mut Expr,
+    ) {
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, _op: &mut UnaryOperator, expr: &mut Expr) {
         Self::visit_expr(self, expr);
     }
@@ -386,19 +397,19 @@ pub trait VisitorMut: Sized {
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
-    fn visit_show_settings(&mut self, _like: &mut Option<String>) {}
+    fn visit_show_settings(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_process_list(&mut self) {}
+    fn visit_show_process_list(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_metrics(&mut self) {}
+    fn visit_show_metrics(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_engines(&mut self) {}
+    fn visit_show_engines(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+    fn visit_show_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_indexes(&mut self) {}
+    fn visit_show_indexes(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+    fn visit_show_table_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}
 
@@ -421,12 +432,7 @@ pub trait VisitorMut: Sized {
     fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(
-        &mut self,
-        _table_reference: &mut TableReference,
-        _selection: &mut Option<Expr>,
-    ) {
-    }
+    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
 
     fn visit_update(&mut self, _update: &mut UpdateStmt) {}
 

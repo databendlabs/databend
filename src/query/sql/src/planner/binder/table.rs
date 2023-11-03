@@ -22,9 +22,13 @@ use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Connection;
+use common_ast::ast::Expr;
 use common_ast::ast::FileLocation;
+use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
+use common_ast::ast::Query;
+use common_ast::ast::SelectStageOptions;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -158,6 +162,364 @@ impl Binder {
         }
     }
 
+    /// Bind a base table.
+    /// A base table is a table that is not a view or CTE.
+    #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
+    async fn bind_table(
+        &mut self,
+        bind_context: &mut BindContext,
+        span: &Span,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        table: &Identifier,
+        alias: &Option<TableAlias>,
+        travel_point: &Option<TimeTravelPoint>,
+    ) -> Result<(SExpr, BindContext)> {
+        let (catalog, database, table_name) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_alias_name = if let Some(table_alias) = alias {
+            Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+        } else {
+            None
+        };
+        let mut bind_cte = true;
+        if let Some(cte_name) = &bind_context.cte_name {
+            // If table name equals to cte name, then skip bind cte and find table from catalog
+            // Or will dead loop and stack overflow
+            if cte_name == &table_name {
+                bind_cte = false;
+            }
+        }
+        // Check and bind common table expression
+        let ctes_map = self.ctes_map.clone();
+        if let Some(cte_info) = ctes_map.get(&table_name) {
+            if bind_cte {
+                return if !cte_info.materialized {
+                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                        .await
+                } else {
+                    self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                        .await
+                };
+            }
+        }
+
+        let tenant = self.ctx.get_tenant();
+
+        let navigation_point = match travel_point {
+            Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+            None => None,
+        };
+
+        // Resolve table with catalog
+        let table_meta = match self
+            .resolve_data_source(
+                tenant.as_str(),
+                catalog.as_str(),
+                database.as_str(),
+                table_name.as_str(),
+                &navigation_point,
+            )
+            .await
+        {
+            Ok(table) => table,
+            Err(_) => {
+                let mut parent = bind_context.parent.as_mut();
+                loop {
+                    if parent.is_none() {
+                        break;
+                    }
+                    let bind_context = parent.unwrap().as_mut();
+                    let ctes_map = self.ctes_map.clone();
+                    if let Some(cte_info) = ctes_map.get(&table_name) {
+                        return if !cte_info.materialized {
+                            self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                .await
+                        } else {
+                            self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                                .await
+                        };
+                    }
+                    parent = bind_context.parent.as_mut();
+                }
+                return Err(ErrorCode::UnknownTable(format!(
+                    "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
+                ))
+                .set_span(*span));
+            }
+        };
+
+        match table_meta.engine() {
+            "VIEW" => {
+                Self::check_view_dep(bind_context, &database, &table_name)?;
+                let query = table_meta
+                    .options()
+                    .get(QUERY)
+                    .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
+                let tokens = tokenize_sql(query.as_str())?;
+                let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                // For view, we need use a new context to bind it.
+                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                new_bind_context.view_info = Some((database.clone(), table_name.to_string()));
+                if let Statement::Query(query) = &stmt {
+                    self.metadata.write().add_table(
+                        catalog,
+                        database.clone(),
+                        table_meta,
+                        table_alias_name,
+                        false,
+                        false,
+                    );
+                    let (s_expr, mut new_bind_context) =
+                        self.bind_query(&mut new_bind_context, query).await?;
+                    if let Some(alias) = alias {
+                        // view maybe has alias, e.g. select v1.col1 from v as v1;
+                        new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    } else {
+                        // e.g. select v0.c0 from v0;
+                        for column in new_bind_context.columns.iter_mut() {
+                            column.database_name = None;
+                            column.table_name =
+                                Some(normalize_identifier(table, &self.name_resolution_ctx).name);
+                        }
+                    }
+                    Ok((s_expr, new_bind_context))
+                } else {
+                    Err(
+                        ErrorCode::Internal(format!("Invalid VIEW object: {}", table_meta.name()))
+                            .set_span(*span),
+                    )
+                }
+            }
+            _ => {
+                let table_index = self.metadata.write().add_table(
+                    catalog,
+                    database.clone(),
+                    table_meta,
+                    table_alias_name,
+                    bind_context.view_info.is_some(),
+                    bind_context.planning_agg_index,
+                );
+
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, database.as_str(), table_index)
+                    .await?;
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+                Ok((s_expr, bind_context))
+            }
+        }
+    }
+
+    /// Bind a table function.
+    #[async_backtrace::framed]
+    async fn bind_table_function(
+        &mut self,
+        bind_context: &mut BindContext,
+        span: &Span,
+        name: &Identifier,
+        params: &Vec<Expr>,
+        named_params: &Vec<(String, Expr)>,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
+        );
+        let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
+
+        let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+
+        if func_name.name.eq_ignore_ascii_case("result_scan") {
+            let query_id = parse_result_scan_args(&table_args)?;
+            if query_id.is_empty() {
+                return Err(ErrorCode::InvalidArgument(
+                    "query_id must be specified when using `RESULT_SCAN`",
+                )
+                .set_span(*span));
+            }
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            let meta_key = self.ctx.get_result_cache_key(&query_id);
+            if meta_key.is_none() {
+                return Err(ErrorCode::EmptyData(format!(
+                    "`RESULT_SCAN` could not find related cache key in current session for this query id: {query_id}"
+                )).set_span(*span));
+            }
+            let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
+            let meta_key = meta_key.unwrap();
+            let (table_schema, block_raw_data) = match result_cache_mgr
+                .get(meta_key.clone())
+                .await?
+            {
+                Some(value) => {
+                    let op = DataOperator::instance().operator();
+                    ResultCacheReader::read_table_schema_and_data(op, &value.location).await?
+                }
+                None => {
+                    return Err(ErrorCode::EmptyData(format!(
+                        "`RESULT_SCAN` could not fetch cache value, maybe the data has touched ttl and was cleaned up.\n\
+                    query id: {query_id}, cache key: {meta_key}"
+                    )).set_span(*span));
+                }
+            };
+            let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
+
+            let table_alias_name = if let Some(table_alias) = alias {
+                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            } else {
+                None
+            };
+
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                table_alias_name,
+                false,
+                false,
+            );
+
+            let (s_expr, mut bind_context) = self
+                .bind_base_table(bind_context, "system", table_index)
+                .await?;
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            return Ok((s_expr, bind_context));
+        }
+
+        if BUILTIN_FUNCTIONS
+            .get_property(&func_name.name)
+            .map(|p| p.kind == FunctionKind::SRF)
+            .unwrap_or(false)
+        {
+            // If it is a set-returning function, we bind it as a subquery.
+            let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            let stmt = SelectStmt {
+                span: *span,
+                hints: None,
+                distinct: false,
+                select_list: vec![SelectTarget::AliasedExpr {
+                    expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                        span: *span,
+                        distinct: false,
+                        name: common_ast::ast::Identifier {
+                            span: *span,
+                            name: func_name.name.clone(),
+                            quote: None,
+                        },
+                        params: vec![],
+                        args: params.clone(),
+                        window: None,
+                        lambda: None,
+                    }),
+                    alias: None,
+                }],
+                from: vec![],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            };
+            self.bind_select_stmt(&mut bind_context, &stmt, &[], 0)
+                .await
+        } else {
+            // Other table functions always reside is default catalog
+            let table_meta: Arc<dyn TableFunction> = self
+                .catalogs
+                .get_default_catalog()?
+                .get_table_function(&func_name.name, table_args)?;
+            let table = table_meta.as_table();
+            let table_alias_name = if let Some(table_alias) = alias {
+                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            } else {
+                None
+            };
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                table_alias_name,
+                false,
+                false,
+            );
+
+            let (s_expr, mut bind_context) = self
+                .bind_base_table(bind_context, "system", table_index)
+                .await?;
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            Ok((s_expr, bind_context))
+        }
+    }
+
+    /// Bind a subquery.
+    #[async_backtrace::framed]
+    async fn bind_subquery(
+        &mut self,
+        bind_context: &mut BindContext,
+        subquery: &Query,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        // For subquery, we need to use a new context to bind it.
+        let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let (s_expr, mut res_bind_context) =
+            self.bind_query(&mut new_bind_context, subquery).await?;
+
+        if let Some(alias) = alias {
+            res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            // Reset column name as alias column name
+            for i in 0..alias.columns.len() {
+                let column = &res_bind_context.columns[i];
+                self.metadata
+                    .write()
+                    .change_derived_column_alias(column.index, column.column_name.clone());
+            }
+        }
+        Ok((s_expr, res_bind_context))
+    }
+
+    /// Bind a location.
+    #[async_backtrace::framed]
+    async fn bind_location(
+        &mut self,
+        bind_context: &mut BindContext,
+        location: &FileLocation,
+        options: &SelectStageOptions,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        let location = match location {
+            FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
+                connection: Connection::new(options.connection.clone()),
+                ..uri.clone()
+            }),
+            _ => location.clone(),
+        };
+        let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
+        if let Some(f) = &options.file_format {
+            stage_info.file_format_params = match StageFileFormatType::from_str(f) {
+                Ok(t) => FileFormatParams::default_by_type(t)?,
+                _ => self.ctx.get_file_format(f).await?,
+            }
+        }
+        let files_info = StageFilesInfo {
+            path,
+            pattern: options.pattern.clone(),
+            files: options.files.clone(),
+        };
+        let table_ctx = self.ctx.clone();
+        self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
+            .await
+    }
+
     #[async_recursion]
     #[async_backtrace::framed]
     pub(crate) async fn bind_single_table(
@@ -176,152 +538,16 @@ impl Binder {
                 pivot: _,
                 unpivot: _,
             } => {
-                let (catalog, database, table_name) =
-                    self.normalize_object_identifier_triple(catalog, database, table);
-                let table_alias_name = if let Some(table_alias) = alias {
-                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
-                } else {
-                    None
-                };
-                let mut bind_cte = true;
-                if let Some(cte_name) = &bind_context.cte_name {
-                    // If table name equals to cte name, then skip bind cte and find table from catalog
-                    // Or will dead loop and stack overflow
-                    if cte_name == &table_name {
-                        bind_cte = false;
-                    }
-                }
-                // Check and bind common table expression
-                let ctes_map = self.ctes_map.clone();
-                if let Some(cte_info) = ctes_map.get(&table_name) {
-                    if bind_cte {
-                        return if !cte_info.materialized {
-                            self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                .await
-                        } else {
-                            self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-                                .await
-                        };
-                    }
-                }
-
-                let tenant = self.ctx.get_tenant();
-
-                let navigation_point = match travel_point {
-                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
-                    None => None,
-                };
-
-                // Resolve table with catalog
-                let table_meta = match self
-                    .resolve_data_source(
-                        tenant.as_str(),
-                        catalog.as_str(),
-                        database.as_str(),
-                        table_name.as_str(),
-                        &navigation_point,
-                    )
-                    .await
-                {
-                    Ok(table) => table,
-                    Err(_) => {
-                        let mut parent = bind_context.parent.as_mut();
-                        loop {
-                            if parent.is_none() {
-                                break;
-                            }
-                            let bind_context = parent.unwrap().as_mut();
-                            let ctes_map = self.ctes_map.clone();
-                            if let Some(cte_info) = ctes_map.get(&table_name) {
-                                return if !cte_info.materialized {
-                                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                        .await
-                                } else {
-                                    self.bind_m_cte(
-                                        bind_context,
-                                        cte_info,
-                                        &table_name,
-                                        alias,
-                                        span,
-                                    )
-                                    .await
-                                };
-                            }
-                            parent = bind_context.parent.as_mut();
-                        }
-                        return Err(ErrorCode::UnknownTable(format!(
-                            "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                        ))
-                        .set_span(*span));
-                    }
-                };
-
-                match table_meta.engine() {
-                    "VIEW" => {
-                        Self::check_view_dep(bind_context, &database, &table_name)?;
-                        let query = table_meta
-                            .options()
-                            .get(QUERY)
-                            .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
-                        let tokens = tokenize_sql(query.as_str())?;
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-                        // For view, we need use a new context to bind it.
-                        let mut new_bind_context =
-                            BindContext::with_parent(Box::new(bind_context.clone()));
-                        new_bind_context.view_info =
-                            Some((database.clone(), table_name.to_string()));
-                        if let Statement::Query(query) = &stmt {
-                            self.metadata.write().add_table(
-                                catalog,
-                                database.clone(),
-                                table_meta,
-                                table_alias_name,
-                                false,
-                                false,
-                            );
-                            let (s_expr, mut new_bind_context) =
-                                self.bind_query(&mut new_bind_context, query).await?;
-                            if let Some(alias) = alias {
-                                // view maybe has alias, e.g. select v1.col1 from v as v1;
-                                new_bind_context
-                                    .apply_table_alias(alias, &self.name_resolution_ctx)?;
-                            } else {
-                                // e.g. select v0.c0 from v0;
-                                for column in new_bind_context.columns.iter_mut() {
-                                    column.database_name = None;
-                                    column.table_name = Some(
-                                        normalize_identifier(table, &self.name_resolution_ctx).name,
-                                    );
-                                }
-                            }
-                            Ok((s_expr, new_bind_context))
-                        } else {
-                            Err(ErrorCode::Internal(format!(
-                                "Invalid VIEW object: {}",
-                                table_meta.name()
-                            ))
-                            .set_span(*span))
-                        }
-                    }
-                    _ => {
-                        let table_index = self.metadata.write().add_table(
-                            catalog,
-                            database.clone(),
-                            table_meta,
-                            table_alias_name,
-                            bind_context.view_info.is_some(),
-                            bind_context.planning_agg_index,
-                        );
-
-                        let (s_expr, mut bind_context) = self
-                            .bind_base_table(bind_context, database.as_str(), table_index)
-                            .await?;
-                        if let Some(alias) = alias {
-                            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                        }
-                        Ok((s_expr, bind_context))
-                    }
-                }
+                self.bind_table(
+                    bind_context,
+                    span,
+                    catalog,
+                    database,
+                    table,
+                    alias,
+                    travel_point,
+                )
+                .await
             }
             TableReference::TableFunction {
                 span,
@@ -330,195 +556,21 @@ impl Binder {
                 named_params,
                 alias,
             } => {
-                let mut scalar_binder = ScalarBinder::new(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
-                );
-                let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
-
-                let func_name = normalize_identifier(name, &self.name_resolution_ctx);
-
-                if func_name.name.eq_ignore_ascii_case("result_scan") {
-                    let query_id = parse_result_scan_args(&table_args)?;
-                    if query_id.is_empty() {
-                        return Err(ErrorCode::InvalidArgument(
-                            "query_id must be specified when using `RESULT_SCAN`",
-                        )
-                        .set_span(*span));
-                    }
-                    let kv_store = UserApiProvider::instance().get_meta_store_client();
-                    let meta_key = self.ctx.get_result_cache_key(&query_id);
-                    if meta_key.is_none() {
-                        return Err(ErrorCode::EmptyData(format!(
-                            "`RESULT_SCAN` could not find related cache key in current session for this query id: {query_id}"
-                        )).set_span(*span));
-                    }
-                    let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
-                    let meta_key = meta_key.unwrap();
-                    let (table_schema, block_raw_data) = match result_cache_mgr
-                        .get(meta_key.clone())
-                        .await?
-                    {
-                        Some(value) => {
-                            let op = DataOperator::instance().operator();
-                            ResultCacheReader::read_table_schema_and_data(op, &value.location)
-                                .await?
-                        }
-                        None => {
-                            return Err(ErrorCode::EmptyData(format!(
-                                "`RESULT_SCAN` could not fetch cache value, maybe the data has touched ttl and was cleaned up.\n\
-                            query id: {query_id}, cache key: {meta_key}"
-                            )).set_span(*span));
-                        }
-                    };
-                    let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
-
-                    let table_alias_name = if let Some(table_alias) = alias {
-                        Some(
-                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
-                        )
-                    } else {
-                        None
-                    };
-
-                    let table_index = self.metadata.write().add_table(
-                        CATALOG_DEFAULT.to_string(),
-                        "system".to_string(),
-                        table.clone(),
-                        table_alias_name,
-                        false,
-                        false,
-                    );
-
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, "system", table_index)
-                        .await?;
-                    if let Some(alias) = alias {
-                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    }
-                    return Ok((s_expr, bind_context));
-                }
-
-                if BUILTIN_FUNCTIONS
-                    .get_property(&func_name.name)
-                    .map(|p| p.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    // If it is a set-returning function, we bind it as a subquery.
-                    let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                    let stmt = SelectStmt {
-                        span: *span,
-                        hints: None,
-                        distinct: false,
-                        select_list: vec![SelectTarget::AliasedExpr {
-                            expr: Box::new(common_ast::ast::Expr::FunctionCall {
-                                span: *span,
-                                distinct: false,
-                                name: common_ast::ast::Identifier {
-                                    span: *span,
-                                    name: func_name.name.clone(),
-                                    quote: None,
-                                },
-                                params: vec![],
-                                args: params.clone(),
-                                window: None,
-                                lambda: None,
-                            }),
-                            alias: None,
-                        }],
-                        from: vec![],
-                        selection: None,
-                        group_by: None,
-                        having: None,
-                        window_list: None,
-                    };
-                    self.bind_select_stmt(&mut bind_context, &stmt, &[], 0)
-                        .await
-                } else {
-                    // Other table functions always reside is default catalog
-                    let table_meta: Arc<dyn TableFunction> =
-                        self.catalogs
-                            .get_default_catalog()?
-                            .get_table_function(&func_name.name, table_args)?;
-                    let table = table_meta.as_table();
-                    let table_alias_name = if let Some(table_alias) = alias {
-                        Some(
-                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
-                        )
-                    } else {
-                        None
-                    };
-                    let table_index = self.metadata.write().add_table(
-                        CATALOG_DEFAULT.to_string(),
-                        "system".to_string(),
-                        table.clone(),
-                        table_alias_name,
-                        false,
-                        false,
-                    );
-
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, "system", table_index)
-                        .await?;
-                    if let Some(alias) = alias {
-                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    }
-                    Ok((s_expr, bind_context))
-                }
+                self.bind_table_function(bind_context, span, name, params, named_params, alias)
+                    .await
             }
             TableReference::Subquery {
                 span: _,
                 subquery,
                 alias,
-            } => {
-                // For subquery, we need use a new context to bind it.
-                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                let (s_expr, mut res_bind_context) =
-                    self.bind_query(&mut new_bind_context, subquery).await?;
-                if let Some(alias) = alias {
-                    res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    // reset column name as alias column name
-                    for i in 0..alias.columns.len() {
-                        let column = &res_bind_context.columns[i];
-                        self.metadata
-                            .write()
-                            .change_derived_column_alias(column.index, column.column_name.clone());
-                    }
-                }
-                Ok((s_expr, res_bind_context))
-            }
+            } => self.bind_subquery(bind_context, subquery, alias).await,
             TableReference::Location {
                 span: _,
                 location,
                 options,
                 alias,
             } => {
-                let location = match location {
-                    FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
-                        connection: Connection::new(options.connection.clone()),
-                        ..uri.clone()
-                    }),
-                    _ => location.clone(),
-                };
-                let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
-                if let Some(f) = &options.file_format {
-                    stage_info.file_format_params = match StageFileFormatType::from_str(f) {
-                        Ok(t) => FileFormatParams::default_by_type(t)?,
-                        _ => self.ctx.get_file_format(f).await?,
-                    }
-                }
-                let files_info = StageFilesInfo {
-                    path,
-                    pattern: options.pattern.clone(),
-                    files: options.files.clone(),
-                };
-                let table_ctx = self.ctx.clone();
-                self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
+                self.bind_location(bind_context, location, options, alias)
                     .await
             }
             TableReference::Join { join, .. } => {
@@ -938,7 +990,7 @@ impl Binder {
             }
         }
 
-        let stat = table.table().table_statistics()?;
+        let stat = table.table().table_statistics().await?;
 
         Ok((
             SExpr::create_leaf(Arc::new(

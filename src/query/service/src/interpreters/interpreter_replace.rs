@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -118,6 +119,7 @@ impl Interpreter for ReplaceInterpreter {
                 &mut pipeline.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
+                true,
             )
             .await;
         }
@@ -135,6 +137,10 @@ impl ReplaceInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
         let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
@@ -162,6 +168,7 @@ impl ReplaceInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
@@ -317,6 +324,7 @@ impl ReplaceInterpreter {
             catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
             merge_meta: false,
+            need_lock: false,
         })));
         Ok((root, purge_info))
     }

@@ -3,6 +3,9 @@ title: Developing with Databend using Rust
 sidebar_label: Rust
 ---
 
+import StepsWrap from '@site/src/components/StepsWrap';
+import StepContent from '@site/src/components/Steps/step-content';
+
 Databend offers a driver (databend-driver) written in Rust, which facilitates the development of applications using the Rust programming language and establishes connectivity with Databend.
 
 For installation instructions, examples, and the source code, see [GitHub - databend-driver](https://github.com/datafuselabs/BendSQL/tree/main/driver) or [crates.io - databend-driver](https://crates.io/crates/databend-driver) .
@@ -28,7 +31,9 @@ GRANT ALL on *.* TO user1;
 
 In this step, you'll create a simple Rust program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
-1. Create a new project 
+<StepsWrap>
+
+<StepContent number="1" title="Create a new project">
 
 ```shell
 cargo new databend-demo --bin
@@ -48,7 +53,11 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.12"
 ```
 
-2. Copy and paste the following code to the file `main.rs`:
+
+</StepContent>
+
+<StepContent number="2" title="Copy and paste the following code to the file main.rs">
+
 
 :::note
 The value of `hostname` in the code below must align with your HTTP handler settings for Databend query service.
@@ -91,7 +100,10 @@ async fn main() {
 }
 ```
 
-3. Run the program. 
+
+</StepContent>
+
+<StepContent number="3" title="Run the program. ">
 
 ```shell
 cargo run
@@ -100,3 +112,9 @@ cargo run
 ```text title='Outputs'
 mybook author 2022
 ```
+
+</StepContent>
+
+</StepsWrap>
+
+

@@ -14,7 +14,6 @@
 
 #![feature(try_blocks)]
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
 
 mod config;
 mod minitrace;
@@ -32,22 +31,12 @@ pub use crate::minitrace::GlobalLogger;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
 
-#[macro_export]
-macro_rules! func_name {
-    () => {{
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        let n = &name[..name.len() - 3];
-        n.rsplit("::").next().unwrap()
-    }};
-}
-
 pub fn closure_name<F: std::any::Any>() -> &'static str {
     let full_name = std::any::type_name::<F>();
-    full_name.rsplit("::").next().unwrap()
+    full_name
+        .rsplit("::")
+        .find(|name| *name != "{{closure}}")
+        .unwrap()
 }
 
 /// Returns the intended databend semver for Sentry as an `Option<Cow<'static, str>>`.

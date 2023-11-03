@@ -1,0 +1,15 @@
+create virtual column should fail
+Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+alter virtual column should fail
+Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+drop virtual column should fail
+Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+refresh virtual column should fail
+Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+vacuum table
+vacuum table should fail
+Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+vacuum drop table from db should not include the read_only attach table
+expect table data still there
+1	{"a":33,"b":44}
+2	{"a":55,"b":66}

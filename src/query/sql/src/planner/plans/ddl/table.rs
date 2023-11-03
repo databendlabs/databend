@@ -45,6 +45,7 @@ pub struct CreateTablePlan {
     pub schema: TableSchemaRef,
     pub engine: Engine,
     pub storage_params: Option<StorageParams>,
+    pub read_only_attach: bool,
     pub part_prefix: String,
     pub options: TableOptions,
     pub field_comments: Vec<String>,
@@ -150,6 +151,7 @@ pub struct OptimizeTablePlan {
     pub table: String,
     pub action: OptimizeTableAction,
     pub limit: Option<usize>,
+    pub need_lock: bool,
 }
 
 impl OptimizeTablePlan {

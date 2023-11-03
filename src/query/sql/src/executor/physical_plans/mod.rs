@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod common;
+pub mod physical_add_row_number;
 pub mod physical_aggregate_expand;
 pub mod physical_aggregate_final;
 pub mod physical_aggregate_partial;
@@ -39,6 +40,8 @@ pub mod physical_merge_into;
 pub mod physical_project;
 pub mod physical_project_set;
 pub mod physical_range_join;
+pub mod physical_recluster_sink;
+pub mod physical_recluster_source;
 pub mod physical_refresh_index;
 pub mod physical_replace_into;
 pub mod physical_row_fetch;

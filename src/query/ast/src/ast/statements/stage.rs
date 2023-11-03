@@ -17,7 +17,6 @@ use std::default::Default;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::write_comma_separated_arrow_map;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::UriLocation;
@@ -45,8 +44,7 @@ impl Display for CreateStageStmt {
         write!(f, " {}", self.stage_name)?;
 
         if let Some(ul) = &self.location {
-            write!(f, " URL = ")?;
-            write!(f, "{ul}")?;
+            write!(f, " {ul}")?;
         }
 
         if !self.file_format_options.is_empty() {
@@ -80,7 +78,7 @@ pub enum SelectStageOption {
     Files(Vec<String>),
     Pattern(String),
     FileFormat(String),
-    Connection((String, String)),
+    Connection(BTreeMap<String, String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -133,7 +131,11 @@ impl Display for SelectStageOptions {
             write!(f, " PATTERN => '{}',", pattern)?;
         }
 
-        write_comma_separated_arrow_map(f, &self.connection)?;
+        if !self.connection.is_empty() {
+            write!(f, " CONNECTION => (")?;
+            write_comma_separated_map(f, &self.connection)?;
+            write!(f, " )")?;
+        }
 
         write!(f, " )")?;
 
@@ -149,9 +151,7 @@ impl SelectStageOptions {
                 SelectStageOption::Files(v) => options.files = Some(v),
                 SelectStageOption::Pattern(v) => options.pattern = Some(v),
                 SelectStageOption::FileFormat(v) => options.file_format = Some(v),
-                SelectStageOption::Connection((k, v)) => {
-                    options.connection.insert(k, v);
-                }
+                SelectStageOption::Connection(v) => options.connection = v,
             }
         }
         options

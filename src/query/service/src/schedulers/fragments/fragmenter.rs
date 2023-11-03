@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::MergeInto;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 
@@ -58,6 +59,7 @@ enum State {
     DeleteLeaf,
     ReplaceInto,
     Compact,
+    Recluster,
     Other,
 }
 
@@ -147,6 +149,15 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
+    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        self.state = State::SelectLeaf;
+        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
     fn replace_replace_into(
         &mut self,
         plan: &common_sql::executor::ReplaceInto,
@@ -183,6 +194,15 @@ impl PhysicalPlanReplacer for Fragmenter {
                 )))
             }
         }
+    }
+
+    fn replace_recluster_source(
+        &mut self,
+        plan: &common_sql::executor::ReclusterSource,
+    ) -> Result<PhysicalPlan> {
+        self.state = State::Recluster;
+
+        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
     }
 
     fn replace_compact_source(
@@ -230,6 +250,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             probe_to_build: plan.probe_to_build.clone(),
             output_schema: plan.output_schema.clone(),
             contain_runtime_filter: plan.contain_runtime_filter,
+            need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -265,6 +286,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::Other => FragmentType::Intermediate,
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
+            State::Recluster => FragmentType::Recluster,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

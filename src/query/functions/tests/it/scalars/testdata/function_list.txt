@@ -717,8 +717,22 @@ Functions overloads:
 1 bitmap_xor(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
-0 build_bitmap(Array(UInt64)) :: Bitmap
-1 build_bitmap(Array(UInt64) NULL) :: Bitmap NULL
+0 build_bitmap(Array(UInt8 NULL)) :: Bitmap
+1 build_bitmap(Array(UInt8 NULL) NULL) :: Bitmap NULL
+2 build_bitmap(Array(UInt16 NULL)) :: Bitmap
+3 build_bitmap(Array(UInt16 NULL) NULL) :: Bitmap NULL
+4 build_bitmap(Array(UInt32 NULL)) :: Bitmap
+5 build_bitmap(Array(UInt32 NULL) NULL) :: Bitmap NULL
+6 build_bitmap(Array(UInt64 NULL)) :: Bitmap
+7 build_bitmap(Array(UInt64 NULL) NULL) :: Bitmap NULL
+8 build_bitmap(Array(Int8 NULL)) :: Bitmap
+9 build_bitmap(Array(Int8 NULL) NULL) :: Bitmap NULL
+10 build_bitmap(Array(Int16 NULL)) :: Bitmap
+11 build_bitmap(Array(Int16 NULL) NULL) :: Bitmap NULL
+12 build_bitmap(Array(Int32 NULL)) :: Bitmap
+13 build_bitmap(Array(Int32 NULL) NULL) :: Bitmap NULL
+14 build_bitmap(Array(Int64 NULL)) :: Bitmap
+15 build_bitmap(Array(Int64 NULL) NULL) :: Bitmap NULL
 0 cbrt(UInt8) :: Float64
 1 cbrt(UInt8 NULL) :: Float64 NULL
 2 cbrt(UInt16) :: Float64
@@ -1653,10 +1667,16 @@ Functions overloads:
 12 get FACTORY
 13 get FACTORY
 14 get FACTORY
+0 get_by_keypath FACTORY
+0 get_by_keypath_string FACTORY
 0 get_ignore_case(Variant, String) :: Variant NULL
 1 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
 0 get_path(Variant, String) :: Variant NULL
 1 get_path(Variant NULL, String NULL) :: Variant NULL
+0 get_string(Variant, String) :: String NULL
+1 get_string(Variant NULL, String NULL) :: String NULL
+2 get_string(Variant, Int64) :: String NULL
+3 get_string(Variant NULL, Int64 NULL) :: String NULL
 0 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
@@ -1829,6 +1849,12 @@ Functions overloads:
 0 json_array FACTORY
 0 json_array_elements FACTORY
 0 json_each FACTORY
+0 json_exists_all_keys(Variant, Array(String)) :: Boolean
+1 json_exists_all_keys(Variant NULL, Array(String) NULL) :: Boolean NULL
+0 json_exists_any_keys(Variant, Array(String)) :: Boolean
+1 json_exists_any_keys(Variant NULL, Array(String) NULL) :: Boolean NULL
+0 json_exists_key(Variant, String) :: Boolean
+1 json_exists_key(Variant NULL, String NULL) :: Boolean NULL
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
 0 json_object FACTORY

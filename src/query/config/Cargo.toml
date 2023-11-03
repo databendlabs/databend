@@ -28,7 +28,7 @@ common-users = { path = "../users" }
 clap = { workspace = true }
 hex = "0.4.3"
 log = { workspace = true }
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serfig = "0.1.0"

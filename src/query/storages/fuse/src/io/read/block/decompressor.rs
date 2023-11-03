@@ -149,7 +149,9 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
 impl<I: Iterator<Item = Result<CompressedPage, Error>>> Drop for BuffedBasicDecompressor<I> {
     fn drop(&mut self) {
         if let Some(page) = self.current.as_mut() {
-            if self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0 {
+            if !std::thread::panicking()
+                && self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0
+            {
                 self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
                 panic!(
                     "UncompressedBuffer cannot be accessed between multiple threads at the same time."
