@@ -463,7 +463,8 @@ async fn test_result_timeout() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(session_middleware);
 
-    let (status, result) = post_sql_to_endpoint_with_result_timeout(&ep, "select 1", 1, 1u64).await?;
+    let (status, result) =
+        post_sql_to_endpoint_with_result_timeout(&ep, "select 1", 1, 1u64).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
     let next_uri = make_page_uri(&query_id, 0);
