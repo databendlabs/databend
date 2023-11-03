@@ -187,6 +187,9 @@ pub struct HttpQuery {
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
     expire_state: Arc<TokioMutex<ExpireState>>,
+    /// The timeout for the query result polling. In the normal case, the client driver
+    /// should fetch the paginated result in a timely manner, and the interval should not
+    /// exceed this result_timeout_secs.
     pub(crate) result_timeout_secs: u64,
 }
 
