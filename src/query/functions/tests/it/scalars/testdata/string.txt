@@ -385,8 +385,7 @@ output         : 'a\nb'
 
 
 ast            : quote('a\rb')
-raw expr       : quote('a
-b')
+raw expr       : quote('ab')
 checked expr   : quote<String>("a\rb")
 optimized expr : "a\\rb"
 output type    : String

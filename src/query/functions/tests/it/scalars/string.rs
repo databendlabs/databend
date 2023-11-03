@@ -510,7 +510,10 @@ fn test_translate(file: &mut impl Write) {
     run_ast(file, "translate('abcdefabcdef', 'dc', 'dc')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["abcdef", "abcdef", "abcdef", "abcdef"])),
+        (
+            "a",
+            StringType::from_data(&["abcdef", "abcdef", "abcdef", "abcdef"]),
+        ),
         ("b", StringType::from_data(&["dc", "", "dc", "dc"])),
         ("c", StringType::from_data(&["zy", "zy", "", "dc"])),
     ];
