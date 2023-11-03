@@ -659,12 +659,6 @@ pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()>
     Ok(())
 }
 
-pub async fn do_insert(ctx: Arc<QueryContext>, plan: Insert) -> Result<()> {
-    let insert_interpreter = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
-    insert_interpreter.execute(ctx).await?;
-    Ok(())
-}
-
 pub async fn do_update(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
