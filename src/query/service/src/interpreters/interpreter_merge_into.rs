@@ -726,22 +726,39 @@ impl MergeIntoInterpreter {
                     filter_parts.push(and);
                 }
             }
-            let mut or = filter_parts[0].clone();
-            for filter_part in filter_parts.iter().skip(1) {
-                or = ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "or".to_string(),
-                    params: vec![],
-                    arguments: vec![or, filter_part.clone()],
-                });
-            }
-            filters.push(or);
+            filters.extend(Self::combine_filter_parts(&filter_parts).into_iter());
         }
         let mut target_plan = m_join.target_sexpr.clone();
         Self::push_down_filters(&mut target_plan, &filters)?;
         let new_sexpr =
             join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
         Ok(Box::new(new_sexpr))
+    }
+
+    fn combine_filter_parts(filter_parts: &[ScalarExpr]) -> Option<ScalarExpr> {
+        match filter_parts.len() {
+            0 => None,
+            1 => Some(filter_parts[0].clone()),
+            _ => {
+                let mid = filter_parts.len() / 2;
+                let left = Self::combine_filter_parts(&filter_parts[0..mid]);
+                let right = Self::combine_filter_parts(&filter_parts[mid..]);
+                if let Some(left) = left {
+                    if let Some(right) = right {
+                        Some(ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "or".to_string(),
+                            params: vec![],
+                            arguments: vec![left, right],
+                        }))
+                    } else {
+                        Some(left)
+                    }
+                } else {
+                    right
+                }
+            }
+        }
     }
 
     fn display_scalar_expr(s: &ScalarExpr) -> String {
