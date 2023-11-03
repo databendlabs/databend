@@ -40,7 +40,6 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         // Probe states.
-        let max_block_size = probe_state.max_block_size;
         let mutable_indexes = &mut probe_state.mutable_indexes;
         let probe_indexes = &mut mutable_indexes.probe_indexes;
         let pointers = probe_state.hashes.as_slice();
@@ -58,20 +57,6 @@ impl HashJoinProbeState {
                 if hash_table.next_contains(key, ptr) {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                     matched_idx += 1;
-                    if matched_idx == max_block_size {
-                        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                            return Err(ErrorCode::AbortedQuery(
-                                "Aborted query, because the server is shutting down or the query was killed.",
-                            ));
-                        }
-                        let probe_block = DataBlock::take(
-                            input,
-                            probe_indexes,
-                            &mut probe_state.generation_state.string_items_buf,
-                        )?;
-                        result_blocks.push(probe_block);
-                        matched_idx = 0;
-                    }
                 }
             }
         } else {
@@ -81,22 +66,14 @@ impl HashJoinProbeState {
                 if hash_table.next_contains(key, ptr) {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
                     matched_idx += 1;
-                    if matched_idx == max_block_size {
-                        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                            return Err(ErrorCode::AbortedQuery(
-                                "Aborted query, because the server is shutting down or the query was killed.",
-                            ));
-                        }
-                        let probe_block = DataBlock::take(
-                            input,
-                            probe_indexes,
-                            &mut probe_state.generation_state.string_items_buf,
-                        )?;
-                        result_blocks.push(probe_block);
-                        matched_idx = 0;
-                    }
                 }
             }
+        }
+
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
         }
 
         if matched_idx > 0 {
@@ -105,7 +82,6 @@ impl HashJoinProbeState {
                 &probe_indexes[0..matched_idx],
                 &mut probe_state.generation_state.string_items_buf,
             )?);
-            return Ok(result_blocks);
         }
 
         Ok(result_blocks)
@@ -152,21 +128,21 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
                 }
 
-                // Fill probe_indexes.
+                // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
-                    self.new_left_semi_block(
+                    self.process_left_semi_join_block(
                         &mut result_blocks,
                         matched_idx,
                         input,
@@ -210,7 +186,7 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.new_left_semi_block(
+                    self.process_left_semi_join_block(
                         &mut result_blocks,
                         matched_idx,
                         input,
@@ -238,7 +214,7 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            self.new_left_semi_block(
+            self.process_left_semi_join_block(
                 &mut result_blocks,
                 matched_idx,
                 input,
@@ -266,11 +242,13 @@ impl HashJoinProbeState {
         row_state: &mut [u32],
     ) {
         for (index, row) in probe_indexes.iter().enumerate() {
-            if bm.get(index) {
-                if row_state[*row as usize] == 0 {
-                    row_state[*row as usize] = 1;
-                } else {
-                    bm.set(index, false);
+            unsafe {
+                if bm.get(index) {
+                    if *row_state.get_unchecked(*row as usize) == 0 {
+                        *row_state.get_unchecked_mut(*row as usize) = 1;
+                    } else {
+                        bm.set_unchecked(index, false);
+                    }
                 }
             }
         }
@@ -278,7 +256,7 @@ impl HashJoinProbeState {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn new_left_semi_block(
+    fn process_left_semi_join_block(
         &self,
         result_blocks: &mut Vec<DataBlock>,
         matched_idx: usize,
@@ -316,6 +294,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_idx);
 
         let mut bm = match self.get_other_filters(&result_block, other_predicate, &self.func_ctx)? {

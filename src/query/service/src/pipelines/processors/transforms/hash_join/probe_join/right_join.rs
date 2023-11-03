@@ -75,21 +75,21 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
                 }
 
-                // Fill probe_indexes.
+                // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
-                    self.extend_right_data_block(
+                    self.process_right_join_block(
                         &mut result_blocks,
                         matched_idx,
                         input,
@@ -133,7 +133,7 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.extend_right_data_block(
+                    self.process_right_join_block(
                         &mut result_blocks,
                         matched_idx,
                         input,
@@ -161,7 +161,7 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            self.extend_right_data_block(
+            self.process_right_join_block(
                 &mut result_blocks,
                 matched_idx,
                 input,
@@ -218,7 +218,7 @@ impl HashJoinProbeState {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn extend_right_data_block(
+    fn process_right_join_block(
         &self,
         result_blocks: &mut Vec<DataBlock>,
         matched_idx: usize,
@@ -264,6 +264,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
         if !result_block.is_empty() {

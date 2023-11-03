@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::KeyAccessor;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -67,7 +68,7 @@ impl HashJoinProbeState {
             let key = unsafe { keys.key_unchecked(idx) };
             let ptr = unsafe { *pointers.get_unchecked(idx) };
 
-            // Probe hash table and fill build_indexes.
+            // Probe hash table and fill `build_indexes`.
             let (mut match_count, mut incomplete_ptr) =
                 hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
@@ -88,71 +89,65 @@ impl HashJoinProbeState {
             } else {
                 unsafe { *probe_unmatched_indexes.get_unchecked_mut(unmatched_idx) = idx as u32 };
                 unmatched_idx += 1;
-                if unmatched_idx == max_block_size {
-                    result_blocks.push(self.new_left_join_null_block(
-                        unmatched_idx,
-                        input,
-                        probe_unmatched_indexes,
-                        &mut probe_state.generation_state,
-                        &build_state.generation_state,
-                    )?);
-                    unmatched_idx = 0;
-                }
             }
-            if matched_idx >= max_block_size || idx == input_rows - 1 {
-                loop {
-                    let result_block = self.new_left_or_full_block(
-                        matched_idx,
-                        input,
-                        probe_indexes,
-                        build_indexes,
-                        &mut probe_state.generation_state,
-                        &build_state.generation_state,
-                    )?;
-                    if !result_block.is_empty() {
-                        result_blocks.push(result_block);
-                        if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                            for row_ptr in build_indexes.iter().take(matched_idx) {
-                                unsafe {
-                                    *outer_scan_map
-                                        .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                        .get_unchecked_mut(row_ptr.row_index as usize) = true;
-                                };
-                            }
-                        }
-                    }
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        matched_idx,
-                        max_block_size,
-                    );
-                    if match_count > 0 {
-                        total_probe_matched += match_count;
-                        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
-                            && total_probe_matched > 1
-                        {
-                            return Err(ErrorCode::Internal(
-                                "Scalar subquery can't return more than one row",
-                            ));
-                        }
-                        for _ in 0..match_count {
-                            unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                            matched_idx += 1;
-                        }
-                    }
 
-                    if matched_idx < max_block_size && idx != input_rows - 1 {
-                        break;
+            while matched_idx == max_block_size {
+                self.process_left_or_full_join_block(
+                    matched_idx,
+                    input,
+                    probe_indexes,
+                    build_indexes,
+                    &mut probe_state.generation_state,
+                    &build_state.generation_state,
+                    outer_scan_map,
+                    &mut result_blocks,
+                    None,
+                    None,
+                    None,
+                )?;
+                matched_idx = 0;
+                (match_count, incomplete_ptr) = hash_table.next_probe(
+                    key,
+                    incomplete_ptr,
+                    build_indexes_ptr,
+                    matched_idx,
+                    max_block_size,
+                );
+                if match_count > 0 {
+                    total_probe_matched += match_count;
+                    if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
+                        && total_probe_matched > 1
+                    {
+                        return Err(ErrorCode::Internal(
+                            "Scalar subquery can't return more than one row",
+                        ));
+                    }
+                    for _ in 0..match_count {
+                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                        matched_idx += 1;
                     }
                 }
             }
         }
 
         if matched_idx > 0 {
-            result_blocks.push(self.new_left_join_null_block(
+            self.process_left_or_full_join_block(
+                matched_idx,
+                input,
+                probe_indexes,
+                build_indexes,
+                &mut probe_state.generation_state,
+                &build_state.generation_state,
+                outer_scan_map,
+                &mut result_blocks,
+                None,
+                None,
+                None,
+            )?;
+        }
+
+        if unmatched_idx > 0 {
+            result_blocks.push(self.process_left_or_full_join_null_block(
                 unmatched_idx,
                 input,
                 probe_unmatched_indexes,
@@ -193,6 +188,12 @@ impl HashJoinProbeState {
         // Build states.
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let outer_scan_map = &mut build_state.outer_scan_map;
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
 
         // Results.
         let mut matched_idx = 0;
@@ -203,7 +204,7 @@ impl HashJoinProbeState {
             let key = unsafe { keys.key_unchecked(idx) };
             let ptr = unsafe { *pointers.get_unchecked(idx) };
 
-            // Probe hash table and fill build_indexes.
+            // Probe hash table and fill `build_indexes`.
             let (mut match_count, mut incomplete_ptr) =
                 hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
@@ -227,149 +228,81 @@ impl HashJoinProbeState {
                     }
                 }
             }
-            if matched_idx == max_block_size || idx == input_rows - 1 {
-                loop {
-                    let result_block = self.new_left_or_full_block(
-                        matched_idx,
-                        input,
-                        probe_indexes,
-                        build_indexes,
-                        &mut probe_state.generation_state,
-                        &build_state.generation_state,
-                    )?;
-                    if !result_block.is_empty() {
-                        let (bm, all_true, all_false) = self.get_other_filters(
-                            &result_block,
-                            self.hash_join_state
-                                .hash_join_desc
-                                .other_predicate
-                                .as_ref()
-                                .unwrap(),
-                            &self.func_ctx,
-                        )?;
 
-                        if all_true {
-                            result_blocks.push(result_block);
-                            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                                for row_ptr in build_indexes.iter().take(matched_idx) {
-                                    unsafe {
-                                        *outer_scan_map
-                                            .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                            .get_unchecked_mut(row_ptr.row_index as usize) = true
-                                    };
-                                }
-                            }
-                        } else if all_false {
-                            let mut idx = 0;
-                            while idx < matched_idx {
-                                unsafe {
-                                    *row_state.get_unchecked_mut(
-                                        *row_state_indexes.get_unchecked(idx),
-                                    ) -= 1;
-                                };
-                                idx += 1;
-                            }
-                        } else {
-                            // Safe to unwrap.
-                            let validity = bm.unwrap();
-                            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                                let mut idx = 0;
-                                while idx < matched_idx {
-                                    unsafe {
-                                        let valid = validity.get_bit_unchecked(idx);
-                                        let row_ptr = build_indexes.get_unchecked(idx);
-                                        if valid {
-                                            *outer_scan_map
-                                                .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                                .get_unchecked_mut(row_ptr.row_index as usize) =
-                                                true;
-                                        } else {
-                                            *row_state.get_unchecked_mut(
-                                                *row_state_indexes.get_unchecked(idx),
-                                            ) -= 1;
-                                        }
-                                    }
-                                    idx += 1;
-                                }
-                            } else {
-                                let mut idx = 0;
-                                while idx < matched_idx {
-                                    unsafe {
-                                        let valid = validity.get_bit_unchecked(idx);
-                                        if !valid {
-                                            *row_state.get_unchecked_mut(
-                                                *row_state_indexes.get_unchecked(idx),
-                                            ) -= 1;
-                                        }
-                                    }
-                                    idx += 1;
-                                }
-                            }
-                            let filtered_block =
-                                DataBlock::filter_with_bitmap(result_block, &validity)?;
-                            result_blocks.push(filtered_block);
-                        }
-                    }
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        matched_idx,
-                        max_block_size,
-                    );
-                    if match_count > 0 {
-                        total_probe_matched += match_count;
-                        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
-                            && total_probe_matched > 1
-                        {
-                            return Err(ErrorCode::Internal(
-                                "Scalar subquery can't return more than one row",
-                            ));
-                        }
-
-                        unsafe {
-                            *row_state.get_unchecked_mut(idx) += match_count;
-                            for _ in 0..match_count {
-                                *row_state_indexes.get_unchecked_mut(matched_idx) = idx;
-                                *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32;
-                                matched_idx += 1;
-                            }
-                        }
+            while matched_idx == max_block_size {
+                self.process_left_or_full_join_block(
+                    matched_idx,
+                    input,
+                    probe_indexes,
+                    build_indexes,
+                    &mut probe_state.generation_state,
+                    &build_state.generation_state,
+                    outer_scan_map,
+                    &mut result_blocks,
+                    Some(other_predicate),
+                    Some(row_state),
+                    Some(row_state_indexes),
+                )?;
+                matched_idx = 0;
+                (match_count, incomplete_ptr) = hash_table.next_probe(
+                    key,
+                    incomplete_ptr,
+                    build_indexes_ptr,
+                    matched_idx,
+                    max_block_size,
+                );
+                if match_count > 0 {
+                    total_probe_matched += match_count;
+                    if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
+                        && total_probe_matched > 1
+                    {
+                        return Err(ErrorCode::Internal(
+                            "Scalar subquery can't return more than one row",
+                        ));
                     }
 
-                    if matched_idx < max_block_size && idx != input_rows - 1 {
-                        break;
+                    unsafe {
+                        *row_state.get_unchecked_mut(idx) += match_count;
+                        for _ in 0..match_count {
+                            *row_state_indexes.get_unchecked_mut(matched_idx) = idx;
+                            *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32;
+                            matched_idx += 1;
+                        }
                     }
                 }
             }
-        }
-
-        matched_idx = 0;
-        let mut idx = 0;
-        while idx < input_rows {
-            if unsafe { *row_state.get_unchecked(idx) } == 0 {
-                unsafe { *probe_indexes.get_unchecked_mut(idx) = idx as u32 };
-                matched_idx += 1;
-                if matched_idx == max_block_size {
-                    result_blocks.push(self.new_left_join_null_block(
-                        matched_idx,
-                        input,
-                        probe_indexes,
-                        &mut probe_state.generation_state,
-                        &build_state.generation_state,
-                    )?);
-                    matched_idx = 0;
-                }
-            }
-            // reset to zero.
-            unsafe { *row_state.get_unchecked_mut(idx) = 0 };
-            idx += 1;
         }
 
         if matched_idx > 0 {
-            result_blocks.push(self.new_left_join_null_block(
+            self.process_left_or_full_join_block(
                 matched_idx,
+                input,
+                probe_indexes,
+                build_indexes,
+                &mut probe_state.generation_state,
+                &build_state.generation_state,
+                outer_scan_map,
+                &mut result_blocks,
+                Some(other_predicate),
+                Some(row_state),
+                Some(row_state_indexes),
+            )?;
+        }
+
+        let mut unmatched_idx = 0;
+        for (idx, state) in row_state[0..input_rows].iter_mut().enumerate() {
+            if *state == 0 {
+                unsafe { *probe_indexes.get_unchecked_mut(unmatched_idx) = idx as u32 };
+                unmatched_idx += 1;
+            } else {
+                // reset to zero.
+                *state = 0;
+            }
+        }
+
+        if unmatched_idx > 0 {
+            result_blocks.push(self.process_left_or_full_join_null_block(
+                unmatched_idx,
                 input,
                 probe_indexes,
                 &mut probe_state.generation_state,
@@ -382,7 +315,7 @@ impl HashJoinProbeState {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn new_left_join_null_block(
+    fn process_left_or_full_join_null_block(
         &self,
         matched_idx: usize,
         input: &DataBlock,
@@ -433,12 +366,13 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         Ok(self.merge_eq_block(probe_block, build_block, matched_idx))
     }
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn new_left_or_full_block(
+    fn process_left_or_full_join_block(
         &self,
         matched_idx: usize,
         input: &DataBlock,
@@ -446,7 +380,12 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
-    ) -> Result<DataBlock> {
+        outer_scan_map: &mut [Vec<bool>],
+        result_blocks: &mut Vec<DataBlock>,
+        other_predicate: Option<&Expr>,
+        row_state: Option<&mut Vec<usize>>,
+        row_state_indexes: Option<&mut Vec<usize>>,
+    ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
@@ -501,8 +440,91 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        Ok(result_block)
+        if other_predicate.is_none() {
+            result_blocks.push(result_block);
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
+                for row_ptr in build_indexes[0..matched_idx].iter() {
+                    unsafe {
+                        *outer_scan_map
+                            .get_unchecked_mut(row_ptr.chunk_index as usize)
+                            .get_unchecked_mut(row_ptr.row_index as usize) = true;
+                    };
+                }
+            }
+            return Ok(());
+        }
+
+        let row_state = row_state.unwrap();
+        let row_state_indexes = row_state_indexes.unwrap();
+        let (bm, all_true, all_false) = self.get_other_filters(
+            &result_block,
+            self.hash_join_state
+                .hash_join_desc
+                .other_predicate
+                .as_ref()
+                .unwrap(),
+            &self.func_ctx,
+        )?;
+
+        if all_true {
+            result_blocks.push(result_block);
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
+                for row_ptr in build_indexes[0..matched_idx].iter() {
+                    unsafe {
+                        *outer_scan_map
+                            .get_unchecked_mut(row_ptr.chunk_index as usize)
+                            .get_unchecked_mut(row_ptr.row_index as usize) = true
+                    };
+                }
+            }
+        } else if all_false {
+            let mut idx = 0;
+            while idx < matched_idx {
+                unsafe {
+                    *row_state.get_unchecked_mut(*row_state_indexes.get_unchecked(idx)) -= 1;
+                };
+                idx += 1;
+            }
+        } else {
+            // Safe to unwrap.
+            let validity = bm.unwrap();
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
+                let mut idx = 0;
+                while idx < matched_idx {
+                    unsafe {
+                        let valid = validity.get_bit_unchecked(idx);
+                        let row_ptr = build_indexes.get_unchecked(idx);
+                        if valid {
+                            *outer_scan_map
+                                .get_unchecked_mut(row_ptr.chunk_index as usize)
+                                .get_unchecked_mut(row_ptr.row_index as usize) = true;
+                        } else {
+                            *row_state.get_unchecked_mut(*row_state_indexes.get_unchecked(idx)) -=
+                                1;
+                        }
+                    }
+                    idx += 1;
+                }
+            } else {
+                let mut idx = 0;
+                while idx < matched_idx {
+                    unsafe {
+                        let valid = validity.get_bit_unchecked(idx);
+                        if !valid {
+                            *row_state.get_unchecked_mut(*row_state_indexes.get_unchecked(idx)) -=
+                                1;
+                        }
+                    }
+                    idx += 1;
+                }
+            }
+            let filtered_block = DataBlock::filter_with_bitmap(result_block, &validity)?;
+            result_blocks.push(filtered_block);
+        }
+
+        Ok(())
     }
 }

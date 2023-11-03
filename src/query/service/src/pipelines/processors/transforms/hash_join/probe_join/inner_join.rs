@@ -65,21 +65,21 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
                 }
 
-                // Fill probe_indexes.
+                // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
-                    result_blocks.push(self.new_inner_data_block(
+                    result_blocks.push(self.process_inner_join_block(
                         matched_idx,
                         input,
                         probe_indexes,
@@ -106,21 +106,21 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(idx) };
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
                 }
 
-                // Fill probe_indexes.
+                // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
-                    result_blocks.push(self.new_inner_data_block(
+                    result_blocks.push(self.process_inner_join_block(
                         matched_idx,
                         input,
                         probe_indexes,
@@ -145,7 +145,7 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            result_blocks.push(self.new_inner_data_block(
+            result_blocks.push(self.process_inner_join_block(
                 matched_idx,
                 input,
                 probe_indexes,
@@ -188,7 +188,7 @@ impl HashJoinProbeState {
     }
 
     #[inline]
-    fn new_inner_data_block(
+    fn process_inner_join_block(
         &self,
         matched_idx: usize,
         input: &DataBlock,
@@ -223,7 +223,9 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         let mut result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
+
         if !self.hash_join_state.probe_to_build.is_empty() {
             for (index, (is_probe_nullable, is_build_nullable)) in
                 self.hash_join_state.probe_to_build.iter()

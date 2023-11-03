@@ -59,7 +59,7 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
@@ -67,6 +67,7 @@ impl HashJoinProbeState {
                 }
 
                 matched_idx += match_count;
+
                 while matched_idx == max_block_size {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -98,7 +99,7 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(idx) };
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
@@ -134,7 +135,7 @@ impl HashJoinProbeState {
             }
         }
 
-        for row_ptr in build_indexes.iter().take(matched_idx) {
+        for row_ptr in build_indexes[0..matched_idx].iter() {
             unsafe {
                 *outer_scan_map
                     .get_unchecked_mut(row_ptr.chunk_index as usize)
@@ -183,21 +184,21 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-                // Probe hash table and fill build_indexes.
+                // Probe hash table and fill `build_indexes`.
                 let (mut match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
                 }
 
-                // Fill probe_indexes.
+                // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
-                    self.update_outer_scan_map(
+                    self.process_right_semi_anti_join_block(
                         matched_idx,
                         input,
                         probe_indexes,
@@ -237,7 +238,7 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.update_outer_scan_map(
+                    self.process_right_semi_anti_join_block(
                         matched_idx,
                         input,
                         probe_indexes,
@@ -264,7 +265,7 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            self.update_outer_scan_map(
+            self.process_right_semi_anti_join_block(
                 matched_idx,
                 input,
                 probe_indexes,
@@ -281,7 +282,7 @@ impl HashJoinProbeState {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn update_outer_scan_map(
+    fn process_right_semi_anti_join_block(
         &self,
         matched_idx: usize,
         input: &DataBlock,
@@ -318,6 +319,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
         if !result_block.is_empty() {
