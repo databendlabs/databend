@@ -3220,7 +3220,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let if_then = vec![txn_op_put_with_expire(
                 &key,
                 serialize_struct(&lock_meta)?,
-                req.expire_at,
+                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
             )];
 
             let txn_req = TxnRequest {
@@ -3284,7 +3284,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let if_then = vec![txn_op_put_with_expire(
                 &key,
                 serialize_struct(&lock_meta)?,
-                req.expire_at,
+                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
             )];
 
             let txn_req = TxnRequest {
