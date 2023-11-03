@@ -154,7 +154,6 @@ impl Payload {
     pub fn append_rows(
         &mut self,
         state: &mut ProbeState,
-        group_hashes: &[u64],
         new_group_rows: usize,
         group_columns: &[Column],
     ) {
@@ -214,7 +213,7 @@ impl Payload {
         for idx in select_vector.iter().take(new_group_rows).copied() {
             unsafe {
                 let dst = address[idx].add(write_offset);
-                store(group_hashes[idx], dst as *mut u8);
+                store(state.group_hashes[idx], dst as *mut u8);
             }
         }
 

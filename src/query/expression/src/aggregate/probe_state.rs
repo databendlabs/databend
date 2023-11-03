@@ -19,6 +19,7 @@ use crate::StateAddr;
 /// It could be reuse during multiple probe process
 #[derive(Debug)]
 pub struct ProbeState {
+    pub group_hashes: Vec<u64>,
     pub addresses: Vec<*const u8>,
     pub state_places: Vec<StateAddr>,
     pub group_compare_vector: SelectVector,
@@ -35,6 +36,7 @@ unsafe impl Sync for ProbeState {}
 impl ProbeState {
     pub fn with_capacity(len: usize) -> Self {
         Self {
+            group_hashes: vec![0; len],
             addresses: vec![std::ptr::null::<u8>(); len],
             state_places: vec![StateAddr::new(0); len],
             group_compare_vector: vec![0; len],
@@ -46,7 +48,8 @@ impl ProbeState {
     }
 
     pub fn adjust_vector(&mut self, row_count: usize) {
-        if self.no_match_vector.len() < row_count {
+        if self.group_hashes.len() < row_count {
+            self.group_hashes.resize(row_count, 0);
             self.addresses.resize(row_count, std::ptr::null::<u8>());
             self.state_places.resize(row_count, StateAddr::new(0));
 

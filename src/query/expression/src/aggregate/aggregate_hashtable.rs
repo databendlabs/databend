@@ -88,8 +88,8 @@ impl AggregateHashTable {
         params: &[Vec<Column>],
         row_count: usize,
     ) -> Result<usize> {
-        let group_hashes = group_hash_columns(group_columns);
-        let new_group_count = self.probe_and_create(state, group_columns, row_count, &group_hashes);
+        group_hash_columns(group_columns, &mut state.group_hashes);
+        let new_group_count = self.probe_and_create(state, group_columns, row_count);
 
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
@@ -124,7 +124,6 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: &[Column],
         row_count: usize,
-        hashes: &[u64],
     ) -> usize {
         if self.capacity - self.len() <= row_count || self.len() > self.resize_threshold() {
             let mut new_capacity = self.capacity * 2;
@@ -159,8 +158,9 @@ impl AggregateHashTable {
                     state.no_match_vector[i]
                 };
 
-                let ht_offset = (hashes[index] as usize + iter_times) & (self.capacity - 1);
-                let salt = (hashes[index] >> (64 - 16)) as u16;
+                let ht_offset =
+                    (state.group_hashes[index] as usize + iter_times) & (self.capacity - 1);
+                let salt = (state.group_hashes[index] >> (64 - 16)) as u16;
 
                 let entry = &mut entries[ht_offset];
 
@@ -197,7 +197,7 @@ impl AggregateHashTable {
             if new_entry_count != 0 {
                 new_group_count += new_entry_count;
                 self.payload
-                    .append_rows(state, hashes, new_entry_count, group_columns);
+                    .append_rows(state, new_entry_count, group_columns);
             }
 
             // 3. handle need_compare_count
@@ -246,7 +246,6 @@ impl AggregateHashTable {
                 &mut flush_state.probe_state,
                 &flush_state.group_columns,
                 row_count,
-                &flush_state.group_hashes,
             );
 
             let state = &mut flush_state.probe_state;

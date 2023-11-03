@@ -35,7 +35,6 @@ const FLUSH_BATCH_SIZE: usize = 8192;
 
 pub struct PayloadFlushState {
     pub probe_state: ProbeState,
-    pub group_hashes: Vec<u64>,
     pub group_columns: Vec<Column>,
     pub aggregate_results: Vec<Column>,
     pub row_count: usize,
@@ -52,7 +51,6 @@ impl PayloadFlushState {
     pub fn with_capacity(len: usize) -> PayloadFlushState {
         PayloadFlushState {
             probe_state: ProbeState::with_capacity(len),
-            group_hashes: vec![0; len],
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,
@@ -84,8 +82,7 @@ impl Payload {
             return false;
         }
 
-        if state.group_hashes.len() < rows {
-            state.group_hashes.resize(rows, 0);
+        if state.addresses.len() < rows {
             state.addresses.resize(rows, std::ptr::null::<u8>());
             state.state_places.resize(rows, StateAddr::new(0));
         }
@@ -122,7 +119,7 @@ impl Payload {
         let len = state.probe_state.row_count;
 
         for i in 0..len {
-            state.group_hashes[i] =
+            state.probe_state.group_hashes[i] =
                 unsafe { core::ptr::read::<u64>(state.addresses[i].add(self.hash_offset) as _) };
         }
     }
