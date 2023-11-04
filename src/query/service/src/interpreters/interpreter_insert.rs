@@ -14,6 +14,7 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table::AppendMode;
 use common_catalog::table::TableExt;
@@ -31,7 +32,10 @@ use common_sql::plans::Plan;
 use common_sql::NameResolutionContext;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::hook_refresh_agg_index;
+use crate::interpreters::common::CompactHookTraceCtx;
+use crate::interpreters::common::CompactTargetTableDescription;
 use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -93,6 +97,7 @@ impl Interpreter for InsertInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
 
+        let start = Instant::now();
         match &self.plan.source {
             InsertInputSource::Stage(_) => {
                 unreachable!()
@@ -241,6 +246,29 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
+                // Compact if 'enable_recluster_after_write' on.
+                {
+                    let compact_target = CompactTargetTableDescription {
+                        catalog: self.plan.catalog.clone(),
+                        database: self.plan.database.clone(),
+                        table: self.plan.table.clone(),
+                    };
+
+                    let trace_ctx = CompactHookTraceCtx {
+                        start,
+                        operation_name: "insert_into_table".to_owned(),
+                    };
+
+                    hook_compact(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        compact_target,
+                        trace_ctx,
+                        true,
+                    )
+                    .await;
+                }
+
                 let refresh_agg_index_desc = RefreshAggIndexDesc {
                     catalog: self.plan.catalog.clone(),
                     database: self.plan.database.clone(),
@@ -273,6 +301,29 @@ impl Interpreter for InsertInterpreter {
             self.plan.overwrite,
             append_mode,
         )?;
+
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            let trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "insert_into_table".to_owned(),
+            };
+
+            hook_compact(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                compact_target,
+                trace_ctx,
+                true,
+            )
+            .await;
+        }
 
         let refresh_agg_index_desc = RefreshAggIndexDesc {
             catalog: self.plan.catalog.clone(),

@@ -391,6 +391,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("auto_compaction_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Threshold for triggering auto compaction after write(copy/insert).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",
