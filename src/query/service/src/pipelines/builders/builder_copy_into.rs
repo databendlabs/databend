@@ -49,7 +49,7 @@ impl PipelineBuilder {
         let source_schema = match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(&input.plan)?;
-                Self::render_result_set(
+                Self::build_result_projection(
                     &self.func_ctx,
                     input.plan.output_schema()?,
                     &input.result_columns,

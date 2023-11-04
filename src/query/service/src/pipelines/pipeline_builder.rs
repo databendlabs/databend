@@ -259,17 +259,25 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
-            PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
-            PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
-            PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
             }
+
+            // Copy into.
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
-            PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
-            PhysicalPlan::Deduplicate(deduplicate) => self.build_deduplicate(deduplicate),
+
+            // Delete.
+            PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
+
+            // Replace.
+            PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => {
+                self.build_async_sourcer(async_sourcer)
+            }
+            PhysicalPlan::ReplaceDeduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
+
+            // Merge into.
             PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
@@ -277,7 +285,17 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
                 self.build_merge_into_append_not_matched(merge_into_append_not_matched)
             }
-            PhysicalPlan::AddRowNumber(add_row_number) => self.build_add_row_number(add_row_number),
+            PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => {
+                self.build_add_row_number(add_row_number)
+            }
+
+            // Commit.
+            PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
+
+            // Compact.
+            PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
+
+            // Recluster.
             PhysicalPlan::ReclusterSource(recluster_source) => {
                 self.build_recluster_source(recluster_source)
             }
@@ -622,7 +640,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn render_result_set(
+    pub fn build_result_projection(
         func_ctx: &FunctionContext,
         input_schema: DataSchemaRef,
         result_columns: &[ColumnBinding],
@@ -1676,7 +1694,7 @@ impl PipelineBuilder {
         self.build_pipeline(&insert_select.input)?;
 
         // should render result for select
-        PipelineBuilder::render_result_set(
+        PipelineBuilder::build_result_projection(
             &self.func_ctx,
             insert_select.input.output_schema()?,
             &insert_select.select_column_bindings,
@@ -1826,7 +1844,7 @@ impl PipelineBuilder {
         let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
         assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
 
-        PipelineBuilder::render_result_set(
+        PipelineBuilder::build_result_projection(
             &self.func_ctx,
             left_side.output_schema()?,
             left_output_columns,

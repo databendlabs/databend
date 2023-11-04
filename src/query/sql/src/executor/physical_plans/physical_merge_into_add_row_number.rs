@@ -31,13 +31,13 @@ use crate::optimizer::SExpr;
 
 // add row_number for distributed merge into
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct AddRowNumber {
+pub struct MergeIntoAddRowNumber {
     pub cluster_index: BTreeMap<String, usize>,
     pub input: Box<PhysicalPlan>,
     pub output_schema: DataSchemaRef,
 }
 
-impl AddRowNumber {
+impl MergeIntoAddRowNumber {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }
@@ -67,10 +67,12 @@ impl PhysicalPlanBuilder {
         ));
         let meta = input_schema.meta().clone();
 
-        Ok(PhysicalPlan::AddRowNumber(Box::new(AddRowNumber {
-            cluster_index,
-            input: Box::new(input_plan),
-            output_schema: Arc::new(DataSchema::new_from(fields, meta)),
-        })))
+        Ok(PhysicalPlan::MergeIntoAddRowNumber(Box::new(
+            MergeIntoAddRowNumber {
+                cluster_index,
+                input: Box::new(input_plan),
+                output_schema: Arc::new(DataSchema::new_from(fields, meta)),
+            },
+        )))
     }
 }

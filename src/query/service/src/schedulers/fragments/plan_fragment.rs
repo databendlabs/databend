@@ -23,11 +23,11 @@ use common_settings::ReplaceIntoShuffleStrategy;
 use common_sql::executor::CompactSource;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::Deduplicate;
 use common_sql::executor::DeleteSource;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReclusterSource;
 use common_sql::executor::ReclusterTask;
+use common_sql::executor::ReplaceDeduplicate;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::BlockSlotDescription;
@@ -511,13 +511,15 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
         })))
     }
 
-    fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
+    fn replace_deduplicate(&mut self, plan: &ReplaceDeduplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
-            input: Box::new(input),
-            need_insert: self.need_insert,
-            table_is_empty: self.partitions.is_empty(),
-            ..plan.clone()
-        })))
+        Ok(PhysicalPlan::ReplaceDeduplicate(Box::new(
+            ReplaceDeduplicate {
+                input: Box::new(input),
+                need_insert: self.need_insert,
+                table_is_empty: self.partitions.is_empty(),
+                ..plan.clone()
+            },
+        )))
     }
 }
