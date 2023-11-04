@@ -16,14 +16,21 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Barrier;
 use common_exception::Result;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
 use common_pipeline_transforms::processors::transforms::Transformer;
 use common_sql::executor::HashJoin;
+use common_sql::executor::MaterializedCte;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::RangeJoin;
+use common_sql::executor::RuntimeFilterSource;
+use common_sql::ColumnBinding;
+use common_sql::IndexType;
 
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -32,11 +39,16 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeSpillState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
+use crate::pipelines::processors::transforms::MaterializedCteSink;
+use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::transforms::RangeJoinState;
+use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformHashJoinBuild;
 use crate::pipelines::processors::TransformHashJoinProbe;
+use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -286,6 +298,136 @@ impl PipelineBuilder {
             self.probe_data_fields = Some(projected_probe_fields);
         }
 
+        Ok(())
+    }
+
+    pub fn build_runtime_filter_source(
+        &mut self,
+        runtime_filter_source: &RuntimeFilterSource,
+    ) -> Result<()> {
+        let state = self.build_runtime_filter_state(self.ctx.clone(), runtime_filter_source)?;
+        self.expand_runtime_filter_source(&runtime_filter_source.right_side, state.clone())?;
+        self.build_runtime_filter(&runtime_filter_source.left_side, state)?;
+        Ok(())
+    }
+
+    fn expand_runtime_filter_source(
+        &mut self,
+        _right_side: &PhysicalPlan,
+        state: Arc<RuntimeFilterState>,
+    ) -> Result<()> {
+        let pipeline = &mut self.pipelines[self.index.unwrap()];
+        let output_size = pipeline.output_len();
+        debug_assert!(output_size % 2 == 0);
+
+        let mut items = Vec::with_capacity(output_size);
+        //           Join
+        //          /   \
+        //        /      \
+        //   RFSource     \
+        //      /    \     \
+        //     /      \     \
+        // scan t1     scan t2
+        for _ in 0..output_size / 2 {
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                ProcessorPtr::create(TransformHashJoinBuild::try_create(
+                    input.clone(),
+                    self.join_state.as_ref().unwrap().clone(),
+                    None,
+                )?),
+                vec![input],
+                vec![],
+            ));
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                ProcessorPtr::create(Sinker::<SinkRuntimeFilterSource>::create(
+                    input.clone(),
+                    SinkRuntimeFilterSource::new(state.clone()),
+                )),
+                vec![input],
+                vec![],
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(output_size, 0, items));
+        Ok(())
+    }
+
+    fn build_runtime_filter(
+        &mut self,
+        left_side: &PhysicalPlan,
+        state: Arc<RuntimeFilterState>,
+    ) -> Result<()> {
+        self.build_pipeline(left_side)?;
+        self.main_pipeline.add_transform(|input, output| {
+            let processor = TransformRuntimeFilter::create(input, output, state.clone());
+            Ok(ProcessorPtr::create(processor))
+        })?;
+        Ok(())
+    }
+
+    fn build_runtime_filter_state(
+        &self,
+        ctx: Arc<QueryContext>,
+        runtime_filter_source: &RuntimeFilterSource,
+    ) -> Result<Arc<RuntimeFilterState>> {
+        Ok(Arc::new(RuntimeFilterState::new(
+            ctx,
+            runtime_filter_source.left_runtime_filters.clone(),
+            runtime_filter_source.right_runtime_filters.clone(),
+        )))
+    }
+
+    pub(crate) fn build_materialized_cte(
+        &mut self,
+        materialized_cte: &MaterializedCte,
+    ) -> Result<()> {
+        self.expand_left_side_pipeline(
+            &materialized_cte.left,
+            materialized_cte.cte_idx,
+            &materialized_cte.left_output_columns,
+        )?;
+        self.build_pipeline(&materialized_cte.right)
+    }
+
+    fn expand_left_side_pipeline(
+        &mut self,
+        left_side: &PhysicalPlan,
+        cte_idx: IndexType,
+        left_output_columns: &[ColumnBinding],
+    ) -> Result<()> {
+        let left_side_ctx = QueryContext::create_from(self.ctx.clone());
+        let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
+        self.cte_state.insert(cte_idx, state.clone());
+        let mut left_side_builder = PipelineBuilder::create(
+            self.func_ctx.clone(),
+            self.settings.clone(),
+            left_side_ctx,
+            self.enable_profiling,
+            self.proc_profs.clone(),
+        );
+        left_side_builder.cte_state = self.cte_state.clone();
+        let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
+        assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
+
+        PipelineBuilder::build_result_projection(
+            &self.func_ctx,
+            left_side.output_schema()?,
+            left_output_columns,
+            &mut left_side_pipeline.main_pipeline,
+            false,
+        )?;
+
+        left_side_pipeline.main_pipeline.add_sink(|input| {
+            let transform = Sinker::<MaterializedCteSink>::create(
+                input,
+                MaterializedCteSink::create(self.ctx.clone(), cte_idx, state.clone())?,
+            );
+            Ok(ProcessorPtr::create(transform))
+        })?;
+        self.pipelines.push(left_side_pipeline.main_pipeline);
+        self.pipelines
+            .extend(left_side_pipeline.sources_pipelines.into_iter());
         Ok(())
     }
 }

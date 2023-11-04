@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_base::runtime::Runtime;
 use common_catalog::plan::Projection;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_sources::EmptySource;

@@ -14,16 +14,27 @@
 
 mod builder_aggregate;
 mod builder_append_table;
+mod builder_commit;
 mod builder_compact;
 mod builder_copy_into;
 mod builder_delete;
+mod builder_distributed_insert_select;
+mod builder_exchange;
 mod builder_fill_missing_columns;
+mod builder_filter;
 mod builder_join;
+mod builder_lambda;
 mod builder_limit;
 mod builder_merge_into;
 mod builder_on_finished;
+mod builder_project;
 mod builder_recluster;
 mod builder_replace_into;
 mod builder_row_fetch;
+mod builder_scalar;
+mod builder_scan;
 mod builder_sort;
+mod builder_union_all;
 mod builder_window;
+
+pub use builder_replace_into::ValueSource;

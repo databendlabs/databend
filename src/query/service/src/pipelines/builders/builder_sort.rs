@@ -13,24 +13,18 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::with_number_mapped_type;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::Sort;
-use common_sql::executor::Window;
 
-use crate::pipelines::processors::transforms::FrameBound;
-use crate::pipelines::processors::transforms::WindowFunctionInfo;
-use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    fn build_sort(&mut self, sort: &Sort) -> Result<()> {
+    pub(crate) fn build_sort(&mut self, sort: &Sort) -> Result<()> {
         self.build_pipeline(&sort.input)?;
 
         let input_schema = sort.input.output_schema()?;

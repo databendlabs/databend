@@ -12,23 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::PhysicalPlan;
-use common_sql::executor::RowFetch;
-use common_storages_fuse::operations::build_row_fetcher_pipeline;
+use common_sql::executor::CommitSink;
+use common_storages_fuse::FuseTable;
 
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
-        debug_assert!(matches!(&*row_fetch.input, PhysicalPlan::Limit(_)));
-        self.build_pipeline(&row_fetch.input)?;
-        build_row_fetcher_pipeline(
-            self.ctx.clone(),
+    pub(crate) fn build_commit_sink(&mut self, plan: &CommitSink) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
+        let table =
+            self.ctx
+                .build_table_by_table_info(&plan.catalog_info, &plan.table_info, None)?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+
+        table.chain_mutation_pipes(
+            &ctx,
             &mut self.main_pipeline,
-            row_fetch.row_id_col_offset,
-            &row_fetch.source,
-            row_fetch.cols_to_fetch.clone(),
+            plan.snapshot.clone(),
+            plan.mutation_kind,
+            plan.merge_meta,
+            plan.need_lock,
         )
     }
 }

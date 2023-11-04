@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::with_number_mapped_type;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -25,7 +27,7 @@ use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    fn build_window(&mut self, window: &Window) -> Result<()> {
+    pub(crate) fn build_window(&mut self, window: &Window) -> Result<()> {
         self.build_pipeline(&window.input)?;
 
         let input_schema = window.input.output_schema()?;

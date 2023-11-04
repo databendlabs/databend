@@ -14,21 +14,35 @@
 
 use std::sync::Arc;
 
+use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::tokenize_sql;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_formats::FastFieldDecoderValues;
+use common_formats::FastValuesDecodeFallback;
+use common_formats::FastValuesDecoder;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_sql::executor::ReplaceAsyncSourcer;
 use common_sql::executor::ReplaceDeduplicate;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
+use common_sql::BindContext;
+use common_sql::Metadata;
+use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
@@ -36,10 +50,10 @@ use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
+use parking_lot::RwLock;
 
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::ValueSource;
 
 impl PipelineBuilder {
     // check if cast needed
@@ -364,5 +378,111 @@ impl PipelineBuilder {
                 .add_pipe(replace_into_processor.into_pipe());
         }
         Ok(())
+    }
+}
+
+pub struct ValueSource {
+    data: String,
+    ctx: Arc<dyn TableContext>,
+    name_resolution_ctx: NameResolutionContext,
+    bind_context: BindContext,
+    schema: DataSchemaRef,
+    metadata: MetadataRef,
+    start: usize,
+    is_finished: bool,
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for ValueSource {
+    const NAME: &'static str = "ValueSource";
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
+    #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.is_finished {
+            return Ok(None);
+        }
+
+        let format = self.ctx.get_format_settings()?;
+        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
+
+        let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
+        let estimated_rows = values_decoder.estimated_rows();
+
+        let mut columns = self
+            .schema
+            .fields()
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
+            .collect::<Vec<_>>();
+
+        values_decoder.parse(&mut columns, self).await?;
+
+        let columns = columns
+            .into_iter()
+            .map(|col| col.build())
+            .collect::<Vec<_>>();
+        let block = DataBlock::new_from_columns(columns);
+        self.is_finished = true;
+        Ok(Some(block))
+    }
+}
+
+#[async_trait::async_trait]
+impl FastValuesDecodeFallback for ValueSource {
+    async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
+        let res: Result<Vec<Scalar>> = try {
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
+            let tokens = tokenize_sql(sql)?;
+            let mut bind_context = self.bind_context.clone();
+            let metadata = self.metadata.clone();
+
+            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            bind_context
+                .exprs_to_scalar(
+                    exprs,
+                    &self.schema,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    metadata,
+                )
+                .await?
+        };
+        res.map_err(|mut err| {
+            // The input for ValueSource is a sub-section of the original SQL. This causes
+            // the error span to have an offset, so we adjust the span accordingly.
+            if let Some(span) = err.span() {
+                err = err.set_span(Some(
+                    (span.start() + self.start..span.end() + self.start).into(),
+                ));
+            }
+            err
+        })
+    }
+}
+
+impl ValueSource {
+    pub fn new(
+        data: String,
+        ctx: Arc<dyn TableContext>,
+        name_resolution_ctx: NameResolutionContext,
+        schema: DataSchemaRef,
+        start: usize,
+    ) -> Self {
+        let bind_context = BindContext::new();
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
+
+        Self {
+            data,
+            ctx,
+            name_resolution_ctx,
+            schema,
+            bind_context,
+            metadata,
+            start,
+            is_finished: false,
+        }
     }
 }

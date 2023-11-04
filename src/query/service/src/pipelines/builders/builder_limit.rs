@@ -21,7 +21,7 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    fn build_limit(&mut self, limit: &Limit) -> Result<()> {
+    pub(crate) fn build_limit(&mut self, limit: &Limit) -> Result<()> {
         self.build_pipeline(&limit.input)?;
 
         if limit.limit.is_some() || limit.offset != 0 {
