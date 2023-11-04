@@ -1010,17 +1010,22 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn resolve_data_source(
+    pub async fn resolve_data_source(
         &self,
-        tenant: &str,
+        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         travel_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
-        // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
-        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        // Resolve table with ctx
+        // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
+        // we will invoke here twice for t1, so in the past, we use catalog every time to get the
+        // newest snapshot, we can't get consistent snapshot
+        let mut table_meta = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
 
         if let Some(tp) = travel_point {
             table_meta = table_meta.navigate_to(tp).await?;

@@ -332,7 +332,7 @@ pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
 pub fn with(i: Input) -> IResult<With> {
     let cte = map(
         consumed(rule! {
-            #table_alias ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
+            #table_alias_without_as ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
         |(span, (table_alias, _, materialized, _, query, _))| CTE {
             span: transform_span(span.0),
@@ -436,10 +436,26 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
 }
 
 pub fn alias_name(i: Input) -> IResult<Identifier> {
-    let as_alias = map(rule! { AS ~ #ident_after_as }, |(_, name)| name);
+    let short_alias = map(
+        rule! {
+            #ident
+            ~ #error_hint(
+                rule! { AS },
+                "an alias without `AS` keyword has already been defined before this one, \
+                    please remove one of them"
+            )
+        },
+        |(ident, _)| ident,
+    );
+    let as_alias = map(
+        rule! {
+            AS ~ #ident_after_as
+        },
+        |(_, name)| name,
+    );
 
     rule!(
-        #ident
+        #short_alias
         | #as_alias
     )(i)
 }
@@ -447,6 +463,16 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
     map(
         rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
+        |(name, opt_columns)| TableAlias {
+            name,
+            columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
+        },
+    )(i)
+}
+
+pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
+    map(
+        rule! { #ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
         |(name, opt_columns)| TableAlias {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),

@@ -56,15 +56,11 @@ use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn parse_exprs(
-    ctx: Arc<dyn TableContext>,
-    table_meta: Arc<dyn Table>,
-    sql: &str,
-) -> Result<Vec<Expr>> {
-    let settings = Settings::create("".to_string());
+pub fn bind_one_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
@@ -111,7 +107,16 @@ pub fn parse_exprs(
 
         bind_context.add_column_binding(column_binding);
     }
+    Ok((bind_context, metadata))
+}
 
+pub fn parse_exprs(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<Vec<Expr>> {
+    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let settings = Settings::create("".to_string());
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::new(
         &mut bind_context,

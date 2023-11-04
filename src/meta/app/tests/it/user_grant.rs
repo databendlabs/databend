@@ -77,6 +77,36 @@ fn test_grant_object_contains() -> Result<()> {
             rhs: GrantObject::Database("default".into(), "db1".into()),
             expect: false,
         },
+        Test {
+            lhs: GrantObject::Stage("c".into()),
+            rhs: GrantObject::Stage("c".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::Stage("c".into()),
+            rhs: GrantObject::Stage("c".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::UDF("c".into()),
+            rhs: GrantObject::UDF("c".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::UDF("a".into()),
+            rhs: GrantObject::UDF("c".into()),
+            expect: false,
+        },
+        Test {
+            lhs: GrantObject::Stage("a".into()),
+            rhs: GrantObject::UDF("a".into()),
+            expect: false,
+        },
+        Test {
+            lhs: GrantObject::Stage("a".into()),
+            rhs: GrantObject::Table("default".into(), "db1".into(), "c".into()),
+            expect: false,
+        },
     ];
     for t in tests {
         assert_eq!(

@@ -11153,6 +11153,78 @@ GrantShareObject(
 
 
 ---------- Input ----------
+GRANT all ON stage s1 TO a;
+---------- Output ---------
+GRANT ALL PRIVILEGES ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT read ON stage s1 TO a;
+---------- Output ---------
+GRANT Read ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Read,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT write ON stage s1 TO a;
+---------- Output ---------
+GRANT Write ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Write,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a;
 ---------- Output ---------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a

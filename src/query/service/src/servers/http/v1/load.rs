@@ -179,7 +179,8 @@ pub async fn streaming_load(
                 *input_context_option = Some(input_context.clone());
                 info!("streaming load with file_format {:?}", input_context);
 
-                let handler = context.spawn(execute_query(context.clone(), plan));
+                let query_id = context.get_id();
+                let handler = context.spawn(query_id, execute_query(context.clone(), plan));
                 let files = read_multi_part(multipart, tx, &input_context).await?;
 
                 match handler.await {
