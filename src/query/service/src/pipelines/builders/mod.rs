@@ -12,9 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod builder_aggregate;
 mod builder_append_table;
+mod builder_compact;
 mod builder_copy_into;
+mod builder_delete;
 mod builder_fill_missing_columns;
+mod builder_join;
+mod builder_limit;
 mod builder_merge_into;
 mod builder_on_finished;
+mod builder_recluster;
 mod builder_replace_into;
+mod builder_row_fetch;
+mod builder_sort;
+mod builder_window;
