@@ -118,9 +118,8 @@ To make the most of Databend, learn how to manage your database by inserting, up
 
 <TabItem value="Function" label="Function" >
 
-* [How to Create a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-create-function.md)
-* [How to Drop a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-drop-function.md)
-* [How to Alter a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-alter-function.md)
+* [User-Defined Functions](../14-sql-commands/00-ddl/104-udf/index.md)
+* [External Functions](../14-sql-commands/00-ddl/105-external-function/index.md)
 * [Generating SQL with AI](../15-sql-functions/61-ai-functions/01-ai-to-sql.md)
 * [Creating Embedding Vectors](../15-sql-functions/61-ai-functions/02-ai-embedding-vector.md)
 * [Text Completion with AI](../15-sql-functions/61-ai-functions/03-ai-text-completion.md)
@@ -160,10 +159,7 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 
 <TabItem value="APIs" label="APIs" default>
 
-* [HTTP Handler](../03-develop/00-api/00-rest.md)
-* [MySQL Handler](../03-develop/00-api/01-mysql-handler.md)
-* [ClickHouse Handler](../03-develop/00-api/02-clickhouse-handler.md)
-* [Streaming Load API](../03-develop/00-api/03-streaming-load.md)
+* [REST API](../03-develop/00-apis/index.md)
 
 </TabItem>
 

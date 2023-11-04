@@ -43,6 +43,7 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
                 ("max_block_size", DefaultSettingValue {
@@ -95,6 +96,16 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("http_handler_result_timeout_secs", DefaultSettingValue {
+                    value: {
+                        let result_timeout_secs = global_conf.map(|conf| conf.query.http_handler_result_timeout_secs)
+                            .unwrap_or(60);
+                        UserSettingValue::UInt64(result_timeout_secs)
+                    },
+                    desc: "Set the timeout in seconds that a http query session expires without any polls.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("storage_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),
                     desc: "Sets the byte size of the buffer used for reading data into memory.",
@@ -102,7 +113,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("input_read_buffer_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024 * 1024),
+                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
                     desc: "Sets the memory size in bytes allocated to the buffer used by the buffered reader to read data from storage.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -326,6 +337,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("acquire_lock_timeout", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Sets the maximum timeout in seconds for acquire a lock.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Sql duplicate label for deduplication.",
@@ -333,14 +350,20 @@ impl DefaultSettings {
                     display_in_show_settings: false,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of copy into.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable unstable merge into.",
+                    desc: "Enable experimental merge into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_distributed_merge_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed merge into.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -426,6 +449,36 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(recluster_block_size),
                     desc: "Sets the maximum byte size of blocks for recluster",
                     possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_distributed_recluster", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed execution of table recluster.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_parquet_page_index", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet page index",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("enable_parquet_rowgroup_pruning", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet rowgroup pruning",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("enable_parquet_prewhere", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables parquet prewhere",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("numeric_cast_option", DefaultSettingValue {
+                    value: UserSettingValue::String("rounding".to_string()),
+                    desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
+                    possible_values: Some(vec!["rounding", "truncating"]),
                     display_in_show_settings: true,
                 }),
             ]);
@@ -549,7 +602,7 @@ impl DefaultSettings {
 
     pub fn try_get_string(key: &str) -> Result<String> {
         match DefaultSettings::instance()?.settings.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => Err(ErrorCode::UnknownVariable(format!(
                 "Unknown variable: {:?}",
                 key

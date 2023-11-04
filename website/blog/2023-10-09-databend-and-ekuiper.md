@@ -2,7 +2,7 @@
 title: "Sending IoT Stream Data to Databend with LF Edge eKuiper"
 date: 2023-10-09
 slug: 2023-10-09-databend-and-ekuiper
-cover_url: 'ekuiper/databend-and-ekuiper-1.PNG'
+cover_url: 'ekuiper/databend-and-ekuiper-0.jpg'
 tags: [databend, eKuiper, IoT]
 description: "eKuiper, a stream processing software under EMQ, is known for its compact size  and robust functionality. It is widely utilized in various applications  such as industrial IoT, vehicular networks, and public data analysis.  This article has provided insights into how to use eKuiper for writing  IoT stream processing data into Databend."
 authors:

@@ -1,1 +1,1 @@
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = invalid block_per_segment option, can't be over 1000.
+Error: APIError: ResponseError with 1301: invalid block_per_segment option, can't be over 1000

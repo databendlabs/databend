@@ -83,9 +83,28 @@ jobs:
         run: |
           echo "Create a release for ${{ steps.generated-tag.outputs.tag }}"
           gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
+      - name: Get date
+        shell: bash
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      - name: Generate Release Note
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p docs/release-notes
+          gh release view ${{ steps.generated-tag.outputs.tag }} > docs/release-notes/${{ env.DATE }}_${{ steps.generated-tag.outputs.tag }}.md
+          git add docs/release-notes
+          git status
+      - uses: peter-evans/create-pull-request@v4
+        with:
+          token: ${{ github.token }}
+          title: "chore(docs): Update Release Notes - ${{ env.DATE }}"
+          base: main
+          commit-message: "chore(docs): Update Release Notes - ${{ env.DATE }}"
+          branch-suffix: random
+          delete-branch: true
 
   macos:
-    runs-on: macos-11
+    runs-on: macos-latest
     needs: create_release
     env:
       RUNNER_PROVIDER: github
@@ -541,7 +560,7 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   benchmark:
-    needs: [create_release, linux]
+    needs: [create_release, docker_separate]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:

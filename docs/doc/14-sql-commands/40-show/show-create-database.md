@@ -6,7 +6,7 @@ Shows the CREATE DATABASE statement that creates the named database.
 
 ## Syntax
 
-```
+```sql
 SHOW CREATE DATABASE database_name
 ```
 

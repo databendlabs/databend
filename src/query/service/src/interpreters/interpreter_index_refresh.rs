@@ -218,11 +218,9 @@ impl Interpreter for RefreshIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            Feature::AggregateIndex,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
@@ -350,10 +348,12 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let write_settings = fuse_table.get_write_settings();
 
+        let ctx = self.ctx.clone();
         build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
+                ctx.clone(),
                 data_accessor.operator(),
                 self.plan.index_id,
                 write_settings.clone(),

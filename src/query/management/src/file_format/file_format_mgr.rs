@@ -59,6 +59,7 @@ impl FileFormatMgr {
 #[async_trait::async_trait]
 impl FileFormatApi for FileFormatMgr {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_file_format(&self, info: UserDefinedFileFormat) -> Result<u64> {
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serialize_struct(
@@ -86,6 +87,7 @@ impl FileFormatApi for FileFormatMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_file_format(
         &self,
         name: &str,
@@ -111,6 +113,7 @@ impl FileFormatApi for FileFormatMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_file_formats(&self) -> Result<Vec<UserDefinedFileFormat>> {
         let values = self.kv_api.prefix_list_kv(&self.file_format_prefix).await?;
 
@@ -124,6 +127,7 @@ impl FileFormatApi for FileFormatMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_file_format(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = format!("{}/{}", self.file_format_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();

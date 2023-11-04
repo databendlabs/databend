@@ -20,7 +20,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -54,7 +53,7 @@ use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
@@ -163,22 +162,6 @@ impl HashJoinBuildState {
 
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let mut data_block = data_block;
-        if matches!(
-            self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
-        ) {
-            let mut validity = MutableBitmap::new();
-            validity.extend_constant(data_block.num_rows(), true);
-            let validity: Bitmap = validity.into();
-            let nullable_columns = data_block
-                .columns()
-                .iter()
-                .map(|c| set_true_validity(c, validity.len(), &validity))
-                .collect::<Vec<_>>();
-            data_block = DataBlock::new(nullable_columns, data_block.num_rows());
-        }
-
         let block_outer_scan_map = if self.hash_join_state.need_outer_scan() {
             vec![false; data_block.num_rows()]
         } else {
@@ -463,7 +446,26 @@ impl HashJoinBuildState {
 
             let chunk = &mut chunks[chunk_index];
 
-            let evaluator = Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let mut _nullable_chunk = None;
+            let evaluator = if matches!(
+                self.hash_join_state.hash_join_desc.join_type,
+                JoinType::Left | JoinType::LeftSingle | JoinType::Full
+            ) {
+                let validity = Bitmap::new_constant(true, chunk.num_rows());
+                let nullable_columns = chunk
+                    .columns()
+                    .iter()
+                    .map(|c| wrap_true_validity(c, chunk.num_rows(), &validity))
+                    .collect::<Vec<_>>();
+                _nullable_chunk = Some(DataBlock::new(nullable_columns, chunk.num_rows()));
+                Evaluator::new(
+                    _nullable_chunk.as_ref().unwrap(),
+                    &self.func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                )
+            } else {
+                Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
+            };
             let columns: Vec<(Column, DataType)> = self
                 .hash_join_state
                 .hash_join_desc

@@ -9,14 +9,20 @@ Creates an internal or external stage.
 ```sql
 -- Internal stage
 CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
-  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = (
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+       ) ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 
 -- External stage
 CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
     externalStageParams
-  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = (
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+       ) ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 ```
@@ -32,7 +38,7 @@ import TabItem from '@theme/TabItem';
 
 ```sql
 externalStageParams ::=
-  URL = 's3://<bucket>[<path/>]'
+  's3://<bucket>[<path/>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -49,7 +55,7 @@ To create an external stage on Amazon S3, you can also use an IAM user account, 
 
 ```sql
 externalStageParams ::=
-  URL = 'azblob://<container>[<path/>]'
+  'azblob://<container>[<path/>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -62,7 +68,7 @@ For the connection parameters available for accessing Azure Blob Storage, see [C
 
 ```sql
 externalLocation ::=
-  URL = 'gcs://<bucket>[<path>]'
+  'gcs://<bucket>[<path>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -75,7 +81,7 @@ For the connection parameters available for accessing Google Cloud Storage, see 
 
 ```sql
 externalLocation ::=
-  URL = 'oss://<bucket>[<path>]'
+  'oss://<bucket>[<path>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -88,7 +94,7 @@ For the connection parameters available for accessing Alibaba Cloud OSS, see [Co
 
 ```sql
 externalLocation ::=
-  URL = 'cos://<bucket>[<path>]'
+  'cos://<bucket>[<path>]'
   CONNECTION = (
         <connection_parameters>
   )
@@ -101,7 +107,7 @@ For the connection parameters available for accessing Tencent Cloud Object Stora
 
 ```sql
 externalLocation ::=
-  URL = "hdfs://<endpoint_url>[<path>]"
+  "hdfs://<endpoint_url>[<path>]"
   CONNECTION = (
         <connection_parameters>
   )
@@ -114,7 +120,7 @@ For the connection parameters available for accessing HDFS, see [Connection Para
 
 ```sql
 externalLocation ::=
-  URL = "webhdfs://<endpoint_url>[<path>]"
+  "webhdfs://<endpoint_url>[<path>]"
   CONNECTION = (
         <connection_parameters>
   )
@@ -124,13 +130,13 @@ For the connection parameters available for accessing WebHDFS, see [Connection P
 </TabItem>
 </Tabs>
 
-### formatTypeOptions
+### FILE_FORMAT
 
-For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/50-file-format-options.md).
+See [Input & Output File Formats](../../../13-sql-reference/50-file-format-options.md) for details.
 
 ### copyOptions
 
-```
+```sql
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]

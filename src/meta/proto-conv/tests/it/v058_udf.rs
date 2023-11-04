@@ -17,6 +17,7 @@ use common_expression::types::NumberDataType;
 use common_meta_app::principal::UDFDefinition;
 use common_meta_app::principal::UDFServer;
 use common_meta_app::principal::UserDefinedFunction;
+use minitrace::func_name;
 
 use crate::common;
 

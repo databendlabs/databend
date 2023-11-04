@@ -30,6 +30,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
@@ -48,6 +49,7 @@ use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
@@ -57,6 +59,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
+use crate::plans::DescribeTaskPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
@@ -70,10 +73,12 @@ use crate::plans::DropStagePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
@@ -110,6 +115,7 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
+use crate::plans::ShowTasksPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -276,6 +282,14 @@ pub enum Plan {
     DropNetworkPolicy(Box<DropNetworkPolicyPlan>),
     DescNetworkPolicy(Box<DescNetworkPolicyPlan>),
     ShowNetworkPolicies(Box<ShowNetworkPoliciesPlan>),
+
+    // Task
+    CreateTask(Box<CreateTaskPlan>),
+    AlterTask(Box<AlterTaskPlan>),
+    DropTask(Box<DropTaskPlan>),
+    DescribeTask(Box<DescribeTaskPlan>),
+    ShowTasks(Box<ShowTasksPlan>),
+    ExecuteTask(Box<ExecuteTaskPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -376,6 +390,11 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
+
+            Plan::CreateTask(plan) => plan.schema(),
+            Plan::DescribeTask(plan) => plan.schema(),
+            Plan::ShowTasks(plan) => plan.schema(),
+            Plan::ExecuteTask(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -410,6 +429,8 @@ impl Plan {
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
                 | Plan::CopyIntoTable(_)
+                | Plan::ShowTasks(_)
+                | Plan::DescribeTask(_)
         )
     }
 }

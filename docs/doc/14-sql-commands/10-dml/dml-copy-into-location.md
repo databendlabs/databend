@@ -20,7 +20,10 @@ See also: [`COPY INTO <table>`](dml-copy-into-table.md)
 ```sql
 COPY INTO { internalStage | externalStage | externalLocation }
 FROM { [<database_name>.]<table_name> | ( <query> ) }
-[ FILE_FORMAT = ( { TYPE = { CSV | JSON | NDJSON | PARQUET } [ formatTypeOptions ] } ) ]
+[ FILE_FORMAT = (
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+       ) ]
 [ copyOptions ]
 [ VALIDATION_MODE = RETURN_ROWS ]
 ```
@@ -137,7 +140,7 @@ For the connection parameters available for accessing WebHDFS, see [Connection P
 
 ### FILE_FORMAT
 
-See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
+See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md) for details.
 
 ### copyOptions
 
@@ -187,8 +190,10 @@ This example unloads data to an internal stage:
 CREATE STAGE my_internal_stage;
 
 -- Unload data from the table to the stage using the PARQUET file format
-COPY INTO @my_internal_stage 
-FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO @my_internal_stage
+    FROM canadian_city_population
+    FILE_FORMAT = (TYPE = PARQUET);
+
 
 LIST @my_internal_stage;
 
@@ -203,8 +208,14 @@ This example unloads data into a compressed file:
 
 ```sql
 -- Unload data from the table to the stage using the CSV file format with gzip compression
-COPY INTO @my_internal_stage 
-FROM canadian_city_population FILE_FORMAT = (TYPE = CSV COMPRESSION = gzip);
+COPY INTO @my_internal_stage
+    FROM canadian_city_population
+    FILE_FORMAT = (TYPE = CSV COMPRESSION = gzip);
+
+COPY INTO @my_internal_stage
+    FROM canadian_city_population
+    FILE_FORMAT = (TYPE = CSV COMPRESSION = gzip);
+
 
 LIST @my_internal_stage;
 
@@ -216,9 +227,11 @@ data_cb30822a-4166-4df6-9030-21a47c565bea_0000_00000000.parquet| 566|   |2023-10
 -- COPY INTO also works with custom file formats. See below:
 -- Create a custom file format named my_cs_gzip with CSV format and gzip compression
 CREATE FILE FORMAT my_csv_gzip TYPE = CSV COMPRESSION = gzip;
+       
 -- Unload data from the table to the stage using the custom file format my_cs_gzip
-COPY INTO @my_internal_stage 
-FROM canadian_city_population FILE_FORMAT=(FORMAT_NAME='my_csv_gzip');
+COPY INTO @my_internal_stage
+    FROM canadian_city_population
+    FILE_FORMAT = (FORMAT_NAME = 'my_csv_gzip');
 
 LIST @my_internal_stage;
 
@@ -235,13 +248,15 @@ This example unloads data into a bucket on MinIO:
 
 ```sql
 -- Unload data from the table to a bucket named 'databend' on MinIO using the PARQUET file format
-COPY INTO 's3://databend' 
-CONNECTION = (
-  ENDPOINT_URL = 'http://localhost:9000/' 
-  ACCESS_KEY_ID = 'ROOTUSER' 
-  SECRET_ACCESS_KEY = 'CHANGEME123' 
-  region = 'us-west-2') 
-FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO 's3://databend'
+    CONNECTION = (
+    ENDPOINT_URL = 'http://localhost:9000/',
+    ACCESS_KEY_ID = 'ROOTUSER',
+    SECRET_ACCESS_KEY = 'CHANGEME123',
+    region = 'us-west-2'
+    )
+    FROM canadian_city_population
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 ![Alt text](../../../public/img/sql/copy-into-bucket.png)

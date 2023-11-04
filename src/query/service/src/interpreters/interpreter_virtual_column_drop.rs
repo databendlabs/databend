@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::Result;
 use common_license::license::Feature::VirtualColumn;
 use common_license::license_manager::get_license_manager;
@@ -48,11 +49,9 @@ impl Interpreter for DropVirtualColumnInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            tenant.clone(),
-            VirtualColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
 
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
@@ -61,6 +60,9 @@ impl Interpreter for DropVirtualColumnInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         let table_id = table.get_id();
         let catalog = self.ctx.get_catalog(&catalog_name).await?;

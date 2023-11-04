@@ -175,8 +175,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        put_cache: bool,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, plan, pipeline);
+        let (_, _, _, _) = (ctx, plan, pipeline, put_cache);
 
         Err(ErrorCode::Unimplemented(format!(
             "read_data operation for table {} is not implemented. table engine : {}",
@@ -240,7 +241,7 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 
@@ -374,6 +375,10 @@ pub trait Table: Sync + Send {
     fn broadcast_truncate_to_cluster(&self) -> bool {
         false
     }
+
+    fn is_read_only(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -385,7 +390,7 @@ pub trait TableExt: Table {
         let tid = table_info.ident.table_id;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-        let table_info: TableInfo = TableInfo {
+        let table_info = TableInfo {
             ident,
             desc: "".to_owned(),
             name,
@@ -395,8 +400,19 @@ pub trait TableExt: Table {
         };
         catalog.get_table_by_info(&table_info)
     }
-}
 
+    fn check_mutable(&self) -> Result<()> {
+        if self.is_read_only() {
+            let table_info = self.get_table_info();
+            Err(ErrorCode::InvalidOperation(format!(
+                "Mutation not allowed, table [{}] is READ ONLY.",
+                table_info.name
+            )))
+        } else {
+            Ok(())
+        }
+    }
+}
 impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -435,7 +451,7 @@ pub enum AppendMode {
     Copy,
 }
 
-pub trait ColumnStatisticsProvider {
+pub trait ColumnStatisticsProvider: Send {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
     fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics>;

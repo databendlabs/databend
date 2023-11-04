@@ -163,6 +163,7 @@ impl Table for RangeTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         match self.name() {
             "generate_series" => {
@@ -315,7 +316,7 @@ impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
     }
 }
 
-pub fn validate_args(args: &Vec<Scalar>, table_func_name: &str) -> Result<()> {
+fn validate_args(args: &Vec<Scalar>, table_func_name: &str) -> Result<()> {
     // Check args len.
     validate_function_arg(table_func_name, args.len(), Some((2, 3)), 2)?;
 

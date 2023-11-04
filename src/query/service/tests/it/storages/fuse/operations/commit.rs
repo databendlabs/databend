@@ -48,11 +48,13 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -61,6 +63,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -68,7 +71,9 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -494,6 +499,9 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
@@ -527,7 +535,7 @@ impl TableContext for CtxDelegation {
         Settings::create("fake_settings".to_string())
     }
 
-    fn get_shard_settings(&self) -> Arc<Settings> {
+    fn get_shared_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
@@ -640,6 +648,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
+        todo!()
+    }
+
+    fn get_license_key(&self) -> String {
         todo!()
     }
 }
@@ -852,28 +864,19 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
+    async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         todo!()
     }
 
-    async fn create_table_lock_rev(
-        &self,
-        _expire_sec: u64,
-        _table_info: &TableInfo,
-    ) -> Result<CreateTableLockRevReply> {
+    async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
         todo!()
     }
 
-    async fn extend_table_lock_rev(
-        &self,
-        _expire_sec: u64,
-        _table_info: &TableInfo,
-        _revision: u64,
-    ) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
         todo!()
     }
 
-    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         todo!()
     }
 }

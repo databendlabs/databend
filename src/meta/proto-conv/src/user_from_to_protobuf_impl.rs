@@ -162,6 +162,12 @@ impl FromToProto for mt::principal::GrantObject {
                 db,
                 table,
             })) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
+            Some(pb::grant_object::Object::Udf(pb::grant_object::GrantUdfObject { udf })) => {
+                Ok(mt::principal::GrantObject::UDF(udf))
+            }
+            Some(pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage })) => {
+                Ok(mt::principal::GrantObject::Stage(stage))
+            }
             _ => Err(Incompatible {
                 reason: "GrantObject cannot be None".to_string(),
             }),
@@ -186,6 +192,14 @@ impl FromToProto for mt::principal::GrantObject {
                     table: table.clone(),
                 }),
             ),
+            mt::principal::GrantObject::UDF(udf) => Some(pb::grant_object::Object::Udf(
+                pb::grant_object::GrantUdfObject { udf: udf.clone() },
+            )),
+            mt::principal::GrantObject::Stage(stage) => Some(pb::grant_object::Object::Stage(
+                pb::grant_object::GrantStageObject {
+                    stage: stage.clone(),
+                },
+            )),
         };
         Ok(pb::GrantObject {
             ver: VER,

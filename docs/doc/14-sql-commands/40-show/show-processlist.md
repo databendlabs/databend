@@ -8,7 +8,7 @@ The SHOW PROCESSLIST statement is one source of process information.
 
 ## Syntax
 
-```
+```sql
 SHOW PROCESSLIST
 ```
 

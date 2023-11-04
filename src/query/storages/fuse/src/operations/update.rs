@@ -114,7 +114,7 @@ impl FuseTable {
             proc.into_processor()
         })?;
 
-        self.chain_mutation_pipes(&ctx, pipeline, snapshot, MutationKind::Update, false)
+        self.chain_mutation_pipes(&ctx, pipeline, snapshot, MutationKind::Update, false, false)
     }
 
     #[async_backtrace::framed]
@@ -174,9 +174,10 @@ impl FuseTable {
                 });
 
                 let reader = self.create_block_reader(
+                    ctx.clone(),
                     Projection::Columns(remain_col_indices),
                     false,
-                    ctx.clone(),
+                    false,
                 )?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
@@ -235,7 +236,8 @@ impl FuseTable {
             projection: offset_map.values().cloned().collect(),
         });
 
-        let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection.clone(), false, false)?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(

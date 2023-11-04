@@ -37,8 +37,10 @@ use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::infer_schema::InferSchemaTable;
+use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::srf::FlattenTable;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -149,6 +151,10 @@ impl TableFunctionFactory {
             "infer_schema".to_string(),
             (next_id(), Arc::new(InferSchemaTable::create)),
         );
+        creators.insert(
+            "inspect_parquet".to_string(),
+            (next_id(), Arc::new(InspectParquetTable::create)),
+        );
 
         creators.insert(
             "list_stage".to_string(),
@@ -193,6 +199,11 @@ impl TableFunctionFactory {
         creators.insert(
             "fuse_encoding".to_string(),
             (next_id(), Arc::new(FuseEncodingTable::create)),
+        );
+
+        creators.insert(
+            "flatten".to_string(),
+            (next_id(), Arc::new(FlattenTable::create)),
         );
 
         TableFunctionFactory {

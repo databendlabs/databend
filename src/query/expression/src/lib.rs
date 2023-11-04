@@ -25,6 +25,7 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![feature(trait_alias)]
+#![feature(vec_into_raw_parts)]
 #![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(trusted_len)]
@@ -38,6 +39,7 @@
 #[allow(dead_code)]
 mod block;
 
+pub mod aggregate;
 mod convert_arrow_rs;
 pub mod converts;
 mod evaluator;
@@ -53,6 +55,7 @@ pub mod types;
 pub mod utils;
 pub mod values;
 
+pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;

@@ -17,7 +17,7 @@ common-expression = { path = "../../../expression" }
 common-functions = { path = "../../../functions" }
 
 storages-common-index = { path = "../index" }
-storages-common-table-meta = { path = "../table-meta" }
+storages-common-table-meta = { path = "../table_meta" }
 
 log = { workspace = true }
 serde = { workspace = true }

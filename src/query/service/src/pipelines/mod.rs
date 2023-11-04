@@ -22,10 +22,11 @@ use common_pipeline_core::pipeline;
 mod pipeline_build_res;
 mod pipeline_builder;
 
+pub use builders::ValueSource;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::Pipeline;
 pub use pipeline_build_res::PipelineBuildResult;
+pub use pipeline_build_res::PipelineBuilderData;
 pub use pipeline_builder::PipelineBuilder;
-pub use pipeline_builder::ValueSource;

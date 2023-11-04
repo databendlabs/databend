@@ -37,11 +37,6 @@ pub struct ParquetReadOptions {
 
 impl ParquetReadOptions {
     #[inline]
-    pub fn new() -> Self {
-        ParquetReadOptions::default()
-    }
-
-    #[inline]
     pub fn with_prune_row_groups(mut self, v: bool) -> Self {
         self.prune_row_groups = v;
         self

@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+pub mod count;
 pub mod counter;
 mod dump;
 pub mod histogram;
@@ -21,16 +22,16 @@ pub mod registry;
 
 pub type VecLabels = Vec<(&'static str, String)>;
 
+pub use counter::Counter;
 pub use dump::dump_metric_samples;
 pub use dump::HistogramCount;
 pub use dump::MetricSample;
 pub use dump::MetricValue;
 pub use dump::SummaryCount;
+pub use histogram::Histogram;
 pub use metrics_exporter_prometheus::PrometheusHandle;
-pub use prometheus_client::metrics::counter::Counter;
 pub use prometheus_client::metrics::family::Family;
 pub use prometheus_client::metrics::gauge::Gauge;
-pub use prometheus_client::metrics::histogram::Histogram;
 pub use registry::load_global_prometheus_registry;
 pub use registry::register_counter;
 pub use registry::register_counter_family;

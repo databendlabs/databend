@@ -167,20 +167,46 @@ impl ScalarExpr {
         }
     }
 
-    pub fn valid_for_clustering(&self) -> bool {
+    /// Returns true if the expression can be evaluated from a row of data.
+    pub fn evaluable(&self) -> bool {
         match self {
             ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => true,
             ScalarExpr::WindowFunction(_)
             | ScalarExpr::AggregateFunction(_)
             | ScalarExpr::SubqueryExpr(_)
             | ScalarExpr::UDFServerCall(_) => false,
-            ScalarExpr::FunctionCall(func) => {
-                func.arguments.iter().all(|arg| arg.valid_for_clustering())
+            ScalarExpr::FunctionCall(func) => func.arguments.iter().all(|arg| arg.evaluable()),
+            ScalarExpr::LambdaFunction(func) => func.args.iter().all(|arg| arg.evaluable()),
+            ScalarExpr::CastExpr(expr) => expr.argument.evaluable(),
+        }
+    }
+
+    pub fn try_project_column_binding(
+        &self,
+        f: impl Fn(&ColumnBinding) -> Option<ColumnBinding> + Copy,
+    ) -> Option<Self> {
+        match self {
+            ScalarExpr::BoundColumnRef(expr) => f(&expr.column).map(|x| {
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: x,
+                })
+            }),
+            ScalarExpr::FunctionCall(expr) => {
+                // Any of the arguments return None, then return None
+                let arguments = expr
+                    .arguments
+                    .iter()
+                    .map(|x| x.try_project_column_binding(f))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: expr.func_name.clone(),
+                    params: expr.params.clone(),
+                    arguments,
+                }))
             }
-            ScalarExpr::LambdaFunction(func) => {
-                func.args.iter().all(|arg| arg.valid_for_clustering())
-            }
-            ScalarExpr::CastExpr(expr) => expr.argument.valid_for_clustering(),
+            _ => None,
         }
     }
 }

@@ -26,6 +26,7 @@ use common_meta_app::background::BackgroundTaskType;
 use common_meta_app::background::CompactionStats;
 use common_meta_app::background::VacuumStats;
 use common_meta_app::schema::TableStatistics;
+use minitrace::func_name;
 
 use crate::common;
 

@@ -180,13 +180,13 @@ HashJoin
 │       └── AggregateFinal
 │           ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │           ├── group by: []
-│           ├── aggregate functions: [count(number), any(number)]
+│           ├── aggregate functions: [count(), any(number)]
 │           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │               ├── group by: []
-│               ├── aggregate functions: [count(number), any(number)]
+│               ├── aggregate functions: [count(), any(number)]
 │               ├── estimated rows: 1.00
 │               └── Filter
 │                   ├── output columns: [numbers.number (#1)]

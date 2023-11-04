@@ -3,10 +3,10 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop table if exists sample" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists sample" | $BENDSQL_CLIENT_CONNECT
 
 ## Create table
-cat <<EOF | $MYSQL_CLIENT_CONNECT
+cat <<EOF | $BENDSQL_CLIENT_CONNECT
 CREATE TABLE sample
 (
     Id     INT,
@@ -23,10 +23,10 @@ copy_from_test_csv=(
 
 echo "---test csv field with computed columns"
 for i in "${copy_from_test_csv[@]}"; do
-  echo "$i" | $MYSQL_CLIENT_CONNECT
-  echo "select * from sample" | $MYSQL_CLIENT_CONNECT
-  echo "truncate table sample" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $BENDSQL_CLIENT_CONNECT
+  echo "select * from sample" | $BENDSQL_CLIENT_CONNECT
+  echo "truncate table sample" | $BENDSQL_CLIENT_CONNECT
 done
 
 ## Drop table
-echo "drop table if exists sample;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists sample;" | $BENDSQL_CLIENT_CONNECT

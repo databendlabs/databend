@@ -859,12 +859,12 @@ query T
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
-├── output columns: [count() (#2)]
+├── output columns: [count(_1) (#2)]
 ├── group by: []
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [count() (#2)]
+    ├── output columns: [count(_1) (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
@@ -893,12 +893,12 @@ query T
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
-├── output columns: [count() (#2)]
+├── output columns: [count(_1) (#2)]
 ├── group by: []
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [count() (#2)]
+    ├── output columns: [count(_1) (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
@@ -923,7 +923,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan

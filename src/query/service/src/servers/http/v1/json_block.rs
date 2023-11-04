@@ -19,7 +19,6 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
@@ -54,7 +53,7 @@ pub fn block_to_json_value(
         let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
         for column in &columns {
             buf.clear();
-            encoder.write_field(column, row_index, &mut buf, true);
+            encoder.write_field(column, row_index, &mut buf, false);
             row.push(serde_json::to_value(String::from_utf8_lossy(&buf))?);
         }
         res.push(row)

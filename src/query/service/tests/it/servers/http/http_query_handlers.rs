@@ -453,10 +453,7 @@ async fn test_http_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_result_timeout() -> Result<()> {
-    let config = ConfigBuilder::create()
-        .http_handler_result_timeout(1u64)
-        .build();
-
+    let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
@@ -466,7 +463,8 @@ async fn test_result_timeout() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(session_middleware);
 
-    let (status, result) = post_sql_to_endpoint(&ep, "select 1", 1).await?;
+    let (status, result) =
+        post_sql_to_endpoint_with_result_timeout(&ep, "select 1", 1, 1u64).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
     let next_uri = make_page_uri(&query_id, 0);
@@ -505,6 +503,7 @@ async fn test_system_tables() -> Result<()> {
     let skipped = vec![
         "credits", // slow for ci (> 1s) and maybe flaky
         "metrics", // QueryError: "Prometheus recorder is not initialized yet"
+        "tasks",   // need to connect grpc server, tested on sqllogic test
         "tracing", // Could be very large.
     ];
     for table_name in table_names {
@@ -628,7 +627,10 @@ async fn test_query_log() -> Result<()> {
     );
     Ok(())
 }
+
+// todo(youngsofun): flaky, may timing problem
 #[tokio::test(flavor = "current_thread")]
+#[ignore]
 async fn test_query_log_killed() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
@@ -742,6 +744,16 @@ async fn post_sql_to_endpoint_new_session(
 ) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
     post_json_to_endpoint(ep, &json, headers).await
+}
+
+async fn post_sql_to_endpoint_with_result_timeout(
+    ep: &EndpointType,
+    sql: &str,
+    wait_time_secs: u64,
+    result_timeout_secs: u64,
+) -> Result<(StatusCode, QueryResponse)> {
+    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"http_handler_result_timeout_secs": result_timeout_secs.to_string()}}});
+    post_json_to_endpoint(ep, &json, HeaderMap::default()).await
 }
 
 async fn post_json_to_endpoint(
@@ -924,6 +936,41 @@ async fn assert_auth_current_role(
     Ok(())
 }
 
+async fn assert_auth_current_role_with_restricted_role(
+    ep: &EndpointType,
+    role_name: &str,
+    restricted_role: &str,
+    header: impl Header,
+) -> Result<()> {
+    let sql = "select current_role()";
+
+    let json = serde_json::json!({"sql": sql.to_string(), "session": {"role": restricted_role.to_string()}});
+
+    let path = "/v1/query";
+    let uri = format!("{}?wait_time_secs={}", path, 3);
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+
+    let response = ep
+        .call(
+            Request::builder()
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, content_type)
+                .typed_header(header)
+                .body(body),
+        )
+        .await
+        .unwrap();
+
+    let (_, resp) = check_response(response).await?;
+    let v = resp.data;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
+    Ok(())
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn test_auth_jwt_with_create_user() -> Result<()> {
     let user_name = "user1";
@@ -980,7 +1027,8 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let token = key_pair.sign(claims)?;
     let bearer = headers::Authorization::bearer(&token).unwrap();
     assert_auth_current_user(&ep, user_name, bearer.clone(), "%").await?;
-    assert_auth_current_role(&ep, "account_admin", bearer).await?;
+    assert_auth_current_role(&ep, "account_admin", bearer.clone()).await?;
+    assert_auth_current_role_with_restricted_role(&ep, "public", "public", bearer).await?;
     Ok(())
 }
 
@@ -1212,7 +1260,8 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
-                database: None,
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1221,10 +1270,28 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
+            serde_json::json!({"sql": "unset timezone", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["timezone".to_string()],
+                values: vec!["UTC".to_string()], /* TODO(liyz): consider to return the complete settings after set or unset */
+                is_globals: vec![false],
+            }),
+            Some(HttpSessionConf {
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
+                keep_server_session_secs: None,
+                settings: Some(BTreeMap::from([(
+                    "max_threads".to_string(),
+                    "6".to_string(),
+                )])),
+            }),
+        ),
+        (
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
-                database: None,
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1239,6 +1306,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),

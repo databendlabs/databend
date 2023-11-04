@@ -16,6 +16,7 @@ use common_meta_app as mt;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
+use minitrace::func_name;
 
 use crate::common;
 

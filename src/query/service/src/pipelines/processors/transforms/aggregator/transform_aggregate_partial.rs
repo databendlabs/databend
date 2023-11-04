@@ -209,17 +209,9 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             let agg_index = block.num_columns() - aggregate_functions.len() + index;
             let function = &aggregate_functions[index];
             let offset = offsets_aggregate_states[index];
-            let agg_state = block
-                .get_by_offset(agg_index)
-                .value
-                .as_column()
-                .unwrap()
-                .as_string()
-                .unwrap();
-            for (row, mut raw_state) in agg_state.iter().enumerate() {
-                let place = &places[row];
-                function.merge(place.next(offset), &mut raw_state)?;
-            }
+            let agg_state = block.get_by_offset(agg_index).value.as_column().unwrap();
+
+            function.batch_merge(places, offset, agg_state)?;
         }
 
         Ok(())

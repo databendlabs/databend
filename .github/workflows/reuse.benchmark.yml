@@ -39,9 +39,9 @@ env:
 
 jobs:
   local:
-    if: inputs.runner_provider == 'aws' && inputs.source == 'release'
+    if: inputs.source == 'release'
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
     strategy:
       matrix:
         dataset:
@@ -57,8 +57,6 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: Download artifact for pr
         if: inputs.source == 'pr'
         uses: ./.github/actions/artifact_download
@@ -112,8 +110,6 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-        env:
-          GH_TOKEN: ${{ github.token }}
       - uses: ./.github/actions/benchmark_cloud
         timeout-minutes: 20
         id: benchmark
@@ -207,6 +203,7 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         run: |
+          aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date --date='-1 month' -u +%Y)/$(date --date='-1 month' -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}
 

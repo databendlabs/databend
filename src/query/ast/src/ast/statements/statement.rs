@@ -21,10 +21,10 @@ use common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::ast::TableReference;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
@@ -45,18 +45,26 @@ pub enum Statement {
     Call(CallStmt),
 
     ShowSettings {
-        like: Option<String>,
+        show_options: Option<ShowOptions>,
     },
-    ShowProcessList,
-    ShowMetrics,
-    ShowEngines,
+    ShowProcessList {
+        show_options: Option<ShowOptions>,
+    },
+    ShowMetrics {
+        show_options: Option<ShowOptions>,
+    },
+    ShowEngines {
+        show_options: Option<ShowOptions>,
+    },
     ShowFunctions {
-        limit: Option<ShowLimit>,
+        show_options: Option<ShowOptions>,
     },
     ShowTableFunctions {
-        limit: Option<ShowLimit>,
+        show_options: Option<ShowOptions>,
     },
-    ShowIndexes,
+    ShowIndexes {
+        show_options: Option<ShowOptions>,
+    },
 
     KillStmt {
         kill_target: KillTarget,
@@ -79,11 +87,7 @@ pub enum Statement {
     Insert(InsertStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
-    Delete {
-        hints: Option<Hint>,
-        table_reference: TableReference,
-        selection: Option<Expr>,
-    },
+    Delete(DeleteStmt),
 
     Update(UpdateStmt),
 
@@ -229,6 +233,14 @@ pub enum Statement {
     DropNetworkPolicy(DropNetworkPolicyStmt),
     DescNetworkPolicy(DescNetworkPolicyStmt),
     ShowNetworkPolicies,
+
+    // tasks
+    CreateTask(CreateTaskStmt),
+    AlterTask(AlterTaskStmt),
+    ExecuteTask(ExecuteTaskStmt),
+    DescribeTask(DescribeTaskStmt),
+    DropTask(DropTaskStmt),
+    ShowTasks(ShowTasksStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -296,42 +308,50 @@ impl Display for Statement {
             Statement::Insert(insert) => write!(f, "{insert}")?,
             Statement::Replace(replace) => write!(f, "{replace}")?,
             Statement::MergeInto(merge_into) => write!(f, "{merge_into}")?,
-            Statement::Delete {
-                table_reference,
-                selection,
-                hints,
-            } => {
-                write!(f, "DELETE FROM {table_reference} ")?;
-                if let Some(hints) = hints {
-                    write!(f, "{} ", hints)?;
-                }
-                if let Some(conditions) = selection {
-                    write!(f, "WHERE {conditions} ")?;
-                }
-            }
+            Statement::Delete(delete) => write!(f, "{delete}")?,
             Statement::Update(update) => write!(f, "{update}")?,
             Statement::CopyIntoTable(stmt) => write!(f, "{stmt}")?,
             Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowSettings { like } => {
+            Statement::ShowSettings { show_options } => {
                 write!(f, "SHOW SETTINGS")?;
-                if like.is_some() {
-                    write!(f, " LIKE '{}'", like.as_ref().unwrap())?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
                 }
             }
-            Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
-            Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
-            Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
-            Statement::ShowIndexes => write!(f, "SHOW INDEXES")?,
-            Statement::ShowFunctions { limit } => {
+            Statement::ShowProcessList { show_options } => {
+                write!(f, "SHOW PROCESSLIST")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowMetrics { show_options } => {
+                write!(f, "SHOW METRICS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowEngines { show_options } => {
+                write!(f, "SHOW ENGINES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowIndexes { show_options } => {
+                write!(f, "SHOW INDEXES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowFunctions { show_options } => {
                 write!(f, "SHOW FUNCTIONS")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
                 }
             }
-            Statement::ShowTableFunctions { limit } => {
+            Statement::ShowTableFunctions { show_options } => {
                 write!(f, "SHOW TABLE_FUNCTIONS")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
                 }
             }
             Statement::KillStmt {
@@ -526,6 +546,12 @@ impl Display for Statement {
             Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
+            Statement::CreateTask(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterTask(stmt) => write!(f, "{stmt}")?,
+            Statement::ExecuteTask(stmt) => write!(f, "{stmt}")?,
+            Statement::DropTask(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowTasks(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeTask(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

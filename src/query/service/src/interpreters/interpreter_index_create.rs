@@ -52,11 +52,9 @@ impl Interpreter for CreateIndexInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            tenant.clone(),
-            Feature::AggregateIndex,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
 
         let index_name = self.plan.index_name.clone();
         let catalog = self.ctx.get_current_catalog();

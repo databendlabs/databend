@@ -6,7 +6,7 @@ Shows the list of user accounts.
 
 ## Syntax
 
-```
+```sql
 SHOW USERS
 ```
 

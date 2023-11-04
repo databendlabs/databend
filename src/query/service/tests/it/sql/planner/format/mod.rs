@@ -70,10 +70,10 @@ impl Table for DummyTable {
 
 #[test]
 fn test_format() {
-    let thread_name = match std::thread::current().name() {
-        None => panic!("thread name is none"),
-        Some(thread_name) => thread_name.to_string(),
-    };
+    let thread_name = std::thread::current()
+        .name()
+        .map(ToString::to_string)
+        .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
 
@@ -152,6 +152,7 @@ fn test_format() {
                 marker_index: None,
                 from_correlated_subquery: false,
                 contain_runtime_filter: false,
+                need_hold_hash_table: false,
             }
             .into(),
         ),

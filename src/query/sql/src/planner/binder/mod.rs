@@ -66,4 +66,5 @@ pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 pub use scalar_visitor::*;
 pub use table::parse_result_scan_args;
+pub use values::bind_values;
 pub use window::WindowOrderByInfo;

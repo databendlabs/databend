@@ -13,10 +13,8 @@
 // limitations under the License.
 
 mod aggregate_count;
-mod aggregate_function;
 
 mod aggregate_function_factory;
-mod aggregate_function_state;
 
 mod adaptors;
 mod aggregate_approx_count_distinct;
@@ -36,6 +34,7 @@ mod aggregate_null_result;
 mod aggregate_quantile_cont;
 mod aggregate_quantile_disc;
 mod aggregate_quantile_tdigest;
+mod aggregate_quantile_tdigest_weighted;
 mod aggregate_retention;
 mod aggregate_scalar_state;
 mod aggregate_skewness;
@@ -56,12 +55,12 @@ pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
 pub use aggregate_combinator_if::AggregateIfCombinator;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_covariance::AggregateCovarianceFunction;
+pub use aggregate_function::get_layout_offsets;
 pub use aggregate_function::AggregateFunction;
 pub use aggregate_function::AggregateFunctionRef;
+pub use aggregate_function::StateAddr;
+pub use aggregate_function::StateAddrs;
 pub use aggregate_function_factory::AggregateFunctionFactory;
-pub use aggregate_function_state::get_layout_offsets;
-pub use aggregate_function_state::StateAddr;
-pub use aggregate_function_state::StateAddrs;
 pub use aggregate_kurtosis::AggregateKurtosisFunction;
 pub use aggregate_min_max_any::AggregateMinMaxAnyFunction;
 pub use aggregate_null_result::AggregateNullResultFunction;
@@ -73,3 +72,4 @@ pub use aggregate_string_agg::AggregateStringAggFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
+pub use common_expression::aggregate as aggregate_function;

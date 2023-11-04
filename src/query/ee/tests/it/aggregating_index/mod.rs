@@ -14,3 +14,6 @@
 
 mod index_refresh;
 mod index_scan;
+
+const CATALOG: &str = "default";
+const DATABASE: &str = "default";

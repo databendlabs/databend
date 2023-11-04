@@ -2,22 +2,16 @@
 a	VARCHAR	NO	''	
 b	INT	NO	0	
 c	INT	NO	0	
-1.0	2
+1	2
 a	FLOAT	NO	0	
 b	VARCHAR	NO	''	
 c	INT	NO	0	
-ERROR 1105 (HY000) at line 1: Internal. Code: 1001, Text = invalid float literal while evaluating function `to_float32('a')`.
-ERROR 1105 (HY000) at line 1: UnknownColumn. Code: 1058, Text = Cannot find column b.
+Error: APIError: ResponseError with 1006: invalid float literal while evaluating function `to_float32('a')`
+Error: APIError: ResponseError with 1058: Cannot find column b
 0	1
-ERROR 1105 (HY000) at line 1: Internal. Code: 1001, Text = error: 
-  --> SQL:1:1
-  |
-1 | alter table test_modify_column_type.c modify column a float not null default 'a'
-  | ^^^^^^^^^^^^^^^ invalid float literal while evaluating function `to_float32('a')`
-
-.
-0.0	1
-0.0	1
+Error: APIError: ResponseError with 1006: invalid float literal while evaluating function `to_float32('a')`
+0	1
+0	1
 1.2	2
 1	10
 1	10

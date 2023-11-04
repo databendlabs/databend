@@ -12,7 +12,7 @@ String
 t2
 Table	Create Table
 String	String
-t2	CREATE TABLE `t2` (\n  `a` INT\n) ENGINE=FUSE
+t2	CREATE TABLE `t2` (\n  `a` INT NOT NULL\n) ENGINE=FUSE
 Field	Type	Null	Default	Extra
 String	String	String	String	String
 a	INT	NO	0	

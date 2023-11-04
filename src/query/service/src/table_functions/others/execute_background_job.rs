@@ -116,6 +116,7 @@ impl Table for ExecuteBackgroundJobTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| ExecuteBackgroundJobSource::create(ctx.clone(), output, self.job_name.clone()),

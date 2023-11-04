@@ -174,6 +174,7 @@ impl Parquet2Reader {
                         chunks,
                         part.num_rows,
                         column_node.field.clone(),
+                        column_node.init.clone(),
                     )?);
                     nested_fields.push(self.output_schema.field(idx).clone());
                 } else {
@@ -182,6 +183,7 @@ impl Parquet2Reader {
                         chunks,
                         part.num_rows,
                         column_node.field.clone(),
+                        column_node.init.clone(),
                         bitmap.clone(),
                     )?);
                     normal_fields.push(self.output_schema.field(idx).clone());
@@ -192,6 +194,7 @@ impl Parquet2Reader {
                     chunks,
                     part.num_rows,
                     column_node.field.clone(),
+                    column_node.init.clone(),
                 )?)
             }
         }

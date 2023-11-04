@@ -13,9 +13,9 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-aggregating-index = { path = "../ee-features/aggregating-index" }
+aggregating-index = { path = "../ee_features/aggregating_index" }
 async-backtrace = { workspace = true }
-background-service = { path = "../ee-features/background-service" }
+background-service = { path = "../ee_features/background_service" }
 common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
@@ -26,22 +26,19 @@ common-io = { path = "../../common/io" }
 common-license = { path = "../../common/license" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
-common-meta-types = { path = "../../meta/types" }
-common-settings = { path = "../../query/settings" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-data-mask-feature = { path = "../ee-features/data-mask" }
+data-mask-feature = { path = "../ee_features/data_mask" }
 databend-query = { path = "../service" }
 jsonb = { workspace = true }
 opendal = { workspace = true }
+storage-encryption = { path = "../ee_features/storage_encryption" }
 storages-common-cache = { path = "../storages/common/cache" }
-storages-common-table-meta = { path = "../storages/common/table-meta" }
-table-lock = { path = "../ee-features/table-lock" }
-vacuum-handler = { path = "../ee-features/vacuum-handler" }
-virtual-column = { path = "../ee-features/virtual-column" }
+storages-common-table-meta = { path = "../storages/common/table_meta" }
+vacuum-handler = { path = "../ee_features/vacuum_handler" }
+virtual-column = { path = "../ee_features/virtual_column" }
 
 arrow-array = { workspace = true }
 async-trait = "0.1.57"

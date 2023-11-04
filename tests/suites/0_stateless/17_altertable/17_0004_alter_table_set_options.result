@@ -1,8 +1,8 @@
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = table option snapshot_location is invalid for alter table statement.
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = table option snapshot_loc is invalid for alter table statement.
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = table option extrenal_location is invalid for alter table statement.
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = table option abc is invalid for alter table statement.
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = invalid block_per_segment option, can't be over 1000.
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = can't change storage_format for alter table statement.
-ERROR 1105 (HY000) at line 1: BadArguments. Code: 1006, Text = Unable to get field named "b". Valid fields: ["a"].
-ERROR 1105 (HY000) at line 1: TableOptionInvalid. Code: 1301, Text = Unsupported data type 'Decimal(4, 2)' for bloom index.
+Error: APIError: ResponseError with 1301: table option snapshot_location is invalid for alter table statement
+Error: APIError: ResponseError with 1301: table option snapshot_loc is invalid for alter table statement
+Error: APIError: ResponseError with 1301: table option extrenal_location is invalid for alter table statement
+Error: APIError: ResponseError with 1301: table option abc is invalid for alter table statement
+Error: APIError: ResponseError with 1301: invalid block_per_segment option, can't be over 1000
+Error: APIError: ResponseError with 1301: can't change storage_format for alter table statement
+Error: APIError: ResponseError with 1006: Unable to get field named "b". Valid fields: ["a"]
+Error: APIError: ResponseError with 1301: Unsupported data type 'Decimal(4, 2)' for bloom index

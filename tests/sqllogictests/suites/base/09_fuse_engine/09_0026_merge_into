@@ -2,6 +2,9 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+set enable_distributed_merge_into = 1;
+
+statement ok
 drop table if exists t1;
 
 statement ok
@@ -495,6 +498,13 @@ create table cluster_source(a int,b string,c int);
 statement ok
 insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a',3);
 
+## test update indetify error
+statement error 1006
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update set cluster_target.a = t2.a;
+
+statement error 1006
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update set t2.a = t2.a;
+
 statement ok
 merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
 
@@ -564,6 +574,57 @@ create table random_source(id bigint not null, id1 bigint, id2 bigint, id3 bigin
 
 statement ok
 merge into test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from random_source limit 1) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert *;
+
+## test update list #13297
+statement ok
+create table t11(a int,b string, c string);
+
+statement ok
+create table t12(a int,b string, c string);
+
+statement ok
+insert into t11 values(1,'b1','c1'),(2,'b2','c2');
+
+statement ok
+insert into t12 values(1,'b_5','c_5'),(3,'b_6','c_6');
+
+statement error 1065
+merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched and max(t11.a) > 0 then update set c = t12.c;
+
+statement error 1065
+merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched then update set c = count(*);
+
+## test issue #13287
+statement ok
+create table tt1 (a int, b int);
+
+statement ok
+merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
+
+query T
+select count(*) from tt1;
+----
+0
+
+## test issue #13367
+statement ok
+create table tt2(a bool, b variant, c map(string, string));
+
+statement ok
+insert into tt2 values (true, '10', {'k1':'v1'}), (false, '20', {'k2':'v2'})
+
+statement ok
+merge into tt2 using(select true as x) as t on (x and tt2.a) when matched and tt2.a then update set tt2.b = parse_json('30');
+
+query TTT
+select a, b, c from tt2 order by b;
+----
+0 20 {'k2':'v2'}
+1 30 {'k1':'v1'}
+
+
+statement ok
+set enable_distributed_merge_into = 0;
 
 statement ok
 set enable_experimental_merge_into = 0;

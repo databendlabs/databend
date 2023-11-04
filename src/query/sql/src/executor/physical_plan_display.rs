@@ -18,17 +18,17 @@ use std::fmt::Formatter;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::physical_plans::physical_merge_into_add_row_number::MergeIntoAddRowNumber;
+use super::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
-use crate::executor::physical_plans::physical_async_source::AsyncSourcerPlan;
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
-use crate::executor::physical_plans::physical_compact_partial::CompactPartial;
+use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
-use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
+use crate::executor::physical_plans::physical_copy_into::CopyIntoTable;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
-use crate::executor::physical_plans::physical_deduplicate::Deduplicate;
-use crate::executor::physical_plans::physical_delete_partial::DeletePartial;
+use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
 use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
 use crate::executor::physical_plans::physical_exchange::Exchange;
@@ -44,6 +44,10 @@ use crate::executor::physical_plans::physical_merge_into::MergeIntoSource;
 use crate::executor::physical_plans::physical_project::Project;
 use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
+use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
+use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
+use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer;
+use crate::executor::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
@@ -87,22 +91,28 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
-            PhysicalPlan::CompactPartial(compact_partial) => write!(f, "{}", compact_partial)?,
-            PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::CompactSource(compact) => write!(f, "{}", compact)?,
+            PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
-            PhysicalPlan::AsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
-            PhysicalPlan::Deduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
+            PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
+            PhysicalPlan::ReplaceDeduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::MergeIntoSource(merge_into_source) => write!(f, "{}", merge_into_source)?,
             PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
+            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
+                write!(f, "{}", merge_into_row_id_apply)?
+            }
+            PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -401,15 +411,15 @@ impl Display for DistributedInsertSelect {
     }
 }
 
-impl Display for CompactPartial {
+impl Display for CompactSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CompactPartial")
+        write!(f, "CompactSource")
     }
 }
 
-impl Display for DeletePartial {
+impl Display for DeleteSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DeletePartial")
+        write!(f, "DeleteSource")
     }
 }
 
@@ -418,7 +428,7 @@ impl Display for CommitSink {
         write!(f, "CommitSink")
     }
 }
-impl Display for CopyIntoTablePhysicalPlan {
+impl Display for CopyIntoTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CopyIntoTable")
     }
@@ -446,13 +456,13 @@ impl Display for ProjectSet {
     }
 }
 
-impl Display for AsyncSourcerPlan {
+impl Display for ReplaceAsyncSourcer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "AsyncSourcer")
     }
 }
 
-impl Display for Deduplicate {
+impl Display for ReplaceDeduplicate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Deduplicate")
     }
@@ -467,6 +477,18 @@ impl Display for ReplaceInto {
 impl Display for MergeInto {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MergeInto")
+    }
+}
+
+impl Display for MergeIntoAddRowNumber {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MergeIntoAddRowNumber")
+    }
+}
+
+impl Display for MergeIntoAppendNotMatched {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MergeIntoAppendNotMatched")
     }
 }
 
@@ -492,5 +514,17 @@ impl Display for Lambda {
             })
             .collect::<Vec<String>>();
         write!(f, "Lambda functions: {}", scalars.join(", "))
+    }
+}
+
+impl Display for ReclusterSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ReclusterSource")
+    }
+}
+
+impl Display for ReclusterSink {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ReclusterSink")
     }
 }

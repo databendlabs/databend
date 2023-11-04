@@ -67,10 +67,10 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
@@ -180,6 +180,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -203,6 +204,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -237,6 +239,7 @@ impl TestFixture {
             schema: TestFixture::variant_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -280,6 +283,7 @@ impl TestFixture {
             schema: TestFixture::computed_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -542,7 +546,7 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        build_fill_missing_columns_pipeline(
+        PipelineBuilder::build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),

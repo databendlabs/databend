@@ -78,38 +78,39 @@ impl FlightClient {
             )
             .await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming);
+        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn do_get(
         &mut self,
         query_id: &str,
         target: &str,
         fragment: usize,
     ) -> Result<FlightExchange> {
-        let streaming = self
-            .get_streaming(
-                RequestBuilder::create(Ticket::default())
-                    .with_metadata("x-type", "exchange_fragment")?
-                    .with_metadata("x-target", target)?
-                    .with_metadata("x-query-id", query_id)?
-                    .with_metadata("x-fragment-id", &fragment.to_string())?
-                    .build(),
-            )
-            .await?;
+        let request = RequestBuilder::create(Ticket::default())
+            .with_metadata("x-type", "exchange_fragment")?
+            .with_metadata("x-target", target)?
+            .with_metadata("x-query-id", query_id)?
+            .with_metadata("x-fragment-id", &fragment.to_string())?
+            .build();
+        let request = common_tracing::inject_span_to_tonic_request(request);
 
-        let (notify, rx) = Self::streaming_receiver(streaming);
+        let streaming = self.get_streaming(request).await?;
+
+        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     fn streaming_receiver(
+        query_id: &str,
         mut streaming: Streaming<FlightData>,
     ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
         let notify = Arc::new(tokio::sync::Notify::new());
-        GlobalIORuntime::instance().spawn({
+        GlobalIORuntime::instance().spawn(query_id, {
             let notify = notify.clone();
             async move {
                 let mut notified = Box::pin(notify.notified());
@@ -156,8 +157,8 @@ impl FlightClient {
     }
 
     // Execute do_action.
-    #[minitrace::trace]
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();

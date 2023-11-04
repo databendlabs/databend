@@ -42,7 +42,7 @@ pub async fn build_query_pipeline(
         build_query_pipeline_without_render_result_set(ctx, plan, enable_profile).await?;
 
     let input_schema = plan.output_schema()?;
-    PipelineBuilder::render_result_set(
+    PipelineBuilder::build_result_projection(
         &ctx.get_function_context()?,
         input_schema,
         result_columns,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::fmt::Formatter;
 
 use common_base::base::tokio::sync::oneshot::Sender;
 use common_meta_kvapi::kvapi::GetKVReply;
@@ -23,8 +24,8 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReq;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
@@ -33,11 +34,10 @@ use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use tonic::codegen::InterceptedService;
-use tonic::transport::Channel;
-use tonic::Streaming;
+use minitrace::Span;
+use tonic::codegen::BoxStream;
 
-use crate::grpc_client::AuthInterceptor;
+use crate::grpc_client::RealClient;
 
 /// A request that is sent by a meta-client handle to its worker.
 pub struct ClientWorkerRequest {
@@ -48,6 +48,9 @@ pub struct ClientWorkerRequest {
 
     /// Request body
     pub(crate) req: Request,
+
+    /// Tracing span for this request
+    pub(crate) span: Span,
 }
 
 impl fmt::Debug for ClientWorkerRequest {
@@ -108,6 +111,9 @@ pub enum Request {
     /// Get endpoints, for test
     GetEndpoints(GetEndpoints),
 
+    /// Get cluster status, for metactl
+    GetClusterStatus(GetClusterStatus),
+
     /// Get info about the client
     GetClientInfo(GetClientInfo),
 }
@@ -127,29 +133,78 @@ impl Request {
             Request::Export(_) => "Export",
             Request::MakeClient(_) => "MakeClient",
             Request::GetEndpoints(_) => "GetEndpoints",
+            Request::GetClusterStatus(_) => "GetClusterStatus",
             Request::GetClientInfo(_) => "GetClientInfo",
         }
     }
 }
 
 /// Meta-client worker-to-handle response body
-#[derive(Debug, derive_more::TryInto)]
+#[derive(derive_more::TryInto)]
 pub enum Response {
     Get(Result<GetKVReply, MetaError>),
     MGet(Result<MGetKVReply, MetaError>),
     List(Result<ListKVReply, MetaError>),
-    StreamGet(Result<Streaming<StreamItem>, MetaError>),
-    StreamMGet(Result<Streaming<StreamItem>, MetaError>),
-    StreamList(Result<Streaming<StreamItem>, MetaError>),
+    StreamGet(Result<BoxStream<StreamItem>, MetaError>),
+    StreamMGet(Result<BoxStream<StreamItem>, MetaError>),
+    StreamList(Result<BoxStream<StreamItem>, MetaError>),
     Upsert(Result<UpsertKVReply, MetaError>),
     Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
-    MakeClient(
-        Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>,
-    ),
+    MakeClient(Result<(RealClient, u64), MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),
+    GetClusterStatus(Result<ClusterStatus, MetaError>),
     GetClientInfo(Result<ClientInfo, MetaError>),
+}
+
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Response::Get(x) => {
+                write!(f, "Get({:?})", x)
+            }
+            Response::MGet(x) => {
+                write!(f, "MGet({:?})", x)
+            }
+            Response::List(x) => {
+                write!(f, "List({:?})", x)
+            }
+            Response::StreamGet(x) => {
+                write!(f, "StreamGet({:?})", x.as_ref().map(|_s| "<stream>"))
+            }
+            Response::StreamMGet(x) => {
+                write!(f, "StreamMGet({:?})", x.as_ref().map(|_s| "<stream>"))
+            }
+            Response::StreamList(x) => {
+                write!(f, "StreamList({:?})", x.as_ref().map(|_s| "<stream>"))
+            }
+            Response::Upsert(x) => {
+                write!(f, "Upsert({:?})", x)
+            }
+            Response::Txn(x) => {
+                write!(f, "Txn({:?})", x)
+            }
+            Response::Watch(x) => {
+                write!(f, "Watch({:?})", x)
+            }
+            Response::Export(x) => {
+                write!(f, "Export({:?})", x)
+            }
+            Response::MakeClient(x) => {
+                write!(f, "MakeClient({:?})", x)
+            }
+            Response::GetEndpoints(x) => {
+                write!(f, "GetEndpoints({:?})", x)
+            }
+            Response::GetClusterStatus(x) => {
+                write!(f, "GetClusterStatus({:?})", x)
+            }
+            Response::GetClientInfo(x) => {
+                write!(f, "GetClientInfo({:?})", x)
+            }
+        }
+    }
 }
 
 impl Response {
@@ -203,6 +258,10 @@ impl Response {
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::GetClusterStatus(res) => res
+                .as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static)),
             Response::GetClientInfo(res) => res
                 .as_ref()
                 .err()
@@ -225,6 +284,10 @@ pub struct MakeClient {}
 /// Get all meta server endpoints
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct GetEndpoints {}
+
+/// Get cluster status
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetClusterStatus {}
 
 /// Get info about client
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

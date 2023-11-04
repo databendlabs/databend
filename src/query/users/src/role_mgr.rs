@@ -18,6 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::RoleApi;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
+use common_meta_app::principal::OwnershipInfo;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType;
@@ -114,6 +116,10 @@ impl UserApiProvider {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
+        account_admin.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
+        );
 
         let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         public.grants.grant_privileges(
@@ -141,19 +147,31 @@ impl UserApiProvider {
     pub async fn grant_ownership_to_role(
         &self,
         tenant: &str,
-        from: &String,
-        to: &String,
-        object: GrantObject,
+        object: &GrantObjectByID,
+        new_role: &str,
     ) -> Result<()> {
         // from and to role must exists
-        self.get_role(tenant, from.clone()).await?;
-        self.get_role(tenant, to.clone()).await?;
+        self.get_role(tenant, new_role.to_string()).await?;
 
         let client = self.get_role_api_client(tenant)?;
         client
-            .grant_ownership(from, to, &object)
+            .grant_ownership(object, new_role)
             .await
             .map_err(|e| e.add_message_back("(while set role ownership)"))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_ownership(
+        &self,
+        tenant: &str,
+        object: &GrantObjectByID,
+    ) -> Result<Option<OwnershipInfo>> {
+        let client = self.get_role_api_client(tenant)?;
+        let ownership = client
+            .get_ownership(object)
+            .await
+            .map_err(|e| e.add_message_back("(while get ownership)"))?;
+        Ok(ownership)
     }
 
     #[async_backtrace::framed]

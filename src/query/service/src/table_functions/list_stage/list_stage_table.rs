@@ -129,6 +129,7 @@ impl Table for ListStageTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| ListStagesSource::create(ctx.clone(), output, self.args_parsed.clone()),

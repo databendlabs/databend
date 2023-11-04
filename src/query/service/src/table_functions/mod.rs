@@ -14,6 +14,7 @@
 
 mod async_crash_me;
 mod infer_schema;
+mod inspect_parquet;
 mod list_stage;
 mod numbers;
 mod openai;
@@ -32,5 +33,6 @@ pub use others::LicenseInfoTable;
 pub use others::SuggestedBackgroundTasksSource;
 pub use others::SuggestedBackgroundTasksTable;
 pub use others::TenantQuotaTable;
+pub use srf::FlattenTable;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;

@@ -23,21 +23,19 @@ use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::license::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
-use crate::table_lock::RealTableLockHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct MockServices;
 impl MockServices {
     #[async_backtrace::framed]
-    pub async fn init(_config: InnerConfig, public_key: String) -> Result<()> {
-        let rm = RealLicenseManager::new(public_key);
+    pub async fn init(cfg: InnerConfig, public_key: String) -> Result<()> {
+        let rm = RealLicenseManager::new(cfg.query.tenant_id.clone(), public_key);
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
         };
         GlobalInstance::set(Arc::new(wrapper));
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
-        RealTableLockHandler::init()?;
         RealDatamaskHandler::init()?;
         RealVirtualColumnHandler::init()?;
         Ok(())

@@ -285,11 +285,74 @@ ShowColumns(
 
 
 ---------- Input ----------
-show processlist;
+show processlist like 't%' limit 2;
 ---------- Output ---------
-SHOW PROCESSLIST
+SHOW PROCESSLIST LIKE 't%' LIMIT 2
 ---------- AST ------------
-ShowProcessList
+ShowProcessList {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "t%",
+                },
+            ),
+            limit: Some(
+                2,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show processlist where database='default' limit 2;
+---------- Output ---------
+SHOW PROCESSLIST WHERE (database = 'default') LIMIT 2
+---------- AST ------------
+ShowProcessList {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            31..32,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                23..31,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "database",
+                                    quote: None,
+                                    span: Some(
+                                        23..31,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                32..41,
+                            ),
+                            lit: String(
+                                "default",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                2,
+            ),
+        },
+    ),
+}
 
 
 ---------- Input ----------
@@ -1309,7 +1372,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32)
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1380,7 +1443,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32)
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1571,7 +1634,7 @@ UseDatabase {
 ---------- Input ----------
 create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol='binary', url='<hive-meta-store>' )
+CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -7016,9 +7079,46 @@ CreateStage(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "1a2b3c",
+                        "aws_secret_key": "4x5y6z",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c', aws_secret_key='4x5y6z' ) FILE_FORMAT = (compression='GZIP', record_delimiter=',', type='CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7055,7 +7155,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key='4x5y6z', account_name='1a2b3c' ) FILE_FORMAT = (compression='GZIP', record_delimiter=',', type='CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8102,7 +8202,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);
 ---------- Output ---------
-ALTER TABLE t SET OPTIONS (block_per_segment='500', snapshot_location='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk')
+ALTER TABLE t SET OPTIONS (block_per_segment = '500', snapshot_location = '1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk')
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -8421,7 +8521,7 @@ VacuumDropTable(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment')comment='table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment')comment = 'table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -9232,8 +9332,8 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9288,8 +9388,8 @@ COPY INTO mytable
                 size_limit=10
                 max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9353,8 +9453,8 @@ COPY INTO mytable
                 size_limit=10
                 max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 MAX_FILES = 2000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 2000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9420,8 +9520,8 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9489,8 +9589,8 @@ COPY INTO mytable
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9658,8 +9758,8 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @my_stage FILE_FORMAT = (error_on_column_count_mismatch='false', field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @my_stage FILE_FORMAT = (error_on_column_count_mismatch = 'false', field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9713,8 +9813,8 @@ COPY INTO 's3://mybucket/data.csv'
                     skip_header = 1
                 )
 ---------- Output ---------
-COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SINGLE = false MAX_FILE_SIZE= 0
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -9798,8 +9898,8 @@ COPY INTO @my_stage
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO @my_stage FROM mytable FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SINGLE = false MAX_FILE_SIZE= 0
+COPY INTO @my_stage FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -9847,8 +9947,8 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key', aws_secret_key='secret_key' ) FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9914,8 +10014,8 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9969,8 +10069,8 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10024,8 +10124,8 @@ COPY INTO mytable
                 )
                 force=true;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10080,8 +10180,8 @@ COPY INTO mytable
                 size_limit=10
                 disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter=',', record_delimiter='
-', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10143,7 +10243,7 @@ COPY INTO books FROM 's3://databend/books.csv'
                 )
                 FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id='ROOTUSER', endpoint_url='http://localhost:9000/', region='us-west-2', secret_access_key='CHANGEME123' ) FILE_FORMAT = (type='CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '********', endpoint_url = '********', region = '********', secret_access_key = '********' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10228,13 +10328,427 @@ Call(
 
 
 ---------- Input ----------
-show settings like 'enable%'
+show settings like 'enable%' limit 1
 ---------- Output ---------
-SHOW SETTINGS LIKE 'enable%'
+SHOW SETTINGS LIKE 'enable%' LIMIT 1
 ---------- AST ------------
 ShowSettings {
-    like: Some(
-        "enable%",
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "enable%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show settings where name='max_memory_usage' limit 1
+---------- Output ---------
+SHOW SETTINGS WHERE (name = 'max_memory_usage') LIMIT 1
+---------- AST ------------
+ShowSettings {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            24..25,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                20..24,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        20..24,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                25..43,
+                            ),
+                            lit: String(
+                                "max_memory_usage",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show functions like 'today%' limit 1
+---------- Output ---------
+SHOW FUNCTIONS LIKE 'today%' LIMIT 1
+---------- AST ------------
+ShowFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "today%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show functions where name='to_day_of_year' limit 1
+---------- Output ---------
+SHOW FUNCTIONS WHERE (name = 'to_day_of_year') LIMIT 1
+---------- AST ------------
+ShowFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            25..26,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                21..25,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        21..25,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                26..42,
+                            ),
+                            lit: String(
+                                "to_day_of_year",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show engines like 'FU%' limit 1
+---------- Output ---------
+SHOW ENGINES LIKE 'FU%' LIMIT 1
+---------- AST ------------
+ShowEngines {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "FU%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show engines where engine='MEMORY' limit 1
+---------- Output ---------
+SHOW ENGINES WHERE (engine = 'MEMORY') LIMIT 1
+---------- AST ------------
+ShowEngines {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            25..26,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                19..25,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "engine",
+                                    quote: None,
+                                    span: Some(
+                                        19..25,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                26..34,
+                            ),
+                            lit: String(
+                                "MEMORY",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show metrics like '%parse%' limit 1
+---------- Output ---------
+SHOW METRICS LIKE '%parse%' LIMIT 1
+---------- AST ------------
+ShowMetrics {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "%parse%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show metrics where metric='session_connect_numbers' limit 1
+---------- Output ---------
+SHOW METRICS WHERE (metric = 'session_connect_numbers') LIMIT 1
+---------- AST ------------
+ShowMetrics {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            25..26,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                19..25,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "metric",
+                                    quote: None,
+                                    span: Some(
+                                        19..25,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                26..51,
+                            ),
+                            lit: String(
+                                "session_connect_numbers",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show table_functions like 'fuse%' limit 1
+---------- Output ---------
+SHOW TABLE_FUNCTIONS LIKE 'fuse%' LIMIT 1
+---------- AST ------------
+ShowTableFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "fuse%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show table_functions where name='fuse_snapshot' limit 1
+---------- Output ---------
+SHOW TABLE_FUNCTIONS WHERE (name = 'fuse_snapshot') LIMIT 1
+---------- AST ------------
+ShowTableFunctions {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            31..32,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                27..31,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        27..31,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                32..47,
+                            ),
+                            lit: String(
+                                "fuse_snapshot",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show indexes like 'test%' limit 1
+---------- Output ---------
+SHOW INDEXES LIKE 'test%' LIMIT 1
+---------- AST ------------
+ShowIndexes {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "test%",
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+show indexes where name='test_idx' limit 1
+---------- Output ---------
+SHOW INDEXES WHERE (name = 'test_idx') LIMIT 1
+---------- AST ------------
+ShowIndexes {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            23..24,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                19..23,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "name",
+                                    quote: None,
+                                    span: Some(
+                                        19..23,
+                                    ),
+                                },
+                            ),
+                        },
+                        right: Literal {
+                            span: Some(
+                                24..34,
+                            ),
+                            lit: String(
+                                "test_idx",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: Some(
+                1,
+            ),
+        },
     ),
 }
 
@@ -10594,6 +11108,78 @@ GrantShareObject(
             "tb1",
         ),
         privilege: Select,
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON stage s1 TO a;
+---------- Output ---------
+GRANT ALL PRIVILEGES ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT read ON stage s1 TO a;
+---------- Output ---------
+GRANT Read ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Read,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT write ON stage s1 TO a;
+---------- Output ---------
+GRANT Write ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Write,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
     },
 )
 
@@ -11399,20 +11985,20 @@ Query(
 
 
 ---------- Input ----------
-SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;
+SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', connection => (ENDPOINT_URL = 'xxx')) t;
 ---------- Output ---------
-SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet',endpoint_url=>'xxx' ) AS t
+SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet', CONNECTION => (endpoint_url = 'xxx' ) ) AS t
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            0..83,
+            0..98,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    0..83,
+                    0..98,
                 ),
                 hints: None,
                 distinct: false,
@@ -11440,7 +12026,7 @@ Query(
                 from: [
                     Location {
                         span: Some(
-                            15..83,
+                            15..98,
                         ),
                         location: Uri(
                             UriLocation {
@@ -11470,7 +12056,7 @@ Query(
                                     name: "t",
                                     quote: None,
                                     span: Some(
-                                        82..83,
+                                        97..98,
                                     ),
                                 },
                                 columns: [],
@@ -12772,6 +13358,237 @@ AlterNetworkPolicy(
         comment: Some(
             "test",
         ),
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 MINUTE SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT *
+FROM
+    MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: IntervalMinutes(
+            15,
+        ),
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        sql: "SELECT *\nFROM\n    MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO
+    t (c1, c2)
+VALUES
+    (1, 2), (3, 4)
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: CronExpression(
+            "0 6 * * *",
+            Some(
+                "America/Los_Angeles",
+            ),
+        ),
+        suspend_task_after_num_failures: None,
+        comments: "serverless + cron",
+        sql: "INSERT INTO\n    t (c1, c2)\nVALUES\n    (1, 2), (3, 4)",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 12 * * *' AS VACUUM TABLE t 
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: CronExpression(
+            "0 12 * * *",
+            None,
+        ),
+        suspend_task_after_num_failures: None,
+        comments: "",
+        sql: "VACUUM TABLE t ",
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 RESUME
+---------- Output ---------
+ALTER TASK MyTask1 RESUME
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Resume,
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SUSPEND
+---------- Output ---------
+ALTER TASK MyTask1 SUSPEND
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Suspend,
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
+---------- Output ---------
+ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+            schedule: Some(
+                CronExpression(
+                    "0 6 * * *",
+                    Some(
+                        "America/Los_Angeles",
+                    ),
+                ),
+            ),
+            suspend_task_after_num_failures: None,
+            comments: Some(
+                "serverless + cron",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
+---------- Output ---------
+ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 13 MINUTE SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+            schedule: Some(
+                IntervalMinutes(
+                    13,
+                ),
+            ),
+            suspend_task_after_num_failures: Some(
+                10,
+            ),
+            comments: Some(
+                "serverless + cron",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()
+---------- Output ---------
+ALTER TASK MyTask2 AS SELECT CURRENT_VERSION()
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask2",
+        options: ModifyAs(
+            "SELECT CURRENT_VERSION()",
+        ),
+    },
+)
+
+
+---------- Input ----------
+DROP TASK MyTask1
+---------- Output ---------
+DROP TASK MyTask1
+---------- AST ------------
+DropTask(
+    DropTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+    },
+)
+
+
+---------- Input ----------
+SHOW TASKS
+---------- Output ---------
+SHOW TASKS
+---------- AST ------------
+ShowTasks(
+    ShowTasksStmt {
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+EXECUTE TASK MyTask
+---------- Output ---------
+EXECUTE TASK MyTask
+---------- AST ------------
+ExecuteTask(
+    ExecuteTaskStmt {
+        name: "MyTask",
+    },
+)
+
+
+---------- Input ----------
+DESC TASK MyTask
+---------- Output ---------
+DESCRIBE TASK MyTask
+---------- AST ------------
+DescribeTask(
+    DescribeTaskStmt {
+        name: "MyTask",
     },
 )
 
