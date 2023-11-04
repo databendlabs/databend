@@ -23,13 +23,13 @@ use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageInfo;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
-use common_sql::executor::Deduplicate;
 use common_sql::executor::Exchange;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
+use common_sql::executor::ReplaceAsyncSourcer;
+use common_sql::executor::ReplaceDeduplicate;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
 use common_sql::plans::InsertInputSource;
@@ -279,19 +279,21 @@ impl ReplaceInterpreter {
             vec![]
         };
 
-        root = Box::new(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
-            input: root,
-            on_conflicts: on_conflicts.clone(),
-            bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
-            table_is_empty,
-            table_info: table_info.clone(),
-            catalog_info: catalog.info(),
-            select_ctx,
-            table_schema: plan.schema.clone(),
-            table_level_range_index,
-            need_insert: true,
-            delete_when,
-        })));
+        root = Box::new(PhysicalPlan::ReplaceDeduplicate(Box::new(
+            ReplaceDeduplicate {
+                input: root,
+                on_conflicts: on_conflicts.clone(),
+                bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
+                table_is_empty,
+                table_info: table_info.clone(),
+                catalog_info: catalog.info(),
+                select_ctx,
+                table_schema: plan.schema.clone(),
+                table_level_range_index,
+                need_insert: true,
+                delete_when,
+            },
+        )));
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
@@ -377,11 +379,13 @@ impl ReplaceInterpreter {
         value_data: &str,
         span_offset: usize,
     ) -> Result<Box<PhysicalPlan>> {
-        Ok(Box::new(PhysicalPlan::AsyncSourcer(AsyncSourcerPlan {
-            value_data: value_data.to_string(),
-            start: span_offset,
-            schema,
-        })))
+        Ok(Box::new(PhysicalPlan::ReplaceAsyncSourcer(
+            ReplaceAsyncSourcer {
+                value_data: value_data.to_string(),
+                start: span_offset,
+                schema,
+            },
+        )))
     }
 
     #[async_backtrace::framed]

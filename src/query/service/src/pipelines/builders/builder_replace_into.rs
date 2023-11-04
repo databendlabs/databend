@@ -25,8 +25,8 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
-use common_sql::executor::AsyncSourcerPlan;
-use common_sql::executor::Deduplicate;
+use common_sql::executor::ReplaceAsyncSourcer;
+use common_sql::executor::ReplaceDeduplicate;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
 use common_sql::NameResolutionContext;
@@ -52,7 +52,10 @@ impl PipelineBuilder {
     }
 
     // build async sourcer pipeline.
-    pub(crate) fn build_async_sourcer(&mut self, async_sourcer: &AsyncSourcerPlan) -> Result<()> {
+    pub(crate) fn build_async_sourcer(
+        &mut self,
+        async_sourcer: &ReplaceAsyncSourcer,
+    ) -> Result<()> {
         self.main_pipeline.add_source(
             |output| {
                 let name_resolution_ctx = NameResolutionContext::try_from(self.settings.as_ref())?;
@@ -229,8 +232,8 @@ impl PipelineBuilder {
     }
 
     // build deduplicate pipeline.
-    pub(crate) fn build_deduplicate(&mut self, deduplicate: &Deduplicate) -> Result<()> {
-        let Deduplicate {
+    pub(crate) fn build_deduplicate(&mut self, deduplicate: &ReplaceDeduplicate) -> Result<()> {
+        let ReplaceDeduplicate {
             input,
             on_conflicts,
             bloom_filter_column_indexes,
@@ -256,7 +259,7 @@ impl PipelineBuilder {
             select_schema,
         }) = select_ctx
         {
-            PipelineBuilder::render_result_set(
+            PipelineBuilder::build_result_projection(
                 &self.func_ctx,
                 input.output_schema()?,
                 select_column_bindings,

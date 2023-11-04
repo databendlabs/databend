@@ -31,8 +31,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::AddRowNumber;
 use common_sql::executor::MergeInto;
+use common_sql::executor::MergeIntoAddRowNumber;
 use common_sql::executor::MergeIntoAppendNotMatched;
 use common_sql::executor::MergeIntoSource;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
@@ -52,7 +52,10 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     // Build and add row_number column
-    pub(crate) fn build_add_row_number(&mut self, add_row_number: &AddRowNumber) -> Result<()> {
+    pub(crate) fn build_add_row_number(
+        &mut self,
+        add_row_number: &MergeIntoAddRowNumber,
+    ) -> Result<()> {
         // it must be distributed merge into execution
         self.build_pipeline(&add_row_number.input)?;
         let node_index = add_row_number
