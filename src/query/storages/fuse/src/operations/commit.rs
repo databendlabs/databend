@@ -272,7 +272,7 @@ impl FuseTable {
             });
     }
 
-    // TODO refactor, it is called by segment compaction and re-cluster now
+    // TODO refactor, it is called by segment compaction
     #[async_backtrace::framed]
     pub async fn commit_mutation(
         &self,
