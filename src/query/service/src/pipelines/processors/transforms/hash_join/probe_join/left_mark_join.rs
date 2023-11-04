@@ -34,7 +34,7 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn probe_left_mark_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_mark_join<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -157,7 +157,7 @@ impl HashJoinProbeState {
         Ok(vec![])
     }
 
-    pub(crate) fn probe_left_mark_join_with_conjunct<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_mark_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,

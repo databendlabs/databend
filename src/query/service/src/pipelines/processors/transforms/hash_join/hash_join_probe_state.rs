@@ -108,10 +108,10 @@ impl HashJoinProbeState {
         barrier: Barrier,
         restore_barrier: Barrier,
     ) -> Result<Self> {
-        if matches!(join_type, &JoinType::Right | &JoinType::RightSingle) {
-            probe_schema = probe_schema_wrap_nullable(&probe_schema);
-        }
-        if join_type == &JoinType::Full {
+        if matches!(
+            join_type,
+            &JoinType::Right | &JoinType::RightSingle | &JoinType::Full
+        ) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
         }
         let hash_key_types = probe_keys
@@ -253,40 +253,48 @@ impl HashJoinProbeState {
             );
         }
 
+        // Adaptive early filtering.
         probe_state.key_nums += if let Some(valids) = &valids {
             (valids.len() - valids.unset_bits()) as u64
         } else {
             input_num_rows as u64
         };
-        // Adaptive early filtering.
         let prefer_early_filtering =
-            (probe_state.key_hash_matched_nums as f64) / (probe_state.key_nums as f64) < 0.95;
+            (probe_state.key_hash_matched_nums as f64) / (probe_state.key_nums as f64) < 0.8;
+
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
+                // Build `keys` and get the hashes of `keys`.
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input_num_rows)?;
                 let keys = table
                     .hash_method
                     .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
-                // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+
+                // Perform a round of hash table probe.
                 if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
                     probe_state.selection_count = if prefer_early_filtering {
+                        // Early filtering, use selection to get better performance.
                         probe_state.probe_with_selection = true;
+
                         table.hash_table.early_filtering_probe_with_selection(
                             &mut probe_state.hashes,
                             valids,
                             &mut probe_state.selection,
                         )
                     } else {
+                        // If don't do early filtering, don't use selection.
                         probe_state.probe_with_selection = false;
+
                         table.hash_table.probe(&mut probe_state.hashes, valids)
                     };
                     probe_state.key_hash_matched_nums += probe_state.selection_count as u64;
                 } else {
-                    // For these join types, we don't use selection: full, left, left single, left anti.
+                    // For left join, left single join, full join and left anti join, don't use selection.
                     probe_state.probe_with_selection = false;
+
                     let count = if prefer_early_filtering {
                         table
                             .hash_table
@@ -296,12 +304,50 @@ impl HashJoinProbeState {
                     };
                     probe_state.key_hash_matched_nums += count as u64;
                 }
+
+                // Continue to probe hash table and process data blocks.
                 self.result_blocks(&input, keys, &table.hash_table, probe_state)
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })
+    }
+
+    /// Checks if a join type can eliminate valids.
+    pub fn check_for_eliminate_valids(
+        from_correlated_subquery: bool,
+        join_type: &JoinType,
+    ) -> bool {
+        if !from_correlated_subquery {
+            return false;
+        }
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Full
+                | JoinType::Left
+                | JoinType::LeftSingle
+                | JoinType::LeftAnti
+                | JoinType::LeftSemi
+                | JoinType::LeftMark
+                | JoinType::RightMark
+        )
+    }
+
+    /// Checks if a join type can use selection.
+    pub fn check_for_selection(join_type: &JoinType) -> bool {
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+                | JoinType::RightMark
+                | JoinType::LeftSemi
+                | JoinType::LeftMark
+        )
     }
 
     pub fn probe_attach(&self) -> Result<usize> {
@@ -744,41 +790,5 @@ impl HashJoinProbeState {
             build_indexes_idx = 0;
         }
         Ok(result_blocks)
-    }
-
-    /// Checks if a join type can use selection.
-    pub fn check_for_eliminate_valids(
-        from_correlated_subquery: bool,
-        join_type: &JoinType,
-    ) -> bool {
-        if !from_correlated_subquery {
-            return false;
-        }
-        matches!(
-            join_type,
-            JoinType::Inner
-                | JoinType::Full
-                | JoinType::Left
-                | JoinType::LeftSingle
-                | JoinType::LeftAnti
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-                | JoinType::RightMark
-        )
-    }
-
-    /// Checks if a join type can eliminate valids.
-    pub fn check_for_selection(join_type: &JoinType) -> bool {
-        matches!(
-            join_type,
-            JoinType::Inner
-                | JoinType::Right
-                | JoinType::RightSingle
-                | JoinType::RightSemi
-                | JoinType::RightAnti
-                | JoinType::RightMark
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-        )
     }
 }

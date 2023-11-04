@@ -19,46 +19,6 @@ use common_hashtable::RowPtr;
 use super::desc::MARKER_KIND_FALSE;
 use crate::sql::plans::JoinType;
 
-pub struct MutableIndexes {
-    pub(crate) probe_indexes: Vec<u32>,
-    pub(crate) build_indexes: Vec<RowPtr>,
-}
-
-impl MutableIndexes {
-    fn new(size: usize) -> Self {
-        Self {
-            probe_indexes: vec![0; size],
-            build_indexes: vec![
-                RowPtr {
-                    chunk_index: 0,
-                    row_index: 0,
-                };
-                size
-            ],
-        }
-    }
-}
-
-pub struct ProbeBlockGenerationState {
-    pub(crate) is_probe_projected: bool,
-    pub(crate) true_validity: Bitmap,
-    pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
-}
-
-impl ProbeBlockGenerationState {
-    fn new(size: usize, has_string_column: bool) -> Self {
-        Self {
-            is_probe_projected: false,
-            true_validity: Bitmap::new_constant(true, size),
-            string_items_buf: if has_string_column {
-                Some(vec![(0, 0); size])
-            } else {
-                None
-            },
-        }
-    }
-}
-
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
@@ -139,10 +99,47 @@ impl ProbeState {
     // Reset some states which changed during probe.
     // Only be called when spill is enabled.
     pub fn reset(&mut self) {
-        self.mutable_indexes = MutableIndexes::new(self.max_block_size);
-        self.row_state = None;
-        self.row_state_indexes = None;
-        self.probe_unmatched_indexes = None;
-        self.markers = None;
+        self.key_nums = 1;
+        self.key_hash_matched_nums = 1;
+    }
+}
+
+pub struct MutableIndexes {
+    pub(crate) probe_indexes: Vec<u32>,
+    pub(crate) build_indexes: Vec<RowPtr>,
+}
+
+impl MutableIndexes {
+    fn new(size: usize) -> Self {
+        Self {
+            probe_indexes: vec![0; size],
+            build_indexes: vec![
+                RowPtr {
+                    chunk_index: 0,
+                    row_index: 0,
+                };
+                size
+            ],
+        }
+    }
+}
+
+pub struct ProbeBlockGenerationState {
+    pub(crate) is_probe_projected: bool,
+    pub(crate) true_validity: Bitmap,
+    pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
+}
+
+impl ProbeBlockGenerationState {
+    fn new(size: usize, has_string_column: bool) -> Self {
+        Self {
+            is_probe_projected: false,
+            true_validity: Bitmap::new_constant(true, size),
+            string_items_buf: if has_string_column {
+                Some(vec![(0, 0); size])
+            } else {
+                None
+            },
+        }
     }
 }

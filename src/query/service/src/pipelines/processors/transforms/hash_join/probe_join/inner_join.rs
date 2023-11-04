@@ -33,7 +33,7 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn probe_inner_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn inner_join<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,

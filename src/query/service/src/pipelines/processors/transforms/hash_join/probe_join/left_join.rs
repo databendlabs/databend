@@ -33,7 +33,7 @@ use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
 
 impl HashJoinProbeState {
-    pub(crate) fn probe_left_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_join<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -159,7 +159,7 @@ impl HashJoinProbeState {
         Ok(result_blocks)
     }
 
-    pub(crate) fn probe_left_join_with_conjunct<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,

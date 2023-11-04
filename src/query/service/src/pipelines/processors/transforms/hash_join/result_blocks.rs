@@ -28,6 +28,18 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::sql::planner::plans::JoinType;
 
 impl HashJoinProbeState {
+    /// The left/right single join is similar to left/right join, but the result is a single row.
+    ///
+    /// Three cases will produce Mark join:
+    /// 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
+    /// 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
+    ///    equi-condition is subquery's outer columns with subquery's derived columns.
+    ///    non-equi-condition is subquery's child expr with subquery's output column.
+    ///    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
+    ///    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
+    ///    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
+    /// 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
+    ///    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
     pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
@@ -38,96 +50,41 @@ impl HashJoinProbeState {
     where
         H::Key: 'a,
     {
+        let has_other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .is_none();
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner => self.probe_inner_join(input, keys, hash_table, probe_state),
-            JoinType::LeftSemi => {
-                if self
-                    .hash_join_state
-                    .hash_join_desc
-                    .other_predicate
-                    .is_none()
-                {
-                    self.left_semi_join::<_>(input, keys, hash_table, probe_state)
-                } else {
-                    self.left_semi_join_with_conjunct::<_>(input, keys, hash_table, probe_state)
-                }
-            }
-            JoinType::LeftAnti => {
-                if self
-                    .hash_join_state
-                    .hash_join_desc
-                    .other_predicate
-                    .is_none()
-                {
-                    self.left_anti_join::<_>(input, keys, hash_table, probe_state)
-                } else {
-                    self.left_anti_join_with_conjunct::<_>(input, keys, hash_table, probe_state)
-                }
-            }
-            JoinType::RightSemi | JoinType::RightAnti => {
-                if self
-                    .hash_join_state
-                    .hash_join_desc
-                    .other_predicate
-                    .is_none()
-                {
-                    self.probe_right_semi_anti_join::<_>(input, keys, hash_table, probe_state)
-                } else {
-                    self.probe_right_semi_anti_join_with_conjunct::<_>(
-                        input,
-                        keys,
-                        hash_table,
-                        probe_state,
-                    )
-                }
-            }
-            // Single join is similar to left join, but the result is a single row.
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
-                if self
-                    .hash_join_state
-                    .hash_join_desc
-                    .other_predicate
-                    .is_none()
-                {
-                    self.probe_left_join::<_>(input, keys, hash_table, probe_state)
-                } else {
-                    self.probe_left_join_with_conjunct::<_>(input, keys, hash_table, probe_state)
-                }
-            }
+            JoinType::Inner => self.inner_join(input, keys, hash_table, probe_state),
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => match has_other_predicate {
+                true => self.left_join(input, keys, hash_table, probe_state),
+                false => self.left_join_with_conjunct(input, keys, hash_table, probe_state),
+            },
+            JoinType::LeftSemi => match has_other_predicate {
+                true => self.left_semi_join(input, keys, hash_table, probe_state),
+                false => self.left_semi_join_with_conjunct(input, keys, hash_table, probe_state),
+            },
+            JoinType::LeftAnti => match has_other_predicate {
+                true => self.left_anti_join(input, keys, hash_table, probe_state),
+                false => self.left_anti_join_with_conjunct(input, keys, hash_table, probe_state),
+            },
+            JoinType::LeftMark => match has_other_predicate {
+                true => self.left_mark_join(input, keys, hash_table, probe_state),
+                false => self.left_mark_join_with_conjunct(input, keys, hash_table, probe_state),
+            },
             JoinType::Right | JoinType::RightSingle => {
-                self.probe_right_join::<_>(input, keys, hash_table, probe_state)
+                self.probe_right_join(input, keys, hash_table, probe_state)
             }
-            // Three cases will produce Mark join:
-            // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
-            // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
-            //    equi-condition is subquery's outer columns with subquery's derived columns.
-            //    non-equi-condition is subquery's child expr with subquery's output column.
-            //    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
-            //    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
-            //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
-            // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
-            //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
-            JoinType::LeftMark => match self
-                .hash_join_state
-                .hash_join_desc
-                .other_predicate
-                .is_none()
-            {
-                true => self.probe_left_mark_join(input, keys, hash_table, probe_state),
+            JoinType::RightSemi | JoinType::RightAnti => match has_other_predicate {
+                true => self.right_semi_anti_join(input, keys, hash_table, probe_state),
                 false => {
-                    self.probe_left_mark_join_with_conjunct(input, keys, hash_table, probe_state)
+                    self.right_semi_anti_join_with_conjunct(input, keys, hash_table, probe_state)
                 }
             },
-            JoinType::RightMark => match self
-                .hash_join_state
-                .hash_join_desc
-                .other_predicate
-                .is_none()
-            {
-                true => self.probe_right_mark_join(input, keys, hash_table, probe_state),
-                false => {
-                    self.probe_right_mark_join_with_conjunct(input, keys, hash_table, probe_state)
-                }
+            JoinType::RightMark => match has_other_predicate {
+                true => self.right_mark_join(input, keys, hash_table, probe_state),
+                false => self.right_mark_join_with_conjunct(input, keys, hash_table, probe_state),
             },
             _ => Err(ErrorCode::Unimplemented(format!(
                 "{} is unimplemented",

@@ -16,6 +16,24 @@ use common_expression::types::DataType;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 
+pub struct BuildState {
+    pub(crate) generation_state: BuildBlockGenerationState,
+    /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
+    pub(crate) outer_scan_map: Vec<Vec<bool>>,
+    /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
+    pub(crate) mark_scan_map: Vec<Vec<u8>>,
+}
+
+impl BuildState {
+    pub fn new() -> Self {
+        Self {
+            generation_state: BuildBlockGenerationState::new(),
+            outer_scan_map: Vec::new(),
+            mark_scan_map: Vec::new(),
+        }
+    }
+}
+
 pub struct BuildBlockGenerationState {
     pub(crate) build_num_rows: usize,
     /// Data of the build side.
@@ -33,24 +51,6 @@ impl BuildBlockGenerationState {
             build_columns: Vec::new(),
             build_columns_data_type: Vec::new(),
             is_build_projected: true,
-        }
-    }
-}
-
-pub struct BuildState {
-    pub(crate) generation_state: BuildBlockGenerationState,
-    /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) outer_scan_map: Vec<Vec<bool>>,
-    /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) mark_scan_map: Vec<Vec<u8>>,
-}
-
-impl BuildState {
-    pub fn new() -> Self {
-        Self {
-            generation_state: BuildBlockGenerationState::new(),
-            outer_scan_map: Vec::new(),
-            mark_scan_map: Vec::new(),
         }
     }
 }
