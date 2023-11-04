@@ -257,6 +257,55 @@ impl CopyIntoTableInterpreter {
         ])];
         Ok(blocks)
     }
+
+    /// Build commit insertion pipeline.
+    async fn commit_insertion(
+        &self,
+        main_pipeline: &mut Pipeline,
+        plan: &CopyIntoTablePlan,
+        files: &[StageFileInfo],
+    ) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let to_table = ctx
+            .get_table(
+                plan.catalog_info.catalog_name(),
+                &plan.database_name,
+                &plan.table_name,
+            )
+            .await?;
+
+        // Commit.
+        {
+            let copied_files_meta_req = PipelineBuilder::build_upsert_copied_files_to_meta_req(
+                ctx.clone(),
+                to_table.as_ref(),
+                &plan.stage_table_info.stage_info,
+                files,
+                plan.force,
+            )?;
+
+            to_table.commit_insertion(
+                ctx.clone(),
+                main_pipeline,
+                copied_files_meta_req,
+                plan.write_mode.is_overwrite(),
+                None,
+            )?;
+        }
+
+        // Purge files.
+        {
+            // set on_finished callback.
+            PipelineBuilder::set_purge_files_on_finished(
+                ctx.clone(),
+                files.to_vec(),
+                plan.stage_table_info.stage_info.copy_options.purge,
+                plan.stage_table_info.stage_info.clone(),
+                main_pipeline,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -283,13 +332,12 @@ impl Interpreter for CopyIntoTableInterpreter {
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
-        PipelineBuilder::build_commit_data_pipeline(
-            &self.ctx,
-            &mut build_res.main_pipeline,
-            &self.plan,
-            &files,
-        )
-        .await?;
+
+        // Build commit insertion pipeline.
+        {
+            self.commit_insertion(&mut build_res.main_pipeline, &self.plan, &files)
+                .await?;
+        }
 
         // Compact if 'enable_recluster_after_write' on.
         {

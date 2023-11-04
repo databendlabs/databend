@@ -30,7 +30,6 @@ use common_pipeline_core::Pipeline;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::plans::CopyIntoTableMode;
-use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
 use common_storages_stage::StageTable;
 use log::debug;
@@ -134,51 +133,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub async fn build_commit_data_pipeline(
-        ctx: &Arc<QueryContext>,
-        main_pipeline: &mut Pipeline,
-        plan: &CopyIntoTablePlan,
-        files: &[StageFileInfo],
-    ) -> Result<()> {
-        let to_table = ctx
-            .get_table(
-                plan.catalog_info.catalog_name(),
-                &plan.database_name,
-                &plan.table_name,
-            )
-            .await?;
-        // Source node will do:
-        // 1. commit
-        // 2. purge
-        // commit
-        let copied_files_meta_req = Self::build_upsert_copied_files_to_meta_req(
-            ctx.clone(),
-            to_table.as_ref(),
-            &plan.stage_table_info.stage_info,
-            files,
-            plan.force,
-        )?;
-
-        to_table.commit_insertion(
-            ctx.clone(),
-            main_pipeline,
-            copied_files_meta_req,
-            plan.write_mode.is_overwrite(),
-            None,
-        )?;
-
-        // set on_finished callback.
-        Self::set_purge_files_on_finished(
-            ctx.clone(),
-            files.to_vec(),
-            plan.stage_table_info.stage_info.copy_options.purge,
-            plan.stage_table_info.stage_info.clone(),
-            main_pipeline,
-        )?;
-        Ok(())
-    }
-
-    fn build_upsert_copied_files_to_meta_req(
+    pub(crate) fn build_upsert_copied_files_to_meta_req(
         ctx: Arc<QueryContext>,
         to_table: &dyn Table,
         stage_info: &StageInfo,
