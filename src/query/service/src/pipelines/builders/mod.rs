@@ -15,4 +15,6 @@
 mod builder_append_table;
 mod builder_copy_into;
 mod builder_fill_missing_columns;
+mod builder_merge_into;
 mod builder_on_finished;
+mod builder_replace_into;
