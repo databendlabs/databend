@@ -84,8 +84,6 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::CompactSource;
 use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CopyIntoTablePhysicalPlan;
-use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeleteSource;
@@ -139,7 +137,6 @@ use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::SegmentLocation;
-use common_storages_stage::StageTable;
 use log::info;
 use parking_lot::RwLock;
 
@@ -151,8 +148,6 @@ use super::processors::TransformResortAddOnWithoutSourceSchema;
 use super::PipelineBuilderData;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::pipelines::builders::build_append_data_pipeline;
-use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -193,12 +188,13 @@ use crate::sessions::TableContext;
 use crate::sql::executor::MutationKind;
 
 pub struct PipelineBuilder {
-    ctx: Arc<QueryContext>,
+    pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) func_ctx: FunctionContext,
+    pub(crate) main_pipeline: Pipeline,
 
-    main_pipeline: Pipeline,
-    pub pipelines: Vec<Pipeline>,
-    func_ctx: FunctionContext,
     settings: Arc<Settings>,
+
+    pub pipelines: Vec<Pipeline>,
 
     // probe data_fields for merge into
     pub probe_data_fields: Option<Vec<DataField>>,
@@ -262,7 +258,7 @@ impl PipelineBuilder {
         })
     }
 
-    fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
+    pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
@@ -585,7 +581,7 @@ impl PipelineBuilder {
             }
         }
 
-        build_fill_missing_columns_pipeline(
+        Self::build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
@@ -1215,39 +1211,6 @@ impl PipelineBuilder {
                 AsyncSourcer::create(self.ctx.clone(), output, inner)
             },
             1,
-        )?;
-        Ok(())
-    }
-
-    fn build_copy_into_table(&mut self, copy: &CopyIntoTablePhysicalPlan) -> Result<()> {
-        let to_table =
-            self.ctx
-                .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
-        let source_schema = match &copy.source {
-            CopyIntoTableSource::Query(input) => {
-                self.build_pipeline(&input.plan)?;
-                Self::render_result_set(
-                    &self.func_ctx,
-                    input.plan.output_schema()?,
-                    &input.result_columns,
-                    &mut self.main_pipeline,
-                    input.ignore_result,
-                )?;
-                input.query_source_schema.clone()
-            }
-            CopyIntoTableSource::Stage(source) => {
-                let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
-                stage_table.set_block_thresholds(to_table.get_block_thresholds());
-                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline, false)?;
-                copy.required_source_schema.clone()
-            }
-        };
-        build_append_data_pipeline(
-            self.ctx.clone(),
-            &mut self.main_pipeline,
-            copy,
-            source_schema,
-            to_table,
         )?;
         Ok(())
     }
@@ -2669,7 +2632,7 @@ impl PipelineBuilder {
         )?;
 
         let source_schema = insert_schema;
-        build_fill_missing_columns_pipeline(
+        Self::build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.clone(),
