@@ -53,8 +53,8 @@ use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::set_copy_on_finished;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
@@ -92,7 +92,7 @@ impl Interpreter for ReplaceInterpreter {
 
         // purge
         if let Some((files, stage_info)) = purge_info {
-            set_copy_on_finished(
+            PipelineBuilder::set_purge_files_on_finished(
                 self.ctx.clone(),
                 files,
                 stage_info.copy_options.purge,

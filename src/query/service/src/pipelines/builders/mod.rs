@@ -12,13 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod copy;
-mod table;
-
-pub use copy::build_append_data_pipeline;
-pub use copy::build_commit_data_pipeline;
-pub use copy::build_upsert_copied_files_to_meta_req;
-pub use copy::set_copy_on_finished;
-pub use table::build_append2table_with_commit_pipeline;
-pub use table::build_append2table_without_commit_pipeline;
-pub use table::build_fill_missing_columns_pipeline;
+mod builder_append_table;
+mod builder_copy_into;
+mod builder_fill_missing_columns;
+mod builder_on_finished;

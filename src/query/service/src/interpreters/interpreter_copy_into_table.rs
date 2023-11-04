@@ -47,8 +47,8 @@ use crate::interpreters::common::CompactTargetTableDescription;
 use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::build_commit_data_pipeline;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -283,8 +283,13 @@ impl Interpreter for CopyIntoTableInterpreter {
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
-        build_commit_data_pipeline(&self.ctx, &mut build_res.main_pipeline, &self.plan, &files)
-            .await?;
+        PipelineBuilder::build_commit_data_pipeline(
+            &self.ctx,
+            &mut build_res.main_pipeline,
+            &self.plan,
+            &files,
+        )
+        .await?;
 
         // Compact if 'enable_recluster_after_write' on.
         {
