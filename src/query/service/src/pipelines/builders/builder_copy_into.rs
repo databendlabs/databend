@@ -27,7 +27,7 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::CopyIntoTablePhysicalPlan;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::plans::CopyIntoTableMode;
 use common_storage::StageFileInfo;
@@ -42,7 +42,7 @@ use crate::sessions::QueryContext;
 
 /// This file implements copy into table pipeline builder.
 impl PipelineBuilder {
-    pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTablePhysicalPlan) -> Result<()> {
+    pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
         let to_table =
             self.ctx
                 .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
@@ -78,7 +78,7 @@ impl PipelineBuilder {
     fn build_append_data_pipeline(
         ctx: Arc<QueryContext>,
         main_pipeline: &mut Pipeline,
-        plan: &CopyIntoTablePhysicalPlan,
+        plan: &CopyIntoTable,
         source_schema: Arc<DataSchema>,
         to_table: Arc<dyn Table>,
     ) -> Result<()> {

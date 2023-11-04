@@ -22,7 +22,7 @@ use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartia
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
 use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
-use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
+use crate::executor::physical_plans::physical_copy_into::CopyIntoTable;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTableSource;
 use crate::executor::physical_plans::physical_copy_into::QuerySource;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
@@ -44,7 +44,7 @@ use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
 use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
 use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
-use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcerPlan;
+use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
@@ -353,25 +353,20 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &CopyIntoTablePhysicalPlan,
-    ) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
             }
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(
-                    CopyIntoTablePhysicalPlan {
-                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                            plan: input,
-                            ..*query_ctx.clone()
-                        })),
-                        ..plan.clone()
-                    },
-                )))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
             }
         }
     }
@@ -409,7 +404,7 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_async_sourcer(&mut self, plan: &ReplaceAsyncSourcerPlan) -> Result<PhysicalPlan> {
+    fn replace_async_sourcer(&mut self, plan: &ReplaceAsyncSourcer) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::ReplaceAsyncSourcer(plan.clone()))
     }
 

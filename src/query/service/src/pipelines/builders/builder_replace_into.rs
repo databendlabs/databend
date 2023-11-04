@@ -25,7 +25,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
-use common_sql::executor::ReplaceAsyncSourcerPlan;
+use common_sql::executor::ReplaceAsyncSourcer;
 use common_sql::executor::ReplaceDeduplicate;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
@@ -54,7 +54,7 @@ impl PipelineBuilder {
     // build async sourcer pipeline.
     pub(crate) fn build_async_sourcer(
         &mut self,
-        async_sourcer: &ReplaceAsyncSourcerPlan,
+        async_sourcer: &ReplaceAsyncSourcer,
     ) -> Result<()> {
         self.main_pipeline.add_source(
             |output| {

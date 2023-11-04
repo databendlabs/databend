@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::ReplaceIntoShuffleStrategy;
 use common_sql::executor::CompactSource;
-use common_sql::executor::CopyIntoTablePhysicalPlan;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::DeleteSource;
 use common_sql::executor::QuerySource;
@@ -426,29 +426,24 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         }))
     }
 
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &CopyIntoTablePhysicalPlan,
-    ) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(
-                    CopyIntoTablePhysicalPlan {
-                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                            plan: input,
-                            ..*query_ctx.clone()
-                        })),
-                        ..plan.clone()
-                    },
-                )))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
             }
-            CopyIntoTableSource::Stage(_) => Ok(PhysicalPlan::CopyIntoTable(Box::new(
-                CopyIntoTablePhysicalPlan {
+            CopyIntoTableSource::Stage(_) => {
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
                     source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
                     ..plan.clone()
-                },
-            ))),
+                })))
+            }
         }
     }
 }

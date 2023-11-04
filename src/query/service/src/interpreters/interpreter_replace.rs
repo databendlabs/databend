@@ -28,7 +28,7 @@ use common_sql::executor::Exchange;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
-use common_sql::executor::ReplaceAsyncSourcerPlan;
+use common_sql::executor::ReplaceAsyncSourcer;
 use common_sql::executor::ReplaceDeduplicate;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
@@ -380,7 +380,7 @@ impl ReplaceInterpreter {
         span_offset: usize,
     ) -> Result<Box<PhysicalPlan>> {
         Ok(Box::new(PhysicalPlan::ReplaceAsyncSourcer(
-            ReplaceAsyncSourcerPlan {
+            ReplaceAsyncSourcer {
                 value_data: value_data.to_string(),
                 start: span_offset,
                 schema,

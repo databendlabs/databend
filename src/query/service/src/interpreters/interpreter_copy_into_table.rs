@@ -29,7 +29,7 @@ use common_expression::FromOptData;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::CopyIntoTablePhysicalPlan;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
@@ -155,7 +155,7 @@ impl CopyIntoTableInterpreter {
             CopyIntoTableSource::Stage(read_source_plan)
         };
 
-        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTablePhysicalPlan {
+        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),

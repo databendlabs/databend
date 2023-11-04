@@ -25,7 +25,7 @@ use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartia
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
 use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
-use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
+use crate::executor::physical_plans::physical_copy_into::CopyIntoTable;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
 use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
@@ -45,7 +45,7 @@ use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
 use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
 use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
-use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcerPlan;
+use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
@@ -91,10 +91,10 @@ pub enum PhysicalPlan {
     DeleteSource(Box<DeleteSource>),
 
     /// Copy into table
-    CopyIntoTable(Box<CopyIntoTablePhysicalPlan>),
+    CopyIntoTable(Box<CopyIntoTable>),
 
     /// Replace
-    ReplaceAsyncSourcer(ReplaceAsyncSourcerPlan),
+    ReplaceAsyncSourcer(ReplaceAsyncSourcer),
     ReplaceDeduplicate(Box<ReplaceDeduplicate>),
     ReplaceInto(Box<ReplaceInto>),
 

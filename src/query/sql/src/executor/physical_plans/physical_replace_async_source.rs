@@ -15,7 +15,7 @@
 use common_expression::DataSchemaRef;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ReplaceAsyncSourcerPlan {
+pub struct ReplaceAsyncSourcer {
     pub value_data: String,
     pub start: usize,
     pub schema: DataSchemaRef,
