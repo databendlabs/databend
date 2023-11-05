@@ -15,24 +15,26 @@
 use std::str::FromStr;
 
 use chrono_tz;
-use common_ast::ast::{AlterTaskOptions, ShowTaskRunsStmt};
+use common_ast::ast::AlterTaskOptions;
 use common_ast::ast::AlterTaskStmt;
 use common_ast::ast::CreateTaskStmt;
 use common_ast::ast::DescribeTaskStmt;
 use common_ast::ast::DropTaskStmt;
 use common_ast::ast::ExecuteTaskStmt;
 use common_ast::ast::ScheduleOptions;
+use common_ast::ast::ShowTaskRunsStmt;
 use common_ast::ast::ShowTasksStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use cron;
 
-use crate::plans::{AlterTaskPlan, ShowTaskRunsPlan};
+use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
+use crate::plans::ShowTaskRunsPlan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 

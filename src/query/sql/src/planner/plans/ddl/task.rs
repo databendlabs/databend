@@ -19,7 +19,8 @@ use common_ast::ast::ScheduleOptions;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::WarehouseOptions;
 use common_expression::types::DataType;
-use common_expression::types::NumberDataType::{Int32, UInt64};
+use common_expression::types::NumberDataType::Int32;
+use common_expression::types::NumberDataType::UInt64;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -59,15 +60,11 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("query_id", DataType::String),
         DataField::new("error_code", DataType::Number(Int32)),
         DataField::new("error_message", DataType::String),
-        DataField::new(
-            "attempt_number",
-            DataType::Number(Int32).wrap_nullable(),
-        ),
+        DataField::new("attempt_number", DataType::Number(Int32).wrap_nullable()),
         DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("scheduled_time", DataType::Timestamp),
     ]))
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTaskPlan {

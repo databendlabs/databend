@@ -55,11 +55,10 @@ impl Display for State {
             State::EXECUTING => write!(f, "Executing"),
             State::SUCCEEDED => write!(f, "Succeeded"),
             State::FAILED => write!(f, "Failed"),
-            State::CANCELLED => wirite!(f,"Cancelled"),
+            State::CANCELLED => wirite!(f, "Cancelled"),
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Task {

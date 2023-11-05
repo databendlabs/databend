@@ -26,7 +26,9 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-use common_expression::types::{Int32Type, Int64Type, StringType};
+use common_expression::types::Int32Type;
+use common_expression::types::Int64Type;
+use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
@@ -144,7 +146,8 @@ impl AsyncSystemTable for TaskRunsTable {
 
 impl TaskRunsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = infer_table_schema(&task_schema()).expect("failed to parse task run table schema");
+        let schema =
+            infer_table_schema(&task_schema()).expect("failed to parse task run table schema");
 
         let table_info = TableInfo {
             desc: "'system'.'task_runs'".to_string(),
