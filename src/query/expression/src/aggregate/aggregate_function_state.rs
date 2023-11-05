@@ -74,6 +74,14 @@ impl StateAddr {
             std::ptr::write(ptr, f());
         }
     }
+
+    #[inline]
+    pub fn write_state<T>(&self, state: T) {
+        unsafe {
+            let ptr = self.addr as *mut T;
+            std::ptr::write(ptr, state);
+        }
+    }
 }
 
 impl From<NonNull<u8>> for StateAddr {
