@@ -632,6 +632,7 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
     ctx.get_settings()
         .set_enable_refresh_aggregating_index_after_write(true)?;
+    ctx.get_settings().set_auto_compaction_threshold(1)?;
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let ctx = fixture.ctx();
 
