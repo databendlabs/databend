@@ -269,7 +269,7 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
             .into_boolean()
             .unwrap();
         filter.slice(slice_start, slice_len);
-        
+
         let mut columns = Vec::with_capacity(data_types.len());
         for data_type in data_types.iter() {
             let column = Column::random(data_type, len);
