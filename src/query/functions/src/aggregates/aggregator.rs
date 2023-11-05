@@ -52,6 +52,7 @@ use crate::aggregates::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_skewness_function_desc;
 use crate::aggregates::aggregate_string_agg_function_desc;
 use crate::aggregates::aggregate_sum_function_desc;
+use crate::aggregates::aggregate_unary_function_desc;
 
 pub struct Aggregators;
 
@@ -134,6 +135,11 @@ impl Aggregators {
             "intersect_count",
             aggregate_bitmap_intersect_count_function_desc(),
         );
+
+        let unary_func_names = vec!["skewness_v2"];
+        for func_name in unary_func_names {
+            factory.register(func_name, aggregate_unary_function_desc())
+        }
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
