@@ -227,7 +227,7 @@ impl Column {
         // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
         // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let col_offset = col.offsets().as_slice();
-        let col_data_ptr = col.data().as_slice();
+        let col_data_ptr = col.data().as_slice().as_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         let mut data_size = 0;
 
