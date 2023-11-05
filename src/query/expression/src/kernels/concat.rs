@@ -359,7 +359,7 @@ impl Column {
             *offsets.get_unchecked_mut(offsets_len) = 0;
             offsets_len += 1;
             for col in cols.clone() {
-                let mut start = 0;
+                let mut start = col.offsets()[0];
                 for end in col.offsets()[1..].iter() {
                     data_size += end - start;
                     start = *end;
