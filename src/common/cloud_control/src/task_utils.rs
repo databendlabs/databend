@@ -55,7 +55,7 @@ impl Display for State {
             State::EXECUTING => write!(f, "Executing"),
             State::SUCCEEDED => write!(f, "Succeeded"),
             State::FAILED => write!(f, "Failed"),
-            State::CANCELLED => wirite!(f, "Cancelled"),
+            State::CANCELLED => write!(f, "Cancelled"),
         }
     }
 }
@@ -218,7 +218,7 @@ pub struct TaskRun {
     pub attempt_number: Option<i32>,
     pub state: State,
     pub scheduled_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<UTC>>,
+    pub completed_at: Option<DateTime<Utc>>,
     pub error_code: i64,
     pub error_message: Option<String>,
 }
