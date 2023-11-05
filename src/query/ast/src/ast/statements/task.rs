@@ -225,8 +225,7 @@ pub struct ShowTaskRunsStmt {
 impl Display for ShowTaskRunsStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW ")?;
-        write!(f, "TASK")?;
-        write!(f, "RUNS")?;
+        write!(f, "TASK_RUNS")?;
         if let Some(limit) = &self.limit {
             write!(f, " {limit}")?;
         }

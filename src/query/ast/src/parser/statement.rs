@@ -170,7 +170,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_task_runs = map(
         rule! {
-            SHOW ~ TASK ~ RUNS ~ #show_limit?
+            SHOW ~ TASK_RUNS ~ #show_limit?
         },
         |(_, _, limit)| Statement::ShowTaskRuns(ShowTaskRunsStmt { limit }),
     );
@@ -1682,7 +1682,7 @@ AS
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
-            | #show_task_runs: "`SHOW TASK RUNS [<show_limit>]  [ TASK_NAME = '<string_literal>' ]`"
+            | #show_task_runs: "`SHOW TASK_RUNS [<show_limit>]`"
         ),
     ));
 

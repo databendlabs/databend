@@ -13569,9 +13569,9 @@ ShowTasks(
 )
 
 ---------- Input ----------
-SHOW TASK RUNS
+SHOW TASK_RUNS
 ---------- Output ---------
-SHOW TASK RUNS
+SHOW TASK_RUNS
 ---------- AST ------------
 ShowTasks(
     ShowTaskRunsStmt {

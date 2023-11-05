@@ -17,15 +17,24 @@ TASK_RUN_DB = {}
 
 def load_data_from_json():
     script_directory = os.path.dirname(os.path.abspath(__file__))
-    directory_path = os.path.join(script_directory, "testdata", "tasks")
+    task_directory_path = os.path.join(script_directory, "testdata", "tasks")
 
-    for file_name in os.listdir(directory_path):
+    for file_name in os.listdir(task_directory_path):
         if file_name.endswith(".json"):
-            with open(os.path.join(directory_path, file_name), "r") as f:
-                task_data = json.load(f)
+            with open(os.path.join(task_directory_path, file_name), "r") as f:
+                task_run_data = json.load(f)
                 task = task_pb2.Task()
-                json_format.ParseDict(task_data["Task"], task)
+                json_format.ParseDict(task_run_data["Task"], task)
                 TASK_DB[task.task_name] = task
+
+    task_run_directory_path = os.path.join(script_directory, "testdata", "taskruns")
+    for file_name in os.listdir(task_run_directory_path):
+        if file_name.endswith(".json"):
+            with open(os.path.join(task_directory_path, file_name), "r") as f:
+                task_run_data = json.load(f)
+                task_run = task_pb2.TaskRun()
+                json_format.ParseDict(task_run_data["TaskRun"], task_run)
+                TASK_RUN_DB[task_run.task_name] = task_run
 
 
 def create_task_request_to_task(id, create_task_request):
