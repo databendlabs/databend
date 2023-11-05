@@ -26,7 +26,7 @@ use common_expression::DataSchemaRefExt;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
-use crate::plans::AddTableColumnPlan;
+use crate::plans::{AddTableColumnPlan, ShowTaskRunsPlan};
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
@@ -290,6 +290,7 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
+    ShowTaskRuns(Box<ShowTaskRunsPlan>)
 }
 
 #[derive(Clone, Debug)]

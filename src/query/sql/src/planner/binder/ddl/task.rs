@@ -200,7 +200,7 @@ impl Binder {
         &mut self,
         stmt: &ShowTaskRunsStmt,
     ) -> Result<Plan> {
-        let ShowTaskRunsStmt { limit, task_name } = stmt;
+        let ShowTaskRunsStmt { limit } = stmt;
 
         let tenant = self.ctx.get_tenant();
 

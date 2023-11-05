@@ -151,7 +151,6 @@ impl ShowTasksPlan {
 pub struct ShowTaskRunsPlan {
     pub tenant: String,
     pub limit: Option<ShowLimit>,
-    pub task_name: String,
 }
 
 impl ShowTaskRunsPlan {
