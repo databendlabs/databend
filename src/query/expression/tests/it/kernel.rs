@@ -272,9 +272,7 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
 
         let mut columns = Vec::with_capacity(data_types.len());
         for data_type in data_types.iter() {
-            let column = Column::random(data_type, len);
-            let column = column.slice(slice_start..slice_end);
-            columns.push(column);
+            columns.push(Column::random(data_type, len).slice(slice_start..slice_end));
         }
 
         let mut block_entries = Vec::with_capacity(data_types.len());
