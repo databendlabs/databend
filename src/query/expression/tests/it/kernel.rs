@@ -261,7 +261,7 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     let mut blocks = Vec::with_capacity(data_types.len());
     let mut filtered_blocks = Vec::with_capacity(data_types.len());
     for i in 0..num_blocks {
-        let len = rng.gen_range(5..100);
+        let len = rng.gen_range(2..100);
         let slice_start = rng.gen_range(0..len - 1);
         let slice_end = rng.gen_range(slice_start..len);
         let slice_len = slice_end - slice_start;
