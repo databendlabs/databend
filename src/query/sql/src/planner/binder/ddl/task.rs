@@ -15,7 +15,7 @@
 use std::str::FromStr;
 
 use chrono_tz;
-use common_ast::ast::AlterTaskOptions;
+use common_ast::ast::{AlterTaskOptions, ShowTaskRunsStmt};
 use common_ast::ast::AlterTaskStmt;
 use common_ast::ast::CreateTaskStmt;
 use common_ast::ast::DescribeTaskStmt;
@@ -27,7 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use cron;
 
-use crate::plans::AlterTaskPlan;
+use crate::plans::{AlterTaskPlan, ShowTaskRunsPlan};
 use crate::plans::CreateTaskPlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DropTaskPlan;
@@ -44,7 +44,7 @@ fn verify_scheduler_option(schedule_opts: &ScheduleOptions) -> Result<()> {
                 cron_expr
             )));
         }
-        if let Some(time_zone) = time_zone &&  !time_zone.is_empty() && chrono_tz::Tz::from_str(time_zone).is_err() {
+        if let Some(time_zone) = time_zone && !time_zone.is_empty() && chrono_tz::Tz::from_str(time_zone).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid time zone {}",
                 time_zone
@@ -191,5 +191,22 @@ impl Binder {
             limit: limit.clone(),
         };
         Ok(Plan::ShowTasks(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_task_runs(
+        &mut self,
+        stmt: &ShowTaskRunsStmt,
+    ) -> Result<Plan> {
+        let ShowTaskRunsStmt { limit, task_name } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+
+        let plan = ShowTaskRunsPlan {
+            tenant,
+            limit: limit.clone(),
+            task_name: task_name.to_string(),
+        };
+        Ok(Plan::ShowTaskRuns(Box::new(plan)))
     }
 }

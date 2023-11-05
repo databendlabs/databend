@@ -19,14 +19,14 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_cloud_control::client_config::build_client_config;
 use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_cloud_control::pb::ShowTasksRequest;
-use common_cloud_control::pb::Task;
+use common_cloud_control::pb::ShowTaskRunsRequest;
+use common_cloud_control::pb::TaskRun;
 use common_cloud_control::task_client::make_request;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-use common_expression::types::StringType;
+use common_expression::types::{Int32Type, Int64Type, StringType};
 use common_expression::types::TimestampType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
@@ -40,64 +40,60 @@ use common_sql::plans::task_schema;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
-pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
-    let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
-    let mut name: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut id: Vec<u64> = Vec::with_capacity(tasks.len());
-    let mut owner: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut status: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
-    let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
-    let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
-    let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
+pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock> {
+    let mut name: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut id: Vec<u64> = Vec::with_capacity(task_runs.len());
+    let mut owner: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut query_text: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
+    let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
+    let mut state: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut error_message: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut error_code: Vec<i64> = Vec::with_capacity(task_runs.len());
+    let mut run_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut query_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut attempt_number: Vec<Option<i32>> = Vec::with_capacity(task_runs.len());
+    let mut scheduled_time: Vec<i64> = Vec::with_capacity(task_runs.len());
+    let mut completed_time: Vec<Option<i64>> = Vec::with_capacity(task_runs.len());
 
-    for task in tasks {
-        let tsk: common_cloud_control::task_utils::Task = task.try_into()?;
-        created_on.push(tsk.created_at.timestamp_micros());
-        name.push(tsk.task_name.into_bytes());
-        id.push(tsk.task_id);
-        owner.push(tsk.owner.into_bytes());
-        comment.push(tsk.comment.map(|s| s.into_bytes()));
-        warehouse.push(
-            tsk.warehouse_options
-                .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
-        );
-        schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
-        status.push(tsk.status.to_string().into_bytes());
-        definition.push(tsk.query_text.into_bytes());
-        suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
-        next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
-        last_committed_on.push(tsk.updated_at.timestamp_micros());
-        last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
+    for task_run in task_runs {
+        let tr: common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
+        name.push(tr.task_name.into_bytes());
+        id.push(tr.task_id);
+        owner.push(tr.owner.into_bytes());
+        comment.push(tr.comment.map(|s| s.into_bytes()));
+        schedule.push(tr.schedule_options.map(|s| s.into_bytes()));
+        state.push(tr.state.to_string().into_bytes());
+        query_text.push(tr.query_text.into_bytes());
+        run_id.push(tr.run_id.into_bytes());
+        query_id.push(tr.query_id.into_bytes());
+        attempt_number.push(tr.attempt_number.map(|v| v as i32));
+        scheduled_time.push(tr.scheduled_at.timestamp_micros());
+        completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
     }
     Ok(DataBlock::new_from_columns(vec![
-        TimestampType::from_data(created_on),
         StringType::from_data(name),
         UInt64Type::from_data(id),
         StringType::from_data(owner),
         StringType::from_opt_data(comment),
-        StringType::from_opt_data(warehouse),
         StringType::from_opt_data(schedule),
-        StringType::from_data(status),
-        StringType::from_data(definition),
-        UInt64Type::from_opt_data(suspend_after_num_failures),
-        TimestampType::from_opt_data(next_schedule_time),
-        TimestampType::from_data(last_committed_on),
-        TimestampType::from_opt_data(last_suspended_on),
+        StringType::from_data(state),
+        StringType::from_data(query_text),
+        Int64Type::from_data(error_code),
+        StringType::from_data(error_message),
+        Int32Type::from_data(attempt_number),
+        TimestampType::from_data(scheduled_time),
+        TimestampType::from_opt_data(completed_time),
     ]))
 }
 
-pub struct TasksTable {
+pub struct TaskRunsTable {
     table_info: TableInfo,
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for TasksTable {
-    const NAME: &'static str = "system.tasks";
+impl AsyncSystemTable for TaskRunsTable {
+    const NAME: &'static str = "system.task_runs";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -112,7 +108,7 @@ impl AsyncSystemTable for TasksTable {
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot view system.tasks table without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                "cannot view system.task_runs table without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
 
@@ -120,10 +116,13 @@ impl AsyncSystemTable for TasksTable {
         let query_id = ctx.get_id();
         let user = ctx.get_current_user()?.identity().to_string();
         let available_roles = ctx.get_available_roles().await?;
-        let req = ShowTasksRequest {
+        let req = ShowTaskRunsRequest {
             tenant_id: tenant.clone(),
-            name_like: "".to_string(),
+            scheduled_time_start: "".to_string(),
+            scheduled_time_end: "".to_string(),
+            task_name: "".to_string(),
             result_limit: 10000, // TODO: use plan.limit pushdown
+            error_only: false,
             owners: available_roles
                 .into_iter()
                 .map(|x| x.identity().to_string())
@@ -136,24 +135,24 @@ impl AsyncSystemTable for TasksTable {
         let config = build_client_config(tenant, user, query_id);
         let req = make_request(req, config);
 
-        let resp = task_client.show_tasks(req).await?;
-        let tasks = resp.tasks;
+        let resp = task_client.show_task_runs(req).await?;
+        let trs = resp.task_runs;
 
-        parse_tasks_to_datablock(tasks)
+        parse_task_runs_to_datablock(trs)
     }
 }
 
-impl TasksTable {
+impl TaskRunsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = infer_table_schema(&task_schema()).expect("failed to parse task table schema");
+        let schema = infer_table_schema(&task_schema()).expect("failed to parse task run table schema");
 
         let table_info = TableInfo {
-            desc: "'system'.'tasks'".to_string(),
-            name: "tasks".to_string(),
+            desc: "'system'.'task_runs'".to_string(),
+            name: "task_runs".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
-                engine: "SystemTasks".to_string(),
+                engine: "SystemTaskRuns".to_string(),
 
                 ..Default::default()
             },

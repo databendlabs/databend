@@ -107,19 +107,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ AS ~ #statement
         },
         |(
-            _,
-            _,
-            opt_if_not_exists,
-            task,
-            warehouse_opts,
-            _,
-            _,
-            schedule_opts,
-            suspend_opt,
-            comment_opt,
-            _,
-            sql,
-        )| {
+             _,
+             _,
+             opt_if_not_exists,
+             task,
+             warehouse_opts,
+             _,
+             _,
+             schedule_opts,
+             suspend_opt,
+             comment_opt,
+             _,
+             sql,
+         )| {
             let sql = pretty_statement(sql.stmt, 10)
                 .map_err(|_| ErrorKind::Other("invalid statement"))
                 .unwrap();
@@ -166,6 +166,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             SHOW ~ TASKS ~ #show_limit?
         },
         |(_, _, limit)| Statement::ShowTasks(ShowTasksStmt { limit }),
+    );
+
+    let show_task_runs = map(
+        rule! {
+            SHOW ~ TASK ~RUNS ~ #show_limit?
+        },
+        |(_, _, limit)| Statement::ShowTaskRuns(ShowTaskRunsStmt { limit }),
     );
 
     let execute_task = map(
@@ -222,15 +229,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #insert_source
         },
         |(
-            _,
-            opt_hints,
-            _,
-            (catalog, database, table),
-            opt_columns,
-            (_, _, _, on_conflict_columns, _),
-            opt_delete_when,
-            source,
-        )| {
+             _,
+             opt_hints,
+             _,
+             (catalog, database, table),
+             opt_columns,
+             (_, _, _, on_conflict_columns, _),
+             opt_delete_when,
+             source,
+         )| {
             Statement::Replace(ReplaceStmt {
                 hints: opt_hints,
                 catalog,
@@ -252,17 +259,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
-            _,
-            opt_hints,
-            _,
-            (catalog, database, table),
-            target_alias,
-            _,
-            source,
-            _,
-            join_expr,
-            merge_options,
-        )| {
+             _,
+             opt_hints,
+             _,
+             (catalog, database, table),
+             target_alias,
+             _,
+             source,
+             _,
+             join_expr,
+             merge_options,
+         )| {
             Statement::MergeInto(MergeIntoStmt {
                 hints: opt_hints,
                 catalog,
@@ -659,18 +666,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( AS ~ ^#query )?
         },
         |(
-            _,
-            opt_transient,
-            _,
-            opt_if_not_exists,
-            (catalog, database, table),
-            source,
-            engine,
-            uri_location,
-            opt_cluster_by,
-            opt_table_options,
-            opt_as_query,
-        )| {
+             _,
+             opt_transient,
+             _,
+             opt_if_not_exists,
+             (catalog, database, table),
+             source,
+             engine,
+             uri_location,
+             opt_cluster_by,
+             opt_table_options,
+             opt_as_query,
+         )| {
             Statement::CreateTable(CreateTableStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog,
@@ -731,13 +738,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             RENAME ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
         },
         |(
-            _,
-            _,
-            opt_if_exists,
-            (catalog, database, table),
-            _,
-            (new_catalog, new_database, new_table),
-        )| {
+             _,
+             _,
+             opt_if_exists,
+             (catalog, database, table),
+             _,
+             (new_catalog, new_database, new_table),
+         )| {
             Statement::RenameTable(RenameTableStmt {
                 if_exists: opt_if_exists.is_some(),
                 catalog,
@@ -1136,17 +1143,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
-            _,
-            _,
-            opt_if_not_exists,
-            stage,
-            url_opt,
-            file_format_opt,
-            on_error_opt,
-            size_limit_opt,
-            validation_mode_opt,
-            comment_opt,
-        )| {
+             _,
+             _,
+             opt_if_not_exists,
+             stage,
+             url_opt,
+             file_format_opt,
+             on_error_opt,
+             size_limit_opt,
+             validation_mode_opt,
+             comment_opt,
+         )| {
             Ok(Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
@@ -1425,19 +1432,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
              ~ ( COMMENT ~ Eq ~ #literal_string)?
         },
         |(
-            _,
-            _,
-            _,
-            opt_if_not_exists,
-            name,
-            _,
-            _,
-            _,
-            allowed_ip_list,
-            _,
-            opt_blocked_ip_list,
-            opt_comment,
-        )| {
+             _,
+             _,
+             _,
+             opt_if_not_exists,
+             name,
+             _,
+             _,
+             _,
+             allowed_ip_list,
+             _,
+             opt_blocked_ip_list,
+             opt_comment,
+         )| {
             let stmt = CreateNetworkPolicyStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: name.to_string(),
@@ -1462,16 +1469,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
              ~ ( COMMENT ~ Eq ~ #literal_string)?
         },
         |(
-            _,
-            _,
-            _,
-            opt_if_exists,
-            name,
-            _,
-            opt_allowed_ip_list,
-            opt_blocked_ip_list,
-            opt_comment,
-        )| {
+             _,
+             _,
+             _,
+             opt_if_exists,
+             name,
+             _,
+             opt_allowed_ip_list,
+             opt_blocked_ip_list,
+             opt_comment,
+         )| {
             let stmt = AlterNetworkPolicyStmt {
                 if_exists: opt_if_exists.is_some(),
                 name: name.to_string(),
@@ -1675,6 +1682,7 @@ AS
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
+            | #show_task_runs: "`SHOW TASK RUNS [<show_limit>]  [ TASK_NAME = '<string_literal>' ]`"
         ),
     ));
 
@@ -2220,7 +2228,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
             DEFAULT ~ ^#subexpr(NOT_PREC)
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-    ),));
+    ), ));
 
     let comment = map(
         rule! {
@@ -2543,7 +2551,7 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
                 dry_run,
             }
         },
-    ),))(i)
+    ), ))(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
@@ -2612,7 +2620,7 @@ pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
             };
             WarehouseOptions { warehouse }
         },
-    ),))(i)
+    ), ))(i)
 }
 
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
@@ -2724,7 +2732,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    let engine = alt((value(DatabaseEngine::Default, rule! {DEFAULT}),));
+    let engine = alt((value(DatabaseEngine::Default, rule! {DEFAULT}), ));
 
     map(
         rule! {
@@ -2740,7 +2748,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
             ^#database_engine
         },
         CreateDatabaseOption::DatabaseEngine,
-    ),));
+    ), ));
 
     let share_from = alt((map(
         rule! {
@@ -2752,7 +2760,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
                 share_name: share_name.to_string(),
             })
         },
-    ),));
+    ), ));
 
     map(
         rule! {

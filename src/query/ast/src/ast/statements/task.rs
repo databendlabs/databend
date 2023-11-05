@@ -96,6 +96,7 @@ pub struct AlterTaskStmt {
     pub name: String,
     pub options: AlterTaskOptions,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlterTaskOptions {
     Resume,
@@ -213,5 +214,23 @@ pub struct DescribeTaskStmt {
 impl Display for DescribeTaskStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DESCRIBE TASK {}", self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowTaskRunsStmt {
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowTaskRunsStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW ")?;
+        write!(f, "TASK")?;
+        write!(f, "RUNS")?;
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
     }
 }

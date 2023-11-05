@@ -13568,6 +13568,17 @@ ShowTasks(
     },
 )
 
+---------- Input ----------
+SHOW TASK RUNS
+---------- Output ---------
+SHOW TASK RUNS
+---------- AST ------------
+ShowTasks(
+    ShowTaskRunsStmt {
+        limit: None,
+    },
+)
+
 
 ---------- Input ----------
 EXECUTE TASK MyTask

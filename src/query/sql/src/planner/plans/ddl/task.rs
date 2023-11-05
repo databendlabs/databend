@@ -19,7 +19,7 @@ use common_ast::ast::ScheduleOptions;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::WarehouseOptions;
 use common_expression::types::DataType;
-use common_expression::types::NumberDataType::UInt64;
+use common_expression::types::NumberDataType::{Int32, UInt64};
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -45,6 +45,29 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
     ]))
 }
+
+pub fn task_run_schema() -> DataSchemaRef {
+    Arc::new(DataSchema::new(vec![
+        DataField::new("name", DataType::String),
+        DataField::new("id", DataType::Number(UInt64)),
+        DataField::new("owner", DataType::String),
+        DataField::new("comment", DataType::String.wrap_nullable()),
+        DataField::new("schedule", DataType::String.wrap_nullable()),
+        DataField::new("state", DataType::String),
+        DataField::new("query_text", DataType::String),
+        DataField::new("run_id", DataType::String),
+        DataField::new("query_id", DataType::String),
+        DataField::new("error_code", DataType::Number(Int32)),
+        DataField::new("error_message", DataType::String),
+        DataField::new(
+            "attempt_number",
+            DataType::Number(Int32).wrap_nullable(),
+        ),
+        DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
+        DataField::new("scheduled_time", DataType::Timestamp),
+    ]))
+}
+
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTaskPlan {
@@ -124,5 +147,18 @@ pub struct ShowTasksPlan {
 impl ShowTasksPlan {
     pub fn schema(&self) -> DataSchemaRef {
         task_schema()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShowTaskRunsPlan {
+    pub tenant: String,
+    pub limit: Option<ShowLimit>,
+    pub task_name: String,
+}
+
+impl ShowTaskRunsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        task_run_schema()
     }
 }
