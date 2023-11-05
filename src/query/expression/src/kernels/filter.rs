@@ -320,9 +320,7 @@ impl Column {
         // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
         // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let values_offset = values.offsets().as_slice();
-        let values_data_ptr = &(values.data().as_slice())
-            [values_offset[0] as usize..values_offset[values_offset.len() - 1] as usize]
-            .as_ptr();
+        let values_data_ptr = values.data().as_slice();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         let mut offsets_ptr = offsets.as_mut_ptr();
         let mut items_ptr = items.as_mut_ptr();
