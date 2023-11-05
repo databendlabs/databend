@@ -1043,6 +1043,8 @@ pub enum TokenKind {
     TASK,
     #[token("TASKS", ignore(ascii_case))]
     TASKS,
+    #[token("TASK_RUNS", ignore(ascii_case))]
+    TASK_RUNS,
     #[token("WAREHOUSE", ignore(ascii_case))]
     WAREHOUSE,
     #[token("SCHEDULE", ignore(ascii_case))]
