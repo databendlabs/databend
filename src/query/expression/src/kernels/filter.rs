@@ -190,7 +190,7 @@ impl Column {
         let mut start_index: usize = 0;
 
         if offset > 0 {
-            let n = 8 - offset;
+            let n = std::cmp::min(8 - offset, length);
             start_index += n;
             filter
                 .iter()
@@ -253,7 +253,7 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
+                    if n >= offset && n < offset + length {
                         copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
                     }
                     mask = mask & (mask - 1);
@@ -312,7 +312,7 @@ impl Column {
         if num_rows == values.len() {
             return values.clone();
         } else if num_rows == 0 {
-            return StringColumn::new(vec![].into(), vec![].into());
+            return StringColumn::new(vec![].into(), vec![0].into());
         }
 
         // Each element of `items` is (string pointer(u64), string length).
@@ -335,7 +335,7 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
+                    if n >= offset && n < offset + length {
                         let start = *values_offset.get_unchecked(n - offset) as usize;
                         let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
                         data_size += len as u64;
@@ -507,7 +507,7 @@ impl Column {
                 let mut mask = filter_slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= filter_offset {
+                    if n >= filter_offset && n < filter_offset + filter_length {
                         if bitmap.get_bit_unchecked(n - filter_offset) {
                             buf |= BIT_MASK[builder_idx % 8];
                         } else {
