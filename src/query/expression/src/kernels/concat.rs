@@ -376,9 +376,9 @@ impl Column {
 
         unsafe {
             for col in cols {
-                let offset = col.offsets();
+                let offsets = col.offsets();
                 let col_data =
-                    &(col.data().as_slice())[offset[0] as usize..offset[offset.len() - 1] as usize];
+                    &(col.data().as_slice())[offsets[0] as usize..offsets[offsets.len() - 1] as usize];
                 copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
             }
             set_vec_len_by_ptr(&mut data, data_ptr);
