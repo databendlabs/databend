@@ -96,6 +96,6 @@ fn replace_rand_values<'h>(input: &'h str) -> Cow<'h, str> {
         let n: usize = caps[2].parse().unwrap();
         let mut rng = rand::thread_rng();
         let rand_value = rng.gen_range(m..n);
-        rnd_value.to_string()
+        rand_value.to_string()
     })
 }
