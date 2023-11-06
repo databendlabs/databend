@@ -47,6 +47,9 @@ impl AsyncAccumulatingTransform for AccumulateRowNumber {
 impl AccumulateRowNumber {
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
+        // if matched all source data, we will get an empty block, but which
+        // has source join schema,not only row_number,for combound_block project,
+        // it will do nothing for empty block.
         assert_eq!(data_block.num_columns(), 1);
         assert_eq!(
             data_block.get_by_offset(0).data_type,
