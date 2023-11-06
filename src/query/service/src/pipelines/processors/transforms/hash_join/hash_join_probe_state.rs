@@ -254,13 +254,13 @@ impl HashJoinProbeState {
         }
 
         // Adaptive early filtering.
-        probe_state.key_nums += if let Some(valids) = &valids {
+        probe_state.num_keys += if let Some(valids) = &valids {
             (valids.len() - valids.unset_bits()) as u64
         } else {
             input_num_rows as u64
         };
         let prefer_early_filtering =
-            (probe_state.key_hash_matched_nums as f64) / (probe_state.key_nums as f64) < 0.8;
+            (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
 
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
@@ -290,7 +290,7 @@ impl HashJoinProbeState {
 
                         table.hash_table.probe(&mut probe_state.hashes, valids)
                     };
-                    probe_state.key_hash_matched_nums += probe_state.selection_count as u64;
+                    probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
                 } else {
                     // For left join, left single join, full join and left anti join, don't use selection.
                     probe_state.probe_with_selection = false;
@@ -302,7 +302,7 @@ impl HashJoinProbeState {
                     } else {
                         table.hash_table.probe(&mut probe_state.hashes, valids)
                     };
-                    probe_state.key_hash_matched_nums += count as u64;
+                    probe_state.num_keys_hash_matched += count as u64;
                 }
 
                 // Continue to probe hash table and process data blocks.

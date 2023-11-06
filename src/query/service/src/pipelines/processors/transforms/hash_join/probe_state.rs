@@ -29,8 +29,8 @@ pub struct ProbeState {
     pub(crate) hashes: Vec<u64>,
     pub(crate) func_ctx: FunctionContext,
     pub(crate) selection_count: usize,
-    pub(crate) key_nums: u64,
-    pub(crate) key_hash_matched_nums: u64,
+    pub(crate) num_keys: u64,
+    pub(crate) num_keys_hash_matched: u64,
     pub(crate) probe_with_selection: bool,
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
@@ -86,8 +86,8 @@ impl ProbeState {
             hashes: vec![0; max_block_size],
             selection_count: 0,
             probe_with_selection: false,
-            key_nums: 1,
-            key_hash_matched_nums: 1,
+            num_keys: 1,
+            num_keys_hash_matched: 1,
             func_ctx,
             row_state,
             row_state_indexes,
@@ -99,8 +99,8 @@ impl ProbeState {
     // Reset some states which changed during probe.
     // Only be called when spill is enabled.
     pub fn reset(&mut self) {
-        self.key_nums = 1;
-        self.key_hash_matched_nums = 1;
+        self.num_keys = 1;
+        self.num_keys_hash_matched = 1;
     }
 }
 
