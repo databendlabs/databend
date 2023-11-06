@@ -373,6 +373,16 @@ impl<'a> TypeChecker<'a> {
                         span: *span,
                         exprs: list.clone(),
                     };
+                    // Deduplicate the array.
+                    let array_expr = Expr::FunctionCall {
+                        span: *span,
+                        name: Identifier::from_name("array_distinct"),
+                        args: vec![array_expr],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                        distinct: false,
+                    };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
                         self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::FunctionCall {
