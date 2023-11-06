@@ -646,7 +646,13 @@ impl PipelineBuilder {
                 create_dummy_item(),
                 AccumulateRowNumber::create()?.into_pipe_item(),
             ];
+            self.main_pipeline.add_pipe(Pipe::create(
+                self.main_pipeline.output_len(),
+                get_output_len(&pipe_items),
+                pipe_items,
+            ));
         }
+
         Ok(())
     }
 }
