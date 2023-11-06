@@ -453,10 +453,7 @@ async fn test_http_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_result_timeout() -> Result<()> {
-    let config = ConfigBuilder::create()
-        .http_handler_result_timeout(1u64)
-        .build();
-
+    let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
@@ -466,7 +463,8 @@ async fn test_result_timeout() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(session_middleware);
 
-    let (status, result) = post_sql_to_endpoint(&ep, "select 1", 1).await?;
+    let (status, result) =
+        post_sql_to_endpoint_with_result_timeout(&ep, "select 1", 1, 1u64).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
     let next_uri = make_page_uri(&query_id, 0);
@@ -746,6 +744,16 @@ async fn post_sql_to_endpoint_new_session(
 ) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
     post_json_to_endpoint(ep, &json, headers).await
+}
+
+async fn post_sql_to_endpoint_with_result_timeout(
+    ep: &EndpointType,
+    sql: &str,
+    wait_time_secs: u64,
+    result_timeout_secs: u64,
+) -> Result<(StatusCode, QueryResponse)> {
+    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"http_handler_result_timeout_secs": result_timeout_secs.to_string()}}});
+    post_json_to_endpoint(ep, &json, HeaderMap::default()).await
 }
 
 async fn post_json_to_endpoint(
@@ -1252,8 +1260,8 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
-                database: None,
-                role: None,
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1262,11 +1270,28 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
+            serde_json::json!({"sql": "unset timezone", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["timezone".to_string()],
+                values: vec!["UTC".to_string()], /* TODO(liyz): consider to return the complete settings after set or unset */
+                is_globals: vec![false],
+            }),
+            Some(HttpSessionConf {
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
+                keep_server_session_secs: None,
+                settings: Some(BTreeMap::from([(
+                    "max_threads".to_string(),
+                    "6".to_string(),
+                )])),
+            }),
+        ),
+        (
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
-                database: None,
-                role: None,
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1281,7 +1306,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),

@@ -140,6 +140,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
 #[tokio::test(flavor = "multi_thread")]
 async fn test_internal_column() -> Result<()> {
     let fixture = TestFixture::new().await;
+    let catalog = fixture.default_catalog_name();
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();
@@ -187,6 +188,7 @@ async fn test_internal_column() -> Result<()> {
     check_data_block(expected, blocks)?;
 
     // do compact
+    ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
     let query = format!("optimize table {db}.{tbl} compact");
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
@@ -194,6 +196,7 @@ async fn test_internal_column() -> Result<()> {
     let data_stream = interpreter.execute(ctx.clone()).await?;
     let _ = data_stream.try_collect::<Vec<_>>().await;
 
+    ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
     let query = format!(
         "select _row_id,_snapshot_name,_segment_name,_block_name from {}.{} order by _row_id",
         db, tbl

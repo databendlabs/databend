@@ -34,7 +34,7 @@ impl Settings {
 
     fn try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => DefaultSettings::try_get_string(key),
         }
     }
@@ -245,6 +245,10 @@ impl Settings {
 
     pub fn get_query_result_cache_max_bytes(&self) -> Result<usize> {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
+    }
+
+    pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("http_handler_result_timeout_secs")
     }
 
     pub fn get_query_result_cache_ttl_secs(&self) -> Result<u64> {

@@ -109,7 +109,7 @@ pub struct ListLockRevReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReq {
     pub lock_key: LockKey,
-    pub expire_at: u64,
+    pub expire_secs: u64,
     pub user: String,
     pub node: String,
     pub query_id: String,
@@ -123,7 +123,7 @@ pub struct CreateLockRevReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExtendLockRevReq {
     pub lock_key: LockKey,
-    pub expire_at: u64,
+    pub expire_secs: u64,
     pub revision: u64,
     pub acquire_lock: bool,
 }

@@ -29,6 +29,7 @@ null
 24
 null
 Error: APIError: ResponseError with 1046: Number of columns in file (2) does not match that of the corresponding table (3)
+at file 'sample_2_columns.csv', line 0
 24
 5
 54

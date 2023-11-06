@@ -44,6 +44,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let ctx = fixture.ctx();
 
     // setup
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let create_tbl_command = "create table t(c int)";
     execute_command(ctx.clone(), create_tbl_command).await?;
 
@@ -51,6 +52,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let statistics_sql = "analyze table default.t";
     execute_command(ctx.clone(), statistics_sql).await?;
 
@@ -59,6 +61,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
         .await?;
 
     // check count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
     assert_eq!(num_inserts, query_count(stream).await? as usize);
@@ -68,9 +71,11 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
     // append the same values again, and ndv does changed.
     append_rows(ctx.clone(), num_inserts).await?;
+    ctx.evict_table_from_cache("default", "default", "t")?;
     execute_command(ctx.clone(), statistics_sql).await?;
 
     // check count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
     assert_eq!(num_inserts * 2, query_count(stream).await? as usize);
@@ -78,12 +83,14 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     check_column_ndv_statistics(table.clone(), expected.clone()).await?;
 
     // delete
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
     if let Plan::Delete(delete) = plan {
         do_deletion(ctx.clone(), *delete).await?;
     }
+    ctx.evict_table_from_cache("default", "default", "t")?;
     execute_command(ctx.clone(), statistics_sql).await?;
 
     // check count: delete not affect counts
