@@ -29,8 +29,6 @@ jobs:
         with:
           files_ignore: |
             .github/**
-            docs/**
-            website/**
             **.md
             benchmark/**
             docker/**

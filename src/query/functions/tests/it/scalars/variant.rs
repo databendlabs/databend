@@ -51,6 +51,9 @@ fn test_variant() {
     test_get_string_arrow_op(file);
     test_get_by_keypath_op(file);
     test_get_by_keypath_string_op(file);
+    test_exists_key_op(file);
+    test_exists_any_keys_op(file);
+    test_exists_all_keys_op(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1094,4 +1097,72 @@ fn test_get_by_keypath_string_op(file: &mut impl Write) {
             ]),
         ),
     ]);
+}
+
+fn test_exists_key_op(file: &mut impl Write) {
+    run_ast(file, r#"parse_json('["1","2","3"]') ? NULL"#, &[]);
+    run_ast(file, r#"parse_json('true') ? '1'"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') ? '1'"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') ? '4'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2,"c":3}') ? 'a'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2,"c":3}') ? 'd'"#, &[]);
+    run_ast(file, "parse_json(s) ? 'a'", &[(
+        "s",
+        StringType::from_data_with_validity(&["[1,2,3]", r#"{"a":1}"#, "", r#"{"b":1}"#], vec![
+            true, true, false, true,
+        ]),
+    )]);
+}
+
+fn test_exists_any_keys_op(file: &mut impl Write) {
+    run_ast(file, r#"parse_json('["1","2","3"]') ?| NULL"#, &[]);
+    run_ast(file, r#"parse_json('true') ?| ['1','2']"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') ?| ['1','2']"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') ?| ['4','5']"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2,"c":3}') ?| ['a','b']"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2,"c":3}') ?| ['d','e']"#,
+        &[],
+    );
+    run_ast(file, "parse_json(s) ?| ['a','b']", &[(
+        "s",
+        StringType::from_data_with_validity(
+            &[r#"["a","e","d"]"#, r#"{"a":1,"b":2}"#, "", r#"{"c":1}"#],
+            vec![true, true, false, true],
+        ),
+    )]);
+}
+
+fn test_exists_all_keys_op(file: &mut impl Write) {
+    run_ast(file, r#"parse_json('["1","2","3"]') ?& NULL"#, &[]);
+    run_ast(file, r#"parse_json('true') ?& ['1','2']"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') ?& ['1','2']"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') ?& ['3','5']"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2,"c":3}') ?& ['a','b']"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2,"c":3}') ?& ['c','e']"#,
+        &[],
+    );
+    run_ast(file, "parse_json(s) ?& ['a','b']", &[(
+        "s",
+        StringType::from_data_with_validity(
+            &[
+                r#"["a","e","b"]"#,
+                r#"{"a":1,"b":2}"#,
+                "",
+                r#"{"a":0,"c":1}"#,
+            ],
+            vec![true, true, false, true],
+        ),
+    )]);
 }

@@ -14,20 +14,18 @@
 
 use common_exception::Result;
 
-use super::physical_plans::physical_add_row_number::AddRowNumber;
+use super::physical_plans::physical_merge_into_add_row_number::MergeIntoAddRowNumber;
 use super::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
-use crate::executor::physical_plans::physical_async_source::AsyncSourcerPlan;
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
 use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
-use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
+use crate::executor::physical_plans::physical_copy_into::CopyIntoTable;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTableSource;
 use crate::executor::physical_plans::physical_copy_into::QuerySource;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
-use crate::executor::physical_plans::physical_deduplicate::Deduplicate;
 use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
 use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
@@ -46,6 +44,8 @@ use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
 use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
 use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
+use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer;
+use crate::executor::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
@@ -84,11 +84,11 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
-            PhysicalPlan::AsyncSourcer(plan) => self.replace_async_sourcer(plan),
-            PhysicalPlan::Deduplicate(plan) => self.replace_deduplicate(plan),
+            PhysicalPlan::ReplaceAsyncSourcer(plan) => self.replace_async_sourcer(plan),
+            PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
-            PhysicalPlan::AddRowNumber(plan) => self.replace_add_row_number(plan),
+            PhysicalPlan::MergeIntoAddRowNumber(plan) => self.replace_add_row_number(plan),
             PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 self.replace_merge_into_row_id_apply(plan)
@@ -353,25 +353,20 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &CopyIntoTablePhysicalPlan,
-    ) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
             }
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(
-                    CopyIntoTablePhysicalPlan {
-                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                            plan: input,
-                            ..*query_ctx.clone()
-                        })),
-                        ..plan.clone()
-                    },
-                )))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
             }
         }
     }
@@ -409,16 +404,18 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_async_sourcer(&mut self, plan: &AsyncSourcerPlan) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::AsyncSourcer(plan.clone()))
+    fn replace_async_sourcer(&mut self, plan: &ReplaceAsyncSourcer) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ReplaceAsyncSourcer(plan.clone()))
     }
 
-    fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
+    fn replace_deduplicate(&mut self, plan: &ReplaceDeduplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
+        Ok(PhysicalPlan::ReplaceDeduplicate(Box::new(
+            ReplaceDeduplicate {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
     }
 
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
@@ -437,12 +434,14 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_add_row_number(&mut self, plan: &AddRowNumber) -> Result<PhysicalPlan> {
+    fn replace_add_row_number(&mut self, plan: &MergeIntoAddRowNumber) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::AddRowNumber(Box::new(AddRowNumber {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
+        Ok(PhysicalPlan::MergeIntoAddRowNumber(Box::new(
+            MergeIntoAddRowNumber {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
     }
 
     fn replace_merge_into_source(&mut self, plan: &MergeIntoSource) -> Result<PhysicalPlan> {
@@ -514,7 +513,7 @@ impl PhysicalPlan {
             visit(plan);
             match plan {
                 PhysicalPlan::TableScan(_)
-                | PhysicalPlan::AsyncSourcer(_)
+                | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)
                 | PhysicalPlan::ReclusterSource(_)
@@ -594,7 +593,7 @@ impl PhysicalPlan {
                 PhysicalPlan::CommitSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Deduplicate(plan) => {
+                PhysicalPlan::ReplaceDeduplicate(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ReplaceInto(plan) => {
@@ -606,7 +605,7 @@ impl PhysicalPlan {
                 PhysicalPlan::MergeInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::AddRowNumber(plan) => {
+                PhysicalPlan::MergeIntoAddRowNumber(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeIntoAppendNotMatched(plan) => {

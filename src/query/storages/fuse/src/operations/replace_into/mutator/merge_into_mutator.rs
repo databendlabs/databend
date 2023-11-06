@@ -83,6 +83,7 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
+
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     block_slots_in_charge: Option<BlockSlotDescription>,
@@ -107,6 +108,7 @@ struct AggregationContext {
 
 // Apply MergeIntoOperations to segments
 pub struct MergeIntoOperationAggregator {
+    ctx: Arc<dyn TableContext>,
     deletion_accumulator: DeletionAccumulator,
     aggregation_ctx: Arc<AggregationContext>,
 }
@@ -179,6 +181,7 @@ impl MergeIntoOperationAggregator {
         };
 
         Ok(Self {
+            ctx,
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
@@ -329,20 +332,14 @@ impl MergeIntoOperationAggregator {
                 let block_meta = segment_info.blocks[block_index].clone();
                 let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
-                let handle = io_runtime.spawn(async_backtrace::location!().frame({
-                    async move {
-                        let mutation_log_entry = aggregation_ctx
-                            .apply_deletion_to_data_block(
-                                segment_idx,
-                                block_index,
-                                &block_meta,
-                                &keys,
-                            )
-                            .await?;
-                        drop(permit);
-                        Ok::<_, ErrorCode>(mutation_log_entry)
-                    }
-                }));
+                // self.aggregation_ctx.
+                let handle = io_runtime.spawn(self.ctx.get_id(), async move {
+                    let mutation_log_entry = aggregation_ctx
+                        .apply_deletion_to_data_block(segment_idx, block_index, &block_meta, &keys)
+                        .await?;
+                    drop(permit);
+                    Ok::<_, ErrorCode>(mutation_log_entry)
+                });
                 mutation_log_handlers.push(handle)
             }
         }

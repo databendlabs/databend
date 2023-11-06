@@ -51,6 +51,20 @@ impl UserApiProvider {
         Ok(get_stage.await?.data)
     }
 
+    #[async_backtrace::framed]
+    pub async fn exists_stage(&self, tenant: &str, stage_name: &str) -> Result<bool> {
+        match self.get_stage(tenant, stage_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UNKNOWN_STAGE {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+
     // Get the tenant all stage list.
     #[async_backtrace::framed]
     pub async fn get_stages(&self, tenant: &str) -> Result<Vec<StageInfo>> {

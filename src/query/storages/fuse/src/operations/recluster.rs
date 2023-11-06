@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PushDownInfo;
@@ -372,7 +373,7 @@ impl FuseTable {
             remain -= gap_size;
 
             let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(pruning_ctx.pruning_runtime.spawn({
+            works.push(pruning_ctx.pruning_runtime.spawn(GLOBAL_TASK, {
                 let segment_pruner = segment_pruner.clone();
 
                 async move {
