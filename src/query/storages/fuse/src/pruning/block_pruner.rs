@@ -250,7 +250,7 @@ impl BlockPruner {
         for (block_idx, block_meta) in blocks {
             // Perf.
             {
-                metrics_inc_blocks_range_pruning_after(1);
+                metrics_inc_blocks_range_pruning_before(1);
                 metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
 
                 pruning_stats.set_blocks_range_pruning_before(1);
