@@ -229,12 +229,15 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
         let slice_start = rng.gen_range(0..len - 1);
         let slice_end = rng.gen_range(slice_start..len);
         let slice_len = slice_end - slice_start;
+
         let mut filter = Column::random(&DataType::Boolean, len)
             .into_boolean()
             .unwrap();
         filter.slice(slice_start, slice_len);
 
         let random_block = rand_block_for_all_types(len);
+        let random_block = random_block.slice(slice_start..slice_end);
+
         filtered_blocks.push(random_block.clone().filter_with_bitmap(&filter)?);
 
         blocks.push(random_block);
@@ -389,10 +392,23 @@ pub fn test_filters() -> common_exception::Result<()> {
 
             assert_block_value_eq(&bb, &cc);
 
+            let indices = f
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| *v)
+                .map(|(i, _)| i as u32)
+                .collect::<Vec<_>>();
+
+            let t_b = bb.take(&indices, &mut None)?;
+            let t_c = cc.take(&indices, &mut None)?;
+
             let f_b = bb.filter_with_bitmap(&f)?;
             let f_c = cc.filter_with_bitmap(&f)?;
 
             assert_block_value_eq(&f_b, &f_c);
+
+            assert_block_value_eq(&f_b, &t_b);
+            assert_block_value_eq(&f_c, &t_c);
         }
     }
 
