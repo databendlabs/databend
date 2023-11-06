@@ -207,7 +207,6 @@ impl Binder {
         let plan = ShowTaskRunsPlan {
             tenant,
             limit: limit.clone(),
-            task_name: task_name.to_string(),
         };
         Ok(Plan::ShowTaskRuns(Box::new(plan)))
     }

@@ -49,6 +49,7 @@ use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::interpreter_task_runs_show::ShowTaskRunsInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::UpdateInterpreter;
 use crate::sessions::QueryContext;
@@ -467,6 +468,7 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::ShowTasks(p) => Ok(Arc::new(ShowTasksInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::ShowTaskRuns(p) => Ok(Arc::new(ShowTaskRunsInterpreter::try_create(ctx, *p.clone())?)),
         }
     }
 }

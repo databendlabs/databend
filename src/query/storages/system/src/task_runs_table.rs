@@ -50,11 +50,11 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut state: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut error_message: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut error_message: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut error_code: Vec<i64> = Vec::with_capacity(task_runs.len());
     let mut run_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
     let mut query_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut attempt_number: Vec<Option<i32>> = Vec::with_capacity(task_runs.len());
+    let mut attempt_number: Vec<i32> = Vec::with_capacity(task_runs.len());
     let mut scheduled_time: Vec<i64> = Vec::with_capacity(task_runs.len());
     let mut completed_time: Vec<Option<i64>> = Vec::with_capacity(task_runs.len());
 
@@ -66,10 +66,12 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         comment.push(tr.comment.map(|s| s.into_bytes()));
         schedule.push(tr.schedule_options.map(|s| s.into_bytes()));
         state.push(tr.state.to_string().into_bytes());
+        error_message.push(tr.error_message.map(|s| s.into_bytes()));
+        error_code.push(tr.error_code);
         query_text.push(tr.query_text.into_bytes());
         run_id.push(tr.run_id.into_bytes());
         query_id.push(tr.query_id.into_bytes());
-        attempt_number.push(tr.attempt_number.map(|v| v as i32));
+        attempt_number.push(tr.attempt_number.unwrap());
         scheduled_time.push(tr.scheduled_at.timestamp_micros());
         completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
     }
@@ -82,7 +84,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         StringType::from_data(state),
         StringType::from_data(query_text),
         Int64Type::from_data(error_code),
-        StringType::from_data(error_message),
+        StringType::from_opt_data(error_message),
         Int32Type::from_data(attempt_number),
         TimestampType::from_data(scheduled_time),
         TimestampType::from_opt_data(completed_time),

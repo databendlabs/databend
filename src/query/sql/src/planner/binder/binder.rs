@@ -553,6 +553,9 @@ impl<'a> Binder {
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
             }
+            Statement::ShowTaskRuns(stmt) => {
+                self.bind_show_task_runs(stmt).await?
+            }
         };
         Ok(plan)
     }
