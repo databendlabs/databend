@@ -33,7 +33,6 @@ use crate::Domain;
 use crate::Scalar;
 use crate::TableSchemaRef;
 use crate::Value;
-use crate::ValueRef;
 
 pub type SendableDataBlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;

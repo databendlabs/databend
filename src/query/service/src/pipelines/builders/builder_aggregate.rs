@@ -101,10 +101,12 @@ impl PipelineBuilder {
     pub(crate) fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
 
+        let max_block_size = self.settings.get_max_block_size()?;
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            max_block_size as usize,
             None,
         )?;
 
@@ -125,6 +127,10 @@ impl PipelineBuilder {
         }
 
         let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
+        let enable_experimental_aggregate_hashtable = self
+            .settings
+            .get_enable_experimental_aggregate_hashtable()?
+            && self.ctx.get_cluster().is_empty();
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
@@ -139,7 +145,8 @@ impl PipelineBuilder {
                         method,
                         input,
                         output,
-                        params.clone()
+                        params.clone(),
+                        enable_experimental_aggregate_hashtable
                     ),
                 }),
                 false => with_mappedhash_method!(|T| match method.clone() {
@@ -148,7 +155,8 @@ impl PipelineBuilder {
                         method,
                         input,
                         output,
-                        params.clone()
+                        params.clone(),
+                        enable_experimental_aggregate_hashtable
                     ),
                 }),
             }?;
@@ -220,10 +228,13 @@ impl PipelineBuilder {
     }
 
     pub(crate) fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
+        let max_block_size = self.settings.get_max_block_size()?;
+
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            max_block_size as usize,
             aggregate.limit,
         )?;
 
@@ -322,6 +333,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
+        max_block_size: usize,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
@@ -361,6 +373,7 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
+            max_block_size,
             limit,
         )?;
 

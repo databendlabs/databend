@@ -329,14 +329,12 @@ unsafe fn row_match_string_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        for (idx, is_set) in select_vector
-            .iter()
-            .take(*count)
-            .copied()
-            .zip(validity.iter())
-        {
+        let is_all_set = validity.unset_bits() == 0;
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
             let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
+            let is_set = is_all_set || validity.get_bit_unchecked(idx);
 
             if is_set && is_set2 {
                 let len_address = address[idx].add(col_offset);
@@ -364,7 +362,8 @@ unsafe fn row_match_string_column(
             }
         }
     } else {
-        for idx in select_vector.iter().take(*count).copied() {
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let len_address = address[idx].add(col_offset);
             let address = address[idx].add(col_offset + 4);
 
@@ -410,22 +409,19 @@ unsafe fn row_match_column_type<T: ArgType>(
     let mut match_count = 0;
 
     let mut equal: bool;
-
     if let Some(validity) = validity {
-        for (idx, is_set) in select_vector
-            .iter()
-            .take(*count)
-            .copied()
-            .zip(validity.iter())
-        {
+        let is_all_set = validity.unset_bits() == 0;
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
             let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
-
+            let is_set = is_all_set || validity.get_bit_unchecked(idx);
             if is_set && is_set {
                 let address = address[idx].add(col_offset);
                 let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
                 let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
+
                 equal = scalar.eq(&value);
             } else {
                 equal = is_set == is_set2;
@@ -440,7 +436,8 @@ unsafe fn row_match_column_type<T: ArgType>(
             }
         }
     } else {
-        for idx in select_vector.iter().take(*count).copied() {
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let value = T::index_column_unchecked(&col, idx);
             let address = address[idx].add(col_offset);
             let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);

@@ -99,6 +99,7 @@ impl ValueType for StringType {
         col.index(index)
     }
 
+    #[inline]
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
