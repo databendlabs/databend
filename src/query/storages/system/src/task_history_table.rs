@@ -68,7 +68,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         state.push(tr.state.to_string().into_bytes());
         exception_code.push(tr.error_code);
         exception_text.push(tr.error_message.map(|s| s.into_bytes()));
-        definition.push(tsk.query_text.into_bytes());
+        definition.push(tr.query_text.into_bytes());
         run_id.push(tr.run_id.into_bytes());
         query_id.push(tr.query_id.into_bytes());
         attempt_number.push(tr.attempt_number.unwrap());
