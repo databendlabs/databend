@@ -190,6 +190,9 @@ impl Column {
         let mut start_index: usize = 0;
 
         if offset > 0 {
+            // If `offset` > 0, the valid bits of this byte start at `offset`, and the
+            // max num of valid bits is `8 - offset`, but we also need to ensure that
+            // we cannot iterate more than `length` bits.
             let n = std::cmp::min(8 - offset, length);
             start_index += n;
             filter
@@ -253,6 +256,8 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
+                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
+                    // need to ensure that we cannot iterate more than `length` bits.
                     if n >= offset && n < offset + length {
                         copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
                     }
@@ -335,6 +340,8 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
+                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
+                    // need to ensure that we cannot iterate more than `length` bits.
                     if n >= offset && n < offset + length {
                         let start = *values_offset.get_unchecked(n - offset) as usize;
                         let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
@@ -507,6 +514,8 @@ impl Column {
                 let mut mask = filter_slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
+                    // If `filter_length` > 0, the valid bits of this byte start at `filter_offset`, we also
+                    // need to ensure that we cannot iterate more than `filter_length` bits.
                     if n >= filter_offset && n < filter_offset + filter_length {
                         if bitmap.get_bit_unchecked(n - filter_offset) {
                             buf |= BIT_MASK[builder_idx % 8];
