@@ -52,11 +52,12 @@ impl AccumulateRowNumber {
         // it will do nothing for empty block.
         if !data_block.is_empty() {
             assert_eq!(data_block.num_columns(), 1);
+            assert_eq!(
+                data_block.get_by_offset(0).data_type,
+                DataType::Number(NumberDataType::UInt64)
+            );
         }
-        assert_eq!(
-            data_block.get_by_offset(0).data_type,
-            DataType::Number(NumberDataType::UInt64)
-        );
+
         self.data_blocks.push(data_block);
         Ok(())
     }
