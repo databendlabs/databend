@@ -37,6 +37,10 @@ lazy_static! {
         register_counter(key!("merge_into_append_blocks_counter"));
     static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER: Counter =
         register_counter(key!("merge_into_distributed_hashtable_fetch_row_number"));
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_EMPTY_BLOCK: Counter =
+        register_counter(key!("merge_into_distributed_hashtable_empty_block"));
+    static ref MERGE_INTO_DISTRIBUTED_GENERATE_ROW_NUMBERS: Counter =
+        register_counter(key!("merge_into_distributed_generate_row_numbers"));
     static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK: Counter = register_counter(
         key!("merge_into_distributed_hashtable_push_empty_null_block")
     );
@@ -103,6 +107,14 @@ pub fn merge_into_distributed_apply_row_number(c: u32) {
 
 pub fn merge_into_distributed_hashtable_fetch_row_number(c: u32) {
     MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_hashtable_empty_block(c: u32) {
+    MERGE_INTO_DISTRIBUTED_HASHTABLE_EMPTY_BLOCK.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_generate_row_numbers(c: u32) {
+    MERGE_INTO_DISTRIBUTED_GENERATE_ROW_NUMBERS.inc_by(c as u64);
 }
 
 pub fn merge_into_distributed_hashtable_push_empty_null_block(c: u32) {

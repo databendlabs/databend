@@ -31,6 +31,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::metrics::merge_into::merge_into_distributed_hashtable_empty_block;
 use common_storage::metrics::merge_into::merge_into_distributed_hashtable_fetch_row_number;
 use common_storage::metrics::merge_into::merge_into_distributed_hashtable_push_empty_null_block;
 use common_storage::metrics::merge_into::merge_into_distributed_hashtable_push_null_block;
@@ -115,6 +116,7 @@ impl Processor for ExtractHashTableByRowNumber {
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.is_empty() {
+                merge_into_distributed_hashtable_empty_block(1);
                 return Ok(());
             }
 

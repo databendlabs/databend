@@ -74,11 +74,13 @@ impl Transform for TransformAddRowNumberColumnProcessor {
         for number in row_number..row_number + num_rows {
             row_numbers.push(number);
         }
+        merge_into_distributed_generate_row_numbers(row_numbers.len() as u32);
         let mut data_block = data;
         let row_number_entry = BlockEntry::new(
             DataType::Number(NumberDataType::UInt64),
             Value::Column(UInt64Type::from_data(row_numbers)),
         );
+
         data_block.add_column(row_number_entry);
         Ok(data_block)
     }
