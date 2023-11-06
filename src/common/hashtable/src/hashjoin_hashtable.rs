@@ -52,7 +52,7 @@ pub struct RawEntry<K> {
 
 /// Hash join early filtering:
 /// For each bucket in the hash table, its type is u64. We use the upper 16 bits to store a tag
-/// for early filtering and the lower 48 bits to store a pointer to the RowEntry.  We construct 
+/// for early filtering and the lower 48 bits to store a pointer to the RowEntry.  We construct
 /// the tag during the finalize phase of the hash join, encoding it into the upper 16 bits. During
 /// the probing phase, we can check the tag first. If the key is not found in the tag, we can avoid
 /// reading the RowEntry, which can reduce random memory accesses.
@@ -86,7 +86,7 @@ pub fn remove_header_tag(old_header: u64) -> u64 {
     old_header & POINTER_MASK
 }
 
-/// Obtain the tag by performing a right shift operation on the bucket, 
+/// Obtain the tag by performing a right shift operation on the bucket,
 /// and then check if the key is in the tag.
 #[inline(always)]
 pub fn early_filtering(header: u64, hash: u64) -> bool {
