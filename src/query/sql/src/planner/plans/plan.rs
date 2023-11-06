@@ -26,7 +26,7 @@ use common_expression::DataSchemaRefExt;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
-use crate::plans::{AddTableColumnPlan, ShowTaskRunsPlan};
+use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
@@ -115,6 +115,7 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
+use crate::plans::ShowTaskRunsPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
@@ -290,7 +291,7 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
-    ShowTaskRuns(Box<ShowTaskRunsPlan>)
+    ShowTaskRuns(Box<ShowTaskRunsPlan>),
 }
 
 #[derive(Clone, Debug)]
