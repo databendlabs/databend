@@ -225,10 +225,14 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     let mut filtered_blocks = Vec::with_capacity(data_types.len());
 
     for i in 0..num_blocks {
-        let len = rng.gen_range(5..100);
-        let filter = Column::random(&DataType::Boolean, len)
+        let len = rng.gen_range(2..100);
+        let slice_start = rng.gen_range(0..len - 1);
+        let slice_end = rng.gen_range(slice_start..len);
+        let slice_len = slice_end - slice_start;
+        let mut filter = Column::random(&DataType::Boolean, len)
             .into_boolean()
             .unwrap();
+        filter.slice(slice_start, slice_len);
 
         let random_block = rand_block_for_all_types(len);
         filtered_blocks.push(random_block.clone().filter_with_bitmap(&filter)?);
