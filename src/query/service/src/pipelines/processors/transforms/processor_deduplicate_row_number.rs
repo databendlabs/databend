@@ -28,7 +28,10 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use common_storage::metrics::merge_into::merge_into_distributed_apply_row_number;
 use common_storage::metrics::merge_into::merge_into_distributed_deduplicate_row_number;
 use common_storage::metrics::merge_into::merge_into_distributed_empty_row_number;
+use common_storage::metrics::merge_into::merge_into_distributed_init_unique_number;
+use common_storage::metrics::merge_into::merge_into_distributed_new_set_len;
 use itertools::Itertools;
+use log::info;
 
 pub struct DeduplicateRowNumber {
     unique_row_number: HashSet<u64>,
@@ -75,6 +78,11 @@ impl DeduplicateRowNumber {
 
         if !self.accepted_data {
             self.unique_row_number = row_number_vec.into_iter().collect();
+            merge_into_distributed_init_unique_number(self.unique_row_number.len() as u32);
+            info!(
+                "init unique_row_number_len:{}",
+                self.unique_row_number.len(),
+            );
             self.accepted_data = true;
             return Ok(());
         }
@@ -85,6 +93,8 @@ impl DeduplicateRowNumber {
                 new_set.insert(number);
             }
         }
+        merge_into_distributed_new_set_len(new_set.len() as u32);
+        info!("init new_set_len:{}", new_set.len());
         self.unique_row_number = new_set;
         Ok(())
     }
