@@ -109,6 +109,10 @@ impl Settings {
         )))
     }
 
+    pub fn unset_setting(&self, k: &str) {
+        self.changes.remove(k);
+    }
+
     pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
         for (k, v) in settings.iter() {
             if self.has_setting(k.as_str())? {

@@ -82,6 +82,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     append_rows(ctx.clone(), num_inserts).await?;
 
     // check count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
     assert_eq!(9, check_count(stream).await?);
@@ -97,12 +98,14 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     mutator.try_commit(table.clone()).await?;
 
     // check segment count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), qry).await?;
     // after compact, in our case, there should be only 1 segment left
     assert_eq!(1, check_count(stream).await?);
 
     // check block count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let qry = "select block_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
@@ -124,11 +127,13 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     append_rows(ctx.clone(), num_inserts).await?;
 
     // check count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
     assert_eq!(9, check_count(stream).await?);
 
     // compact segment
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
@@ -144,6 +149,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     mutator.try_commit(table.clone()).await?;
 
     // check segment count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_seg = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), count_seg).await?;
     // after compact, in our case, there should be only 1 + num_inserts segments left
@@ -151,6 +157,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     assert_eq!(1 + num_inserts as u64, check_count(stream).await?);
 
     // check block count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_block = "select block_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), count_block).await?;
     assert_eq!(num_inserts as u64 * 2, check_count(stream).await?);
@@ -181,11 +188,13 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     append_rows(ctx.clone(), num_inserts).await?;
 
     // check count
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
 
     // try compact segment
+    ctx.evict_table_from_cache("default", "default", "t")?;
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;

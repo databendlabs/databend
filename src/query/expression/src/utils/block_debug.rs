@@ -52,6 +52,14 @@ pub fn assert_blocks_sorted_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
     assert_blocks_sorted_eq_with_name("", expect, blocks)
 }
 
+pub fn assert_block_value_eq(a: &DataBlock, b: &DataBlock) {
+    assert!(a.num_columns() == b.num_columns());
+    assert!(a.num_rows() == b.num_rows());
+    for i in 0..a.num_columns() {
+        assert!(a.columns()[i].eq(&b.columns()[i]));
+    }
+}
+
 /// Assert with order insensitive.
 /// ['a', 'b'] equals ['b', 'a']
 pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {

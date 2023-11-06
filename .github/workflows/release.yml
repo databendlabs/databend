@@ -104,7 +104,7 @@ jobs:
           delete-branch: true
 
   macos:
-    runs-on: macos-11
+    runs-on: macos-latest
     needs: create_release
     env:
       RUNNER_PROVIDER: github
