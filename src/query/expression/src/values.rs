@@ -28,6 +28,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
@@ -1217,6 +1218,36 @@ impl Column {
                 )
             }
             _ => arrow_array.with_validity(Some(validity)),
+        }
+    }
+
+    pub fn check_valid(&self) -> Result<()> {
+        match self {
+            Column::String(x) => x.check_valid(),
+            Column::Variant(x) => x.check_valid(),
+            Column::Bitmap(x) => x.check_valid(),
+            Column::Map(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
+                }
+                Ok(())
+            }
+            Column::Array(x) => x.check_valid(),
+            Column::Nullable(x) => {
+                if x.column.len() != x.validity.len() {
+                    return Err(ErrorCode::Internal(
+                        "column and validity length mismatch".to_string(),
+                    ));
+                }
+                x.column.check_valid()
+            }
+            Column::Tuple(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 
