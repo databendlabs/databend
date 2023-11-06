@@ -492,6 +492,7 @@ fn test_statement() {
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,
+        r#"SHOW TASK_RUNS"#,
         r#"EXECUTE TASK MyTask"#,
         r#"DESC TASK MyTask"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",

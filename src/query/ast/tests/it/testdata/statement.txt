@@ -13568,12 +13568,13 @@ ShowTasks(
     },
 )
 
+
 ---------- Input ----------
 SHOW TASK_RUNS
 ---------- Output ---------
 SHOW TASK_RUNS
 ---------- AST ------------
-ShowTasks(
+ShowTaskRuns(
     ShowTaskRunsStmt {
         limit: None,
     },
