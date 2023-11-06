@@ -261,14 +261,18 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     let mut blocks = Vec::with_capacity(data_types.len());
     let mut filtered_blocks = Vec::with_capacity(data_types.len());
     for i in 0..num_blocks {
-        let len = rng.gen_range(5..100);
-        let filter = Column::random(&DataType::Boolean, len)
+        let len = rng.gen_range(2..100);
+        let slice_start = rng.gen_range(0..len - 1);
+        let slice_end = rng.gen_range(slice_start..len);
+        let slice_len = slice_end - slice_start;
+        let mut filter = Column::random(&DataType::Boolean, len)
             .into_boolean()
             .unwrap();
+        filter.slice(slice_start, slice_len);
 
         let mut columns = Vec::with_capacity(data_types.len());
         for data_type in data_types.iter() {
-            columns.push(Column::random(data_type, len));
+            columns.push(Column::random(data_type, len).slice(slice_start..slice_end));
         }
 
         let mut block_entries = Vec::with_capacity(data_types.len());
@@ -281,10 +285,10 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
             block_entries.push(BlockEntry::new(data_type.clone(), Value::Column(col)));
         }
 
-        blocks.push(DataBlock::new(block_entries, len));
+        blocks.push(DataBlock::new(block_entries, slice_len));
         filtered_blocks.push(DataBlock::new(
             filtered_block_entries,
-            len - filter.unset_bits(),
+            slice_len - filter.unset_bits(),
         ));
 
         for (j, val) in filter.iter().enumerate() {
