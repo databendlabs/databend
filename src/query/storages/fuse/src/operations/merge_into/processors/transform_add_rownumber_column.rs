@@ -29,6 +29,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
+use common_storage::metrics::merge_into::merge_into_distributed_generate_row_numbers;
 
 const PREFIX_OFFSET: usize = 48;
 
