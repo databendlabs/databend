@@ -16,6 +16,8 @@ use std::collections::HashSet;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
@@ -73,8 +75,8 @@ impl DeduplicateRowNumber {
             return Ok(());
         }
 
-        merge_into_distributed_deduplicate_row_number(data_block.num_rows() as u32);
         let row_number_vec = get_row_number(&data_block, 0);
+        merge_into_distributed_deduplicate_row_number(data_block.num_rows() as u32);
 
         if !self.accepted_data {
             self.unique_row_number = row_number_vec.into_iter().collect();
@@ -111,6 +113,10 @@ impl DeduplicateRowNumber {
 
 pub(crate) fn get_row_number(data_block: &DataBlock, row_number_idx: usize) -> Buffer<u64> {
     let row_number_col = data_block.get_by_offset(row_number_idx);
+    assert_eq!(
+        row_number_col.data_type,
+        DataType::Number(NumberDataType::UInt64)
+    );
     let value = row_number_col.value.try_downcast::<UInt64Type>().unwrap();
     match value {
         common_expression::Value::Scalar(scalar) => Buffer::from(vec![scalar]),
