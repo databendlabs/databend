@@ -35,11 +35,27 @@ lazy_static! {
         register_counter(key!("merge_into_deleted_blocks_rows_counter"));
     static ref MERGE_INTO_APPEND_BLOCKS_COUNTER: Counter =
         register_counter(key!("merge_into_append_blocks_counter"));
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER: Counter =
+        register_counter(key!("merge_into_distributed_hashtable_fetch_row_number"));
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK: Counter = register_counter(
+        key!("merge_into_distributed_hashtable_push_empty_null_block")
+    );
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK: Counter =
+        register_counter(key!("merge_into_distributed_hashtable_push_null_block"));
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK_ROWS: Counter = register_counter(
+        key!("merge_into_distributed_hashtable_push_null_block_rows")
+    );
     static ref MERGE_INTO_APPEND_BLOCKS_ROWS_COUNTER: Counter =
         register_counter(key!("merge_into_append_blocks_rows_counter"));
     static ref MERGE_INTO_MATCHED_ROWS: Counter = register_counter(key!("merge_into_matched_rows"));
     static ref MERGE_INTO_UNMATCHED_ROWS: Counter =
         register_counter(key!("merge_into_unmatched_rows"));
+    static ref MERGE_INTO_DISTRIBUTED_DEDUPLICATE_ROWNUMBER: Counter =
+        register_counter(key!("merge_into_distributed_deduplicate_row_number"));
+    static ref MERGE_INTO_DISTRIBUTED_EMPTY_ROWNUMBER: Counter =
+        register_counter(key!("merge_into_distributed_empty_row_number"));
+    static ref MERGE_INTO_DISTRIBUTED_APPLY_ROWNUMBER: Counter =
+        register_counter(key!("merge_into_distributed_apply_row_number"));
     static ref MERGE_INTO_ACCUMULATE_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds(key!("merge_into_accumulate_milliseconds"));
     static ref MERGE_INTO_APPLY_MILLISECONDS: Histogram =
@@ -71,6 +87,34 @@ pub fn metrics_inc_merge_into_deleted_blocks_rows_counter(c: u32) {
 // used to record append new blocks in matched split and not match insert.
 pub fn metrics_inc_merge_into_append_blocks_counter(c: u32) {
     MERGE_INTO_APPEND_BLOCKS_COUNTER.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_deduplicate_row_number(c: u32) {
+    MERGE_INTO_DISTRIBUTED_DEDUPLICATE_ROWNUMBER.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_empty_row_number(c: u32) {
+    MERGE_INTO_DISTRIBUTED_EMPTY_ROWNUMBER.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_apply_row_number(c: u32) {
+    MERGE_INTO_DISTRIBUTED_APPLY_ROWNUMBER.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_hashtable_fetch_row_number(c: u32) {
+    MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_hashtable_push_empty_null_block(c: u32) {
+    MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_hashtable_push_null_block(c: u32) {
+    MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK.inc_by(c as u64);
+}
+
+pub fn merge_into_distributed_hashtable_push_null_block_rows(c: u32) {
+    MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK_ROWS.inc_by(c as u64);
 }
 
 pub fn metrics_inc_merge_into_append_blocks_rows_counter(c: u32) {
