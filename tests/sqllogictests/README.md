@@ -73,4 +73,4 @@ For more information about arguments, such as <type_string>, <sort_mode>, <label
 
 ### Aditional features
 
-- sql with regexp pattern`RAND_(\d+)_(\d+)` will be replaced by a random number from the range.
+- sql with regexp pattern `\$RAND_(\d+)_(\d+)` will be replaced by a random number from the range.
