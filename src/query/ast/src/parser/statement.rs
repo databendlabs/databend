@@ -2766,7 +2766,7 @@ pub fn show_options(i: Input) -> IResult<ShowOptions> {
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #option_to_string )*
         },
         |opts| {
             BTreeMap::from_iter(
@@ -2780,7 +2780,7 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident ~ "=" ~ #parameter_to_string ) ~ ("," ~ #ident ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
         },
         |(key, _, value, opts)| {
             let mut options = BTreeMap::from_iter(
@@ -2790,6 +2790,15 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
             options.insert(key.name.to_lowercase(), value);
             options
         },
+    )(i)
+}
+
+fn option_to_string(i: Input) -> IResult<String> {
+    let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+
+    rule! (
+        #bool_to_string
+        | #parameter_to_string
     )(i)
 }
 

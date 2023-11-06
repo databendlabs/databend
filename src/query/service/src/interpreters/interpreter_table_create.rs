@@ -56,6 +56,7 @@ use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
@@ -321,6 +322,7 @@ impl CreateTableInterpreter {
         is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema)?;
+        is_valid_change_tracking(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -430,6 +432,7 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
+    r.insert(OPT_KEY_CHANGE_TRACKING);
 
     r.insert(OPT_KEY_ENGINE);
 
@@ -500,6 +503,13 @@ pub fn is_valid_bloom_index_columns(
 ) -> Result<()> {
     if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
         BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_change_tracking(options: &BTreeMap<String, String>) -> Result<()> {
+    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
+        value.to_lowercase().parse::<bool>()?;
     }
     Ok(())
 }

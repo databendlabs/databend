@@ -59,6 +59,7 @@ use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::table_storage_prefix;
 use storages_common_table_meta::table::TableCompression;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+// use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -390,6 +391,11 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    pub fn change_tracking_enabled(&self) -> bool {
+        // self.get_option(OPT_KEY_CHANGE_TRACKING, false)
+        false
     }
 
     // Check if table is attached.
