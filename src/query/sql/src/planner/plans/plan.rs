@@ -115,7 +115,6 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
-use crate::plans::ShowTaskRunsPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
@@ -291,7 +290,6 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
-    ShowTaskRuns(Box<ShowTaskRunsPlan>),
 }
 
 #[derive(Clone, Debug)]

@@ -168,13 +168,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _, limit)| Statement::ShowTasks(ShowTasksStmt { limit }),
     );
 
-    let show_task_runs = map(
-        rule! {
-            SHOW ~ TASK_RUNS ~ #show_limit?
-        },
-        |(_, _, limit)| Statement::ShowTaskRuns(ShowTaskRunsStmt { limit }),
-    );
-
     let execute_task = map(
         rule! {
             EXECUTE ~ TASK ~ #ident
@@ -1682,7 +1675,6 @@ AS
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
-            | #show_task_runs: "`SHOW TASK_RUNS [<show_limit>]`"
         ),
     ));
 

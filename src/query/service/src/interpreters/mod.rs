@@ -97,7 +97,6 @@ mod interpreter_task_create;
 mod interpreter_task_describe;
 mod interpreter_task_drop;
 mod interpreter_task_execute;
-mod interpreter_task_runs_show;
 mod interpreter_tasks_show;
 mod interpreter_unsetting;
 mod interpreter_update;

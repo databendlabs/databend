@@ -37,7 +37,7 @@ use common_expression::FromOptData;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_sql::plans::task_schema;
+use common_sql::plans::task_run_schema;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -91,13 +91,13 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     ]))
 }
 
-pub struct TaskRunsTable {
+pub struct TaskHistoryTable {
     table_info: TableInfo,
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for TaskRunsTable {
-    const NAME: &'static str = "system.task_runs";
+impl AsyncSystemTable for TaskHistoryTable {
+    const NAME: &'static str = "system.task_history";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -112,7 +112,7 @@ impl AsyncSystemTable for TaskRunsTable {
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot view system.task_runs table without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                "cannot view system.task_history table without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
 
@@ -146,18 +146,18 @@ impl AsyncSystemTable for TaskRunsTable {
     }
 }
 
-impl TaskRunsTable {
+impl TaskHistoryTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema =
-            infer_table_schema(&task_schema()).expect("failed to parse task run table schema");
+        let schema = infer_table_schema(&task_run_schema())
+            .expect("failed to parse task history table schema");
 
         let table_info = TableInfo {
-            desc: "'system'.'task_runs'".to_string(),
-            name: "task_runs".to_string(),
+            desc: "'system'.'task_history'".to_string(),
+            name: "task_history".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
-                engine: "SystemTaskRuns".to_string(),
+                engine: "SystemTaskHistory".to_string(),
 
                 ..Default::default()
             },

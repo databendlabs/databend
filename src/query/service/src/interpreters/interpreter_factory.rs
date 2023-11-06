@@ -43,7 +43,6 @@ use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
 use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
 use crate::interpreters::interpreter_task_drop::DropTaskInterpreter;
 use crate::interpreters::interpreter_task_execute::ExecuteTaskInterpreter;
-use crate::interpreters::interpreter_task_runs_show::ShowTaskRunsInterpreter;
 use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
@@ -468,10 +467,6 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::ShowTasks(p) => Ok(Arc::new(ShowTasksInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::ShowTaskRuns(p) => Ok(Arc::new(ShowTaskRunsInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
         }
     }
 }

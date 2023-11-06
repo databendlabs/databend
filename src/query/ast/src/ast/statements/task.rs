@@ -216,20 +216,3 @@ impl Display for DescribeTaskStmt {
         write!(f, "DESCRIBE TASK {}", self.name)
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ShowTaskRunsStmt {
-    pub limit: Option<ShowLimit>,
-}
-
-impl Display for ShowTaskRunsStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SHOW ")?;
-        write!(f, "TASK_RUNS")?;
-        if let Some(limit) = &self.limit {
-            write!(f, " {limit}")?;
-        }
-
-        Ok(())
-    }
-}

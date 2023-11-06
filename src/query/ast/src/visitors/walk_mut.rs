@@ -459,7 +459,6 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropTask(stmt) => visitor.visit_drop_task(stmt),
         Statement::AlterTask(stmt) => visitor.visit_alter_task(stmt),
         Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
-        Statement::ShowTaskRuns(stmt) => visitor.visit_show_task_runs(stmt),
         Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
     }
 }

@@ -146,15 +146,3 @@ impl ShowTasksPlan {
         task_schema()
     }
 }
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ShowTaskRunsPlan {
-    pub tenant: String,
-    pub limit: Option<ShowLimit>,
-}
-
-impl ShowTaskRunsPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        task_run_schema()
-    }
-}

@@ -13570,18 +13570,6 @@ ShowTasks(
 
 
 ---------- Input ----------
-SHOW TASK_RUNS
----------- Output ---------
-SHOW TASK_RUNS
----------- AST ------------
-ShowTaskRuns(
-    ShowTaskRunsStmt {
-        limit: None,
-    },
-)
-
-
----------- Input ----------
 EXECUTE TASK MyTask
 ---------- Output ---------
 EXECUTE TASK MyTask

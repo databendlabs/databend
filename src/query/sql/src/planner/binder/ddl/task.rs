@@ -22,7 +22,6 @@ use common_ast::ast::DescribeTaskStmt;
 use common_ast::ast::DropTaskStmt;
 use common_ast::ast::ExecuteTaskStmt;
 use common_ast::ast::ScheduleOptions;
-use common_ast::ast::ShowTaskRunsStmt;
 use common_ast::ast::ShowTasksStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,7 +33,6 @@ use crate::plans::DescribeTaskPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
-use crate::plans::ShowTaskRunsPlan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
@@ -193,21 +191,5 @@ impl Binder {
             limit: limit.clone(),
         };
         Ok(Plan::ShowTasks(Box::new(plan)))
-    }
-
-    #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_show_task_runs(
-        &mut self,
-        stmt: &ShowTaskRunsStmt,
-    ) -> Result<Plan> {
-        let ShowTaskRunsStmt { limit } = stmt;
-
-        let tenant = self.ctx.get_tenant();
-
-        let plan = ShowTaskRunsPlan {
-            tenant,
-            limit: limit.clone(),
-        };
-        Ok(Plan::ShowTaskRuns(Box::new(plan)))
     }
 }

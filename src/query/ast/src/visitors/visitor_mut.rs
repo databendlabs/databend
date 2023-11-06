@@ -613,8 +613,6 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_tasks(&mut self, _stmt: &mut ShowTasksStmt) {}
 
-    fn visit_show_task_runs(&mut self, _stmt: &mut ShowTaskRunsStmt) {}
-
     fn visit_execute_task(&mut self, _stmt: &mut ExecuteTaskStmt) {}
 
     fn visit_describe_task(&mut self, _stmt: &mut DescribeTaskStmt) {}

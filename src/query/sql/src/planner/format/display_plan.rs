@@ -192,7 +192,6 @@ impl Plan {
             Plan::DescribeTask(p) => Ok(format!("{:?}", p)),
             Plan::ExecuteTask(p) => Ok(format!("{:?}", p)),
             Plan::ShowTasks(p) => Ok(format!("{:?}", p)),
-            Plan::ShowTaskRuns(p) => Ok(format!("{:?}", p)),
         }
     }
 }

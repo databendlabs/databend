@@ -241,7 +241,6 @@ pub enum Statement {
     DescribeTask(DescribeTaskStmt),
     DropTask(DropTaskStmt),
     ShowTasks(ShowTasksStmt),
-    ShowTaskRuns(ShowTaskRunsStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -552,7 +551,6 @@ impl Display for Statement {
             Statement::ExecuteTask(stmt) => write!(f, "{stmt}")?,
             Statement::DropTask(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTasks(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowTaskRuns(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTask(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
