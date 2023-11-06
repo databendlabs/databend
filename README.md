@@ -159,7 +159,7 @@ We can use `.CMD_NAME VAL` to update the `Settings` above in runtime, example:
 
 Format:
 ```
-databend[+flight]://user:[password]@host[:port]/[database][?sslmode=disabled][&arg1=value1]
+databend[+flight]://user:[password]@host[:port]/[database][?sslmode=disable][&arg1=value1]
 ```
 
 Examples:
