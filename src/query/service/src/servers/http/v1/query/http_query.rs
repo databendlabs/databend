@@ -463,6 +463,9 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn kill(&self) {
+        // the query will be removed from the query manager before the session is dropped.
+        self.detach().await;
+
         Executor::stop(
             &self.state,
             Err(ErrorCode::AbortedQuery("killed by http")),
@@ -472,7 +475,9 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&self) {
+    async fn detach(&self) {
+        info!("{}: http query detached", &self.id);
+
         let data = self.page_manager.lock().await;
         data.detach().await
     }
