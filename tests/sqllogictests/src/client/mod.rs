@@ -89,7 +89,7 @@ impl Client {
     }
 }
 
-fn replace_rand_values<'h>(input: &'h str) -> Cow<'h, str> {
+fn replace_rand_values(input: &str) -> Cow<'_, str> {
     let re = Regex::new(r"\$RAND_(\d+)_(\d+)").unwrap();
     re.replace_all(input, |caps: &regex::Captures| {
         let m: usize = caps[1].parse().unwrap();
