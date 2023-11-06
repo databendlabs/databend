@@ -24,7 +24,7 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 
 pub struct AccumulateRowNumber {
-    datas: Vec<DataBlock>,
+    data_blocks: Vec<DataBlock>,
 }
 
 #[async_trait::async_trait]
@@ -52,21 +52,21 @@ impl AccumulateRowNumber {
             data_block.get_by_offset(0).data_type,
             DataType::Number(NumberDataType::UInt64)
         );
-        self.datas.push(data_block);
+        self.data_blocks.push(data_block);
         Ok(())
     }
 
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<DataBlock>> {
         // row_numbers is small, so concat is ok.
-        Ok(Some(DataBlock::concat(&self.datas)?))
+        Ok(Some(DataBlock::concat(&self.data_blocks)?))
     }
 }
 
 impl AccumulateRowNumber {
     pub fn create() -> Result<Self> {
         Ok(Self {
-            datas: Vec::with_capacity(10),
+            data_blocks: Vec::with_capacity(10),
         })
     }
 
