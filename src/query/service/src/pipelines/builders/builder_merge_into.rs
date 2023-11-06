@@ -44,6 +44,7 @@ use common_storages_fuse::operations::merge_into::TransformAddRowNumberColumnPro
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 
+use crate::pipelines::processors::transforms::AccumulateRowNumber;
 use crate::pipelines::processors::transforms::ExtractHashTableByRowNumber;
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::DeduplicateRowNumber;
@@ -638,6 +639,14 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
+        // accumulate row_number
+        if *distributed {
+            let pipe_items = vec![
+                create_dummy_item(),
+                create_dummy_item(),
+                AccumulateRowNumber::create()?.into_pipe_item(),
+            ];
+        }
         Ok(())
     }
 }

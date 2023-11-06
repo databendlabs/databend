@@ -77,7 +77,6 @@ impl DeduplicateRowNumber {
 
         let row_number_vec = get_row_number(&data_block, 0);
         merge_into_distributed_deduplicate_row_number(data_block.num_rows() as u32);
-
         if !self.accepted_data {
             self.unique_row_number = row_number_vec.into_iter().collect();
             merge_into_distributed_init_unique_number(self.unique_row_number.len() as u32);
