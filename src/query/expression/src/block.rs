@@ -47,7 +47,7 @@ pub struct DataBlock {
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BlockEntry {
     pub data_type: DataType,
     pub value: Value<AnyType>,
@@ -124,20 +124,17 @@ impl DataBlock {
         }
     }
 
-    fn check_columns_valid(columns: &Vec<BlockEntry>, num_rows: usize) -> Result<()> {
+    fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
         for entry in columns.iter() {
-            match &entry.value {
-                Value::Column(c) => {
-                    c.check_valid()?;
-                    if c.len() != num_rows {
-                        return Err(ErrorCode::Internal(format!(
-                            "DataBlock corrupted, column length mismatch, col: {}, num_rows: {}",
-                            c.len(),
-                            num_rows
-                        )));
-                    }
+            if let Value::Column(c) = &entry.value {
+                c.check_valid()?;
+                if c.len() != num_rows {
+                    return Err(ErrorCode::Internal(format!(
+                        "DataBlock corrupted, column length mismatch, col: {}, num_rows: {}",
+                        c.len(),
+                        num_rows
+                    )));
                 }
-                _ => {}
             }
         }
         Ok(())
@@ -325,12 +322,9 @@ impl DataBlock {
 
     #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
-        #[cfg(debug_assertions)]
-        if let Value::Column(col) = &entry.value {
-            assert_eq!(self.num_rows, col.len());
-            assert_eq!(col.data_type(), entry.data_type);
-        }
         self.columns.push(entry);
+        #[cfg(debug_assertions)]
+        self.check_valid().unwrap();
     }
 
     #[inline]
