@@ -31,10 +31,10 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::metrics::merge_into::merge_into_distributed_hashtable_fetch_row_number;
 
 use super::hash_join::HashJoinBuildState;
 use super::processor_deduplicate_row_number::get_row_number;
-
 pub struct ExtractHashTableByRowNumber {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
@@ -114,7 +114,7 @@ impl Processor for ExtractHashTableByRowNumber {
             if data_block.is_empty() {
                 return Ok(());
             }
-
+            merge_into_distributed_hashtable_fetch_row_number(data_block.num_rows() as u32);
             let row_number_vec = get_row_number(&data_block, 0)?;
             let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
             assert_eq!(row_number_set.len(), row_number_vec.len());
@@ -147,6 +147,14 @@ impl Processor for ExtractHashTableByRowNumber {
                         filtered_block.num_rows(),
                     );
                     null_block.merge_block(filtered_block);
+                    if null_block.is_empty() {
+                        merge_into_distributed_hashtable_push_empty_null_block(1);
+                    } else {
+                        merge_into_distributed_hashtable_push_null_block(1);
+                        merge_into_distributed_hashtable_push_null_block_rows(
+                            null_block.num_rows() as u32,
+                        );
+                    }
                     self.output_data.push(null_block);
                 }
             }

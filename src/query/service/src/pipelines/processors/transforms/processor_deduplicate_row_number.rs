@@ -24,6 +24,9 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_storage::metrics::merge_into::merge_into_distributed_apply_row_number;
+use common_storage::metrics::merge_into::merge_into_distributed_deduplicate_row_number;
+use common_storage::metrics::merge_into::merge_into_distributed_empty_row_number;
 use itertools::Itertools;
 
 pub struct DeduplicateRowNumber {
@@ -60,11 +63,12 @@ impl DeduplicateRowNumber {
         // but if there is still also some data unmatched, we won't receive
         // an empty block.
         if data_block.is_empty() {
+            merge_into_distributed_empty_row_number(1);
             self.unique_row_number.clear();
             self.accepted_data = true;
             return Ok(());
         }
-
+        merge_into_distributed_deduplicate_row_number(data_block.num_rows() as u32);
         let row_number_vec = get_row_number(&data_block, 0)?;
         let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
         assert_eq!(row_number_set.len(), row_number_vec.len());
@@ -86,6 +90,7 @@ impl DeduplicateRowNumber {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<DataBlock>> {
         let row_number_vecs = self.unique_row_number.clone().into_iter().collect_vec();
+        merge_into_distributed_apply_row_number(row_number_vecs.len() as u32);
         Ok(Some(DataBlock::new_from_columns(vec![
             UInt64Type::from_data(row_number_vecs),
         ])))
