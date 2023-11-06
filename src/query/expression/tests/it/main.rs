@@ -15,6 +15,13 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+use common_expression::types::DataType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::DecimalSize;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
+use common_expression::DataBlock;
+
 extern crate core;
 
 mod block;
@@ -26,3 +33,55 @@ mod row;
 mod schema;
 mod serde;
 mod sort;
+
+fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
+    let types = get_all_test_data_types();
+    let mut columns = Vec::with_capacity(types.len());
+    for data_type in types.iter() {
+        columns.push(Column::random(data_type, num_rows));
+    }
+
+    let block = DataBlock::new_from_columns(columns);
+    block.check_valid().unwrap();
+
+    block
+}
+
+fn get_all_test_data_types() -> Vec<DataType> {
+    vec![
+        DataType::Null,
+        DataType::EmptyArray,
+        DataType::EmptyMap,
+        DataType::Boolean,
+        DataType::String,
+        DataType::Bitmap,
+        DataType::Variant,
+        DataType::Timestamp,
+        DataType::Date,
+        DataType::Number(NumberDataType::UInt8),
+        DataType::Number(NumberDataType::UInt16),
+        DataType::Number(NumberDataType::UInt32),
+        DataType::Number(NumberDataType::UInt64),
+        DataType::Number(NumberDataType::Int8),
+        DataType::Number(NumberDataType::Int16),
+        DataType::Number(NumberDataType::Int32),
+        DataType::Number(NumberDataType::Int64),
+        DataType::Number(NumberDataType::Float32),
+        DataType::Number(NumberDataType::Float64),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision: 10,
+            scale: 2,
+        })),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision: 35,
+            scale: 3,
+        })),
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
+        DataType::Nullable(Box::new(DataType::String)),
+        DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+        DataType::Map(Box::new(DataType::Tuple(vec![
+            DataType::Number(NumberDataType::UInt64),
+            DataType::String,
+        ]))),
+    ]
+}
