@@ -501,11 +501,11 @@ async fn test_system_tables() -> Result<()> {
         .collect::<Vec<_>>();
 
     let skipped = vec![
-        "credits", // slow for ci (> 1s) and maybe flaky
-        "metrics", // QueryError: "Prometheus recorder is not initialized yet"
-        "tasks",   // need to connect grpc server, tested on sqllogic test
+        "credits",      // slow for ci (> 1s) and maybe flaky
+        "metrics",      // QueryError: "Prometheus recorder is not initialized yet"
+        "tasks",        // need to connect grpc server, tested on sqllogic test
         "task_history", // same with tasks
-        "tracing", // Could be very large.
+        "tracing",      // Could be very large.
     ];
     for table_name in table_names {
         if skipped.contains(&table_name.as_str()) {
@@ -701,8 +701,8 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
             .typed_header(basic)
             .finish(),
     )
-        .await
-        .unwrap_or_else(|err| err.into_response())
+    .await
+    .unwrap_or_else(|err| err.into_response())
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -1042,7 +1042,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
             .http_handler_tls_server_cert(TEST_SERVER_CERT)
             .build(),
     )
-        .await?;
+    .await?;
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
 
@@ -1160,7 +1160,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build(),
     )
-        .await?;
+    .await?;
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
 
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1275,7 +1275,7 @@ async fn test_affect() -> Result<()> {
             Some(QueryAffect::ChangeSettings {
                 keys: vec!["timezone".to_string()],
                 values: vec!["UTC".to_string()],
-                /* TODO(liyz): consider to return the complete settings after set or unset */
+                // TODO(liyz): consider to return the complete settings after set or unset
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
