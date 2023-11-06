@@ -30,7 +30,7 @@ has tried possible overloads:
   to_base64(String NULL) :: String NULL  : unable to unify `UInt8` with `String`
 
 
-Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint8('a')`
+Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint64('a')`
 Error: APIError: ResponseError with 1025: error: 
   --> SQL:1:20
   |
