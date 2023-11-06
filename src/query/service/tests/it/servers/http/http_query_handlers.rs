@@ -504,6 +504,7 @@ async fn test_system_tables() -> Result<()> {
         "credits", // slow for ci (> 1s) and maybe flaky
         "metrics", // QueryError: "Prometheus recorder is not initialized yet"
         "tasks",   // need to connect grpc server, tested on sqllogic test
+        "task_history" // same with tasks
         "tracing", // Could be very large.
     ];
     for table_name in table_names {
