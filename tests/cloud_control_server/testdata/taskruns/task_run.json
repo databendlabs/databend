@@ -16,6 +16,6 @@
     "error_message": "",
     "scheduled_time": "2023-10-27T10:00:00Z",
     "attempt_number": 0,
-    "state": "Scheduled"
+    "state": "SCHEDULED"
   }
 }

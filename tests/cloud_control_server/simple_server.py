@@ -30,7 +30,7 @@ def load_data_from_json():
     task_run_directory_path = os.path.join(script_directory, "testdata", "taskruns")
     for file_name in os.listdir(task_run_directory_path):
         if file_name.endswith(".json"):
-            with open(os.path.join(task_directory_path, file_name), "r") as f:
+            with open(os.path.join(task_run_directory_path, file_name), "r") as f:
                 task_run_data = json.load(f)
                 task_run = task_pb2.TaskRun()
                 json_format.ParseDict(task_run_data["TaskRun"], task_run)
