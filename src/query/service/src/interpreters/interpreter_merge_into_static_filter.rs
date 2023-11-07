@@ -343,7 +343,7 @@ impl MergeIntoInterpreter {
             }
         }
 
-        return Ok(None);
+        Ok(None)
     }
 
     async fn build_min_max_group_by_left_most_cluster_key_expr_plan(
@@ -370,11 +370,11 @@ impl MergeIntoInterpreter {
             .build(),
         });
         eval_scalar_items.push(ScalarItem {
-            scalar: group_expr.clone(),
+            scalar: group_expr,
             index,
         });
         group_items.push(ScalarItem {
-            scalar: evaled.clone(),
+            scalar: evaled,
             index,
         });
         for source_side_expr in m_join.source_conditions {
