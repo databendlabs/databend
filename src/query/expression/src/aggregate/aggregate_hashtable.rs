@@ -59,7 +59,7 @@ impl AggregateHashTable {
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
     ) -> Self {
-        let capacity = 128;
+        let capacity = Self::initial_capacity();
         Self {
             entries: Self::new_entries(capacity),
             payload: Payload::new(arena, group_types, aggrs),
@@ -80,8 +80,44 @@ impl AggregateHashTable {
         self.payload.len()
     }
 
-    // Add new groups and combine the states
     pub fn add_groups(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: &[Column],
+        params: &[Vec<Column>],
+        row_count: usize,
+    ) -> Result<usize> {
+        const BATCH_ADD_SIZE: usize = 2048;
+
+        if row_count <= BATCH_ADD_SIZE {
+            self.add_groups_inner(state, group_columns, params, row_count)
+        } else {
+            let mut new_count = 0;
+            for start in (0..row_count).step_by(BATCH_ADD_SIZE) {
+                let end = if start + BATCH_ADD_SIZE > row_count {
+                    row_count
+                } else {
+                    start + BATCH_ADD_SIZE
+                };
+                let step_group_columns = group_columns
+                    .iter()
+                    .map(|c| c.slice(start..end))
+                    .collect::<Vec<_>>();
+
+                let step_params: Vec<Vec<Column>> = params
+                    .iter()
+                    .map(|c| c.iter().map(|x| x.slice(start..end)).collect())
+                    .collect::<Vec<_>>();
+
+                new_count +=
+                    self.add_groups_inner(state, &step_group_columns, &step_params, end - start)?;
+            }
+            Ok(new_count)
+        }
+    }
+
+    // Add new groups and combine the states
+    fn add_groups_inner(
         &mut self,
         state: &mut ProbeState,
         group_columns: &[Column],
@@ -127,12 +163,18 @@ impl AggregateHashTable {
         group_columns: &[Column],
         row_count: usize,
     ) -> usize {
-        if self.capacity - self.len() <= row_count || self.len() > self.resize_threshold() {
+        if row_count + self.len() > self.capacity
+            || row_count + self.len() > self.resize_threshold()
+        {
             let mut new_capacity = self.capacity * 2;
 
             while new_capacity - self.len() <= row_count {
                 new_capacity *= 2;
             }
+            println!(
+                "resize from {} {}  by {}",
+                self.capacity, new_capacity, row_count
+            );
             self.resize(new_capacity);
         }
 
@@ -321,5 +363,13 @@ impl AggregateHashTable {
 
         self.entries = entries;
         self.capacity = new_capacity;
+    }
+
+    pub fn initial_capacity() -> usize {
+        4096
+    }
+
+    pub fn get_capacity_for_count(count: usize) -> usize {
+        ((count.max(Self::initial_capacity()) as f64 * LOAD_FACTOR) as usize).next_power_of_two()
     }
 }

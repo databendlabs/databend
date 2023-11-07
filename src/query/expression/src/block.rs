@@ -56,7 +56,7 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
-            if let ValueRef::Column(c) = value.as_ref() {
+            if let crate::ValueRef::Column(c) = value.as_ref() {
                 c.check_valid().unwrap();
             }
             check_type(&data_type, &value);

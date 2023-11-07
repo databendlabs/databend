@@ -186,12 +186,18 @@ where Method: HashMethodBounds
                             }
                         }
                     },
-                    AggregateMeta::AggregateHashTable((_, hashtable)) => {
+                    AggregateMeta::AggregateHashTable((_, mut hashtable)) => {
                         match agg_hashtable.as_mut() {
                             Some(ht) => {
                                 ht.combine(hashtable, &mut self.flush_state)?;
                             }
-                            None => agg_hashtable = Some(hashtable),
+                            None => {
+                                let new_capacity =
+                                    AggregateHashTable::get_capacity_for_count(hashtable.len());
+                                hashtable.resize(new_capacity);
+
+                                agg_hashtable = Some(hashtable);
+                            }
                         }
                     }
                 }
