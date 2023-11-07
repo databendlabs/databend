@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter;
-use common_metrics::register_counter_family;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::VecLabels;
 use lazy_static::lazy_static;
+
+use crate::register_counter;
+use crate::register_counter_family;
+use crate::Counter;
+use crate::Family;
+use crate::VecLabels;
 
 lazy_static! {
     static ref QUERY_HTTP_REQUESTS_COUNT: Family<VecLabels, Counter> =

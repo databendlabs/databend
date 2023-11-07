@@ -30,13 +30,13 @@ use common_expression::Column;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Value;
+use common_metrics::storage::*;
 use opendal::Operator;
 use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::metrics::metrics_inc_remote_io_read_parts;
 
 // Native storage format
 

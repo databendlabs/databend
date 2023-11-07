@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter;
-use common_metrics::Counter;
-use lazy_static::lazy_static;
-
-lazy_static! {
-    static ref OMIT_FILTER_ROWGROUPS: Counter = register_counter("omit_filter_rowgroups");
-    static ref OMIT_FILTER_ROWS: Counter = register_counter("omit_filter_rows");
-}
-
-pub fn metrics_inc_omit_filter_rowgroups(c: u64) {
-    OMIT_FILTER_ROWGROUPS.inc_by(c);
-}
-
-pub fn metrics_inc_omit_filter_rows(c: u64) {
-    OMIT_FILTER_ROWS.inc_by(c);
-}
+pub mod cache;
+pub mod cluster;
+pub mod http;
+pub mod interpreter;
+pub mod mysql;
+pub mod openai;
+pub mod session;
+pub mod storage;
+pub mod transform;

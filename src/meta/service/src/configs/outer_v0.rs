@@ -584,7 +584,7 @@ impl Into<InnerLogConfig> for LogConfig {
                 on: false,
                 dir: "".to_string(),
             },
-            tracing: TracingConfig::from_env(),
+            tracing: TracingConfig::default(),
         }
     }
 }

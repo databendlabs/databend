@@ -38,15 +38,13 @@ use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_metrics::storage::*;
 use common_sql::executor::OnConflictField;
 use log::info;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::MinMax;
 
-use crate::metrics::metrics_inc_replace_original_row_number;
-use crate::metrics::metrics_inc_replace_partition_number;
-use crate::metrics::metrics_inc_replace_row_number_after_table_level_pruning;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;

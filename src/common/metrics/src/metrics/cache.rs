@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter_family;
-use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::Histogram;
 use lazy_static::lazy_static;
 use prometheus_client::encoding::EncodeLabelSet;
+
+use crate::register_counter_family;
+use crate::register_histogram_family_in_milliseconds;
+use crate::Counter;
+use crate::Family;
+use crate::Histogram;
 
 #[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
 struct CacheLabels {
@@ -49,7 +50,7 @@ pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
 }
 
 pub fn metrics_inc_cache_miss_count(c: u64, cache_name: &str) {
-    // increment_gauge!(key!("memory_miss_count"), c as f64);
+    // increment_gauge!(("fuse_memory_miss_count"), c as f64);
     CACHE_MISS_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
