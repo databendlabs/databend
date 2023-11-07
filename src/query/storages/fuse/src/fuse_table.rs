@@ -23,6 +23,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StreamColumn;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::NavigationDescriptor;
@@ -30,8 +31,10 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use common_expression::ORIGIN_VERSION_COL_NAME;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
@@ -39,6 +42,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_sharing::create_share_table_operator;
+use common_sql::binder::STREAM_COLUMN_FACTORY;
 use common_sql::parse_exprs;
 use common_sql::BloomIndexColumns;
 use common_storage::init_operator;
@@ -59,7 +63,7 @@ use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::table_storage_prefix;
 use storages_common_table_meta::table::TableCompression;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-// use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -393,11 +397,6 @@ impl FuseTable {
         self.bloom_index_cols.clone()
     }
 
-    pub fn change_tracking_enabled(&self) -> bool {
-        // self.get_option(OPT_KEY_CHANGE_TRACKING, false)
-        false
-    }
-
     // Check if table is attached.
     fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
         table_meta_options
@@ -460,6 +459,28 @@ impl Table for FuseTable {
             return cluster_keys;
         }
         vec![]
+    }
+
+    fn change_tracking_enabled(&self) -> bool {
+        self.get_option(OPT_KEY_CHANGE_TRACKING, false)
+    }
+
+    fn stream_columns(&self) -> Vec<StreamColumn> {
+        if self.change_tracking_enabled() {
+            vec![
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ORIGIN_VERSION_COL_NAME)
+                    .unwrap(),
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ORIGIN_BLOCK_ID_COL_NAME)
+                    .unwrap(),
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
+                    .unwrap(),
+            ]
+        } else {
+            vec![]
+        }
     }
 
     #[async_backtrace::framed]
@@ -725,29 +746,6 @@ impl Table for FuseTable {
                 .navigate_to_time_point(snapshot_location, *time_point)
                 .await?),
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn update(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<FieldIndex>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        self.do_update(
-            ctx,
-            filter,
-            col_indices,
-            update_list,
-            computed_list,
-            query_row_id_col,
-            pipeline,
-        )
-        .await
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

@@ -53,6 +53,7 @@ use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::UnionAll;
+use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
 pub trait PhysicalPlanReplacer {
@@ -97,6 +98,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
+            PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
         }
     }
 
@@ -396,6 +398,10 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
     }
 
+    fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
+    }
+
     fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
@@ -519,7 +525,8 @@ impl PhysicalPlan {
                 | PhysicalPlan::ReclusterSource(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::DeleteSource(_) => {}
+                | PhysicalPlan::DeleteSource(_)
+                | PhysicalPlan::UpdateSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

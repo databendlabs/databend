@@ -19,8 +19,6 @@ use std::sync::Arc;
 use common_catalog::lock::Lock;
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -57,13 +55,9 @@ use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
 use common_storages_factory::Table;
-use common_storages_fuse::operations::MutationBlockPruningContext;
-use common_storages_fuse::pruning::create_segment_location_vector;
-use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
-use log::info;
 use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -212,41 +206,21 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?
         {
+            let cluster = self.ctx.get_cluster();
+            let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
+            let partitions = fuse_table
+                .mutation_read_partitions(
+                    self.ctx.clone(),
+                    snapshot.clone(),
+                    col_indices.clone(),
+                    filters.clone(),
+                    is_lazy,
+                    true,
+                )
+                .await?;
+
             // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
             let filters = filters.unwrap();
-            let cluster = self.ctx.get_cluster();
-            let partitions = if cluster.is_empty() || snapshot.segments.len() < cluster.nodes.len()
-            {
-                let projection = Projection::Columns(col_indices.clone());
-                let prune_ctx = MutationBlockPruningContext {
-                    segment_locations: create_segment_location_vector(
-                        snapshot.segments.clone(),
-                        None,
-                    ),
-                    block_count: Some(snapshot.summary.block_count as usize),
-                };
-                let (partitions, info) = fuse_table
-                    .do_mutation_block_pruning(
-                        self.ctx.clone(),
-                        Some(filters.clone()),
-                        projection,
-                        prune_ctx,
-                        true,
-                        true,
-                    )
-                    .await?;
-                info!(
-                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
-                    info.num_whole_block_mutation
-                );
-                partitions
-            } else {
-                let mut segments = Vec::with_capacity(snapshot.segments.len());
-                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                    segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
-                }
-                Partitions::create(PartitionsShuffleKind::Mod, segments, true)
-            };
             let physical_plan = Self::build_physical_plan(
                 filters,
                 partitions,

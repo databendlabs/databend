@@ -78,6 +78,7 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::UpdateInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -772,51 +773,9 @@ pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()>
     Ok(())
 }
 
-pub async fn do_update(
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
-    plan: UpdatePlan,
-) -> Result<()> {
-    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
-        (
-            Some(
-                scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone())
-                    .as_remote_expr(),
-            ),
-            scalar.used_columns().into_iter().collect(),
-        )
-    } else {
-        (None, vec![])
-    };
-    let update_list = plan.generate_update_list(
-        ctx.clone(),
-        table.schema().into(),
-        col_indices.clone(),
-        None,
-        false,
-    )?;
-    let computed_list =
-        plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
-
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut res = PipelineBuildResult::create();
-    fuse_table
-        .update(
-            ctx.clone(),
-            filter,
-            col_indices,
-            update_list,
-            computed_list,
-            false,
-            &mut res.main_pipeline,
-        )
-        .await?;
-
-    if !res.main_pipeline.is_empty() {
-        execute_pipeline(ctx, res)?;
-    }
+pub async fn do_update(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<()> {
+    let update_interpreter = UpdateInterpreter::try_create(ctx.clone(), plan)?;
+    update_interpreter.execute(ctx).await?;
     Ok(())
 }
 

@@ -32,7 +32,6 @@ pub const CLUSTER_STATS_STRING_PREFIX_LEN: usize = 8;
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
 
-    pub(crate) cluster_key_index: Vec<usize>,
     pub(crate) extra_key_num: usize,
 
     max_page_size: Option<usize>,
@@ -40,9 +39,10 @@ pub struct ClusterStatsGenerator {
     level: i32,
     block_thresholds: BlockThresholds,
 
-    pub(crate) operators: Vec<BlockOperator>,
-    pub(crate) out_fields: Vec<DataField>,
-    pub(crate) func_ctx: FunctionContext,
+    pub cluster_key_index: Vec<usize>,
+    pub operators: Vec<BlockOperator>,
+    pub out_fields: Vec<DataField>,
+    pub func_ctx: FunctionContext,
 }
 
 impl ClusterStatsGenerator {

@@ -55,6 +55,7 @@ use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::UnionAll;
+use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 use crate::plans::JoinType;
 
@@ -113,6 +114,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -526,5 +528,11 @@ impl Display for ReclusterSource {
 impl Display for ReclusterSink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ReclusterSink")
+    }
+}
+
+impl Display for UpdateSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UpdateSource")
     }
 }

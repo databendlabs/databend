@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod fill_internal_columns;
-mod fill_stream_column;
 mod sink_commit;
 mod transform_mutation_aggregator;
 mod transform_serialize_block;

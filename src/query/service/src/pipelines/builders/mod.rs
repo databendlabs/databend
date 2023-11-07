@@ -35,6 +35,7 @@ mod builder_scalar;
 mod builder_scan;
 mod builder_sort;
 mod builder_union_all;
+mod builder_update;
 mod builder_window;
 
 pub use builder_replace_into::ValueSource;

@@ -126,9 +126,8 @@ impl ToReadDataSourcePlan for dyn Table {
             ctx.add_partitions_sha(sha);
         }
 
+        let schema = &self.schema_with_stream();
         let source_info = self.get_data_source_info();
-
-        let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
         let mut output_schema = match (self.support_column_projection(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
@@ -278,6 +277,7 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            update_stream_columns: false,
             data_mask_policy,
         })
     }
