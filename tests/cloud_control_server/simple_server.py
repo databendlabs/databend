@@ -59,7 +59,7 @@ def create_task_run_from_task(task):
     task_run.owner = task.owner
     task_run.query_text = task.query_text
     task_run.schedule_options.CopyFrom(task.schedule_options)
-    task_run.state = "SUCCEEDED"
+    task_run.state = task_pb2.TaskRun.SUCCEEDED
     task_run.attempt_number = 0
     task_run.comment = task.comment
     task_run.error_code = 0
@@ -174,7 +174,7 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ExecuteTask(self, request, context):
         print("ExecuteTask", request)
-        for task_name, task in TASK_DB:
+        for task_name, task in TASK_DB.items():
             TASK_RUN_DB[task_name] = create_task_run_from_task(task)
         return task_pb2.ExecuteTaskResponse(error=None)
 
