@@ -52,6 +52,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("parquet_max_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "Max block size for parquet reader",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
                     desc: "Sets the maximum number of threads to execute a request.",
