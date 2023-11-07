@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
+use common_metrics::transform::*;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -28,10 +29,8 @@ use common_pipeline_sinks::AsyncSinker;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
 
-use crate::api::rpc::exchange::metrics::metrics_inc_exchange_write_bytes;
-use crate::api::rpc::exchange::metrics::metrics_inc_exchange_write_count;
-use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 use crate::api::rpc::flight_client::FlightSender;
+use crate::api::ExchangeSerializeMeta;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeWriterSink {

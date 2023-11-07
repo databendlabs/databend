@@ -20,9 +20,7 @@ common-metrics = { path = "../metrics" }
 # GitHub dependencies
 
 # Crates.io dependencies
-lazy_static = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 
 [dev-dependencies]

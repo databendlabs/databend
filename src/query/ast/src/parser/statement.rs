@@ -1751,9 +1751,20 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         }
     });
 
+    let source_table = map(
+        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
+        |((catalog, database, table), alias)| MergeSource::Table {
+            catalog,
+            database,
+            table,
+            alias,
+        },
+    );
+
     rule!(
           #streaming_v2
         | #query
+        | #source_table
     )(i)
 }
 

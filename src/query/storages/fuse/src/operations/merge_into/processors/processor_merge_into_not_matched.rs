@@ -24,6 +24,7 @@ use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_metrics::storage::*;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -31,9 +32,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
-use common_storage::metrics::merge_into::merge_into_not_matched_operation_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
