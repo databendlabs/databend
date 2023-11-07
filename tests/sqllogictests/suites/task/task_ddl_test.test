@@ -84,5 +84,15 @@ mytask Suspended warehouse2 SELECT 2023 INTERVAL 100 MINUTE 199 test comment
 statement ok
 EXECUTE TASK mytask
 
+query SSSS
+select name, warehouse, schedule, definition from system.task_history where name = 'mytask'
+----
+mytask mywh CRON 0 0 0 1 1 ? 2100 SELECT 1
+
+query S
+select state from system.task_history where name = 'mytask'
+----
+SUCCEEDED
+
 statement ok
 DROP TASK mytask
