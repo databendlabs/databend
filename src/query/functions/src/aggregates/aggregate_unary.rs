@@ -40,12 +40,18 @@ pub trait UnaryState<T, R>: Send + Sync + Clone {
 
     fn accumulate(
         &mut self,
-        place: StateAddr,
         columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()>;
-    fn accumulate_row(&mut self, place: StateAddr, columns: &[Column], row: usize) -> Result<()>;
+    fn accumulate_row(&mut self, columns: &[Column], row: usize) -> Result<()>;
+    fn accumulate_keys(
+        &mut self,
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[Column],
+        input_rows: usize,
+    ) -> Result<()>;
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()>;
 
@@ -67,7 +73,7 @@ impl<S, T, R> Display for AggregateUnaryFunction<S, T, R>
 where S: UnaryState<T, R>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        write!(f, "{}", self.display_name)
     }
 }
 
@@ -120,17 +126,18 @@ where
 
     fn accumulate(
         &self,
-        _place: StateAddr,
-        _columns: &[Column],
-        _validity: Option<&Bitmap>,
-        _input_rows: usize,
+        place: StateAddr,
+        columns: &[Column],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
     ) -> Result<()> {
-        todo!()
+        let state: &mut S = place.get::<S>();
+        state.accumulate(columns, validity, input_rows)
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        state.accumulate_row(place, columns, row)
+        state.accumulate_row(columns, row)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
@@ -166,7 +173,7 @@ pub fn try_create_aggregate_unary_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     match display_name {
-        "skewness" => {
+        "skewness_v2" => {
             let return_type =
                 DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)));
             let state = SkewnessStateV2::default();

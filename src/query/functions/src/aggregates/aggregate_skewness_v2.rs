@@ -36,10 +36,6 @@ pub struct SkewnessStateV2 {
 }
 
 impl SkewnessStateV2 {
-    fn new() -> Self {
-        Self::default()
-    }
-
     #[inline(always)]
     fn add(&mut self, other: f64) {
         self.n += 1;
@@ -94,24 +90,22 @@ impl UnaryState<Float64Type, Float64Type> for SkewnessStateV2 {
 
     fn accumulate(
         &mut self,
-        place: StateAddr,
         columns: &[Column],
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let column = Float64Type::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<Self>();
         match validity {
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
                     if is_valid {
-                        state.add(value.as_());
+                        self.add(value.as_());
                     }
                 }
             }
             None => {
                 for value in column.iter() {
-                    state.add(value.as_());
+                    self.add(value.as_());
                 }
             }
         }
@@ -119,12 +113,29 @@ impl UnaryState<Float64Type, Float64Type> for SkewnessStateV2 {
         Ok(())
     }
 
-    fn accumulate_row(&mut self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&mut self, columns: &[Column], row: usize) -> Result<()> {
         let column = Float64Type::try_downcast_column(&columns[0]).unwrap();
 
-        let state = place.get::<Self>();
         let v: f64 = column[row].as_();
-        state.add(v);
+        self.add(v);
+        Ok(())
+    }
+
+    fn accumulate_keys(
+        &mut self,
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[Column],
+        _input_rows: usize,
+    ) -> Result<()> {
+        let column = Float64Type::try_downcast_column(&columns[0]).unwrap();
+
+        column.iter().zip(places.iter()).for_each(|(value, place)| {
+            let place = place.next(offset);
+            let state = place.get::<Self>();
+            let v: f64 = value.as_();
+            state.add(v);
+        });
         Ok(())
     }
 
