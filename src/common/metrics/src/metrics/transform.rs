@@ -12,44 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter;
-use common_metrics::register_counter_family;
-use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::Histogram;
-use common_metrics::VecLabels;
 use lazy_static::lazy_static;
 
-macro_rules! key {
-    ($key: literal) => {
-        concat!("transform_", $key)
-    };
-}
+use crate::register_counter;
+use crate::register_counter_family;
+use crate::register_histogram_family_in_milliseconds;
+use crate::Counter;
+use crate::Family;
+use crate::Histogram;
+use crate::VecLabels;
 
 lazy_static! {
     static ref AGGREGATE_PARTIAL_SPILL_CELL_COUNT: Counter =
-        register_counter(key!("aggregate_partial_spill_cell_count"));
+        register_counter("transform_aggregate_partial_spill_cell_count");
     static ref AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES: Counter =
-        register_counter(key!("aggregate_partial_hashtable_allocated_bytes"));
+        register_counter("transform_aggregate_partial_hashtable_allocated_bytes");
     static ref SPILL_COUNT: Family<VecLabels, Counter> =
-        register_counter_family(key!("spill_count"));
+        register_counter_family("transform_spill_count");
     static ref SPILL_WRITE_COUNT: Family<VecLabels, Counter> =
-        register_counter_family(key!("spill_write_count"));
+        register_counter_family("transform_spill_write_count");
     static ref SPILL_WRITE_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(key!("spill_write_bytes"));
+        register_counter_family("transform_spill_write_bytes");
     static ref SPILL_WRITE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(key!("spill_write_milliseconds"));
+        register_histogram_family_in_milliseconds("transform_spill_write_milliseconds");
     static ref SPILL_READ_COUNT: Family<VecLabels, Counter> =
-        register_counter_family(key!("spill_read_count"));
+        register_counter_family("transform_spill_read_count");
     static ref SPILL_READ_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(key!("spill_read_bytes"));
+        register_counter_family("transform_spill_read_bytes");
     static ref SPILL_READ_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(key!("spill_read_milliseconds"));
+        register_histogram_family_in_milliseconds("transform_spill_read_milliseconds");
     static ref SPILL_DATA_DESERIALIZE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(key!("spill_data_deserialize_milliseconds"));
+        register_histogram_family_in_milliseconds("transform_spill_data_deserialize_milliseconds");
     static ref SPILL_DATA_SERIALIZE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(key!("spill_data_serialize_milliseconds"));
+        register_histogram_family_in_milliseconds("transform_spill_data_serialize_milliseconds");
 }
 
 pub fn metrics_inc_aggregate_partial_spill_count() {

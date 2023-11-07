@@ -19,3 +19,4 @@ pub mod interpreter;
 pub mod openai;
 pub mod session;
 pub mod storage;
+pub mod transform;
