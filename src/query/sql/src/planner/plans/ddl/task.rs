@@ -20,6 +20,7 @@ use common_ast::ast::ShowLimit;
 use common_ast::ast::WarehouseOptions;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType::Int32;
+use common_expression::types::NumberDataType::Int64;
 use common_expression::types::NumberDataType::UInt64;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -58,9 +59,9 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("definition", DataType::String),
         DataField::new("run_id", DataType::String),
         DataField::new("query_id", DataType::String),
-        DataField::new("exception_code", DataType::Number(Int32)),
-        DataField::new("exception_text", DataType::String),
-        DataField::new("attempt_number", DataType::Number(Int32).wrap_nullable()),
+        DataField::new("exception_code", DataType::Number(Int64)),
+        DataField::new("exception_text", DataType::String.wrap_nullable()),
+        DataField::new("attempt_number", DataType::Number(Int32)),
         DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("scheduled_time", DataType::Timestamp),
     ]))
