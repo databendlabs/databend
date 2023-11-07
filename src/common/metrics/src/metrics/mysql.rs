@@ -14,9 +14,10 @@
 
 use std::time::Duration;
 
-use common_metrics::register_histogram_in_milliseconds;
-use common_metrics::Histogram;
 use lazy_static::lazy_static;
+
+use crate::register_histogram_in_milliseconds;
+use crate::Histogram;
 
 lazy_static! {
     static ref MYSQL_PROCESSOR_REQUEST_DURATION: Histogram =

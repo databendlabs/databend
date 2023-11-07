@@ -15,7 +15,6 @@
 mod aggregator;
 pub mod group_by;
 pub(crate) mod hash_join;
-mod metrics;
 mod processor_accumulate_row_number;
 mod processor_deduplicate_row_number;
 mod processor_extract_hash_table_by_row_number;

@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter;
-use common_metrics::register_gauge;
-use common_metrics::Counter;
-use common_metrics::Gauge;
 use lazy_static::lazy_static;
+
+use crate::register_counter;
+use crate::register_gauge;
+use crate::Counter;
+use crate::Gauge;
 
 lazy_static! {
     static ref SESSION_CONNECT_NUMBERS: Counter = register_counter("session_connect_numbers");

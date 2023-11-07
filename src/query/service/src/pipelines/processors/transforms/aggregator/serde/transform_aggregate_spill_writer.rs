@@ -25,6 +25,7 @@ use common_expression::arrow::serialize_column;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
+use common_metrics::transform::*;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -39,10 +40,6 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTa
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_serialize_milliseconds;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_bytes;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_count;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_milliseconds;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
