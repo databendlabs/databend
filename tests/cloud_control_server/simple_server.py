@@ -27,15 +27,6 @@ def load_data_from_json():
                 json_format.ParseDict(task_run_data["Task"], task)
                 TASK_DB[task.task_name] = task
 
-    task_run_directory_path = os.path.join(script_directory, "testdata", "taskruns")
-    for file_name in os.listdir(task_run_directory_path):
-        if file_name.endswith(".json"):
-            with open(os.path.join(task_run_directory_path, file_name), "r") as f:
-                task_run_data = json.load(f)
-                task_run = task_pb2.TaskRun()
-                json_format.ParseDict(task_run_data["TaskRun"], task_run)
-                TASK_RUN_DB[task_run.task_name] = task_run
-
 
 def create_task_request_to_task(id, create_task_request):
     # Convert CreateTaskRequest to dictionary
@@ -59,6 +50,26 @@ def create_task_request_to_task(id, create_task_request):
     task.updated_at = datetime.now(timezone.utc).isoformat()
 
     return task
+
+
+def create_task_run_from_task(task):
+    task_run = task_pb2.TaskRun()
+
+    task_run.task_name = task.task_name
+    task_run.owner = task.owner
+    task_run.query_text = task.query_text
+    task_run.schedule_options.CopyFrom(task.schedule_options)
+    task_run.state = "SUCCEEDED"
+    task_run.attempt_number = 0
+    task_run.comment = task.comment
+    task_run.error_code = 0
+    task_run.error_message = ""
+    task_run.run_id = "1ftx"
+    task_run.query_id = "qwert"
+    task_run.scheduled_time = datetime.now(timezone.utc).isoformat()
+    task_run.completed_time = datetime.now(timezone.utc).isoformat()
+
+    return task_run
 
 
 class TaskService(task_pb2_grpc.TaskServiceServicer):
@@ -172,6 +183,8 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ShowTaskRuns(self, request, context):
         print("ShowTaskRuns", request)
+        for task_name, task in TASK_DB:
+            TASK_RUN_DB[task_name] = create_task_run_from_task(task)
         task_runs = list(TASK_RUN_DB.values())
         return task_pb2.ShowTaskRunsResponse(task_runs=task_runs)
 
