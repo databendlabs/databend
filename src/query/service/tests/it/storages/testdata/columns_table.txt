@@ -51,6 +51,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'comment'                         | 'system'             | 'task_history'        | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'comment'                         | 'system'             | 'tasks'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'compaction_stats'                | 'system'             | 'background_tasks'    | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
+| 'completed_time'                  | 'system'             | 'task_history'        | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'constraint_catalog'              | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'constraint_name'                 | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'constraint_schema'               | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
