@@ -494,6 +494,10 @@ fn test_statement() {
         r#"SHOW TASKS"#,
         r#"EXECUTE TASK MyTask"#,
         r#"DESC TASK MyTask"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'"#,
+        r#"DROP CONNECTION IF EXISTS my_conn;"#,
+        r#"DESC CONNECTION my_conn;"#,
+        r#"SHOW CONNECTIONS;"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
@@ -585,6 +589,7 @@ fn test_statement_error() {
                     type = CSV,
                     error_on_column_count_mismatch = 1
                 )"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
     ];
 
     for case in cases {

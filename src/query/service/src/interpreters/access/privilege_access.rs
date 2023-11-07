@@ -697,6 +697,10 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropNetworkPolicy(_)
             | Plan::DescNetworkPolicy(_)
             | Plan::ShowNetworkPolicies(_)
+            | Plan::CreateConnection(_)
+            | Plan::ShowConnections(_)
+            | Plan::DescConnection(_)
+            | Plan::DropConnection(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task

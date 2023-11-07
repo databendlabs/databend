@@ -1201,6 +1201,51 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    // connections
+    let connection_opt = connection_opt("=");
+    let create_connection = map_res(
+        rule! {
+            CREATE ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
+        },
+        |(_, _, opt_if_not_exists, connection_name, _, _, storage_type, options)| {
+            let options =
+                BTreeMap::from_iter(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
+            Ok(Statement::CreateConnection(CreateConnectionStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: connection_name,
+                storage_type,
+                storage_params: options,
+            }))
+        },
+    );
+
+    let drop_connection = map(
+        rule! {
+            DROP ~ CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, connection_name)| {
+            Statement::DropConnection(DropConnectionStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: connection_name,
+            })
+        },
+    );
+
+    let desc_connection = map(
+        rule! {
+            (DESC | DESCRIBE) ~ CONNECTION ~ #ident
+        },
+        |(_, _, name)| Statement::DescribeConnection(DescribeConnectionStmt { name }),
+    );
+
+    let show_connections = map(
+        rule! {
+              SHOW ~ CONNECTIONS
+        },
+        |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
+    );
+
     let call = map(
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
@@ -1675,6 +1720,12 @@ AS
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
+        ),
+        rule!(
+        #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+        | #show_connections: "`SHOW CONNECTIONS`"
         ),
     ));
 
