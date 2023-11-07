@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![recursion_limit = "256"]
 
 pub mod count;
 pub mod counter;
@@ -51,4 +52,5 @@ pub use crate::metrics::cluster;
 pub use crate::metrics::http;
 pub use crate::metrics::interpreter;
 pub use crate::metrics::openai;
+pub use crate::metrics::session;
 pub use crate::metrics::storage;

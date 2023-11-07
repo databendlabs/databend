@@ -29,6 +29,7 @@ use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metrics::session::*;
 use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
@@ -36,7 +37,6 @@ use log::info;
 use parking_lot::RwLock;
 
 use crate::sessions::session::Session;
-use crate::sessions::session_metrics;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
@@ -130,8 +130,8 @@ impl SessionManager {
                 self.validate_max_active_sessions(sessions.len(), "active sessions")?;
             }
 
-            session_metrics::incr_session_connect_numbers();
-            session_metrics::set_session_active_connections(sessions.len());
+            incr_session_connect_numbers();
+            set_session_active_connections(sessions.len());
 
             if !matches!(typ, SessionType::FlightRPC) {
                 sessions.insert(session.get_id(), Arc::downgrade(&session));

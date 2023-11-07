@@ -50,7 +50,7 @@ pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
 }
 
 pub fn metrics_inc_cache_miss_count(c: u64, cache_name: &str) {
-    // increment_gauge!(key!("memory_miss_count"), c as f64);
+    // increment_gauge!(("fuse_memory_miss_count"), c as f64);
     CACHE_MISS_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),

@@ -28,14 +28,6 @@ io-uring = [
     # "common-meta-raft-store/io-uring",
 ]
 
-enable-histogram-metrics = [
-    "default",
-    "common-metrics/enable-histogram",
-    "common-storages-fuse/enable-histogram-metrics",
-    "common-storages-system/enable-histogram-metrics",
-    "metrics/enable-histogram",
-    "storages-common-cache/enable-histogram-metrics",
-]
 
 [dependencies]
 # Workspace dependencies
