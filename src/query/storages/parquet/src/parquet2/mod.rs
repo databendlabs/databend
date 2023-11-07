@@ -21,5 +21,5 @@ mod pruning;
 mod statistics;
 
 pub use parquet_table::Parquet2Table;
-pub use partition::Parquet2GroupsPart;
 pub use partition::Parquet2RowGroupPart;
+pub use partition::Parquet2SmallGroupPart;

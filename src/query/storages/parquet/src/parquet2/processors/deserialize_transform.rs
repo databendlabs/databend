@@ -54,6 +54,7 @@ use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
 use crate::parquet2::pruning::PartitionPruner;
 use crate::parquet2::Parquet2RowGroupPart;
+use crate::parquet2::Parquet2SmallGroupPart;
 use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
 
@@ -146,6 +147,39 @@ impl Parquet2DeserializeTransform {
         self.scan_progress.incr(&progress_values);
         self.output_data.push(data_block);
         Ok(())
+    }
+
+    fn process_small_groups(&mut self, part: &Parquet2SmallGroupPart) -> Result<Vec<DataBlock>> {
+        let mut blocks = Vec::new();
+        for (path, data) in part.groups.iter() {
+            blocks.extend(self.process_small_group(path.as_str(), data)?);
+        }
+        Ok(blocks)
+    }
+
+    fn process_small_group(&mut self, path: &str, groups: &Vec<usize>) -> Result<Vec<DataBlock>> {
+        let mut res = Vec::new();
+        let builder = Memory::default();
+        let op = Operator::new(builder)?.finish();
+        let blocking_op = op.blocking();
+        let parts = self.partition_pruner.prune_file_group(path, &op, groups)?;
+
+        for part in parts {
+            let mut readers = self
+                .source_reader
+                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
+            if let Some(block) = self.process_row_group(&part, &mut readers)? {
+                res.push(block)
+            }
+        }
+        if self.is_copy {
+            let num_rows_loaded = res.iter().map(|b| b.num_rows()).sum();
+            self.copy_status.add_chunk(path, FileStatus {
+                num_rows_loaded,
+                error: None,
+            })
+        }
+        Ok(res)
     }
 
     fn process_small_files(
@@ -399,13 +433,10 @@ impl Processor for Parquet2DeserializeTransform {
                         self.add_block(block)?;
                     }
                 }
-                (ParquetPart::Parquet2Groups(rgs), Parquet2PartData::Groups(mut readers)) => {
-                    for (gid, rg) in &rgs.groups {
-                        if let Some(block) =
-                            self.process_row_group(rg, readers.get_mut(gid).unwrap())?
-                        {
-                            self.add_block(block)?;
-                        }
+                (ParquetPart::Parquet2SmallGroup(p), Parquet2PartData::SmallGroups(_)) => {
+                    let blocks = self.process_small_groups(p)?;
+                    if !blocks.is_empty() {
+                        self.add_block(DataBlock::concat(&blocks)?)?;
                     }
                 }
                 (ParquetPart::ParquetFiles(p), Parquet2PartData::SmallFiles(buffers)) => {

@@ -279,14 +279,12 @@ impl Parquet2Reader {
             ParquetPart::Parquet2RowGroup(part) => Ok(Parquet2PartData::RowGroup(
                 self.row_group_readers_from_blocking_io(part, &self.operator().blocking())?,
             )),
-            ParquetPart::Parquet2Groups(part) => {
-                let mut groups = HashMap::with_capacity(part.groups.len());
-                for (gid, group) in &part.groups {
-                    let row_group = self
-                        .row_group_readers_from_blocking_io(group, &self.operator().blocking())?;
-                    groups.insert(*gid, row_group);
+            ParquetPart::Parquet2SmallGroup(part) => {
+                let mut groups = Vec::with_capacity(part.groups.len());
+                for group in part.groups.values() {
+                    groups.push(group.clone());
                 }
-                Ok(Parquet2PartData::Groups(groups))
+                Ok(Parquet2PartData::SmallGroups(groups))
             }
             ParquetPart::ParquetFiles(part) => {
                 let op = self.operator().blocking();
@@ -353,13 +351,12 @@ impl Parquet2Reader {
                 let readers = self.build_row_group_reader(part).await?;
                 Ok(Parquet2PartData::RowGroup(readers))
             }
-            ParquetPart::Parquet2Groups(part) => {
-                let mut readers = HashMap::with_capacity(part.groups.len());
-                for (gid, group) in &part.groups {
-                    let reader = self.build_row_group_reader(group).await?;
-                    readers.insert(*gid, reader);
+            ParquetPart::Parquet2SmallGroup(part) => {
+                let mut groups = Vec::with_capacity(part.groups.len());
+                for group in part.groups.values() {
+                    groups.push(group.clone());
                 }
-                Ok(Parquet2PartData::Groups(readers))
+                Ok(Parquet2PartData::SmallGroups(groups))
             }
             ParquetPart::ParquetFiles(part) => {
                 let mut join_handlers = Vec::with_capacity(part.files.len());

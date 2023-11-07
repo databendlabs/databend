@@ -20,6 +20,7 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 
 type GroupIndex = usize;
+type Path = String;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct ColumnMeta {
@@ -58,16 +59,18 @@ impl Parquet2RowGroupPart {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct Parquet2GroupsPart {
-    pub groups: HashMap<GroupIndex, Parquet2RowGroupPart>,
+pub struct Parquet2SmallGroupPart {
+    pub groups: HashMap<Path, Vec<GroupIndex>>,
+    pub uncompressed_size: usize,
+    pub compressed_size: usize,
 }
 
-impl Parquet2GroupsPart {
+impl Parquet2SmallGroupPart {
     pub fn uncompressed_size(&self) -> u64 {
-        self.groups.values().map(|r| r.uncompressed_size()).sum()
+        self.uncompressed_size as u64
     }
 
     pub fn compressed_size(&self) -> u64 {
-        self.groups.values().map(|r| r.compressed_size()).sum()
+        self.compressed_size as u64
     }
 }
