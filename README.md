@@ -30,11 +30,11 @@
 </div>
 </div>
 
-<img src="https://user-images.githubusercontent.com/172204/219559279-ab7a11a4-9437-4a0a-85e8-cedf9ba0e24b.svg" alt="databend" />
+<img src="https://github.com/datafuselabs/databend/assets/172204/9997d8bc-6462-4dbd-90e3-527cf50a709c" alt="databend" />
 
 ## 🐋 Introduction
 
-**Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to [Snowflake](https://snowflake.com). 
+**Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
 
 ## 🚀 Why Databend
 
@@ -56,8 +56,7 @@
 
 ## 📐 Architecture
 
-![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
-
+![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
 ## 🚀 Try Databend
 
@@ -147,7 +146,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Create a Role](https://databend.rs/doc/sql-commands/ddl/user/user-create-role)
 - [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
-- [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
+- [How to Revoke the Role of a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
 </details>
 
 <details>
@@ -211,7 +210,6 @@ docker run --net=host  datafuselabs/databend
 - [How to Alter Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
 
 </details>
-
 
 <details>
 <summary>Performance</summary>

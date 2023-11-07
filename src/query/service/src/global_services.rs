@@ -19,6 +19,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
 use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::CatalogManager;
+use common_cloud_control::cloud_api::CloudControlApiProvider;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -33,6 +34,7 @@ use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
+use storages_common_locks::LockManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
@@ -99,6 +101,7 @@ impl GlobalServices {
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(&config)?;
+        LockManager::init()?;
         AuthMgr::init(&config)?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
@@ -118,6 +121,10 @@ impl GlobalServices {
             config.query.tenant_id.clone(),
         )?;
         CacheManager::init(&config.cache, &config.query.tenant_id)?;
+
+        if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
+            CloudControlApiProvider::init(addr).await?;
+        }
 
         Ok(())
     }

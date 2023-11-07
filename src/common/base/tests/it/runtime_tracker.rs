@@ -18,6 +18,7 @@ use common_base::runtime::MemStat;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
@@ -29,9 +30,9 @@ async fn test_async_thread_tracker() -> Result<()> {
     let inner_runtime = Runtime::with_worker_threads(2, Some(String::from("Inner")))?;
 
     let memory_tracker = MemStat::create("test_async_thread_tracker".to_string());
-    let inner_join_handler = inner_runtime.spawn(TrackedFuture::create_with_mem_stat(
-        Some(memory_tracker.clone()),
-        async move {
+    let inner_join_handler = inner_runtime.spawn(
+        GLOBAL_TASK,
+        TrackedFuture::create_with_mem_stat(Some(memory_tracker.clone()), async move {
             let memory = vec![0_u8; 3 * 1024 * 1024];
             tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
@@ -57,10 +58,10 @@ async fn test_async_thread_tracker() -> Result<()> {
             tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
             inner_rx.recv().await.unwrap();
-        },
-    ));
+        }),
+    );
 
-    let outer_join_handler = outer_runtime.spawn(async move {
+    let outer_join_handler = outer_runtime.spawn(GLOBAL_TASK, async move {
         for (min_memory_usage, max_memory_usage) in [
             (2 * 1024 * 1024, 4 * 1024 * 1024),
             (2 * 1024 * 1024, 4 * 1024 * 1024),

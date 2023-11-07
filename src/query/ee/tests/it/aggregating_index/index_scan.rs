@@ -34,6 +34,9 @@ use databend_query::test_kits::TestFixture;
 use enterprise_query::test_kits::context::create_ee_query_context;
 use futures_util::TryStreamExt;
 
+use crate::aggregating_index::CATALOG;
+use crate::aggregating_index::DATABASE;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan() -> Result<()> {
     test_index_scan_impl("parquet").await?;
@@ -112,6 +115,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // Insert data
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
@@ -119,6 +125,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // Create index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let index_name = "index1";
 
     execute_sql(
@@ -128,6 +137,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
         .await?;
 
     // Refresh Index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("REFRESH AGGREGATING INDEX {index_name}"),
@@ -135,6 +147,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // Query with index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -175,6 +190,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     )
     .await?;
 
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(fixture.ctx(), "SELECT SUM(a) from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
@@ -194,6 +212,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // Insert new data but not refresh index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
@@ -201,6 +222,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // Query with one fuse block and one index block
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -223,6 +247,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     )
     .await?;
 
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(fixture.ctx(), "SELECT b + 1 from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
@@ -241,6 +268,9 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     )
     .await?;
 
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT SUM(a) + 1 from t WHERE c > 1 GROUP BY b",
@@ -280,6 +310,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     .await?;
 
     // Insert data
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
@@ -289,6 +322,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     // Create index
     let index_name = "index1";
 
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
@@ -296,6 +332,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
         .await?;
 
     // Refresh Index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("REFRESH AGGREGATING INDEX {index_name}"),
@@ -304,6 +343,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
 
     // Query with index
     // sum
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -327,6 +369,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     .await?;
 
     // sum and max
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a), MAX(a) from t WHERE c > 1 GROUP BY b",
@@ -350,6 +395,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     .await?;
 
     // Insert new data but not refresh index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
@@ -358,6 +406,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
 
     // Query with one fuse block and one index block
     // sum
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -381,6 +432,9 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     .await?;
 
     // sum and max
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a), MAX(a) from t WHERE c > 1 GROUP BY b",
@@ -428,7 +482,9 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
 
     // Create index
     let index_name = "index1";
-
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
@@ -436,6 +492,9 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
         .await?;
 
     // Refresh Index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("REFRESH AGGREGATING INDEX {index_name}"),
@@ -444,6 +503,9 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
 
     // Query with index
     // sum
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(fixture.ctx(), "SELECT b from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
@@ -463,6 +525,9 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // sum and max
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -494,6 +559,9 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
 
     // Query with one fuse block and one index block
     // sum
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -517,6 +585,9 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
     .await?;
 
     // sum and max
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -568,6 +639,9 @@ async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
     .await?;
 
     // Refresh Index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("REFRESH AGGREGATING INDEX {index_name}"),
@@ -575,6 +649,9 @@ async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
     .await?;
 
     // Query with index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(fixture.ctx(), "SELECT a, COUNT(*) from t GROUP BY a").await?;
 
     assert!(is_index_scan_plan(&plan));
@@ -614,7 +691,9 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
 
     // Create index
     let index_name = "index1";
-
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
@@ -622,6 +701,9 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
         .await?;
 
     // Refresh Index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     execute_sql(
         fixture.ctx(),
         &format!("REFRESH AGGREGATING INDEX {index_name}"),
@@ -629,6 +711,9 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
     .await?;
 
     // Query with index
+    fixture
+        .ctx()
+        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let plan = plan_sql(
         fixture.ctx(),
         "SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s",

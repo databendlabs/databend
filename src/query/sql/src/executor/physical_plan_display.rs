@@ -18,6 +18,8 @@ use std::fmt::Formatter;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::physical_plans::physical_add_row_number::AddRowNumber;
+use super::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
@@ -102,6 +104,10 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::MergeIntoSource(merge_into_source) => write!(f, "{}", merge_into_source)?,
             PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
+            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
+                write!(f, "{}", merge_into_row_id_apply)?
+            }
+            PhysicalPlan::AddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
@@ -471,6 +477,18 @@ impl Display for ReplaceInto {
 impl Display for MergeInto {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MergeInto")
+    }
+}
+
+impl Display for AddRowNumber {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AddRowNumber")
+    }
+}
+
+impl Display for MergeIntoAppendNotMatched {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MergeIntoAppendNotMatched")
     }
 }
 

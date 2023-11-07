@@ -20,7 +20,10 @@ See also: [`COPY INTO <table>`](dml-copy-into-table.md)
 ```sql
 COPY INTO { internalStage | externalStage | externalLocation }
 FROM { [<database_name>.]<table_name> | ( <query> ) }
-[ FILE_FORMAT = ( { TYPE = { CSV | JSON | NDJSON | PARQUET } [ formatTypeOptions ] } ) ]
+[ FILE_FORMAT = (
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+       ) ]
 [ copyOptions ]
 [ VALIDATION_MODE = RETURN_ROWS ]
 ```
@@ -137,7 +140,7 @@ For the connection parameters available for accessing WebHDFS, see [Connection P
 
 ### FILE_FORMAT
 
-See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
+See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md) for details.
 
 ### copyOptions
 

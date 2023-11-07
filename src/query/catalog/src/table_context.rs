@@ -151,6 +151,10 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    fn get_current_session_id(&self) -> String {
+        unimplemented!()
+    }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
@@ -160,7 +164,7 @@ pub trait TableContext: Send + Sync {
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
-    fn get_shard_settings(&self) -> Arc<Settings>;
+    fn get_shared_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;

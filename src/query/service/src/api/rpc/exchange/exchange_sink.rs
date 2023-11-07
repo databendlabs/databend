@@ -79,6 +79,7 @@ impl ExchangeSink {
                 pipeline.try_resize(1)?;
                 assert_eq!(flight_senders.len(), 1);
                 pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
+                    ctx.clone(),
                     flight_senders.remove(0),
                     params.ignore_exchange,
                 )]));
@@ -89,7 +90,7 @@ impl ExchangeSink {
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = create_writer_items(flight_senders, false);
+                let items = create_writer_items(ctx.clone(), flight_senders, false);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

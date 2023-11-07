@@ -27,7 +27,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, PartialEq, Default, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct BackgroundConfig {
-    #[clap(long = "enable-background-service")]
+    #[clap(long = "enable-background-service", value_name = "VALUE")]
     pub enable: bool,
     // Fs compaction related background config.
     #[clap(flatten)]
@@ -38,29 +38,29 @@ pub struct BackgroundConfig {
 #[serde(default)]
 pub struct BackgroundCompactionConfig {
     // only wake up background job if it is enabled.
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub enable_compaction: bool,
-    #[clap(long, default_value = "one_shot")]
+    #[clap(long, value_name = "VALUE", default_value = "one_shot")]
     pub compact_mode: String,
 
     // Only compact tables in this list.
     // if it is empty, compact job would discover target tables automatically
     // otherwise, the job would only compact tables in this list
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub target_tables: Option<Vec<String>>,
 
     // Compact segments if a table has too many small segments
     // `segment_limit` is the maximum number of segments that would be compacted in a batch
     // None represent their is no limit
     // Details: https://databend.rs/doc/sql-commands/ddl/table/optimize-table#segment-compaction
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub segment_limit: Option<u64>,
 
     // Compact small blocks into large one.
     // `block_limit` is the maximum number of blocks that would be compacted in a batch
     // None represent their is no limit
     // Details: https://databend.rs/doc/sql-commands/ddl/table/optimize-table#block-compaction
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub block_limit: Option<u64>,
 
     #[clap(flatten)]
@@ -71,15 +71,15 @@ pub struct BackgroundCompactionConfig {
 #[serde(default)]
 pub struct BackgroundScheduledConfig {
     // the fixed interval for compaction on each table.
-    #[clap(long, default_value = "1800")]
+    #[clap(long, value_name = "VALUE", default_value = "1800")]
     pub duration_secs: u64,
 
     // the cron expression for scheduled job,
     // by default it is scheduled with UTC timezone
-    #[clap(long, default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub cron: String,
 
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub time_zone: Option<String>,
 }
 

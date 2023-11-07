@@ -20,6 +20,7 @@ mod column_from;
 pub mod date_helper;
 pub mod display;
 pub mod filter_helper;
+pub mod select_vector;
 pub mod serialize;
 pub mod udf_client;
 pub mod variant_transform;

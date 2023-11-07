@@ -43,9 +43,8 @@ use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ScalarRef;
 use common_expression::TableField;
-use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
-use common_formats::CommonSettings;
+use common_formats::OutputCommonSettings;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -198,7 +197,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     for field in fields {
                         self.only_scalar_expr = true;
                         let update_expr = MergeUpdateExpr {
-                            catalog: None,
                             table: None,
                             name: Identifier::from_name(field.name().clone()),
                             expr: self.gen_expr(&DataType::from(field.data_type())),
@@ -531,14 +529,13 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 let columns = self.gen_columns(data_types, row_count);
                 let mut buf = Vec::new();
                 let encoder = FieldEncoderValues {
-                    common_settings: CommonSettings {
+                    common_settings: OutputCommonSettings {
                         true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                         false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                         null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                         timezone: Tz::UTC,
-                        disable_variant_check: false,
                     },
                     quote_char: b'\'',
                 };
@@ -569,7 +566,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 _ => unreachable!(),
                             }
                         } else {
-                            encoder.write_field(column, i, &mut buf, false);
+                            encoder.write_field(column, i, &mut buf, true);
                         }
                     }
                     buf.extend_from_slice(b")");

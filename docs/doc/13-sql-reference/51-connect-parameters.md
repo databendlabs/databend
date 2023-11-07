@@ -14,7 +14,7 @@ The connection parameters are specified using a CONNECTION clause and are separa
 ```sql title='Examples:'
 -- This example illustrates a 'CREATE STAGE' command where 'CONNECTION' is followed by '=', establishing a Minio stage with specific connection parameters.
 CREATE STAGE my_minio_stage
-  URL = 's3://databend'
+  's3://databend'
   CONNECTION = (
     ENDPOINT_URL = 'http://localhost:9000',
     ACCESS_KEY_ID = 'ROOTUSER',

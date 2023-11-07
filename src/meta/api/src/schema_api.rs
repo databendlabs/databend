@@ -23,14 +23,14 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
-use common_meta_app::schema::CreateTableLockRevReq;
+use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropCatalogReply;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -41,13 +41,15 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -58,9 +60,10 @@ use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListTableLockRevReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -238,16 +241,19 @@ pub trait SchemaApi: Send + Sync {
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 
-    async fn list_table_lock_revs(&self, req: ListTableLockRevReq) -> Result<Vec<u64>, KVAppError>;
-
-    async fn create_table_lock_rev(
+    async fn list_lock_revisions(
         &self,
-        req: CreateTableLockRevReq,
-    ) -> Result<CreateTableLockRevReply, KVAppError>;
+        req: ListLockRevReq,
+    ) -> Result<Vec<(u64, LockMeta)>, KVAppError>;
 
-    async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError>;
+    async fn create_lock_revision(
+        &self,
+        req: CreateLockRevReq,
+    ) -> Result<CreateLockRevReply, KVAppError>;
 
-    async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError>;
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError>;
+
+    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError>;
 
     async fn create_catalog(&self, req: CreateCatalogReq)
     -> Result<CreateCatalogReply, KVAppError>;
@@ -261,6 +267,7 @@ pub trait SchemaApi: Send + Sync {
 
     // least visible time
     async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError>;
+    async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError>;
 
     fn name(&self) -> String;
 }

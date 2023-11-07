@@ -33,17 +33,40 @@ pub fn read_decimal_with_size<T: Decimal>(
     buf: &[u8],
     size: DecimalSize,
     exact: bool,
+    rounding_mode: bool,
 ) -> Result<(T, usize)> {
-    let (n, d, e, n_read) = read_decimal::<T>(buf, size.precision as u32, exact)?;
+    // Read one more digit for round
+    let (n, d, e, n_read) = read_decimal::<T>(buf, (size.precision + 1) as u32, exact)?;
     if d as i32 + e > (size.precision - size.scale).into() {
         return Err(decimal_overflow_error());
     }
     let scale_diff = e + size.scale as i32;
+
     let n = match scale_diff.cmp(&0) {
         Ordering::Less => {
-            // e < 0, than  -e is the actual scale, (-e) > scale means we need to cut more
-            n.checked_div(T::e(-scale_diff as u32))
-                .ok_or_else(decimal_overflow_error)?
+            let scale_diff = -scale_diff as u32;
+            let mut round_val = None;
+            if rounding_mode {
+                // Checking whether numbers need to be added or subtracted to calculate rounding
+                if let Some(r) = n.checked_rem(T::e(scale_diff)) {
+                    if let Some(m) = r.checked_div(T::e(scale_diff - 1)) {
+                        if m >= T::from_i64(5i64) {
+                            round_val = Some(T::one());
+                        } else if m <= T::from_i64(-5i64) {
+                            round_val = Some(T::minus_one());
+                        }
+                    }
+                }
+            }
+            // e < 0, than -e is the actual scale, (-e) > scale means we need to cut more
+            let n = n
+                .checked_div(T::e(scale_diff))
+                .ok_or_else(decimal_overflow_error)?;
+            if let Some(val) = round_val {
+                n.checked_add(val).ok_or_else(decimal_overflow_error)?
+            } else {
+                n
+            }
         }
         Ordering::Greater => n
             .checked_mul(T::e(scale_diff as u32))
@@ -279,7 +302,7 @@ pub fn read_decimal_from_json<T: Decimal>(
             }
         }
         serde_json::Value::String(s) => {
-            let (n, _) = read_decimal_with_size::<T>(s.as_bytes(), size, true)?;
+            let (n, _) = read_decimal_with_size::<T>(s.as_bytes(), size, true, true)?;
             Ok(n)
         }
         _ => Err(ErrorCode::from("Incorrect json value for decimal")),

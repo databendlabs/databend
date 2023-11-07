@@ -3405,3 +3405,237 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : parse_json('["1","2","3"]') ? NULL
+raw expr       : json_exists_key(parse_json('["1","2","3"]'), NULL)
+checked expr   : json_exists_key<Variant NULL, String NULL>(CAST(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') ? '1'
+raw expr       : json_exists_key(parse_json('true'), '1')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("true"), "1")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('["1","2","3"]') ? '1'
+raw expr       : json_exists_key(parse_json('["1","2","3"]'), '1')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "1")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["1","2","3"]') ? '4'
+raw expr       : json_exists_key(parse_json('["1","2","3"]'), '4')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "4")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ? 'a'
+raw expr       : json_exists_key(parse_json('{"a":1,"b":2,"c":3}'), 'a')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), "a")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ? 'd'
+raw expr       : json_exists_key(parse_json('{"a":1,"b":2,"c":3}'), 'd')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), "d")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json(s) ? 'a'
+raw expr       : json_exists_key(parse_json(s::String NULL), 'a')
+checked expr   : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST("a" AS String NULL))
+optimized expr : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), "a")
+evaluation:
++--------+-----------------------------+--------------+
+|        | s                           | Output       |
++--------+-----------------------------+--------------+
+| Type   | String NULL                 | Boolean NULL |
+| Domain | {""..="{\"b\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3]'                   | false        |
+| Row 1  | '{"a":1}'                   | true         |
+| Row 2  | NULL                        | NULL         |
+| Row 3  | '{"b":1}'                   | false        |
++--------+-----------------------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b312c322c335d7b2261223a317d7b2262223a317d, offsets: [0, 7, 14, 14, 21] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: Boolean([0b____0010]), validity: [0b____1011] }                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json('["1","2","3"]') ?| NULL
+raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), NULL)
+checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(CAST(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST(NULL AS Array(String) NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') ?| ['1','2']
+raw expr       : json_exists_any_keys(parse_json('true'), array('1', '2'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("true"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('["1","2","3"]') ?| ['1','2']
+raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), array('1', '2'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["1","2","3"]') ?| ['4','5']
+raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), array('4', '5'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("4", "5"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?| ['a','b']
+raw expr       : json_exists_any_keys(parse_json('{"a":1,"b":2,"c":3}'), array('a', 'b'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("a", "b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?| ['d','e']
+raw expr       : json_exists_any_keys(parse_json('{"a":1,"b":2,"c":3}'), array('d', 'e'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("d", "e"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json(s) ?| ['a','b']
+raw expr       : json_exists_any_keys(parse_json(s::String NULL), array('a', 'b'))
+checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
+optimized expr : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
+evaluation:
++--------+-----------------------------+--------------+
+|        | s                           | Output       |
++--------+-----------------------------+--------------+
+| Type   | String NULL                 | Boolean NULL |
+| Domain | {""..="{\"c\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '["a","e","d"]'             | true         |
+| Row 1  | '{"a":1,"b":2}'             | true         |
+| Row 2  | NULL                        | NULL         |
+| Row 3  | '{"c":1}'                   | false        |
++--------+-----------------------------+--------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b2261222c2265222c2264225d7b2261223a312c2262223a327d7b2263223a317d, offsets: [0, 13, 26, 26, 33] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: Boolean([0b____0011]), validity: [0b____1011] }                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json('["1","2","3"]') ?& NULL
+raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), NULL)
+checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(CAST(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST(NULL AS Array(String) NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') ?& ['1','2']
+raw expr       : json_exists_all_keys(parse_json('true'), array('1', '2'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("true"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('["1","2","3"]') ?& ['1','2']
+raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), array('1', '2'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["1","2","3"]') ?& ['3','5']
+raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), array('3', '5'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("3", "5"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?& ['a','b']
+raw expr       : json_exists_all_keys(parse_json('{"a":1,"b":2,"c":3}'), array('a', 'b'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("a", "b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?& ['c','e']
+raw expr       : json_exists_all_keys(parse_json('{"a":1,"b":2,"c":3}'), array('c', 'e'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("c", "e"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json(s) ?& ['a','b']
+raw expr       : json_exists_all_keys(parse_json(s::String NULL), array('a', 'b'))
+checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
+optimized expr : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
+evaluation:
++--------+-------------------------------------+--------------+
+|        | s                                   | Output       |
++--------+-------------------------------------+--------------+
+| Type   | String NULL                         | Boolean NULL |
+| Domain | {""..="{\"a\":1,\"b\":2}"} ∪ {NULL} | Unknown      |
+| Row 0  | '["a","e","b"]'                     | true         |
+| Row 1  | '{"a":1,"b":2}'                     | true         |
+| Row 2  | NULL                                | NULL         |
+| Row 3  | '{"a":0,"c":1}'                     | false        |
++--------+-------------------------------------+--------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b2261222c2265222c2262225d7b2261223a312c2262223a327d7b2261223a302c2263223a317d, offsets: [0, 13, 26, 26, 39] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: Boolean([0b____0011]), validity: [0b____1011] }                                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

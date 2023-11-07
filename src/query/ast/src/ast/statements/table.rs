@@ -156,6 +156,10 @@ impl Display for CreateTableStmt {
             write!(f, " {source}")?;
         }
 
+        if let Some(uri_location) = &self.uri_location {
+            write!(f, " {uri_location}")?;
+        }
+
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
         }

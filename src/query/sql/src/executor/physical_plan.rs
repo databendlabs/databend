@@ -17,6 +17,8 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use enum_as_inner::EnumAsInner;
 
+use super::physical_plans::physical_add_row_number::AddRowNumber;
+use super::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
@@ -99,6 +101,8 @@ pub enum PhysicalPlan {
     /// MergeInto
     MergeIntoSource(MergeIntoSource),
     MergeInto(Box<MergeInto>),
+    MergeIntoAppendNotMatched(Box<MergeIntoAppendNotMatched>),
+    AddRowNumber(Box<AddRowNumber>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -139,7 +143,9 @@ impl PhysicalPlan {
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::AddRowNumber(_)
             | PhysicalPlan::MergeIntoSource(_)
+            | PhysicalPlan::MergeIntoAppendNotMatched(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
@@ -180,10 +186,12 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
+            PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
+            PhysicalPlan::AddRowNumber(plan) => plan.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
-            | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::MergeIntoAppendNotMatched(_)
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
@@ -225,9 +233,11 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
             PhysicalPlan::MergeIntoSource(_) => "MergeIntoSource".to_string(),
+            PhysicalPlan::MergeIntoAppendNotMatched(_) => "MergeIntoAppendNotMatched".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
+            PhysicalPlan::AddRowNumber(_) => "AddRowNumber".to_string(),
             PhysicalPlan::ReclusterSource(_) => "ReclusterSource".to_string(),
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
         }
@@ -278,7 +288,11 @@ impl PhysicalPlan {
             PhysicalPlan::Deduplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AddRowNumber(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoSource(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -319,6 +333,8 @@ impl PhysicalPlan {
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::AddRowNumber(_)
+            | PhysicalPlan::MergeIntoAppendNotMatched(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CteScan(_)

@@ -44,8 +44,7 @@ impl Display for CreateStageStmt {
         write!(f, " {}", self.stage_name)?;
 
         if let Some(ul) = &self.location {
-            write!(f, " URL = ")?;
-            write!(f, "{ul}")?;
+            write!(f, " {ul}")?;
         }
 
         if !self.file_format_options.is_empty() {

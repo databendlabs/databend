@@ -392,6 +392,9 @@ impl Plan {
             Plan::CopyIntoTable(plan) => plan.schema(),
 
             Plan::CreateTask(plan) => plan.schema(),
+            Plan::DescribeTask(plan) => plan.schema(),
+            Plan::ShowTasks(plan) => plan.schema(),
+            Plan::ExecuteTask(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -426,6 +429,8 @@ impl Plan {
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
                 | Plan::CopyIntoTable(_)
+                | Plan::ShowTasks(_)
+                | Plan::DescribeTask(_)
         )
     }
 }

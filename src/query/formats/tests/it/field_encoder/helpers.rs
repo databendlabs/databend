@@ -12,34 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_formats::field_encoder::helpers::write_escaped_string;
 use common_formats::field_encoder::helpers::write_json_string;
+use common_formats::field_encoder::helpers::write_tsv_escaped_string;
 use common_formats::field_encoder::write_csv_string;
 
 #[test]
 fn test_escape() {
     {
         let mut buf = vec![];
-        write_escaped_string(b"\0\n\r\t\\\'", &mut buf, b'\'');
-        assert_eq!(&buf, b"\\0\\n\\r\\t\\\\\\'")
+        write_tsv_escaped_string(b"\0\n\r\t\\\'", &mut buf, b'\t');
+        assert_eq!(&buf, b"\\0\\n\\r\\t\\\\\'")
     }
 
     {
         let mut buf = vec![];
-        write_escaped_string(b"\n123\n456\n", &mut buf, b'\'');
+        write_tsv_escaped_string(b"\n123\n456\n", &mut buf, b'\t');
         assert_eq!(&buf, b"\\n123\\n456\\n")
     }
 
     {
         let mut buf = vec![];
-        write_escaped_string(b"123\n", &mut buf, b'\'');
+        write_tsv_escaped_string(b"123\n", &mut buf, b'\t');
         assert_eq!(&buf, b"123\\n")
     }
 
     {
         let mut buf = vec![];
-        write_escaped_string(b"\n123", &mut buf, b'\'');
+        write_tsv_escaped_string(b"\n123", &mut buf, b'\t');
         assert_eq!(&buf, b"\\n123")
+    }
+
+    {
+        let mut buf = vec![];
+        write_tsv_escaped_string(b"\n,23", &mut buf, b',');
+        assert_eq!(&buf, b"\\n\\,23")
     }
 }
 

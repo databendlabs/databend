@@ -22,7 +22,6 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::WindowFuncType;
-use crate::IndexType;
 use crate::ScalarExpr;
 
 /// Derive filter to push down
@@ -41,38 +40,36 @@ pub fn try_derive_predicates(
         let mut new_right_push_down = vec![];
         for predicate in left_push_down.iter() {
             let used_columns = predicate.used_columns();
-            let mut col_to_scalar = HashMap::with_capacity(used_columns.len());
-            for column in used_columns.iter() {
-                for (idx, left_condition) in join.left_conditions.iter().enumerate() {
-                    if left_condition.used_columns().len() > 1
-                        || !left_condition.used_columns().contains(column)
-                    {
-                        continue;
-                    }
-                    col_to_scalar.insert(column, &join.right_conditions[idx]);
-                    break;
+            let mut equi_conditions_map = HashMap::new();
+            for (idx, left_condition) in join.left_conditions.iter().enumerate() {
+                if left_condition.used_columns().len() > 1
+                    || !left_condition.used_columns().is_subset(&used_columns)
+                {
+                    continue;
                 }
+                equi_conditions_map.insert(left_condition, &join.right_conditions[idx]);
             }
-            if col_to_scalar.len() == used_columns.len() {
-                derive_predicate(&col_to_scalar, predicate, &mut new_right_push_down)?;
+            if used_columns.len() == equi_conditions_map.len() {
+                derive_predicate(
+                    &mut equi_conditions_map,
+                    predicate,
+                    &mut new_right_push_down,
+                )?;
             }
         }
         for predicate in right_push_down.iter() {
             let used_columns = predicate.used_columns();
-            let mut col_to_scalar = HashMap::with_capacity(used_columns.len());
-            for column in used_columns.iter() {
-                for (idx, right_condition) in join.right_conditions.iter().enumerate() {
-                    if right_condition.used_columns().len() > 1
-                        || !right_condition.used_columns().contains(column)
-                    {
-                        continue;
-                    }
-                    col_to_scalar.insert(column, &join.left_conditions[idx]);
-                    break;
+            let mut equi_conditions_map = HashMap::new();
+            for (idx, right_condition) in join.right_conditions.iter().enumerate() {
+                if right_condition.used_columns().len() > 1
+                    || !right_condition.used_columns().is_subset(&used_columns)
+                {
+                    continue;
                 }
+                equi_conditions_map.insert(right_condition, &join.left_conditions[idx]);
             }
-            if col_to_scalar.len() == used_columns.len() {
-                derive_predicate(&col_to_scalar, predicate, &mut new_left_push_down)?;
+            if used_columns.len() == equi_conditions_map.len() {
+                derive_predicate(&mut equi_conditions_map, predicate, &mut new_left_push_down)?;
             }
         }
         left_push_down.extend(new_left_push_down);
@@ -110,72 +107,130 @@ pub fn try_derive_predicates(
 }
 
 fn derive_predicate(
-    col_to_scalar: &HashMap<&IndexType, &ScalarExpr>,
+    equi_conditions_map: &mut HashMap<&ScalarExpr, &ScalarExpr>,
     predicate: &ScalarExpr,
     new_push_down: &mut Vec<ScalarExpr>,
 ) -> Result<()> {
     let mut replaced_predicate = predicate.clone();
-    replace_column(&mut replaced_predicate, col_to_scalar);
+    replace_column(&mut replaced_predicate, equi_conditions_map);
     if &replaced_predicate != predicate {
         new_push_down.push(replaced_predicate);
     }
     Ok(())
 }
 
-fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &ScalarExpr>) {
+fn replace_column(
+    scalar: &mut ScalarExpr,
+    equi_conditions_map: &mut HashMap<&ScalarExpr, &ScalarExpr>,
+) {
     match scalar {
-        ScalarExpr::BoundColumnRef(column) => {
-            let column_index = column.column.index;
-            // Safe to unwrap
-            *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
+        ScalarExpr::BoundColumnRef(col) => {
+            let cloned_col = col.clone();
+            if let Some(s) = equi_conditions_map.get(scalar) {
+                *scalar = (**s).clone();
+            } else {
+                for (key, val) in equi_conditions_map.iter() {
+                    if let ScalarExpr::BoundColumnRef(key_col) = key {
+                        if key_col.column.index.eq(&cloned_col.column.index) {
+                            *scalar = (**val).clone();
+                            break;
+                        }
+                    }
+                }
+            }
         }
         ScalarExpr::WindowFunction(expr) => {
             match &mut expr.func {
                 WindowFuncType::Aggregate(agg) => {
                     for arg in agg.args.iter_mut() {
-                        replace_column(arg, col_to_scalar);
+                        if let Some(s) = equi_conditions_map.get(arg) {
+                            *arg = (**s).clone();
+                        } else {
+                            replace_column(arg, equi_conditions_map);
+                        }
                     }
                 }
                 WindowFuncType::LagLead(f) => {
-                    replace_column(&mut f.arg, col_to_scalar);
+                    if let Some(s) = equi_conditions_map.get(f.arg.as_ref()) {
+                        *f.arg = (**s).clone();
+                    } else {
+                        replace_column(&mut f.arg, equi_conditions_map);
+                    }
                     if let Some(ref mut default) = &mut f.default {
-                        replace_column(default, col_to_scalar);
+                        if let Some(s) = equi_conditions_map.get(default.as_ref()) {
+                            *default = Box::new((**s).clone());
+                        } else {
+                            replace_column(default, equi_conditions_map);
+                        }
                     }
                 }
                 WindowFuncType::NthValue(f) => {
-                    replace_column(&mut f.arg, col_to_scalar);
+                    if let Some(s) = equi_conditions_map.get(f.arg.as_ref()) {
+                        *f.arg = (**s).clone();
+                    } else {
+                        replace_column(&mut f.arg, equi_conditions_map);
+                    }
                 }
                 _ => {}
             }
             for arg in expr.partition_by.iter_mut() {
-                replace_column(arg, col_to_scalar)
+                if let Some(s) = equi_conditions_map.get(arg) {
+                    *arg = (**s).clone();
+                } else {
+                    replace_column(arg, equi_conditions_map);
+                }
             }
+
             for arg in expr.order_by.iter_mut() {
-                replace_column(&mut arg.expr, col_to_scalar)
+                if let Some(s) = equi_conditions_map.get(&arg.expr) {
+                    arg.expr = (**s).clone();
+                } else {
+                    replace_column(&mut arg.expr, equi_conditions_map);
+                }
             }
         }
         ScalarExpr::AggregateFunction(expr) => {
             for arg in expr.args.iter_mut() {
-                replace_column(arg, col_to_scalar)
+                if let Some(s) = equi_conditions_map.get(arg) {
+                    *arg = (**s).clone();
+                } else {
+                    replace_column(arg, equi_conditions_map);
+                }
             }
         }
         ScalarExpr::FunctionCall(expr) => {
             for arg in expr.arguments.iter_mut() {
-                replace_column(arg, col_to_scalar)
+                if let Some(s) = equi_conditions_map.get(arg) {
+                    *arg = (**s).clone();
+                } else {
+                    replace_column(arg, equi_conditions_map);
+                }
             }
         }
         ScalarExpr::LambdaFunction(expr) => {
             for arg in expr.args.iter_mut() {
-                replace_column(arg, col_to_scalar)
+                if let Some(s) = equi_conditions_map.get(arg) {
+                    *arg = (**s).clone();
+                } else {
+                    replace_column(arg, equi_conditions_map);
+                }
             }
         }
         ScalarExpr::CastExpr(expr) => {
-            replace_column(&mut expr.argument, col_to_scalar);
+            if let Some(s) = equi_conditions_map.get(expr.argument.as_ref()) {
+                *expr.argument = (**s).clone();
+            } else {
+                replace_column(&mut expr.argument, equi_conditions_map);
+            }
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => {}
         ScalarExpr::UDFServerCall(expr) => {
             for arg in expr.arguments.iter_mut() {
-                replace_column(arg, col_to_scalar)
+                if let Some(s) = equi_conditions_map.get(arg) {
+                    *arg = (**s).clone();
+                } else {
+                    replace_column(arg, equi_conditions_map);
+                }
             }
         }
     }

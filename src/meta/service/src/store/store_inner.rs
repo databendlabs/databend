@@ -221,7 +221,10 @@ impl StoreInner {
 
         info!(id = self.id; "do_build_snapshot start");
 
-        let snapshot_view = self.build_compacted_snapshot().await;
+        let snapshot_view = self
+            .build_compacted_snapshot()
+            .await
+            .map_err(|e| StorageIOError::read_snapshot(None, &e))?;
 
         let mut snapshot_meta = snapshot_view.build_snapshot_meta();
 
@@ -229,7 +232,9 @@ impl StoreInner {
 
         let mut snapshot_store = self.snapshot_store();
 
-        let strm = snapshot_view.export().await;
+        let strm = snapshot_view.export().await.map_err(|e| {
+            SnapshotStoreError::read(e).with_meta("export state machine", &snapshot_meta)
+        })?;
 
         // Move heavy load to a blocking thread pool.
         let (snapshot_id, snapshot_size) = tokio::task::block_in_place({
@@ -314,7 +319,7 @@ impl StoreInner {
     ///
     /// - Take a snapshot view of the current state machine;
     /// - Compact multi levels in the snapshot view into one to get rid of tombstones;
-    async fn build_compacted_snapshot(&self) -> SnapshotViewV002 {
+    async fn build_compacted_snapshot(&self) -> Result<SnapshotViewV002, io::Error> {
         let mut snapshot_view = {
             let mut s = self.state_machine.write().await;
             s.full_snapshot_view()
@@ -331,7 +336,7 @@ impl StoreInner {
                 // TODO: this is a future never returning Pending:
                 futures::executor::block_on(s.compact_mem_levels())
             }
-        });
+        })?;
 
         // State machine ensures no modification to `base` during snapshotting.
         {
@@ -339,18 +344,18 @@ impl StoreInner {
             s.replace_frozen(&snapshot_view);
         }
 
-        snapshot_view
+        Ok(snapshot_view)
     }
 
     async fn write_snapshot(
         snapshot_store: &mut SnapshotStoreV002,
         snapshot_meta: SnapshotMeta,
-        entry_stream: impl Stream<Item = RaftStoreEntry>,
+        entry_stream: impl Stream<Item = Result<RaftStoreEntry, io::Error>>,
     ) -> Result<(MetaSnapshotId, u64), SnapshotStoreError> {
         let mut writer = snapshot_store.new_writer()?;
 
         writer
-            .write_entries::<io::Error>(entry_stream)
+            .write_entry_results::<io::Error>(entry_stream)
             .await
             .map_err(|e| {
                 SnapshotStoreError::write(e).with_meta("serialize entries", &snapshot_meta)

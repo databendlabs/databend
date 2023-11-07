@@ -21,11 +21,28 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
+/// [`GrantObjectByID`] is used to maintain the grant object by id. Using ID over name
+/// have many benefits, it can avoid lost privileges after the object get renamed.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum GrantObjectByID {
+    /// used on the fuse databases
+    Database { catalog_name: String, db_id: u64 },
+
+    /// used on the fuse tables
+    Table {
+        catalog_name: String,
+        db_id: u64,
+        table_id: u64,
+    },
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
     Database(String, String),
     Table(String, String, String),
+    UDF(String),
+    Stage(String),
 }
 
 impl GrantObject {
@@ -46,6 +63,9 @@ impl GrantObject {
                 GrantObject::Table(rcat, rhs_db, rhs_table),
             ) => lcat == rcat && (lhs_db == rhs_db) && (lhs_table == rhs_table),
             (GrantObject::Table(_, _, _), _) => false,
+            (GrantObject::Stage(lstage), GrantObject::Stage(rstage)) => lstage == rstage,
+            (GrantObject::UDF(udf), GrantObject::UDF(rudf)) => udf == rudf,
+            _ => false,
         }
     }
 
@@ -55,6 +75,16 @@ impl GrantObject {
             GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
             GrantObject::Database(_, _) => UserPrivilegeSet::available_privileges_on_database(),
             GrantObject::Table(_, _, _) => UserPrivilegeSet::available_privileges_on_table(),
+            GrantObject::UDF(_) => UserPrivilegeSet::available_privileges_on_udf(),
+            GrantObject::Stage(_) => UserPrivilegeSet::available_privileges_on_stage(),
+        }
+    }
+
+    pub fn catalog(&self) -> Option<String> {
+        match self {
+            GrantObject::Global | GrantObject::Stage(_) | GrantObject::UDF(_) => None,
+            GrantObject::Database(cat, _) => Some(cat.clone()),
+            GrantObject::Table(cat, _, _) => Some(cat.clone()),
         }
     }
 }
@@ -67,6 +97,8 @@ impl fmt::Display for GrantObject {
             GrantObject::Table(ref cat, ref db, ref table) => {
                 write!(f, "'{}'.'{}'.'{}'", cat, db, table)
             }
+            GrantObject::UDF(udf) => write!(f, "UDF {udf}"),
+            GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
         }
     }
 }
