@@ -71,7 +71,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         definition.push(tr.query_text.into_bytes());
         run_id.push(tr.run_id.into_bytes());
         query_id.push(tr.query_id.into_bytes());
-        attempt_number.push(tr.attempt_number.unwrap());
+        attempt_number.push(tr.attempt_number);
         completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
         scheduled_time.push(tr.scheduled_at.timestamp_micros());
     }
