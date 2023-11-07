@@ -72,6 +72,7 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
 use log::info;
+use log::warn;
 use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 use tokio_stream::StreamExt;
@@ -525,7 +526,16 @@ impl MergeIntoInterpreter {
                     false,
                     false,
                 );
-                let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
+                let (mut scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
+                if let ScalarExpr::FunctionCall(f) = &scalar_expr {
+                    if f.func_name == "tuple" {
+                        if f.arguments.is_empty() {
+                            warn!("cluster key is empty, use default plan");
+                            return Ok(Box::new(join.clone()));
+                        }
+                        scalar_expr = f.arguments[0].clone();
+                    }
+                }
                 let projected = scalar_expr.try_project_column_binding(|binding| {
                     column_map.get(&binding.column_name).cloned()
                 });
