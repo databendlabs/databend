@@ -32,11 +32,11 @@ lazy_static! {
     static ref COPY_READ_SIZE_BYTES: Counter = register_counter("copy_read_size_bytes");
     static ref COPY_READ_PART_COST_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("copy_read_part_cost_milliseconds");
-    static ref FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: Histogram =
+    static ref COPY_FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("copy_filter_out_copied_files_request_milliseconds");
-    static ref FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: Histogram =
+    static ref COPY_FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("copy_filter_out_copied_files_entire_milliseconds");
-    static ref COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: Histogram =
+    static ref COPY_COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("copy_collect_files_get_all_source_files_milliseconds");
 
 
@@ -119,16 +119,16 @@ pub fn metrics_inc_copy_read_part_cost_milliseconds(c: u64) {
     COPY_READ_PART_COST_MILLISECONDS.observe(c as f64);
 }
 
-pub fn metrics_inc_filter_out_copied_files_request_milliseconds(c: u64) {
-    FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS.observe(c as f64);
+pub fn metrics_inc_copy_filter_out_copied_files_request_milliseconds(c: u64) {
+    COPY_FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS.observe(c as f64);
 }
 
-pub fn metrics_inc_filter_out_copied_files_entire_milliseconds(c: u64) {
-    FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS.observe(c as f64);
+pub fn metrics_inc_copy_filter_out_copied_files_entire_milliseconds(c: u64) {
+    COPY_FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS.observe(c as f64);
 }
 
-pub fn metrics_inc_collect_files_get_all_source_files_milliseconds(c: u64) {
-    COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS.observe(c as f64);
+pub fn metrics_inc_copy_collect_files_get_all_source_files_milliseconds(c: u64) {
+    COPY_COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS.observe(c as f64);
 }
 
 /// Merge into metrics.

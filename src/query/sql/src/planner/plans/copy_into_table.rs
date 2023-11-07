@@ -145,7 +145,7 @@ impl CopyIntoTablePlan {
 
         let end_get_all_source = Instant::now();
         let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
-        metrics_inc_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+        metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
 
         ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
@@ -177,7 +177,7 @@ impl CopyIntoTablePlan {
             let cost_filter_out = end_filter_out
                 .duration_since(end_get_all_source)
                 .as_millis();
-            metrics_inc_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
+            metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
 
             files
         };

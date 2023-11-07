@@ -730,7 +730,7 @@ impl TableContext for QueryContext {
                 .await?
                 .file_info;
 
-            metrics_inc_filter_out_copied_files_request_milliseconds(
+            metrics_inc_copy_filter_out_copied_files_request_milliseconds(
                 Instant::now().duration_since(start_request).as_millis() as u64,
             );
             // Colored

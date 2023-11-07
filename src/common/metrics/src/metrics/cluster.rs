@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter_family;
-use common_metrics::register_gauge_family;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::Gauge;
 use lazy_static::lazy_static;
+
+use crate::register_counter_family;
+use crate::register_gauge_family;
+use crate::Counter;
+use crate::Family;
+use crate::Gauge;
 
 lazy_static! {
     static ref CLUSTER_CLUSTER_HEARTBEAT_COUNT: Family<Vec<(&'static str, String)>, Counter> =
@@ -28,7 +29,7 @@ lazy_static! {
         register_gauge_family("cluster_discovered_node");
 }
 
-pub(crate) fn metric_incr_cluster_heartbeat_count(
+pub fn metric_incr_cluster_heartbeat_count(
     local_id: &str,
     flight_address: &str,
     cluster_id: &str,
@@ -46,7 +47,7 @@ pub(crate) fn metric_incr_cluster_heartbeat_count(
     CLUSTER_CLUSTER_HEARTBEAT_COUNT.get_or_create(labels).inc();
 }
 
-pub(crate) fn metric_incr_cluster_error_count(
+pub fn metric_incr_cluster_error_count(
     local_id: &str,
     function: &str,
     cluster_id: &str,
@@ -64,7 +65,7 @@ pub(crate) fn metric_incr_cluster_error_count(
     CLUSTER_CLUSTER_ERROR_COUNT.get_or_create(labels).inc();
 }
 
-pub(crate) fn metrics_gauge_discovered_nodes(
+pub fn metrics_gauge_discovered_nodes(
     local_id: &str,
     cluster_id: &str,
     tenant_id: &str,

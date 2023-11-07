@@ -45,6 +45,7 @@ pub use registry::register_histogram_in_seconds;
 pub use registry::render_prometheus_metrics;
 pub use registry::reset_global_prometheus_registry;
 
+pub use crate::metrics::cluster;
 /// Metrics.
 pub use crate::metrics::http;
 pub use crate::metrics::interpreter;
