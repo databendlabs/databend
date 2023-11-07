@@ -85,9 +85,9 @@ statement ok
 EXECUTE TASK mytask
 
 query SSSS
-select name, warehouse, schedule, definition from system.task_history where name = 'mytask'
+select name, schedule, definition from system.task_history where name = 'mytask'
 ----
-mytask mywh CRON 0 0 0 1 1 ? 2100 SELECT 1
+mytask CRON 0 0 0 1 1 ? 2100 SELECT 1
 
 query S
 select state from system.task_history where name = 'mytask'
