@@ -12,70 +12,126 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter;
-use common_metrics::register_histogram_in_milliseconds;
-use common_metrics::Counter;
-use common_metrics::Histogram;
 use lazy_static::lazy_static;
 
-macro_rules! key {
-    ($key: literal) => {
-        concat!("query_", $key)
-    };
-}
+use crate::register_counter;
+use crate::register_histogram_in_milliseconds;
+use crate::Counter;
+use crate::Histogram;
 
 lazy_static! {
+    // Common metrics.
+    static ref OMIT_FILTER_ROWGROUPS: Counter = register_counter("omit_filter_rowgroups");
+    static ref OMIT_FILTER_ROWS: Counter = register_counter("omit_filter_rows");
+
+    // COPY metrics.
+     static ref COPY_PURGE_FILE_COUNTER: Counter = register_counter("query_copy_purge_file_counter");
+    static ref COPY_PURGE_FILE_COST_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds("query_copy_purge_file_cost_milliseconds");
+    static ref COPY_READ_PART_COUNTER: Counter = register_counter("query_copy_read_part_counter");
+    static ref COPY_READ_SIZE_BYTES: Counter = register_counter("query_copy_read_size_bytes");
+    static ref COPY_READ_PART_COST_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds("query_copy_read_part_cost_milliseconds");
+    static ref FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds("query_filter_out_copied_files_request_milliseconds");
+    static ref FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds("query_filter_out_copied_files_entire_milliseconds");
+    static ref COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds("query_collect_files_get_all_source_files_milliseconds");
+
+
+    // Merge into metrics.
     static ref MERGE_INTO_REPLACE_BLOCKS_COUNTER: Counter =
-        register_counter(key!("merge_into_replace_blocks_counter"));
+        register_counter("merge_into_replace_blocks_counter");
     static ref MERGE_INTO_REPLACE_BLOCKS_ROWS_COUNTER: Counter =
-        register_counter(key!("merge_into_replace_blocks_rows_counter"));
+        register_counter("merge_into_replace_blocks_rows_counter");
     static ref MERGE_INTO_DELETED_BLOCKS_COUNTER: Counter =
-        register_counter(key!("merge_into_deleted_blocks_counter"));
+        register_counter("merge_into_deleted_blocks_counter");
     static ref MERGE_INTO_DELETED_BLOCKS_ROWS_COUNTER: Counter =
-        register_counter(key!("merge_into_deleted_blocks_rows_counter"));
+        register_counter("merge_into_deleted_blocks_rows_counter");
     static ref MERGE_INTO_APPEND_BLOCKS_COUNTER: Counter =
-        register_counter(key!("merge_into_append_blocks_counter"));
+        register_counter("merge_into_append_blocks_counter");
     static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER: Counter =
-        register_counter(key!("merge_into_distributed_hashtable_fetch_row_number"));
+        register_counter("merge_into_distributed_hashtable_fetch_row_number");
     static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_EMPTY_BLOCK: Counter =
-        register_counter(key!("merge_into_distributed_hashtable_empty_block"));
+        register_counter("merge_into_distributed_hashtable_empty_block");
     static ref MERGE_INTO_DISTRIBUTED_GENERATE_ROW_NUMBERS: Counter =
-        register_counter(key!("merge_into_distributed_generate_row_numbers"));
+        register_counter("merge_into_distributed_generate_row_numbers");
     static ref MERGE_INTO_DISTRIBUTED_INIT_UNIQUE_NUMBER: Counter =
-        register_counter(key!("merge_into_distributed_init_unique_number"));
+        register_counter("merge_into_distributed_init_unique_number");
     static ref MERGE_INTO_DISTRIBUTED_NEW_SET_LEN: Counter =
-        register_counter(key!("merge_into_distributed_new_set_len"));
-    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK: Counter = register_counter(
-        key!("merge_into_distributed_hashtable_push_empty_null_block")
-    );
+        register_counter("merge_into_distributed_new_set_len");
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK: Counter =
+        register_counter("merge_into_distributed_hashtable_push_empty_null_block");
     static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK: Counter =
-        register_counter(key!("merge_into_distributed_hashtable_push_null_block"));
-    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK_ROWS: Counter = register_counter(
-        key!("merge_into_distributed_hashtable_push_null_block_rows")
-    );
+        register_counter("merge_into_distributed_hashtable_push_null_block");
+    static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK_ROWS: Counter =
+        register_counter("merge_into_distributed_hashtable_push_null_block_rows");
     static ref MERGE_INTO_APPEND_BLOCKS_ROWS_COUNTER: Counter =
-        register_counter(key!("merge_into_append_blocks_rows_counter"));
-    static ref MERGE_INTO_MATCHED_ROWS: Counter = register_counter(key!("merge_into_matched_rows"));
-    static ref MERGE_INTO_UNMATCHED_ROWS: Counter =
-        register_counter(key!("merge_into_unmatched_rows"));
+        register_counter("merge_into_append_blocks_rows_counter");
+    static ref MERGE_INTO_MATCHED_ROWS: Counter = register_counter("merge_into_matched_rows");
+    static ref MERGE_INTO_UNMATCHED_ROWS: Counter = register_counter("merge_into_unmatched_rows");
     static ref MERGE_INTO_DISTRIBUTED_DEDUPLICATE_ROWNUMBER: Counter =
-        register_counter(key!("merge_into_distributed_deduplicate_row_number"));
+        register_counter("merge_into_distributed_deduplicate_row_number");
     static ref MERGE_INTO_DISTRIBUTED_EMPTY_ROWNUMBER: Counter =
-        register_counter(key!("merge_into_distributed_empty_row_number"));
+        register_counter("merge_into_distributed_empty_row_number");
     static ref MERGE_INTO_DISTRIBUTED_APPLY_ROWNUMBER: Counter =
-        register_counter(key!("merge_into_distributed_apply_row_number"));
+        register_counter("merge_into_distributed_apply_row_number");
     static ref MERGE_INTO_ACCUMULATE_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds(key!("merge_into_accumulate_milliseconds"));
+        register_histogram_in_milliseconds("merge_into_accumulate_milliseconds");
     static ref MERGE_INTO_APPLY_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds(key!("merge_into_apply_milliseconds"));
+        register_histogram_in_milliseconds("merge_into_apply_milliseconds");
     static ref MERGE_INTO_SPLIT_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds(key!("merge_into_split_milliseconds"));
+        register_histogram_in_milliseconds("merge_into_split_milliseconds");
     static ref MERGE_INTO_NOT_MATCHED_OPERATION_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds(key!("merge_into_not_matched_operation_milliseconds"));
+        register_histogram_in_milliseconds("merge_into_not_matched_operation_milliseconds");
     static ref MERGE_INTO_MATCHED_OPERATION_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds(key!("merge_into_matched_operation_milliseconds"));
+        register_histogram_in_milliseconds("merge_into_matched_operation_milliseconds");
 }
 
+/// Common metrics.
+pub fn metrics_inc_omit_filter_rowgroups(c: u64) {
+    OMIT_FILTER_ROWGROUPS.inc_by(c);
+}
+
+pub fn metrics_inc_omit_filter_rows(c: u64) {
+    OMIT_FILTER_ROWS.inc_by(c);
+}
+
+/// COPY
+pub fn metrics_inc_copy_purge_files_counter(c: u32) {
+    COPY_PURGE_FILE_COUNTER.inc_by(c as u64);
+}
+
+pub fn metrics_inc_copy_purge_files_cost_milliseconds(c: u32) {
+    COPY_PURGE_FILE_COST_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_copy_read_part_counter() {
+    COPY_READ_PART_COUNTER.inc();
+}
+
+pub fn metrics_inc_copy_read_size_bytes(c: u64) {
+    COPY_READ_SIZE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_copy_read_part_cost_milliseconds(c: u64) {
+    COPY_READ_PART_COST_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_filter_out_copied_files_request_milliseconds(c: u64) {
+    FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_filter_out_copied_files_entire_milliseconds(c: u64) {
+    FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_collect_files_get_all_source_files_milliseconds(c: u64) {
+    COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS.observe(c as f64);
+}
+
+/// Merge into metrics.
 pub fn metrics_inc_merge_into_replace_blocks_counter(c: u32) {
     MERGE_INTO_REPLACE_BLOCKS_COUNTER.inc_by(c as u64);
 }

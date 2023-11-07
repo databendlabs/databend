@@ -29,9 +29,8 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_meta_app::schema::CatalogInfo;
+use common_metrics::storage::*;
 use common_storage::init_stage_operator;
-use common_storage::metrics::copy::metrics_inc_collect_files_get_all_source_files_milliseconds;
-use common_storage::metrics::copy::metrics_inc_filter_out_copied_files_entire_milliseconds;
 use common_storage::StageFileInfo;
 use log::info;
 

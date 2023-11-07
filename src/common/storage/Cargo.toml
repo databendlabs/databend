@@ -16,7 +16,6 @@ common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
-common-metrics = { path = "../metrics" }
 storage-encryption = { path = "../../query/ee_features/storage_encryption" }
 
 anyhow = { workspace = true }
@@ -28,7 +27,6 @@ chrono = { workspace = true }
 dashmap = { version = "5.5.1", features = ["serde"] }
 flagset = "0.4"
 futures = "0.3"
-lazy_static = { workspace = true }
 log = { workspace = true }
 metrics = "0.20.1"
 opendal = { workspace = true }

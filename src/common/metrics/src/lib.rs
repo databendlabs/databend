@@ -46,3 +46,4 @@ pub use registry::render_prometheus_metrics;
 pub use registry::reset_global_prometheus_registry;
 
 pub use crate::metrics::http;
+pub use crate::metrics::storage;
