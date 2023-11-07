@@ -26,7 +26,7 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use common_sql::executor::MutationKind;
 use itertools::Itertools;
 use log::debug;

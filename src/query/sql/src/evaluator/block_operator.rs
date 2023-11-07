@@ -35,11 +35,11 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 
 use crate::executor::LambdaFunctionDesc;
 use crate::optimizer::ColumnSet;

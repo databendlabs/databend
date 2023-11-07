@@ -57,7 +57,7 @@ mod pipelines {
     pub mod processors {
         pub use common_pipeline_core::processors::*;
         pub use common_pipeline_sources::*;
-        pub use common_pipeline_transforms::processors::transforms;
+        pub use common_pipeline_transforms::processors::*;
     }
 }
 

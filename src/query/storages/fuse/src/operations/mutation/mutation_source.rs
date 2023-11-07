@@ -43,10 +43,10 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Event;
+use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 

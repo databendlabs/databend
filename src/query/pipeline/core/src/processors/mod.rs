@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod port;
-pub mod processor;
+mod port;
+mod processor;
 
 mod duplicate_processor;
 mod port_trigger;
@@ -22,10 +22,15 @@ mod shuffle_processor;
 
 pub use duplicate_processor::DuplicateProcessor;
 pub use port::connect;
+pub use port::InputPort;
+pub use port::OutputPort;
 pub use port_trigger::DirectedEdge;
 pub use port_trigger::UpdateList;
 pub use port_trigger::UpdateTrigger;
+pub use processor::Event;
+pub use processor::EventCause;
 pub use processor::Processor;
+pub use processor::ProcessorPtr;
 pub use resize_processor::create_resize_item;
 pub use resize_processor::ResizeProcessor;
 pub use shuffle_processor::ShuffleProcessor;

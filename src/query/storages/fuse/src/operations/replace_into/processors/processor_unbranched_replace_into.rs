@@ -26,17 +26,17 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_metrics::storage::*;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
 use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
+use crate::operations::replace_into::mutator::ReplaceIntoMutator;
 
 pub struct UnbranchedReplaceIntoProcessor {
     replace_into_mutator: ReplaceIntoMutator,

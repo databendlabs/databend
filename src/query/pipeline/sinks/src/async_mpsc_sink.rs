@@ -19,8 +19,8 @@ use async_trait::async_trait;
 use async_trait::unboxed_simple;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
 
 /// Sink with multiple inputs.

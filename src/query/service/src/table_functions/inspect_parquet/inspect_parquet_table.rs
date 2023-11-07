@@ -49,7 +49,7 @@ use common_storage::read_metadata_async;
 use common_storage::StageFilesInfo;
 use common_storages_fuse::table_functions::string_literal;
 
-use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::TableFunction;

@@ -31,11 +31,11 @@ use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableLike;
 use common_metrics::transform::*;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
+use common_pipeline_transforms::processors::AccumulatingTransform;
+use common_pipeline_transforms::processors::AccumulatingTransformer;
 use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;

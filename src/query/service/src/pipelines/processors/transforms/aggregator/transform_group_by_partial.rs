@@ -24,11 +24,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
+use common_pipeline_transforms::processors::AccumulatingTransform;
+use common_pipeline_transforms::processors::AccumulatingTransformer;
 use common_sql::IndexType;
 use log::info;
 

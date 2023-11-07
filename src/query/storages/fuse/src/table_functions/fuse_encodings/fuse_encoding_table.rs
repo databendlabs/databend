@@ -28,10 +28,10 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use super::FuseEncoding;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::parse_db_tb_col_args;

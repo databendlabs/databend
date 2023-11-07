@@ -22,8 +22,8 @@ use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -178,7 +178,7 @@ impl FuseTable {
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds, None)?;
         pipeline.add_transform(
-            |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
+            |input: Arc<common_pipeline_core::processors::InputPort>, output| {
                 let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
                     input,

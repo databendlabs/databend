@@ -21,11 +21,11 @@ use common_sql::evaluator::CompoundBlockOperator;
 use common_storages_factory::Table;
 
 use super::transform_resort_addon_without_source_schema::build_expression_transform;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
+use crate::pipelines::processors::transforms::Transform;
+use crate::pipelines::processors::transforms::Transformer;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
 pub struct TransformResortAddOn {

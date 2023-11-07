@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataField;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;

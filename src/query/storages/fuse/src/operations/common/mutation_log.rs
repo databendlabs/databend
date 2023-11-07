@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
+use common_pipeline_transforms::processors::AccumulatingTransform;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Statistics;
