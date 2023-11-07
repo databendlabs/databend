@@ -101,7 +101,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p docs/release-notes
-          gh release view ${{ needs.create_release.outputs.version }} > docs/release-notes/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md
+          gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} > docs/release-notes/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md
           git add docs/release-notes/
           git status
       - uses: peter-evans/create-pull-request@v4
