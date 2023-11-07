@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use lazy_static::lazy_static;
-use metrics::counter;
 
 use crate::register_counter;
 use crate::Counter;
@@ -26,21 +25,17 @@ lazy_static! {
 }
 
 pub fn metrics_completion_count(c: u32) {
-    counter!("openai_completion_count", c.into());
     OPENAI_COMPLETION_COUNT.inc_by(c as u64);
 }
 
 pub fn metrics_completion_token(c: u32) {
-    counter!("openai_completion_token", c.into());
     OPENAI_COMPLETION_TOKEN.inc_by(c as u64);
 }
 
 pub fn metrics_embedding_count(c: u32) {
-    counter!("openai_embedding_count", c.into());
     OPENAI_EMBEDDING_COUNT.inc_by(c as u64);
 }
 
 pub fn metrics_embedding_token(c: u32) {
-    counter!("openai_embedding_token", c.into());
     OPENAI_EMBEDDING_TOKEN.inc_by(c as u64);
 }

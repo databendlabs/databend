@@ -16,6 +16,7 @@ pub mod cache;
 pub mod cluster;
 pub mod http;
 pub mod interpreter;
+pub mod mysql;
 pub mod openai;
 pub mod session;
 pub mod storage;

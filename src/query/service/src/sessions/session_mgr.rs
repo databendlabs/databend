@@ -181,8 +181,8 @@ impl SessionManager {
         {
             let sessions_count = { self.active_sessions.read().len() };
 
-            session_metrics::incr_session_close_numbers();
-            session_metrics::set_session_active_connections(sessions_count);
+            incr_session_close_numbers();
+            set_session_active_connections(sessions_count);
         }
     }
 

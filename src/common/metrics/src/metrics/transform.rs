@@ -45,6 +45,13 @@ lazy_static! {
         register_histogram_family_in_milliseconds("transform_spill_data_deserialize_milliseconds");
     static ref SPILL_DATA_SERIALIZE_MILLISECONDS: Family<VecLabels, Histogram> =
         register_histogram_family_in_milliseconds("transform_spill_data_serialize_milliseconds");
+
+
+    // Cluster exchange metrics.
+    static ref EXCHANGE_WRITE_COUNT: Counter = register_counter("transform_exchange_write_count");
+    static ref EXCHANGE_WRITE_BYTES: Counter = register_counter("transform_exchange_write_bytes");
+    static ref EXCHANGE_READ_COUNT: Counter = register_counter("transform_exchange_read_count");
+    static ref EXCHANGE_READ_BYTES: Counter = register_counter("transform_exchange_read_bytes");
 }
 
 pub fn metrics_inc_aggregate_partial_spill_count() {
@@ -123,4 +130,21 @@ pub fn metrics_inc_aggregate_spill_data_deserialize_milliseconds(c: u64) {
     SPILL_DATA_DESERIALIZE_MILLISECONDS
         .get_or_create(labels)
         .observe(c as f64);
+}
+
+// Cluster exchange metrics.
+pub fn metrics_inc_exchange_write_count(v: usize) {
+    EXCHANGE_WRITE_COUNT.inc_by(v as u64);
+}
+
+pub fn metrics_inc_exchange_write_bytes(c: usize) {
+    EXCHANGE_WRITE_BYTES.inc_by(c as u64);
+}
+
+pub fn metrics_inc_exchange_read_count(v: usize) {
+    EXCHANGE_READ_COUNT.inc_by(v as u64);
+}
+
+pub fn metrics_inc_exchange_read_bytes(c: usize) {
+    EXCHANGE_READ_BYTES.inc_by(c as u64);
 }
