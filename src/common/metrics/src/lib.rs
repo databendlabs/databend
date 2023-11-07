@@ -18,6 +18,7 @@ pub mod count;
 pub mod counter;
 mod dump;
 pub mod histogram;
+mod metrics;
 pub mod registry;
 
 pub type VecLabels = Vec<(&'static str, String)>;
@@ -43,3 +44,5 @@ pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;
 pub use registry::render_prometheus_metrics;
 pub use registry::reset_global_prometheus_registry;
+
+pub use crate::metrics::http;

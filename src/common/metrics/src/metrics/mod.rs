@@ -12,14 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse_federated;
-mod clickhouse_handler;
-mod http_services;
-pub mod middleware;
-pub mod v1;
-
-pub use clickhouse_federated::ClickHouseFederated;
-pub use http_services::HttpHandler;
-pub use http_services::HttpHandlerKind;
-
-pub const CLICKHOUSE_VERSION: &str = "8.12.14";
+pub mod http;
