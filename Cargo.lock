@@ -2448,9 +2448,7 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-metrics",
- "lazy_static",
  "log",
- "metrics",
  "openai_api_rust",
 ]
 

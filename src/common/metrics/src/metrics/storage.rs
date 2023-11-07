@@ -25,19 +25,19 @@ lazy_static! {
     static ref OMIT_FILTER_ROWS: Counter = register_counter("omit_filter_rows");
 
     // COPY metrics.
-     static ref COPY_PURGE_FILE_COUNTER: Counter = register_counter("query_copy_purge_file_counter");
+     static ref COPY_PURGE_FILE_COUNTER: Counter = register_counter("copy_purge_file_counter");
     static ref COPY_PURGE_FILE_COST_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("query_copy_purge_file_cost_milliseconds");
-    static ref COPY_READ_PART_COUNTER: Counter = register_counter("query_copy_read_part_counter");
-    static ref COPY_READ_SIZE_BYTES: Counter = register_counter("query_copy_read_size_bytes");
+        register_histogram_in_milliseconds("copy_purge_file_cost_milliseconds");
+    static ref COPY_READ_PART_COUNTER: Counter = register_counter("copy_read_part_counter");
+    static ref COPY_READ_SIZE_BYTES: Counter = register_counter("copy_read_size_bytes");
     static ref COPY_READ_PART_COST_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("query_copy_read_part_cost_milliseconds");
+        register_histogram_in_milliseconds("copy_read_part_cost_milliseconds");
     static ref FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("query_filter_out_copied_files_request_milliseconds");
+        register_histogram_in_milliseconds("copy_filter_out_copied_files_request_milliseconds");
     static ref FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("query_filter_out_copied_files_entire_milliseconds");
+        register_histogram_in_milliseconds("copy_filter_out_copied_files_entire_milliseconds");
     static ref COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("query_collect_files_get_all_source_files_milliseconds");
+        register_histogram_in_milliseconds("copy_collect_files_get_all_source_files_milliseconds");
 
 
     // Merge into metrics.

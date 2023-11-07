@@ -57,8 +57,7 @@ common-io = { path = "../../common/io" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-jsonb = { workspace = true }
-# common-meta-embedded = { path = "../../meta/embedded" }
+
 aggregating-index = { path = "../ee_features/aggregating_index" }
 background-service = { path = "../ee_features/background_service" }
 common-cloud-control = { path = "../../common/cloud_control" }
@@ -93,6 +92,7 @@ common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee_features/data_mask" }
+jsonb = { workspace = true }
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-cache-manager = { path = "../storages/common/cache_manager" }

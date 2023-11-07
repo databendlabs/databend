@@ -13,4 +13,6 @@
 // limitations under the License.
 
 pub mod http;
+pub mod interpreter;
+pub mod openai;
 pub mod storage;

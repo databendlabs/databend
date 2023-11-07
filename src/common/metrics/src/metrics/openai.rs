@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_counter;
-use common_metrics::Counter;
 use lazy_static::lazy_static;
 use metrics::counter;
+
+use crate::register_counter;
+use crate::Counter;
 
 lazy_static! {
     static ref OPENAI_COMPLETION_COUNT: Counter = register_counter("openai_completion_count");
