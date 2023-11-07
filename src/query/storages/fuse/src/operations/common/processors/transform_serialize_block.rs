@@ -229,6 +229,9 @@ impl Processor for TransformSerializeBlock {
                 stats_type,
                 index,
             } => {
+                // Check if the datablock is valid, this is needed to ensure data is correct
+                block.check_valid()?;
+
                 let serialized =
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {
