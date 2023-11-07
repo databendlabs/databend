@@ -94,120 +94,264 @@ impl VacuumOperator {
         Ok(snapshot_files_with_time)
     }
 
+    // reform `snapshot_files_with_time` to make current snapshot in index 0
+    // if all the snapshot file in old format
+    fn reform_snapshot_files_with_time_if_needed(
+        snapshot_files_with_time: &mut Vec<SnapshotLocationWithTime>,
+        current_snapshot_location: &String,
+    ) {
+        // timestamp is_some means that not all the snapshot file name in old format
+        // in this case has nothing to do
+        if snapshot_files_with_time[0].0.is_some() {
+            return;
+        }
+
+        // find current snapshot location and move it to index 0
+        let mut index = None;
+        for (i, (_, snapshot)) in snapshot_files_with_time.iter().enumerate() {
+            if snapshot == current_snapshot_location {
+                index = Some(i);
+                break;
+            }
+        }
+
+        if let Some(index) = index {
+            let last_snapshot_with_file = snapshot_files_with_time[0].clone();
+            let current_snapshot_with_file = snapshot_files_with_time[index].clone();
+            snapshot_files_with_time[index] = last_snapshot_with_file;
+            snapshot_files_with_time[0] = current_snapshot_with_file;
+        }
+    }
+
+    // check if:
+    // 1. current snapshot is snapshot_files_with_time[0]
+    // 2. and current snapshot timestamp < retention time
+    #[async_backtrace::framed]
+    async fn check_if_current_snapshot_root_gc(
+        &self,
+        snapshot_files_with_time: &mut Vec<SnapshotLocationWithTime>,
+    ) -> Result<Option<usize>> {
+        let fuse_table = &self.fuse_table;
+        let current_snapshot_loc =
+            if let Some(current_snapshot_loc) = fuse_table.snapshot_loc().await? {
+                current_snapshot_loc
+            } else {
+                let status = format!(
+                    "do_vacuum with table {}: get current snapshot fail",
+                    self.fuse_table.get_table_info().name,
+                );
+                self.log_status(status);
+                return Ok(None);
+            };
+
+        Self::reform_snapshot_files_with_time_if_needed(
+            snapshot_files_with_time,
+            &current_snapshot_loc,
+        );
+
+        let snapshot_file_with_time = &snapshot_files_with_time[0];
+        if current_snapshot_loc != snapshot_file_with_time.1 {
+            let status = format!(
+                "do_vacuum with table {}: snapshot_file_with_time[0] snapshot is not current snapshot",
+                self.fuse_table.get_table_info().name,
+            );
+            self.log_status(status);
+            return Ok(None);
+        }
+
+        // now snapshot_files_with_time[0] is current snapshot, check if timestamp < retentime time
+        let timestamp = if let Some(timestamp) = snapshot_file_with_time.0 {
+            timestamp
+        } else {
+            let snapshot = fuse_table
+                .read_table_snapshot_by_location(current_snapshot_loc)
+                .await?;
+            if let Some(snapshot) = snapshot {
+                if let Some(timestamp) = snapshot.timestamp {
+                    timestamp
+                } else {
+                    let status = format!(
+                        "do_vacuum with table {}: snapshot {:?} has no timestamp",
+                        self.fuse_table.get_table_info().name,
+                        snapshot_file_with_time.1,
+                    );
+                    self.log_status(status);
+                    return Ok(None);
+                }
+            } else {
+                let status = format!(
+                    "do_vacuum with table {}: read snapshot {:?} return None",
+                    self.fuse_table.get_table_info().name,
+                    snapshot_file_with_time.1,
+                );
+                self.log_status(status);
+                return Ok(None);
+            }
+        };
+
+        if timestamp < self.retention_time {
+            return Ok(Some(0));
+        } else {
+            let status = format!(
+                "do_vacuum with table {}: currerent snapshot {:?} timestamp >= retention_time",
+                self.fuse_table.get_table_info().name,
+                snapshot_file_with_time.1,
+            );
+            self.log_status(status);
+            return Ok(None);
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn check_if_has_committed_success(
+        &self,
+        snapshot_files_with_time: &[SnapshotLocationWithTime],
+        index: usize,
+    ) -> Result<bool> {
+        let fuse_table = &self.fuse_table;
+        let snapshot_file_with_time = &snapshot_files_with_time[index];
+        if index == 0 {
+            if let Some(current_snapshot_loc) = fuse_table.snapshot_loc().await? {
+                return Ok(current_snapshot_loc == snapshot_file_with_time.1);
+            }
+            return Ok(false);
+        }
+
+        let next_index = index - 1;
+        let next_snapshot_location = &snapshot_files_with_time[next_index].1;
+        let next_snapshot = match self
+            .fuse_table
+            .read_table_snapshot_by_location(next_snapshot_location.to_string())
+            .await?
+        {
+            Some(next_snapshot) => next_snapshot,
+            None => {
+                return Ok(false);
+            }
+        };
+
+        let prev_snapshot_location = if let Some((prev_snapshot_id, version, table_version)) =
+            next_snapshot.prev_snapshot_id
+        {
+            let generator = self.fuse_table.meta_location_generator();
+            generator.gen_snapshot_location(&prev_snapshot_id, version, table_version)?
+        } else {
+            return Ok(false);
+        };
+
+        Ok(prev_snapshot_location == snapshot_file_with_time.1)
+    }
+
     // get root gc snapshot file and index in snapshot_files_with_time vector
+    // we call the snapshot file name with timestamp the `new snapshot format`, where without timestamp the `old snapshot format`
+    //
+    // there two cases may find the root gc snapshot:
+    //
+    //                              snapshot timestamp >= retention time          snapshot timestamp < retention time
+    //                           +--------------------------------------+ prev  +-----------------------------------+
+    //           +---------+     |                                      |       |                                   |        +---------+
+    // case 1:   |   ....  +-----|          root gc snapshot            |------->   root snapshot'prev snapshot     |------->|   ....  |
+    //           |         |     |                                      |       |                                   |        |         |
+    //           +---------+     +--------------------------------------+       +-----------------------------------+        +---------+
+    //                              snapshot file name in new format            snapshot file name in new format
+    //
+    //
+    //      snapshot timestamp < retention time
+    //          +-----------------+   prev  +---------+
+    // case 2:  |root gc snapshot |         |   ....  |
+    //          |                 |-------> |         |
+    //          +-----------------+         +---------+
+    //          current snapshot
+    //
     #[async_backtrace::framed]
     async fn get_root_gc_snapshot_file(
         &self,
-        snapshot_files_with_time: &[SnapshotLocationWithTime],
-    ) -> Result<Option<(usize, String)>> {
-        let retention_time = &self.retention_time;
-
-        let mut last_snapshot_location_opt = None;
-        let mut status = format!(
-            "do_vacuum with table {}: cannot find any snapshot that timestamp < retention_time",
-            self.fuse_table.get_table_info().name,
-        );
-        // iterator snapshot files with time in descending order
-        for (i, (timestamp, snapshot_file)) in snapshot_files_with_time.iter().enumerate() {
-            let last_snapshot_location = if let Some(timestamp) = timestamp {
-                if timestamp >= retention_time {
-                    // save the last snapshot location that timestamp >= retention_time and continue the next loop
-                    last_snapshot_location_opt = Some(snapshot_file);
-                    continue;
-                } else if let Some(last_snapshot_location) = last_snapshot_location_opt {
-                    // now we get the first snapshot that timestamp < retention_time, return last_snapshot_location
-                    last_snapshot_location
-                } else {
-                    debug_assert!(i == 0);
-                    // when last_snapshot_location_opt == None, check if current snapshot is snapshot_files_with_time[0]
-                    let current_snapshot_location = match self.fuse_table.snapshot_loc().await? {
-                        Some(current_snapshot_location) => current_snapshot_location,
-                        None => {
-                            status = format!(
-                                "do_vacuum with table {}: read current snapshot location fail",
-                                self.fuse_table.get_table_info().name,
-                            );
-                            break;
-                        }
-                    };
-
-                    // if current snapshot == last snapshot, return
-                    if &current_snapshot_location == snapshot_file {
-                        return Ok(Some((0, current_snapshot_location)));
-                    }
-
-                    status = format!(
-                        "do_vacuum with table {}: last snapshot timestamp < retention_time and it isnot current snapshot",
-                        self.fuse_table.get_table_info().name,
-                    );
-                    break;
-                }
-            } else {
-                // if cannot find a snapshot with timestamp and timestamp < retention_time, return None
-                status = format!(
-                    "do_vacuum with table {}: cannot find a snapshot filename with timestamp",
-                    self.fuse_table.get_table_info().name,
-                );
-                break;
-            };
-
-            // here we get the first snapshot that:
-            //  1. timestamp < retention_time
-            //  2. it is not the current snapshot
-
-            // check if last_snapshot_location'prev match snapshot_file
-            // if not it means that last snapshot or snapshot_files_with_time[i]
-            // has not been committed success
-            // in both cases, return None
-            let last_snapshot = match self
-                .fuse_table
-                .read_table_snapshot_by_location(last_snapshot_location.to_string())
-                .await?
-            {
-                Some(next_snapshot) => next_snapshot,
-                None => {
-                    status = format!(
-                        "do_vacuum with table {}: read last snapshot {:?} return None",
-                        self.fuse_table.get_table_info().name,
-                        last_snapshot_location
-                    );
-                    break;
-                }
-            };
-
-            let prev_snapshot_location = if let Some((prev_snapshot_id, version, table_version)) =
-                last_snapshot.prev_snapshot_id
-            {
-                let generator = self.fuse_table.meta_location_generator();
-                generator.gen_snapshot_location(&prev_snapshot_id, version, table_version)?
-            } else {
-                status = format!(
-                    "do_vacuum with table {}: last snapshot {:?} has no prev snapshot id",
-                    self.fuse_table.get_table_info().name,
-                    last_snapshot_location
-                );
-                break;
-            };
-
-            if &prev_snapshot_location != snapshot_file {
-                status = format!(
-                    "do_vacuum with table {}: last snapshot {:?} 's prev snapshot location is not {:?}, it means that it has not been success committed",
-                    self.fuse_table.get_table_info().name,
-                    last_snapshot_location,
-                    snapshot_file
-                );
-                break;
-            }
-
-            // return root gc snapshot that:
-            //  1. with timestamp in file name
-            //  2. first snapshot that timestamp >= retention(it'prev snapshot timestamp < retention.)
-            //  3. it has been commit success
-            return Ok(Some((i - 1, last_snapshot_location.to_string())));
+        snapshot_files_with_time: &mut Vec<SnapshotLocationWithTime>,
+    ) -> Result<Option<usize>> {
+        if snapshot_files_with_time.is_empty() {
+            return Ok(None);
         }
 
-        self.log_status(status);
-        Ok(None)
+        let retention_time = &self.retention_time;
+
+        // last snapshot index that snapshot's timestamp >= retention time
+        let mut last_snapshot_index_opt = None;
+
+        // iterator snapshot files with time in descending order
+        for (i, (timestamp, snapshot_file)) in snapshot_files_with_time.iter().enumerate() {
+            let timestamp = if let Some(timestamp) = timestamp {
+                timestamp
+            } else {
+                // now we get a snapshot with old file name(no timestamp in snapshot file name)
+                if last_snapshot_index_opt.is_some() {
+                    // if all the succed snapshots timestamp >= timestamp, return None
+                    let status = format!(
+                        "do_vacuum with table {}: reach snapshot {:?} in old format, but cannot find any snapshot that timestamp < retention_time",
+                        self.fuse_table.get_table_info().name,
+                        snapshot_file,
+                    );
+                    self.log_status(status);
+                    return Ok(None);
+                } else {
+                    // case 2: all the snapshot in old snapshot file format
+                    // check if current snapshot is the root gc
+                    return self
+                        .check_if_current_snapshot_root_gc(snapshot_files_with_time)
+                        .await;
+                }
+            };
+
+            if timestamp >= retention_time {
+                // save the last snapshot index that timestamp >= retention time
+                last_snapshot_index_opt = Some(i);
+            } else {
+                if last_snapshot_index_opt.is_none() {
+                    // case 2: all the snapshot in new snapshot file format
+                    // check if current snapshot is the root gc
+                    return self
+                        .check_if_current_snapshot_root_gc(snapshot_files_with_time)
+                        .await;
+                } else {
+                    // now get the last snapshot timestamp < retention time, break the loop
+                    break;
+                }
+            }
+        }
+
+        debug_assert!(last_snapshot_index_opt.is_some());
+        let root_gc_index = last_snapshot_index_opt.unwrap();
+
+        // case 1, now check last index snapshot has been committed success
+        if !self
+            .check_if_has_committed_success(snapshot_files_with_time, root_gc_index)
+            .await?
+        {
+            let status = format!(
+                "do_vacuum with table {}: cannot make sure last index snapshot {:?} has been committed success",
+                self.fuse_table.get_table_info().name,
+                snapshot_files_with_time[root_gc_index].1,
+            );
+            self.log_status(status);
+            return Ok(None);
+        }
+
+        // if root_gc_index is not the last index, check last index + 1 snapshot has been committed success
+        if root_gc_index != snapshot_files_with_time.len() - 1 {
+            if self
+                .check_if_has_committed_success(snapshot_files_with_time, root_gc_index + 1)
+                .await?
+            {
+                let status = format!(
+                    "do_vacuum with table {}: cannot make sure last index + 1 snapshot {:?} has been committed success",
+                    self.fuse_table.get_table_info().name,
+                    snapshot_files_with_time[root_gc_index + 1].1,
+                );
+                self.log_status(status);
+                return Ok(None);
+            }
+        }
+
+        Ok(Some(root_gc_index))
     }
 
     #[async_backtrace::framed]
@@ -428,7 +572,7 @@ impl VacuumOperator {
 
     #[async_backtrace::framed]
     async fn gc(&self, purge_files: &mut Option<&mut Vec<String>>) -> Result<()> {
-        let snapshot_files_with_time = self.list_snapshot_files_with_time().await?;
+        let mut snapshot_files_with_time = self.list_snapshot_files_with_time().await?;
         if snapshot_files_with_time.is_empty() {
             self.log_status(format!(
                 "do_vacuum with table {}: list_snapshot_files_with_time return empty",
@@ -444,10 +588,11 @@ impl VacuumOperator {
         ));
 
         let (root_gc_snapshot_index, root_gc_snapshot_location) = match self
-            .get_root_gc_snapshot_file(&snapshot_files_with_time)
+            .get_root_gc_snapshot_file(&mut snapshot_files_with_time)
             .await?
         {
-            Some((index, root_gc_snapshot_location)) => {
+            Some(index) => {
+                let root_gc_snapshot_location = snapshot_files_with_time[index].1.clone();
                 self.log_status(format!(
                     "do_vacuum with table {}: get_root_gc_snapshot_file {:?}",
                     self.fuse_table.get_table_info().name,
