@@ -174,6 +174,8 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ExecuteTask(self, request, context):
         print("ExecuteTask", request)
+        for task_name, task in TASK_DB:
+            TASK_RUN_DB[task_name] = create_task_run_from_task(task)
         return task_pb2.ExecuteTaskResponse(error=None)
 
     def ShowTasks(self, request, context):
@@ -183,8 +185,6 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ShowTaskRuns(self, request, context):
         print("ShowTaskRuns", request)
-        for task_name, task in TASK_DB:
-            TASK_RUN_DB[task_name] = create_task_run_from_task(task)
         task_runs = list(TASK_RUN_DB.values())
         return task_pb2.ShowTaskRunsResponse(task_runs=task_runs)
 

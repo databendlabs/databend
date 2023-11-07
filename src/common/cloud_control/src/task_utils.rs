@@ -51,11 +51,11 @@ pub enum State {
 impl Display for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
-            State::SCHEDULED => write!(f, "Scheduled"),
-            State::EXECUTING => write!(f, "Executing"),
-            State::SUCCEEDED => write!(f, "Succeeded"),
-            State::FAILED => write!(f, "Failed"),
-            State::CANCELLED => write!(f, "Cancelled"),
+            State::SCHEDULED => write!(f, "SCHEDULED"),
+            State::EXECUTING => write!(f, "EXECUTING"),
+            State::SUCCEEDED => write!(f, "SUCCEEDED"),
+            State::FAILED => write!(f, "FAILED"),
+            State::CANCELLED => write!(f, "CANCELLED"),
         }
     }
 }
