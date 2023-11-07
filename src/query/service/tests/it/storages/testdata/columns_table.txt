@@ -9,7 +9,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'active_result_scan'              | 'system'             | 'query_cache'         | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'agg_spilled_bytes'               | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'agg_spilled_rows'                | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'attempt_number'                  | 'system'             | 'task_history'        | 'Nullable(Int32)'     | 'INT'               | ''       | ''       | 'YES'    | ''       |
+| 'attempt_number'                  | 'system'             | 'task_history'        | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
 | 'auth_type'                       | 'system'             | 'users'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auto_increment'                  | 'information_schema' | 'tables'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'block_count'                     | 'system'             | 'clustering_history'  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -121,9 +121,9 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'event_time'                      | 'system'             | 'query_log'           | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'example'                         | 'system'             | 'functions'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'exception_code'                  | 'system'             | 'query_log'           | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
-| 'exception_code'                  | 'system'             | 'task_history'        | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
+| 'exception_code'                  | 'system'             | 'task_history'        | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
 | 'exception_text'                  | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'exception_text'                  | 'system'             | 'task_history'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'exception_text'                  | 'system'             | 'task_history'        | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'execution_info'                  | 'system'             | 'query_profile'       | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'extra'                           | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'extra'                           | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
