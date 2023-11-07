@@ -45,7 +45,9 @@ impl SkewnessStateV2 {
     }
 }
 
-impl UnaryState<Float64Type, Float64Type> for SkewnessStateV2 {
+impl<T> UnaryState<T> for SkewnessStateV2
+where T: Number + AsPrimitive<f64>
+{
     fn merge(&mut self, rhs: &Self) {
         if rhs.n == 0 {
             return;
@@ -94,7 +96,7 @@ impl UnaryState<Float64Type, Float64Type> for SkewnessStateV2 {
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = Float64Type::try_downcast_column(&columns[0]).unwrap();
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         match validity {
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
@@ -114,7 +116,7 @@ impl UnaryState<Float64Type, Float64Type> for SkewnessStateV2 {
     }
 
     fn accumulate_row(&mut self, columns: &[Column], row: usize) -> Result<()> {
-        let column = Float64Type::try_downcast_column(&columns[0]).unwrap();
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
         let v: f64 = column[row].as_();
         self.add(v);
@@ -128,7 +130,7 @@ impl UnaryState<Float64Type, Float64Type> for SkewnessStateV2 {
         columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let column = Float64Type::try_downcast_column(&columns[0]).unwrap();
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
         column.iter().zip(places.iter()).for_each(|(value, place)| {
             let place = place.next(offset);

@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::with_number_mapped_type;
 use common_expression::AggregateFunction;
 use common_expression::AggregateFunctionRef;
 use common_expression::Column;
@@ -34,7 +35,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::SkewnessStateV2;
 
-pub trait UnaryState<T, R>: Send + Sync + Clone {
+pub trait UnaryState<T>: Send + Sync + Clone {
     fn merge(&mut self, rhs: &Self);
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
 
@@ -59,41 +60,40 @@ pub trait UnaryState<T, R>: Send + Sync + Clone {
     where Self: Sized;
 }
 
-pub struct AggregateUnaryFunction<S, T, R>
-where S: UnaryState<T, R>
+pub struct AggregateUnaryFunction<S, T>
+where S: UnaryState<T>
 {
     display_name: String,
     state: S,
-    arguments: Vec<DataType>,
+    _arguments: Vec<DataType>,
     return_type: DataType,
-    _phantom: PhantomData<(T, R)>,
+    _phantom: PhantomData<T>,
 }
 
-impl<S, T, R> Display for AggregateUnaryFunction<S, T, R>
-where S: UnaryState<T, R>
+impl<S, T> Display for AggregateUnaryFunction<S, T>
+where S: UnaryState<T>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<S, T, R> AggregateUnaryFunction<S, T, R>
+impl<S, T> AggregateUnaryFunction<S, T>
 where
-    S: UnaryState<T, R> + 'static,
+    S: UnaryState<T> + 'static,
     T: Send + Sync + 'static,
-    R: Send + Sync + 'static,
 {
     fn try_create(
         display_name: &str,
         return_type: DataType,
         _params: Vec<Scalar>,
-        arguments: Vec<DataType>,
+        _arguments: Vec<DataType>,
         state: S,
     ) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateUnaryFunction {
             display_name: display_name.to_string(),
             return_type,
-            arguments,
+            _arguments,
             state,
             _phantom: Default::default(),
         };
@@ -102,11 +102,10 @@ where
     }
 }
 
-impl<S, T, R> AggregateFunction for AggregateUnaryFunction<S, T, R>
+impl<S, T> AggregateFunction for AggregateUnaryFunction<S, T>
 where
-    S: UnaryState<T, R>,
+    S: UnaryState<T>,
     T: Send + Sync,
-    R: Send + Sync,
 {
     fn name(&self) -> &str {
         &self.display_name
@@ -174,10 +173,25 @@ pub fn try_create_aggregate_unary_function(
 
     match display_name {
         "skewness_v2" => {
-            let return_type =
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)));
-            let state = SkewnessStateV2::default();
-            AggregateUnaryFunction::try_create(display_name, return_type, params, arguments, state)
+            with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+                DataType::Number(NumberDataType::NUM_TYPE) => {
+                    let return_type =
+                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)));
+                    let state = SkewnessStateV2::default();
+                    AggregateUnaryFunction::<SkewnessStateV2, NUM_TYPE>::try_create(
+                        display_name,
+                        return_type,
+                        params,
+                        arguments,
+                        state,
+                    )
+                }
+
+                _ => Err(ErrorCode::BadDataValueType(format!(
+                    "{} does not support type '{:?}'",
+                    display_name, arguments[0]
+                ))),
+            })
         }
         _ => Err(ErrorCode::UnknownAggregateFunction(format!(
             "{} aggregate function not exists",
