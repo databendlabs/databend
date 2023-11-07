@@ -650,6 +650,27 @@ select * from t1;
 2
 
 statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(b int);
+
+statement ok
+create table t2(a int);
+
+statement ok
+insert into t1 values(1);
+
+statement ok
+insert into t2 values(1),(2);
+
+statement error 1065
+merge into t1 using t2 on t1.a = t2.a when matched then delete when not matched then insert *;
+
+statement ok
 set enable_distributed_merge_into = 0;
 
 statement ok
