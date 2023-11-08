@@ -181,10 +181,6 @@ impl Binder {
         mut left_child: SExpr,
         mut right_child: SExpr,
     ) -> Result<SExpr> {
-        dbg!("{:?}", &join_conditions.left_conditions);
-        dbg!("{:?}", &join_conditions.right_conditions);
-        dbg!("{:?}", &join_conditions.non_equi_conditions);
-        dbg!("{:?}", &join_conditions.other_conditions);
         let left_conditions = join_conditions.left_conditions;
         let right_conditions = join_conditions.right_conditions;
         let mut non_equi_conditions = join_conditions.non_equi_conditions;
