@@ -1724,7 +1724,7 @@ dependencies = [
  "chrono-tz",
  "dyn-clone",
  "either",
- "env_logger 0.9.3",
+ "env_logger",
  "ethnum",
  "fallible-streaming-iterator",
  "flate2",
@@ -1912,7 +1912,7 @@ dependencies = [
  "brotli",
  "bytes",
  "common-exception",
- "env_logger 0.10.0",
+ "env_logger",
  "futures",
  "log",
  "pin-project",
@@ -3863,7 +3863,7 @@ dependencies = [
  "common-metrics",
  "common-tracing",
  "derive_more",
- "env_logger 0.10.0",
+ "env_logger",
  "futures",
  "futures-async-stream",
  "itertools 0.10.5",
@@ -4067,7 +4067,7 @@ dependencies = [
  "async-trait",
  "clap 4.4.2",
  "common-exception",
- "env_logger 0.10.0",
+ "env_logger",
  "futures-util",
  "lazy_static",
  "mysql_async",
@@ -4565,19 +4565,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.29",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
 ]
 
 [[package]]
@@ -8907,6 +8894,7 @@ source = "git+https://github.com/jorgecarleitao/parquet2?rev=b0e6545#b0e654526ce
 dependencies = [
  "async-stream",
  "brotli",
+ "flate2",
  "futures",
  "lz4",
  "parquet-format-safe",
