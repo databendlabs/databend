@@ -711,6 +711,26 @@ select * from t1;
 ----
 2 b2 0
 
+statement ok
+merge into t1 using t2 on t1.a = t2.a when matched then delete;
+
+query T
+select count(*) from t1;
+----
+0
+
+statement ok
+insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
+
+statement ok
+merge into t1 using t2 on t1.a = t2.a when matched and t1.a = 2 then update * when matched and t1.a = 1 then delete when matched and t1.a = 3 then update *;
+
+query TTT
+select * from t1;
+----
+2 b2 0
+3 b3 1
+
 ## issue 13454
 statement ok
 create table tt1(a bool, b int);

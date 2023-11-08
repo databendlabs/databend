@@ -269,7 +269,7 @@ impl Processor for MatchedSplitProcessor {
             }
             let start = Instant::now();
             let mut current_block = data_block;
-            println!("current_block:{:?}", current_block);
+
             for op in self.ops.iter() {
                 match op {
                     MutationKind::Update(update_mutation) => {
@@ -298,7 +298,6 @@ impl Processor for MatchedSplitProcessor {
                 }
             }
 
-            println!("current_block:{:?}", current_block);
             let filter: Value<BooleanType> = current_block
                 .get_by_offset(current_block.num_columns() - 1)
                 .value
