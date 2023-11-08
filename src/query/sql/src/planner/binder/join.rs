@@ -243,7 +243,8 @@ impl Binder {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
                 JoinPredicate::ALL(_) => match join_type {
-                    JoinType::Inner
+                    JoinType::Cross
+                    | JoinType::Inner
                     | JoinType::LeftSemi
                     | JoinType::LeftAnti
                     | JoinType::RightSemi
