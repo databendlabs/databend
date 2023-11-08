@@ -5,7 +5,7 @@ use std::io::Seek;
 use std::io::SeekFrom;
 
 use super::super::compression;
-use super::super::endianess::is_native_little_endian;
+use super::super::endianness::is_native_little_endian;
 use super::Compression;
 use super::IpcBuffer;
 use super::Node;

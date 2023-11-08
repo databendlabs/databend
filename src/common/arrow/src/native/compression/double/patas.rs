@@ -196,9 +196,9 @@ pub fn read_value_custom<T: NativeType>(input: &[u8], mut bytes: u8, trailing_ze
 
 #[test]
 fn test_unpack() {
-    let datas = vec![(692, (1, 2, 52)), (1026, (2, 8, 2))];
+    let data = vec![(692, (1, 2, 52)), (1026, (2, 8, 2))];
 
-    for (p, (reference_index, significant_bytes, trailing_zeros)) in datas {
+    for (p, (reference_index, significant_bytes, trailing_zeros)) in data {
         assert_eq!(pack(reference_index, significant_bytes, trailing_zeros), p);
         assert_eq!(
             (reference_index, significant_bytes, trailing_zeros),

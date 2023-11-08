@@ -8,7 +8,7 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 
-use super::endianess::is_native_little_endian;
+use super::endianness::is_native_little_endian;
 use super::read::FileMetadata;
 use super::read::{self};
 use super::write::common::DictionaryTracker;
@@ -23,7 +23,7 @@ impl<R: Read + Seek + Write> FileWriter<R> {
     /// the existing and appended messages on it.
     /// # Error
     /// This function errors iff:
-    /// * the file's endianess is not the native endianess (not yet supported)
+    /// * the file's endianness is not the native endianness (not yet supported)
     /// * the file is not a valid Arrow IPC file
     pub fn try_from_file(
         mut writer: R,
@@ -32,7 +32,7 @@ impl<R: Read + Seek + Write> FileWriter<R> {
     ) -> Result<FileWriter<R>> {
         if metadata.ipc_schema.is_little_endian != is_native_little_endian() {
             return Err(Error::nyi(
-                "Appending to a file of a non-native endianess is still not supported",
+                "Appending to a file of a non-native endianness is still not supported",
             ));
         }
 

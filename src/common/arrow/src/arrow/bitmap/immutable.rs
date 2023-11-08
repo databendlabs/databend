@@ -181,7 +181,7 @@ impl Bitmap {
         unsafe { self.slice_unchecked(offset, length) }
     }
 
-    /// Slices `self`, offseting by `offset` and truncating up to `length` bits.
+    /// Slices `self`, offsetting by `offset` and truncating up to `length` bits.
     /// # Safety
     /// The caller must ensure that `self.offset + offset + length <= self.len()`
     #[inline]
@@ -220,7 +220,7 @@ impl Bitmap {
         unsafe { self.sliced_unchecked(offset, length) }
     }
 
-    /// Slices `self`, offseting by `offset` and truncating up to `length` bits.
+    /// Slices `self`, offsetting by `offset` and truncating up to `length` bits.
     /// # Safety
     /// The caller must ensure that `self.offset + offset + length <= self.len()`
     #[inline]

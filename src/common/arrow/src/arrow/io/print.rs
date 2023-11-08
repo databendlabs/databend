@@ -20,7 +20,7 @@ pub fn write<A: AsRef<dyn Array>, N: AsRef<str>>(chunks: &[Chunk<A>], names: &[N
     table.set_header(header);
 
     for chunk in chunks {
-        let displayes = chunk
+        let displays = chunk
             .arrays()
             .iter()
             .map(|array| get_display(array.as_ref(), ""))
@@ -30,7 +30,7 @@ pub fn write<A: AsRef<dyn Array>, N: AsRef<str>>(chunks: &[Chunk<A>], names: &[N
             let mut cells = Vec::new();
             (0..chunk.arrays().len()).for_each(|col| {
                 let mut string = String::new();
-                displayes[col](&mut string, row).unwrap();
+                displays[col](&mut string, row).unwrap();
                 cells.push(Cell::new(string));
             });
             table.add_row(cells);

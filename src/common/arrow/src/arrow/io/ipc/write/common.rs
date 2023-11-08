@@ -11,7 +11,7 @@ use crate::arrow::chunk::Chunk;
 use crate::arrow::datatypes::*;
 use crate::arrow::error::Error;
 use crate::arrow::error::Result;
-use crate::arrow::io::ipc::endianess::is_native_little_endian;
+use crate::arrow::io::ipc::endianness::is_native_little_endian;
 use crate::arrow::io::ipc::read::Dictionaries;
 
 /// Compression codec

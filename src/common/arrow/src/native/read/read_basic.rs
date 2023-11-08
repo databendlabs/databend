@@ -90,7 +90,7 @@ pub fn read_validity_nested<R: NativeReadBuf>(
 
     // The following code is copied from arrow2 `extend_offsets2` function.
     // https://github.com/jorgecarleitao/arrow2/blob/main/src/io/parquet/read/deserialize/nested_utils.rs#L403
-    // The main purpose of this code is to caculate the `NestedState` and `Bitmap`
+    // The main purpose of this code is to calculate the `NestedState` and `Bitmap`
     // of the nested information by decode `rep_levels` and `def_levels`.
     let max_depth = nested.nested.len();
 

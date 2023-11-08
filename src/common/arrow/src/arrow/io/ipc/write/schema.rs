@@ -9,7 +9,7 @@ use crate::arrow::datatypes::Metadata;
 use crate::arrow::datatypes::Schema;
 use crate::arrow::datatypes::TimeUnit;
 use crate::arrow::datatypes::UnionMode;
-use crate::arrow::io::ipc::endianess::is_native_little_endian;
+use crate::arrow::io::ipc::endianness::is_native_little_endian;
 
 /// Converts a [Schema] and [IpcField]s to a flatbuffers-encoded [arrow_format::ipc::Message].
 pub fn schema_to_bytes(schema: &Schema, ipc_fields: &[IpcField]) -> Vec<u8> {

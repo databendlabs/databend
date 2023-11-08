@@ -210,7 +210,7 @@ pub async fn read_meta_async<Reader: AsyncRead + AsyncSeek + Send + Unpin>(
                 footer_reader.read_exact(&mut meta_buf)?;
                 deserialize_meta(meta_buf)
             } else {
-                // The readed data is not long enough to hold the meta data.
+                // The readded data is not long enough to hold the meta data.
                 // Should read again.
                 reader.seek(SeekFrom::End(-(footer_size as i64))).await?;
                 let mut buf = vec![0u8; footer_size];
