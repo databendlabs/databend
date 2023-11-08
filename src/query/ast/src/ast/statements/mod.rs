@@ -15,6 +15,7 @@
 mod call;
 mod catalog;
 mod columns;
+mod connection;
 mod copy;
 mod data_mask;
 mod database;
@@ -44,6 +45,7 @@ mod virtual_column;
 pub use call::*;
 pub use catalog::*;
 pub use columns::*;
+pub use connection::*;
 pub use copy::*;
 pub use data_mask::*;
 pub use database::*;
