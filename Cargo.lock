@@ -1725,8 +1725,10 @@ dependencies = [
  "comfy-table 6.1.4",
  "dyn-clone",
  "either",
+ "env_logger 0.9.3",
  "ethnum",
  "fallible-streaming-iterator",
+ "flate2",
  "foreign_vec",
  "futures",
  "hashbrown 0.14.0",
@@ -1754,6 +1756,8 @@ dependencies = [
  "snap",
  "streaming-iterator",
  "strength_reduce",
+ "tokio",
+ "tokio-util",
  "zstd",
 ]
 
@@ -1914,7 +1918,7 @@ dependencies = [
  "brotli",
  "bytes",
  "common-exception",
- "env_logger",
+ "env_logger 0.10.0",
  "futures",
  "log",
  "pin-project",
@@ -3864,7 +3868,7 @@ dependencies = [
  "common-metrics",
  "common-tracing",
  "derive_more",
- "env_logger",
+ "env_logger 0.10.0",
  "futures",
  "futures-async-stream",
  "itertools 0.10.5",
@@ -4068,7 +4072,7 @@ dependencies = [
  "async-trait",
  "clap 4.4.2",
  "common-exception",
- "env_logger",
+ "env_logger 0.10.0",
  "futures-util",
  "lazy_static",
  "mysql_async",
@@ -4566,6 +4570,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.29",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
+dependencies = [
+ "atty",
+ "humantime",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -12030,6 +12047,7 @@ checksum = "806fe8c2c87eccc8b3267cbae29ed3ab2d0bd37fca70ab622e46aaa9375ddb7d"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",

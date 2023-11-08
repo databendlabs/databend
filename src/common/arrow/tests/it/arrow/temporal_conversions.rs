@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::NaiveDateTime;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::temporal_conversions;
 use common_arrow::arrow::types::months_days_ns;
-use chrono::NaiveDateTime;
 
 #[test]
 fn naive() {

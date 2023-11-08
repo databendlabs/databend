@@ -16,7 +16,7 @@ use common_arrow::arrow::error::Result;
 
 use super::integration_read;
 use super::integration_write;
-use crate::io::ipc::read_gzip_json;
+use crate::arrow::io::ipc::read_gzip_json;
 
 fn test_file(version: &str, file_name: &str) -> Result<()> {
     let (schema, _, batches) = read_gzip_json(version, file_name)?;

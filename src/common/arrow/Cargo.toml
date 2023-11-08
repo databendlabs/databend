@@ -43,6 +43,10 @@ io_parquet_brotli = ["parquet2/brotli"]
 # parquet bloom filter functions
 io_parquet_bloom_filter = ["parquet2/bloom_filter"]
 
+# serde+serde_json: its dependencies + error handling
+# serde_derive: there is some derive around
+io_json_integration = ["hex", "serde", "serde_derive", "serde_json", "io_ipc"]
+
 compute_aggregate = []
 compute_cast = ["lexical-core", "compute_take"]
 compute_concatenate = []
@@ -65,6 +69,7 @@ arrow-default = [
     "arrow",
     "io_ipc",
     "io_flight",
+    "io_json_integration",
     "io_parquet_async",
     "io_parquet_compression",
     "io_parquet",
@@ -163,7 +168,13 @@ arrow-data = { workspace = true, optional = true }
 arrow-schema = { workspace = true, optional = true }
 
 [dev-dependencies]
+# used to test async readers
+tokio = { version = "1", features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+# used to run formal property testing
 proptest = { version = "1", default_features = false, features = ["std"] }
+flate2 = "1"
 quanta = "0.11.1"
 async-std = "1.12"
+env_logger = "0.9.0"
 

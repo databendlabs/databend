@@ -21,7 +21,7 @@ use common_arrow::arrow::io::ipc::read::*;
 use super::super::common::read_gzip_json;
 
 fn test_file(version: &str, file_name: &str) -> Result<()> {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let mut file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.arrow_file"
     ))?;
@@ -178,7 +178,7 @@ fn read_generated_200_compression_zstd() -> Result<()> {
 }
 
 fn test_projection(version: &str, file_name: &str, columns: Vec<usize>) -> Result<()> {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let mut file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.arrow_file"
     ))?;
@@ -243,7 +243,7 @@ fn test_does_not_panic() {
 
     let version = "1.0.0-littleendian";
     let file_name = "generated_primitive";
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let path = format!("{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.arrow_file");
     let original = std::fs::read(path).unwrap();
 
@@ -257,7 +257,7 @@ fn test_does_not_panic() {
 }
 
 fn test_limit(version: &str, file_name: &str, limit: usize) -> Result<()> {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let mut file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.arrow_file"
     ))?;

@@ -17,7 +17,7 @@
 
 mod array;
 #[cfg(feature = "arrow")]
-mod arrow;
+mod arrow_data;
 
 mod bitmap;
 mod buffer;

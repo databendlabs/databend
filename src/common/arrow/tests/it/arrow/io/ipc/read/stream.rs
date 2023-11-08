@@ -18,10 +18,10 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::error::Result;
 use common_arrow::arrow::io::ipc::read::*;
 
-use crate::io::ipc::common::read_gzip_json;
+use crate::arrow::io::ipc::common::read_gzip_json;
 
 fn test_file(version: &str, file_name: &str) -> Result<()> {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let mut file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.stream"
     ))?;
@@ -116,7 +116,7 @@ fn read_generated_200_compression_zstd() -> Result<()> {
 }
 
 fn test_projection(version: &str, file_name: &str, columns: Vec<usize>) -> Result<()> {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let mut file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.stream"
     ))?;

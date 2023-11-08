@@ -18,7 +18,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use proptest::prelude::*;
 
-use crate::bitmap::bitmap_strategy;
+use crate::arrow::bitmap::bitmap_strategy;
 
 #[test]
 fn basics() {

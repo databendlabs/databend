@@ -24,8 +24,8 @@ use common_arrow::arrow::io::ipc::write::StreamWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcField;
 
-use crate::io::ipc::common::read_arrow_stream;
-use crate::io::ipc::common::read_gzip_json;
+use crate::arrow::io::ipc::common::read_arrow_stream;
+use crate::arrow::io::ipc::common::read_gzip_json;
 
 fn write_(
     schema: &Schema,

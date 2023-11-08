@@ -15,7 +15,7 @@
 use common_arrow::arrow::bitmap::utils::*;
 use proptest::prelude::*;
 
-use crate::bitmap::bitmap_strategy;
+use crate::arrow::bitmap::bitmap_strategy;
 
 mod bit_chunks_exact;
 mod chunk_iter;

@@ -31,7 +31,7 @@ type IpcRead = (Schema, Vec<IpcField>, Vec<Chunk<Box<dyn Array>>>);
 
 /// Read gzipped JSON file
 pub fn read_gzip_json(version: &str, file_name: &str) -> Result<IpcRead> {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.json.gz"
     ))
@@ -69,7 +69,7 @@ pub fn read_arrow_stream(
     file_name: &str,
     projection: Option<Vec<usize>>,
 ) -> IpcRead {
-    let testdata = crate::test_util::arrow_test_data();
+    let testdata = crate::arrow::test_util::arrow_test_data();
     let mut file = File::open(format!(
         "{testdata}/arrow-ipc-stream/integration/{version}/{file_name}.stream"
     ))

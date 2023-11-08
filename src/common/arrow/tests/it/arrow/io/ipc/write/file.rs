@@ -26,7 +26,7 @@ use common_arrow::arrow::io::ipc::IpcField;
 use common_arrow::arrow::types::i256;
 use common_arrow::arrow::types::months_days_ns;
 
-use crate::io::ipc::common::read_gzip_json;
+use crate::arrow::io::ipc::common::read_gzip_json;
 
 pub(crate) fn write(
     batches: &[Chunk<Box<dyn Array>>],
