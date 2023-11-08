@@ -405,6 +405,10 @@ impl Plan {
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
+
+            Plan::DescConnection(plan) => plan.schema(),
+            Plan::ShowConnections(plan) => plan.schema(),
+
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -441,6 +445,8 @@ impl Plan {
                 | Plan::CopyIntoTable(_)
                 | Plan::ShowTasks(_)
                 | Plan::DescribeTask(_)
+                | Plan::DescConnection(_)
+                | Plan::ShowConnections(_)
         )
     }
 }

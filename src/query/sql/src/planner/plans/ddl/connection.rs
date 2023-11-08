@@ -51,3 +51,13 @@ impl ShowConnectionsPlan {
         ])
     }
 }
+
+impl DescConnectionPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("name", DataType::String),
+            DataField::new("storage_type", DataType::String),
+            DataField::new("storage_params", DataType::String),
+        ])
+    }
+}
