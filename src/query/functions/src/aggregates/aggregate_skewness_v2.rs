@@ -48,14 +48,15 @@ impl SkewnessStateV2 {
 impl<T> UnaryState<T> for SkewnessStateV2
 where T: Number + AsPrimitive<f64>
 {
-    fn merge(&mut self, rhs: &Self) {
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
         if rhs.n == 0 {
-            return;
+            return Ok(());
         }
         self.n += rhs.n;
         self.sum += rhs.sum;
         self.sum_sqr += rhs.sum_sqr;
         self.sum_cub += rhs.sum_cub;
+        Ok(())
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
@@ -124,7 +125,7 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn accumulate_keys(
-        &mut self,
+        &self,
         places: &[StateAddr],
         offset: usize,
         columns: &[Column],
@@ -141,9 +142,8 @@ where T: Number + AsPrimitive<f64>
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<Self>();
-        serialize_state(writer, state)
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        serialize_state(writer, self)
     }
 
     fn deserialize(&self, reader: &mut &[u8]) -> Result<Self> {

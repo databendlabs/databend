@@ -136,6 +136,7 @@ impl Aggregators {
             aggregate_bitmap_intersect_count_function_desc(),
         );
         factory.register("skewness_v2", aggregate_unary_function_desc());
+        factory.register("quantile_disc_v2", aggregate_unary_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
