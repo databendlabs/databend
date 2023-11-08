@@ -138,7 +138,10 @@ impl MergeIntoInterpreter {
                     .await?
                 {
                     None => {
-                        warn!("no suitable group by expr found, use default plan");
+                        warn!(
+                            "no suitable group by expr found, use default plan. cluster_key_str is '{}'",
+                            cluster_key_str
+                        );
                         return Ok(Box::new(join.clone()));
                     }
                     Some(expr) => expr,
@@ -146,16 +149,19 @@ impl MergeIntoInterpreter {
             }
         };
 
+        ctx.set_status_info("constructing static filter plan");
         let plan = Self::build_min_max_group_by_left_most_cluster_key_expr_plan(
             &m_join, metadata, group_expr,
         )
         .await?;
 
+        ctx.set_status_info("executing static filter plan");
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
 
         // 2. build filter and push down to target side
+        ctx.set_status_info("building pushdown filters");
         let mut filters = Vec::with_capacity(m_join.target_conditions.len());
 
         for (i, target_side_expr) in m_join.target_conditions.iter().enumerate() {
@@ -205,6 +211,8 @@ impl MergeIntoInterpreter {
         let source_plan = m_join.source_sexpr;
         let new_sexpr =
             join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
+
+        ctx.set_status_info("join expression replaced");
         Ok(Box::new(new_sexpr))
     }
 
@@ -310,40 +318,50 @@ impl MergeIntoInterpreter {
         cluster_key_str: &str,
         column_map: &HashMap<String, ColumnBinding>,
     ) -> Result<Option<ScalarExpr>> {
-        let sql_dialect = Dialect::MySQL;
-        let tokens = tokenize_sql(cluster_key_str)?;
-        let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+        let ast_exprs = {
+            let sql_dialect = Dialect::MySQL;
+            let tokens = tokenize_sql(cluster_key_str)?;
+            parse_comma_separated_exprs(&tokens, sql_dialect)?
+        };
+
+        let ast_expr = if !ast_exprs.is_empty() {
+            &ast_exprs[0]
+        } else {
+            warn!("empty cluster key found after parsing.");
+            return Ok(None);
+        };
+
         let (mut bind_context, metadata) = bind_one_table(table)?;
-        if !ast_exprs.is_empty() {
-            let ast_expr = &ast_exprs[0];
-            let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-            let mut type_checker = TypeChecker::new(
+        let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+        let mut type_checker = {
+            let allow_pushdown = false;
+            let forbid_udf = true;
+            TypeChecker::new(
                 &mut bind_context,
                 ctx.clone(),
                 &name_resolution_ctx,
                 metadata.clone(),
                 &[],
-                false,
-                false,
-            );
-            let (mut scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
-            if let ScalarExpr::FunctionCall(f) = &scalar_expr {
-                if f.func_name == "tuple" {
-                    if f.arguments.is_empty() {
-                        return Ok(None);
-                    }
-                    scalar_expr = f.arguments[0].clone();
-                }
+                allow_pushdown,
+                forbid_udf,
+            )
+        };
+
+        let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
+
+        match &scalar_expr {
+            ScalarExpr::FunctionCall(f) if f.func_name == "tuple" && !f.arguments.is_empty() => {
+                let left_most_expr = f.arguments[0].clone();
+                let projected = left_most_expr.try_project_column_binding(|binding| {
+                    column_map.get(&binding.column_name).cloned()
+                });
+                Ok(projected)
             }
-            let projected = scalar_expr.try_project_column_binding(|binding| {
-                column_map.get(&binding.column_name).cloned()
-            });
-            if let Some(p) = projected {
-                return Ok(Some(p));
+            _ => {
+                warn!("cluster key expr is not a (suitable) tuple expression");
+                Ok(None)
             }
         }
-
-        Ok(None)
     }
 
     async fn build_min_max_group_by_left_most_cluster_key_expr_plan(
