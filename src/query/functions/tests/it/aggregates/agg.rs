@@ -26,6 +26,7 @@ use common_expression::Column;
 use common_expression::FromData;
 use common_functions::aggregates::eval_aggr;
 use goldenfile::Mint;
+use itertools::Itertools;
 use roaring::RoaringTreemap;
 
 use super::run_agg_ast;
@@ -117,11 +118,13 @@ fn gen_bitmap_data() -> Column {
         rb
     });
 
-    let rbs = rbs_iter.map(|rb| {
-        let mut data = Vec::new();
-        rb.serialize_into(&mut data).unwrap();
-        data
-    });
+    let rbs = rbs_iter
+        .map(|rb| {
+            let mut data = Vec::new();
+            rb.serialize_into(&mut data).unwrap();
+            data
+        })
+        .collect_vec();
 
     BitmapType::from_data(rbs)
 }
@@ -162,10 +165,10 @@ fn get_example() -> Vec<(&'static str, Column)> {
             "event3",
             BooleanType::from_data(vec![false, false, false, false]),
         ),
-        ("s", StringType::from_data(&["abc", "def", "opq", "xyz"])),
+        ("s", StringType::from_data(vec!["abc", "def", "opq", "xyz"])),
         (
             "s_null",
-            StringType::from_data_with_validity(&["a", "", "c", "d"], vec![
+            StringType::from_data_with_validity(vec!["a", "", "c", "d"], vec![
                 true, false, true, true,
             ]),
         ),

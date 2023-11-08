@@ -169,9 +169,9 @@ dependencies = [
 
 [[package]]
 name = "anyerror"
-version = "0.1.8"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eef94a982ad4ebc3036bb072f45fcbb63a6b1b91932a6f5d982a166d8d529916"
+checksum = "0aaeb671913f64cfbe528d9f2236832902c7f32db31b9ec3790f675fceb937c6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2214,6 +2214,7 @@ dependencies = [
  "cron",
  "enumflags2",
  "hex",
+ "itertools 0.10.5",
  "maplit",
  "num-derive",
  "num-traits",
@@ -2448,9 +2449,7 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-metrics",
- "lazy_static",
  "log",
- "metrics",
  "openai_api_rust",
 ]
 
@@ -2644,6 +2643,7 @@ dependencies = [
  "common-license",
  "common-meta-app",
  "common-meta-types",
+ "common-metrics",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
@@ -2698,11 +2698,9 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-meta-app",
- "common-metrics",
  "dashmap",
  "flagset",
  "futures",
- "lazy_static",
  "log",
  "metrics",
  "opendal",
@@ -2766,7 +2764,6 @@ dependencies = [
  "indexmap 2.0.0",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
- "lazy_static",
  "log",
  "metrics",
  "minitrace 0.6.1",
@@ -2925,6 +2922,7 @@ dependencies = [
  "common-expression",
  "common-functions",
  "common-meta-app",
+ "common-metrics",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-sql",
@@ -7681,7 +7679,7 @@ dependencies = [
 [[package]]
 name = "macros"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.8#3fc8ede609beb787aee8199b06a40ac9742aa116"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.9#ffae522425f9a55b1ab4d6ce866d469827932627"
 
 [[package]]
 name = "maplit"
@@ -8505,7 +8503,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.8#3fc8ede609beb787aee8199b06a40ac9742aa116"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.9#ffae522425f9a55b1ab4d6ce866d469827932627"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -11236,11 +11234,8 @@ dependencies = [
  "crc32fast",
  "crossbeam-channel",
  "hex",
- "lazy_static",
  "log",
- "metrics",
  "parking_lot 0.12.1",
- "prometheus-client",
  "siphasher",
  "tempfile",
 ]
@@ -11759,18 +11754,18 @@ checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
-version = "1.0.44"
+version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "611040a08a0439f8248d1990b111c95baa9c704c805fa1f62104b39655fd7f90"
+checksum = "f9a7210f5c9a7156bb50aa36aed4c95afb51df0df00713949448cf9e97d382d2"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.44"
+version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "090198534930841fab3a5d1bb637cde49e339654e606195f8d9c76eeb081dc96"
+checksum = "266b2e40bc00e5a6c09c3584011e08b06f123c00362c92b975ba9843aaaa14b8"
 dependencies = [
  "proc-macro2",
  "quote",

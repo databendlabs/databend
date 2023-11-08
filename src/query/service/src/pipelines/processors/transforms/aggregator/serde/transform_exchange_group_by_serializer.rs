@@ -38,6 +38,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_hashtable::HashtableLike;
+use common_metrics::transform::*;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -59,10 +60,6 @@ use crate::pipelines::processors::transforms::aggregator::serde::transform_group
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_serialize_milliseconds;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
 use crate::sessions::QueryContext;
 
 pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {

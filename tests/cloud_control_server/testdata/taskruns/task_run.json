@@ -1,0 +1,21 @@
+{
+  "TaskRun": {
+    "task_id": 100,
+    "task_name": "SampleTaskRun",
+    "query_text": "SELECT 100",
+    "comment": "This is a sample task run.",
+    "owner": "user1",
+    "run_id": "123456",
+    "query_id": "xd122383",
+    "schedule_options": {
+      "interval": 5,
+      "schedule_type": "interval_type",
+      "time_zone": "UTC"
+    },
+    "error_code": 0,
+    "error_message": "",
+    "scheduled_time": "2023-10-27T10:00:00Z",
+    "attempt_number": 0,
+    "state": "SCHEDULED"
+  }
+}

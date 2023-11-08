@@ -15,6 +15,7 @@
 mod account;
 mod catalog;
 mod column;
+mod connection;
 mod data_mask;
 mod database;
 mod index;

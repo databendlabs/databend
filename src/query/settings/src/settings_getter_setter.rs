@@ -68,6 +68,11 @@ impl Settings {
         self.try_get_u64("max_block_size")
     }
 
+    // Max block size for parquet reader
+    pub fn get_parquet_max_block_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_max_block_size")
+    }
+
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         match self.try_get_u64("max_threads")? {

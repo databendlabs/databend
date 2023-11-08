@@ -96,6 +96,7 @@ pub struct AlterTaskStmt {
     pub name: String,
     pub options: AlterTaskOptions,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlterTaskOptions {
     Resume,
