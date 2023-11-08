@@ -158,6 +158,7 @@ message TaskRun {
   ScheduleOptions schedule_options = 7;
   string run_id = 8;
   int32 attempt_number = 9;
+  WarehouseOptions warehouse_options = 10;
 
   State state = 11;
   int64 error_code = 12;
