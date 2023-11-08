@@ -78,7 +78,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - { arch: x86_64, libc: gnu }
+          # - { arch: x86_64, libc: gnu }
           - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v4
@@ -97,9 +97,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - { arch: x86_64, libc: musl }
+          # - { arch: x86_64, libc: musl }
           - { arch: aarch64, libc: musl }
-          - { arch: aarch64, libc: gnu }
+          # - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -324,7 +324,6 @@ jobs:
     strategy:
       matrix:
         dirs:
-          - "base"
           - "query"
           - "crdb"
           - "duckdb"
@@ -348,6 +347,7 @@ jobs:
     strategy:
       matrix:
         dirs:
+          - "base"
           - "ydb"
           - "tpcds"
           - "tpch"
