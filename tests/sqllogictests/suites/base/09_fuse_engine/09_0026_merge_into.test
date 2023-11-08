@@ -670,6 +670,62 @@ insert into t2 values(1),(2);
 statement error 1065
 merge into t1 using t2 on t1.a = t2.a when matched then delete when not matched then insert *;
 
+## add more multi matched statement test
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int,b string,c bool);
+
+statement ok
+create table t2(a int,b string,c bool);
+
+statement ok
+insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
+
+statement ok
+insert into t2 values(1,'b1',true),(2,'b2',false),(3,'b3',true);
+
+query TTT
+select * from t1;
+----
+1 a1 1
+2 a2 0
+3 a3 1
+
+query TTT
+select * from t2;
+----
+1 b1 1
+2 b2 0
+3 b3 1
+
+statement ok
+merge into t1 using t2 on t1.a = t2.a when matched and t1.a = 1 then delete when matched and t1.a = 2 then update * when matched and t1.a = 3 then delete;
+
+query TTT
+select * from t1;
+----
+2 b2 0
+
+## issue 13454
+statement ok
+create table tt1(a bool, b int);
+
+statement ok
+insert into tt1 values (true, 1), (false, 2);
+
+statement ok
+merge into tt1 using (select 1 as x) as tt2 on (2 > 1) when matched and a then delete;
+
+query TT
+select * from tt1;
+----
+0 2
+
 statement ok
 set enable_distributed_merge_into = 0;
 

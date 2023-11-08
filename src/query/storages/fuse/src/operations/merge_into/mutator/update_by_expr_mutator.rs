@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Not;
 
 use common_exception::Result;
 use common_expression::eval_function;
@@ -103,10 +102,15 @@ impl UpdateByExprMutator {
             // has pop old filter
             let origin_block = data_block.clone();
             // add filter
-            let old_predicate = old_filter.clone().into_column().unwrap();
-
-            let filter_not = old_predicate.not();
-            let old_filter_not: Value<BooleanType> = Value::Column(filter_not);
+            let (old_filter_not, _) = eval_function(
+                None,
+                "not",
+                [(old_filter.clone().upcast(), DataType::Boolean)],
+                &self.func_ctx,
+                data_block.num_rows(),
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let old_filter_not: Value<BooleanType> = old_filter_not.try_downcast().unwrap();
 
             let (res, _) = eval_function(
                 None,
