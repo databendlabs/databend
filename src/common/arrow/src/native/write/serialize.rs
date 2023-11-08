@@ -21,7 +21,7 @@ use parquet2::schema::Repetition;
 use super::boolean::write_bitmap;
 use super::primitive::write_primitive;
 use super::WriteOptions;
-// use arrow::{
+
 use crate::arrow::{
     array::*,
     bitmap::Bitmap,

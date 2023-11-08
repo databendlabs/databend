@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-native/write/boolean.rs
 use std::io::Write;
 
 use super::WriteOptions;
