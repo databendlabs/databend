@@ -413,7 +413,12 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
         }
     };
 
-    let sp = sp.auto_detect().await;
+    let sp = sp.auto_detect().await.map_err(|err| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("storage params is invalid for it's auto detect failed for {err:?}"),
+        )
+    })?;
 
     Ok((sp, path))
 }
