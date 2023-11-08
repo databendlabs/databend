@@ -88,7 +88,7 @@ impl Database for IcebergDatabase {
         }
 
         let table_sp = self.db_root.params().map_root(|r| format!("{r}{path}"));
-        let table_sp = table_sp.auto_detect().await;
+        let table_sp = table_sp.auto_detect().await?;
         let tbl_root = DataOperator::try_create(&table_sp).await?;
 
         let tbl = IcebergTable::try_create(

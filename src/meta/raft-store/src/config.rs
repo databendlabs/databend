@@ -79,6 +79,9 @@ pub struct RaftConfig {
     /// The maximum number of applied logs to keep before purging
     pub max_applied_log_to_keep: u64,
 
+    /// The size of chunk for transmitting snapshot. The default is 64MB
+    pub snapshot_chunk_size: u64,
+
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
     /// This is mainly for testing purpose.
@@ -138,6 +141,7 @@ impl Default for RaftConfig {
             heartbeat_interval: 1000,
             install_snapshot_timeout: 4000,
             max_applied_log_to_keep: 1000,
+            snapshot_chunk_size: 4194304, // 4MB
             single: false,
             join: vec![],
             leave_via: vec![],
