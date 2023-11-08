@@ -36,6 +36,7 @@ use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
 // (source_schema,condition,values_exprs)
+#[allow(dead_code)]
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
 struct InsertDataBlockMutation {
@@ -57,6 +58,7 @@ pub struct MergeIntoNotMatchedProcessor {
 }
 
 impl MergeIntoNotMatchedProcessor {
+    #[allow(dead_code)]
     pub fn create(
         unmatched: UnMatchedExprs,
         input_schema: DataSchemaRef,
@@ -96,6 +98,7 @@ impl MergeIntoNotMatchedProcessor {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port = self.output_port.clone();

@@ -51,6 +51,7 @@ impl TransformDistributedMergeIntoBlockSerialize {
         ))
     }
 
+    #[allow(dead_code)]
     fn create_distributed_merge_into_transform_item() -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
@@ -61,6 +62,7 @@ impl TransformDistributedMergeIntoBlockSerialize {
         )
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe() -> Pipe {
         let pipe_item = Self::create_distributed_merge_into_transform_item();
         Pipe::create(1, 1, vec![pipe_item])

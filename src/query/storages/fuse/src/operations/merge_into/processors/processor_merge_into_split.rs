@@ -45,6 +45,7 @@ pub struct MergeIntoSplitProcessor {
 }
 
 impl MergeIntoSplitProcessor {
+    #[allow(dead_code)]
     pub fn create(row_id_idx: u32, target_table_empty: bool) -> Result<Self> {
         let merge_into_split_mutator = MergeIntoSplitMutator::try_create(row_id_idx);
         let input_port = InputPort::create();
@@ -62,11 +63,13 @@ impl MergeIntoSplitProcessor {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe(self) -> Pipe {
         let pipe_item = self.into_pipe_item();
         Pipe::create(1, 2, vec![pipe_item])
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port_matched = self.output_port_matched.clone();

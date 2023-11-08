@@ -25,7 +25,7 @@ use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::query_spill_prefix;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;

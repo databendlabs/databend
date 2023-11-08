@@ -40,7 +40,8 @@ use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_sql::binder::resolve_stage_location;
@@ -50,7 +51,6 @@ use common_storage::StageFilesInfo;
 use common_storages_fuse::table_functions::string_literal;
 
 use crate::pipelines::processors::OutputPort;
-use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::TableFunction;
 

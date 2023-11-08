@@ -42,6 +42,7 @@ pub struct UpdateByExprMutator {
 }
 
 impl UpdateByExprMutator {
+    #[allow(dead_code)]
     pub fn create(
         expr: Option<Expr>,
         func_ctx: FunctionContext,

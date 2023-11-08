@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use common_sql::executor::Limit;
 
 use crate::pipelines::processors::TransformLimit;

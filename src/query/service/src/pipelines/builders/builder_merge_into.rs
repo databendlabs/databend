@@ -36,6 +36,11 @@ use common_sql::executor::MergeIntoAddRowNumber;
 use common_sql::executor::MergeIntoAppendNotMatched;
 use common_sql::executor::MergeIntoSource;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
+use common_storages_fuse::operations::MatchedSplitProcessor;
+use common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
+use common_storages_fuse::operations::MergeIntoSplitProcessor;
+use common_storages_fuse::operations::RowNumberAndLogSplitProcessor;
+use common_storages_fuse::operations::TransformAddRowNumberColumnProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 

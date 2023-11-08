@@ -24,16 +24,16 @@ use common_base::base::tokio::time::sleep;
 use common_base::runtime::catch_unwind;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,

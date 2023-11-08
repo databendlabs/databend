@@ -30,6 +30,7 @@ pub struct DeleteByExprMutator {
 }
 
 impl DeleteByExprMutator {
+    #[allow(dead_code)]
     pub fn create(expr: Option<Expr>, func_ctx: FunctionContext, row_id_idx: usize) -> Self {
         Self {
             expr,

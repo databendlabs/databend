@@ -21,13 +21,13 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::Scalar;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_exprs;
 use common_storages_factory::Table;
 
-use crate::pipelines::processors::transforms::Transform;
-use crate::pipelines::processors::transforms::Transformer;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;

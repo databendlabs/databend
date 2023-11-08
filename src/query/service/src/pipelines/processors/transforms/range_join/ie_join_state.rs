@@ -33,7 +33,7 @@ use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_transforms::processors::transforms::sort_merge;
+use common_pipeline_transforms::processors::sort_merge;
 use common_sql::executor::RangeJoin;
 
 use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_block;

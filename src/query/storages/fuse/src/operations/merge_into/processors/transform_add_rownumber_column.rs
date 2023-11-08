@@ -31,6 +31,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_transforms::processors::Transform;
 use common_pipeline_transforms::processors::Transformer;
 
+#[allow(dead_code)]
 const PREFIX_OFFSET: usize = 48;
 
 pub struct TransformAddRowNumberColumnProcessor {
@@ -41,6 +42,7 @@ pub struct TransformAddRowNumberColumnProcessor {
 }
 
 impl TransformAddRowNumberColumnProcessor {
+    #[allow(dead_code)]
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,

@@ -39,6 +39,7 @@ pub struct RowNumberAndLogSplitProcessor {
 }
 
 impl RowNumberAndLogSplitProcessor {
+    #[allow(dead_code)]
     pub fn create() -> Result<Self> {
         Ok(Self {
             input_port: InputPort::create(),
@@ -50,11 +51,13 @@ impl RowNumberAndLogSplitProcessor {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe(self) -> Pipe {
         let pipe_item = self.into_pipe_item();
         Pipe::create(1, 2, vec![pipe_item])
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port_row_number = self.output_port_row_number.clone();

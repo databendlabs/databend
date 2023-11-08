@@ -32,6 +32,7 @@ pub struct BroadcastProcessor {
 }
 
 impl BroadcastProcessor {
+    #[allow(dead_code)]
     pub fn new(num_outputs: usize) -> Self {
         let mut output_ports = Vec::with_capacity(num_outputs);
         for _ in 0..num_outputs {
@@ -47,6 +48,7 @@ impl BroadcastProcessor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let outputs = self.output_ports.clone();

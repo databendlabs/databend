@@ -30,7 +30,7 @@ use common_base::base::{GlobalUniqName, ProgressValues};
 use common_catalog::table_context::TableContext;
 use common_expression::arrow::serialize_column;
 use common_expression::types::{ArgType, ArrayType, Int64Type, UInt64Type, ValueType};
-use common_pipeline_transforms::processors::transforms::{BlockMetaTransform, BlockMetaTransformer};
+use common_pipeline_transforms::processors::{BlockMetaTransform, BlockMetaTransformer};
 
 use crate::api::{ExchangeShuffleMeta, serialize_block};
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::{AggregateMeta, HashTablePayload};

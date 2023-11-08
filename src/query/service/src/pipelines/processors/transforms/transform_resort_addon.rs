@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_storages_factory::Table;
 
 use super::transform_resort_addon_without_source_schema::build_expression_transform;
-use crate::pipelines::processors::transforms::Transform;
-use crate::pipelines::processors::transforms::Transformer;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;

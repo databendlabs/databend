@@ -22,9 +22,9 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 
-use crate::pipelines::processors::transforms::Transform;
-use crate::pipelines::processors::transforms::Transformer;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;

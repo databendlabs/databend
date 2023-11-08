@@ -62,6 +62,7 @@ pub struct ReplaceIntoProcessor {
 }
 
 impl ReplaceIntoProcessor {
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
@@ -99,11 +100,13 @@ impl ReplaceIntoProcessor {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe(self) -> Pipe {
         let pipe_item = self.into_pipe_item();
         Pipe::create(1, 2, vec![pipe_item])
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port_merge_into_action = self.output_port_merge_into_action.clone();

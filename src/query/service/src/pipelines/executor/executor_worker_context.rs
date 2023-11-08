@@ -20,9 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::processors::ProcessorPtr;
 
 pub enum ExecutorTask {
     None,
@@ -67,6 +67,7 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
+    /// # Safety
     pub unsafe fn execute_task(&mut self) -> Result<Option<NodeIndex>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
@@ -78,6 +79,7 @@ impl ExecutorWorkerContext {
         }
     }
 
+    /// # Safety
     unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<Option<NodeIndex>> {
         processor.process()?;
         Ok(Some(processor.id()))

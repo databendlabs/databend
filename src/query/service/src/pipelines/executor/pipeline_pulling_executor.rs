@@ -34,7 +34,7 @@ use minitrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
-use crate::pipelines::executor::executor_settings::ExecutorSettings;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::ProcessorPtr;
