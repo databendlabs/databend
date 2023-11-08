@@ -81,13 +81,13 @@ impl IEJoinState {
             SortColumnDescription {
                 offset: 0,
                 asc: l1_order,
-                nulls_first: false,
+                nulls_first: true,
                 is_nullable: l1_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 1,
                 asc: l2_order,
-                nulls_first: false,
+                nulls_first: true,
                 is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
@@ -102,13 +102,13 @@ impl IEJoinState {
             SortColumnDescription {
                 offset: 1,
                 asc: l2_order,
-                nulls_first: false,
+                nulls_first: true,
                 is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 0,
                 asc: l1_order,
-                nulls_first: false,
+                nulls_first: true,
                 is_nullable: l1_data_type.is_nullable(),
             },
             // `_tuple_id` column
@@ -315,10 +315,10 @@ impl RangeJoinState {
                     continue;
                 }
             }
+            let idx_val = unsafe { l2.index_unchecked(idx) };
             while off2 < len {
-                let order =
-                    unsafe { l2.index_unchecked(idx) }.cmp(&unsafe { l2.index_unchecked(off2) });
-                if !order_match(&self.conditions[1].operator, order) {
+                let off2_val = unsafe { l2.index_unchecked(off2) };
+                if !order_match(&self.conditions[1].operator, &idx_val, &off2_val) {
                     break;
                 }
                 let p2 = p_array[off2];
