@@ -1,14 +1,28 @@
-use arrow2::array::*;
-use arrow2::bitmap::Bitmap;
-use arrow2::bitmap::MutableBitmap;
-use arrow2::buffer::Buffer;
-use arrow2::compute::take::can_take;
-use arrow2::compute::take::take;
-use arrow2::datatypes::DataType;
-use arrow2::datatypes::Field;
-use arrow2::datatypes::IntervalUnit;
-use arrow2::error::Result;
-use arrow2::types::NativeType;
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute::take::can_take;
+use common_arrow::arrow::compute::take::take;
+use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::IntervalUnit;
+use common_arrow::arrow::error::Result;
+use common_arrow::arrow::types::NativeType;
 
 fn test_take_primitive<T>(
     data: &[Option<T>],
@@ -108,9 +122,9 @@ fn test_struct_with_nulls() {
 
 #[test]
 fn consistency() {
-    use arrow2::array::new_null_array;
-    use arrow2::datatypes::DataType::*;
-    use arrow2::datatypes::TimeUnit;
+    use common_arrow::arrow::array::new_null_array;
+    use common_arrow::arrow::datatypes::DataType::*;
+    use common_arrow::arrow::datatypes::TimeUnit;
 
     let datatypes = vec![
         Null,

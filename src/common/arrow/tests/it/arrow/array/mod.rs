@@ -1,3 +1,17 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 mod binary;
 mod boolean;
 mod dictionary;
@@ -13,15 +27,15 @@ mod struct_;
 mod union;
 mod utf8;
 
-use arrow2::array::clone;
-use arrow2::array::new_empty_array;
-use arrow2::array::new_null_array;
-use arrow2::array::Array;
-use arrow2::array::PrimitiveArray;
-use arrow2::bitmap::Bitmap;
-use arrow2::datatypes::DataType;
-use arrow2::datatypes::Field;
-use arrow2::datatypes::UnionMode;
+use common_arrow::arrow::array::clone;
+use common_arrow::arrow::array::new_empty_array;
+use common_arrow::arrow::array::new_null_array;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::UnionMode;
 
 #[test]
 fn nulls() {

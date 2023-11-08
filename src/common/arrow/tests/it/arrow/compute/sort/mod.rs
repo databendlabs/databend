@@ -1,10 +1,24 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 mod lex_sort;
 mod row;
 
-use arrow2::array::*;
-use arrow2::compute::sort::*;
-use arrow2::datatypes::*;
-use arrow2::types::NativeType;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::compute::sort::*;
+use common_arrow::arrow::datatypes::*;
+use common_arrow::arrow::types::NativeType;
 
 fn to_indices_boolean_arrays(data: &[Option<bool>], options: SortOptions, expected_data: &[i32]) {
     let output = BooleanArray::from(data);
@@ -546,9 +560,9 @@ fn string_dicts() {
 
 #[test]
 fn consistency() {
-    use arrow2::array::new_null_array;
-    use arrow2::datatypes::DataType::*;
-    use arrow2::datatypes::TimeUnit;
+    use common_arrow::arrow::array::new_null_array;
+    use common_arrow::arrow::datatypes::DataType::*;
+    use common_arrow::arrow::datatypes::TimeUnit;
 
     let datatypes = vec![
         Null,

@@ -1,16 +1,30 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::io::Cursor;
 
-use arrow2::array::*;
-use arrow2::chunk::Chunk;
-use arrow2::datatypes::Field;
-use arrow2::datatypes::Schema;
-use arrow2::error::Result;
-use arrow2::io::ipc::read::read_file_metadata;
-use arrow2::io::ipc::read::FileReader;
-use arrow2::io::ipc::write::*;
-use arrow2::io::ipc::IpcField;
-use arrow2::types::i256;
-use arrow2::types::months_days_ns;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::Schema;
+use common_arrow::arrow::error::Result;
+use common_arrow::arrow::io::ipc::read::read_file_metadata;
+use common_arrow::arrow::io::ipc::read::FileReader;
+use common_arrow::arrow::io::ipc::write::*;
+use common_arrow::arrow::io::ipc::IpcField;
+use common_arrow::arrow::types::i256;
+use common_arrow::arrow::types::months_days_ns;
 
 use crate::io::ipc::common::read_gzip_json;
 
