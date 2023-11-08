@@ -567,13 +567,13 @@ pub trait Visitor<'a>: Sized {
             self.visit_expr(&expr.expr);
         }
         match &window.func {
-            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(&func),
+            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func),
             WindowFuncType::NthValue(func) => self.visit_expr(&func.arg),
             WindowFuncType::LagLead(func) => {
                 self.visit_expr(&func.arg);
-                func.default
-                    .as_ref()
-                    .map(|default| self.visit_expr(default));
+                if let Some(default) = func.default.as_ref() {
+                    self.visit_expr(default)
+                }
             }
             WindowFuncType::RowNumber
             | WindowFuncType::CumeDist
@@ -603,10 +603,9 @@ pub trait Visitor<'a>: Sized {
         self.visit_expr(&cast.argument);
     }
     fn visit_subquery_expr(&mut self, subquery: &'a SubqueryExpr) {
-        subquery
-            .child_expr
-            .as_ref()
-            .map(|child_expr| self.visit_expr(child_expr));
+        if let Some(child_expr) = subquery.child_expr.as_ref() {
+            self.visit_expr(child_expr)
+        }
     }
     fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) {
         for expr in &udf.arguments {
@@ -647,9 +646,9 @@ pub trait VisitorMut<'a>: Sized {
             WindowFuncType::NthValue(func) => self.visit_expr(&mut func.arg),
             WindowFuncType::LagLead(func) => {
                 self.visit_expr(&mut func.arg);
-                func.default
-                    .as_mut()
-                    .map(|default| self.visit_expr(default));
+                if let Some(default) = func.default.as_mut() {
+                    self.visit_expr(default)
+                }
             }
             WindowFuncType::RowNumber
             | WindowFuncType::CumeDist
@@ -679,10 +678,9 @@ pub trait VisitorMut<'a>: Sized {
         self.visit_expr(&mut cast.argument);
     }
     fn visit_subquery_expr(&mut self, subquery: &'a mut SubqueryExpr) {
-        subquery
-            .child_expr
-            .as_mut()
-            .map(|child_expr| self.visit_expr(child_expr));
+        if let Some(child_expr) = subquery.child_expr.as_mut() {
+            self.visit_expr(child_expr)
+        }
     }
     fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) {
         for expr in &mut udf.arguments {
