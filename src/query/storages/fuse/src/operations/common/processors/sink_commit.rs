@@ -29,6 +29,10 @@ use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_metrics::storage::*;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::LockGuard;
 use log::debug;
 use log::error;
@@ -47,10 +51,6 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::SnapshotGenerator;
-use crate::pipelines::processors::Event;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::Processor;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::FuseTable;
 
 enum State {

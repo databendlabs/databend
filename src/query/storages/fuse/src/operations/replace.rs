@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::FieldIndex;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
+use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::AccumulatingTransformer;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
@@ -39,7 +40,6 @@ use crate::operations::common::MutationGenerator;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::mutator::MergeIntoOperationAggregator;
-use crate::pipelines::Pipeline;
 use crate::FuseTable;
 
 impl FuseTable {

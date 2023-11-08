@@ -51,14 +51,4 @@ pub use pruning::SegmentLocation;
 mod sessions {
     pub use common_catalog::table_context::TableContext;
 }
-
-mod pipelines {
-    pub use common_pipeline_core::Pipeline;
-    pub mod processors {
-        pub use common_pipeline_core::processors::*;
-        pub use common_pipeline_sources::*;
-        pub use common_pipeline_transforms::processors::*;
-    }
-}
-
 pub use storages_common_index as index;

@@ -29,6 +29,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_core::Pipeline;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MutationKind;
 use common_sql::plans::PREDICATE_COLUMN_NAME;
@@ -39,7 +40,6 @@ use super::delete::MutationBlockPruningContext;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
-use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::FuseTable;
 
