@@ -29,6 +29,7 @@ mod user_stage;
 mod user_udf;
 mod visibility_checker;
 
+pub mod connection;
 pub mod file_format;
 pub mod idm_config;
 pub mod role_cache_mgr;
