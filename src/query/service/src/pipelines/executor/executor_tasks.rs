@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
@@ -197,11 +198,22 @@ pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
+    pub elapsed: Option<Duration>,
 }
 
 impl CompletedAsyncTask {
-    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>) -> Self {
-        CompletedAsyncTask { id, worker_id, res }
+    pub fn create(
+        id: NodeIndex,
+        worker_id: usize,
+        res: Result<()>,
+        elapsed: Option<Duration>,
+    ) -> Self {
+        CompletedAsyncTask {
+            id,
+            worker_id,
+            res,
+            elapsed,
+        }
     }
 }
 
