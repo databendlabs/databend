@@ -33,9 +33,9 @@ use itertools::Itertools;
 use log::info;
 use opendal::Operator;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 type DeserializingMeta<Method, V> = (AggregateMeta<Method, V>, VecDeque<Vec<u8>>);

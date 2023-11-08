@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregator;
+pub mod aggregator;
 pub mod group_by;
 mod hash_join;
 mod processor_accumulate_row_number;
@@ -33,28 +33,6 @@ mod transform_runtime_cast_schema;
 mod transform_runtime_filter;
 mod window;
 
-pub use aggregator::build_partition_bucket;
-pub use aggregator::AggregateInjector;
-pub use aggregator::AggregatorParams;
-pub use aggregator::FinalSingleStateAggregator;
-pub use aggregator::HashTableCell;
-pub use aggregator::PartialSingleStateAggregator;
-pub use aggregator::PartitionedHashTableDropper;
-pub use aggregator::TransformAggregateDeserializer;
-pub use aggregator::TransformAggregateSerializer;
-pub use aggregator::TransformAggregateSpillReader;
-pub use aggregator::TransformAggregateSpillWriter;
-pub use aggregator::TransformExpandGroupingSets;
-pub use aggregator::TransformFinalAggregate;
-pub use aggregator::TransformGroupByDeserializer;
-pub use aggregator::TransformGroupBySerializer;
-pub use aggregator::TransformGroupBySpillReader;
-pub use aggregator::TransformGroupBySpillWriter;
-pub use aggregator::TransformPartialAggregate;
-pub use aggregator::TransformPartialGroupBy;
-pub use hash_join::FixedKeyHashJoinHashTable;
-pub use hash_join::HashJoinDesc;
-pub use hash_join::HashJoinState;
 pub use hash_join::*;
 pub use processor_accumulate_row_number::AccumulateRowNumber;
 pub use processor_deduplicate_row_number::DeduplicateRowNumber;

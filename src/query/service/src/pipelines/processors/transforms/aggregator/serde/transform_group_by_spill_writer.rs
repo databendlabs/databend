@@ -34,10 +34,10 @@ use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
+use crate::pipelines::processors::transforms::aggregator::serialize_group_by;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::sessions::QueryContext;

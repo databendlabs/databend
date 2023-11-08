@@ -37,7 +37,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::AccumulatingTransform;
 use common_pipeline_transforms::processors::AccumulatingTransformer;
 
-use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 /// SELECT COUNT | SUM FROM table;
 pub struct PartialSingleStateAggregator {

@@ -36,16 +36,16 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 
-use crate::pipelines::processors::transforms::build_partition_bucket;
-use crate::pipelines::processors::transforms::AggregateInjector;
-use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
-use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformPartialAggregate;
-use crate::pipelines::processors::transforms::TransformPartialGroupBy;
-use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::TransformExpandGroupingSets;
+use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
+use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
+use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::pipelines::processors::transforms::aggregator::TransformPartialGroupBy;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

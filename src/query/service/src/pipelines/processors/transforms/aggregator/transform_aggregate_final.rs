@@ -33,11 +33,11 @@ use common_pipeline_transforms::processors::BlockMetaTransformer;
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
-use crate::pipelines::processors::transforms::HashTableCell;
-use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformFinalAggregate<Method: HashMethodBounds> {
     method: Method,

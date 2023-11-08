@@ -34,13 +34,13 @@ use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
+use crate::pipelines::processors::transforms::aggregator::serialize_aggregate;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {

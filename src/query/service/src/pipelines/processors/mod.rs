@@ -15,14 +15,12 @@
 pub use common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
-pub use transforms::AggregatorParams;
 pub use transforms::DeduplicateRowNumber;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::SinkRuntimeFilterSource;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCreateSets;
-pub use transforms::TransformExpandGroupingSets;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;
 pub use transforms::TransformResortAddOnWithoutSourceSchema;
