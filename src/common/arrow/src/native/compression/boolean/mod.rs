@@ -42,7 +42,7 @@ pub fn compress_boolean(
     let stats = gen_stats(array);
     let compressor = choose_compressor(array, &stats, &write_options);
 
-    log::info!(
+    log::debug!(
         "choose boolean compression : {:?}",
         compressor.to_compression()
     );

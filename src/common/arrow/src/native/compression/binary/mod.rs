@@ -45,7 +45,7 @@ pub fn compress_binary<O: Offset>(
     let stats = gen_stats(array);
     let compressor = choose_compressor(array, &stats, &write_options);
 
-    log::info!(
+    log::debug!(
         "choose binary compression : {:?}",
         compressor.to_compression()
     );

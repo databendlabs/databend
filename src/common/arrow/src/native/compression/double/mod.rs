@@ -55,7 +55,7 @@ pub fn compress_double<T: DoubleType>(
     let stats = gen_stats(array);
     let compressor = choose_compressor(array, &stats, &write_options);
 
-    log::info!(
+    log::debug!(
         "choose double compression : {:?}",
         compressor.to_compression()
     );

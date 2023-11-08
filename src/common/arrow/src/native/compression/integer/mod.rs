@@ -59,7 +59,7 @@ pub fn compress_integer<T: IntegerType>(
     let stats = gen_stats(array);
     let compressor = choose_compressor(array, &stats, &write_options);
 
-    log::info!(
+    log::debug!(
         "choose integer compression : {:?}",
         compressor.to_compression()
     );
