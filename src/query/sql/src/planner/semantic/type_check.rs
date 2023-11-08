@@ -85,9 +85,12 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
+use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
+use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -98,6 +101,7 @@ use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDFServerCall;
@@ -372,6 +376,16 @@ impl<'a> TypeChecker<'a> {
                     let array_expr = Expr::Array {
                         span: *span,
                         exprs: list.clone(),
+                    };
+                    // Deduplicate the array.
+                    let array_expr = Expr::FunctionCall {
+                        span: *span,
+                        name: Identifier::from_name("array_distinct"),
+                        args: vec![array_expr],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                        distinct: false,
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
@@ -3240,14 +3254,36 @@ impl<'a> TypeChecker<'a> {
         )
         .await?;
         assert_eq!(ctx.columns.len(), 1);
+        // Wrap group by on `const_scan` to deduplicate values
+        let distinct_const_scan = SExpr::create_unary(
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items: vec![ScalarItem {
+                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ctx.columns[0].clone(),
+                        }),
+                        index: self.metadata.read().columns().len() - 1,
+                    }],
+                    aggregate_functions: vec![],
+                    from_distinct: false,
+                    limit: None,
+                    grouping_sets: None,
+                }
+                .into(),
+            ),
+            Arc::new(const_scan),
+        );
+
         let data_type = ctx.columns[0].data_type.clone();
-        let rel_expr = RelExpr::with_s_expr(&const_scan);
+        let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
         let rel_prop = rel_expr.derive_relational_prop()?;
         let box (scalar, _) = self.resolve(expr).await?;
         let child_scalar = Some(Box::new(scalar));
         let subquery_expr = SubqueryExpr {
             span: None,
-            subquery: Box::new(const_scan),
+            subquery: Box::new(distinct_const_scan),
             child_expr: child_scalar,
             compare_op: Some(ComparisonOp::Equal),
             output_column: ctx.columns[0].clone(),

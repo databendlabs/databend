@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
+use common_users::UserApiProvider;
 
 use crate::sessions::QueryContext;
 
@@ -53,6 +54,26 @@ pub async fn validate_grant_object_exists(
                 return Err(common_exception::ErrorCode::UnknownDatabase(format!(
                     "database {} not exists",
                     database_name,
+                )));
+            }
+        }
+        GrantObject::UDF(udf) => {
+            if !UserApiProvider::instance()
+                .exists_udf(tenant.as_str(), udf)
+                .await?
+            {
+                return Err(common_exception::ErrorCode::UnknownStage(format!(
+                    "udf {udf} not exists"
+                )));
+            }
+        }
+        GrantObject::Stage(stage) => {
+            if !UserApiProvider::instance()
+                .exists_stage(ctx.get_tenant().as_str(), stage)
+                .await?
+            {
+                return Err(common_exception::ErrorCode::UnknownStage(format!(
+                    "stage {stage} not exists"
                 )));
             }
         }

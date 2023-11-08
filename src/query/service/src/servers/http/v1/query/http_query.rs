@@ -36,10 +36,10 @@ use super::HttpQueryContext;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
+use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
-use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
@@ -141,28 +141,7 @@ pub struct HttpSessionConf {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-impl HttpSessionConf {
-    fn apply_affect(&self, affect: &QueryAffect) -> HttpSessionConf {
-        let mut ret = self.clone();
-        match affect {
-            QueryAffect::UseDB { name } => {
-                ret.database = Some(name.to_string());
-            }
-            QueryAffect::ChangeSettings {
-                keys,
-                values,
-                is_globals: _,
-            } => {
-                let settings = ret.settings.get_or_insert_default();
-                for (key, value) in keys.iter().zip(values) {
-                    settings.insert(key.to_string(), value.to_string());
-                }
-            }
-            _ => {}
-        }
-        ret
-    }
-}
+impl HttpSessionConf {}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StageAttachmentConf {
@@ -207,8 +186,11 @@ pub struct HttpQuery {
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    config: HttpQueryConfig,
     expire_state: Arc<TokioMutex<ExpireState>>,
+    /// The timeout for the query result polling. In the normal case, the client driver
+    /// should fetch the paginated result in a timely manner, and the interval should not
+    /// exceed this result_timeout_secs.
+    pub(crate) result_timeout_secs: u64,
 }
 
 impl HttpQuery {
@@ -217,7 +199,6 @@ impl HttpQuery {
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = HttpQueryManager::instance();
 
@@ -254,7 +235,7 @@ impl HttpQuery {
         // the session variables includes:
         // - the current database
         // - the current role
-        // - the session-level settings, like max_threads
+        // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
@@ -289,6 +270,8 @@ impl HttpQuery {
             }
         };
 
+        let settings = session.get_settings();
+        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
@@ -345,6 +328,7 @@ impl HttpQuery {
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance.runtime().try_spawn(
+            ctx.get_id(),
             async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
@@ -361,6 +345,7 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
+                        session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
                     };
@@ -390,7 +375,7 @@ impl HttpQuery {
             request,
             state,
             page_manager: data,
-            config,
+            result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
         };
 
@@ -402,17 +387,12 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session = self.request.session.clone().unwrap_or_default();
-        let session = if let Some(affect) = &state.affect {
-            Some(session.apply_affect(affect))
-        } else {
-            Some(session)
-        };
+        let session = self.get_response_session().await;
 
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session,
+            session: Some(session),
             session_id: self.session_id.clone(),
         })
     }
@@ -420,17 +400,13 @@ impl HttpQuery {
     #[async_backtrace::framed]
     pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
         let state = self.get_state().await;
-        let session = self.request.session.clone().unwrap_or_default();
-        let session = if let Some(affect) = &state.affect {
-            Some(session.apply_affect(affect))
-        } else {
-            Some(session)
-        };
+        let session = self.get_response_session().await;
+
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
             state,
-            session,
+            session: Some(session),
         }
     }
 
@@ -444,6 +420,31 @@ impl HttpQuery {
             state: exe_state,
             error: err,
             affect: state.get_affect(),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_response_session(&self) -> HttpSessionConf {
+        let executor = self.state.read().await;
+        let session_state = executor.get_session_state();
+        let settings = session_state
+            .settings
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let keep_server_session_secs = self
+            .request
+            .session
+            .clone()
+            .map(|v| v.keep_server_session_secs)
+            .unwrap_or(None);
+
+        // TODO: add current role here
+        HttpSessionConf {
+            database: Some(session_state.current_database),
+            role: session_state.current_role,
+            keep_server_session_secs,
+            settings: Some(settings),
         }
     }
 
@@ -462,6 +463,9 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn kill(&self) {
+        // the query will be removed from the query manager before the session is dropped.
+        self.detach().await;
+
         Executor::stop(
             &self.state,
             Err(ErrorCode::AbortedQuery("killed by http")),
@@ -471,14 +475,16 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&self) {
+    async fn detach(&self) {
+        info!("{}: http query detached", &self.id);
+
         let data = self.page_manager.lock().await;
         data.detach().await
     }
 
     #[async_backtrace::framed]
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_secs(self.config.result_timeout_secs)
+        let duration = Duration::from_secs(self.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
@@ -510,7 +516,7 @@ impl HttpQuery {
             }
             ExpireState::Removed => ExpireResult::Removed,
             ExpireState::Working => {
-                ExpireResult::Sleep(Duration::from_secs(self.config.result_timeout_secs))
+                ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
         }
     }

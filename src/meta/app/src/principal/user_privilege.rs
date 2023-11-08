@@ -66,6 +66,13 @@ pub enum UserPrivilegeType {
     CreateDataMask = 1 << 16,
     // Privilege to Own a databend object such as database/table.
     Ownership = 1 << 17,
+    // Privilege to Read stage
+    Read = 1 << 18,
+    // Privilege to Write stage
+    Write = 1 << 19,
+    // Privilege to usage UDF
+    UsageUDF = 1 << 20,
+
     // TODO: remove this later
     Set = 1 << 4,
 }
@@ -89,6 +96,9 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Set
         | CreateDataMask
         | Ownership
+        | Read
+        | Write
+        | UsageUDF
     }
 );
 
@@ -113,6 +123,9 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Set => "SET",
             UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
             UserPrivilegeType::Ownership => "OWNERSHIP",
+            UserPrivilegeType::Read => "Read",
+            UserPrivilegeType::Write => "Write",
+            UserPrivilegeType::UsageUDF => "UsageUDF",
         })
     }
 }
@@ -151,6 +164,14 @@ impl UserPrivilegeSet {
     /// The all privileges global which available to the table object
     pub fn available_privileges_on_table() -> Self {
         make_bitflags!(UserPrivilegeType::{ Create | Update | Select | Insert | Delete | Drop | Alter | Grant | Ownership }).into()
+    }
+
+    pub fn available_privileges_on_stage() -> Self {
+        make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
+    }
+
+    pub fn available_privileges_on_udf() -> Self {
+        make_bitflags!(UserPrivilegeType::{ UsageUDF }).into()
     }
 
     // TODO: remove this, as ALL has different meanings on different objects

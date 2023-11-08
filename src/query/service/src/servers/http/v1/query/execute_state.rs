@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -25,6 +26,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
+use common_settings::ChangeValue;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
@@ -109,12 +111,33 @@ pub struct ExecuteStopped {
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
+    pub session_state: ExecutorSessionState,
     pub query_duration_ms: i64,
 }
 
 pub struct Executor {
     pub query_id: String,
     pub state: ExecuteState,
+}
+
+// ExecutorSessionState is used to record the session state when the query is stopped.
+// The HTTP Query API returns the session state to the client on each request. The client
+// may store these new session state, and pass it to the next http query request.
+#[derive(Debug, Clone)]
+pub struct ExecutorSessionState {
+    pub current_database: String,
+    pub current_role: Option<String>,
+    pub settings: HashMap<String, ChangeValue>,
+}
+
+impl ExecutorSessionState {
+    pub fn new(session: Arc<Session>) -> Self {
+        Self {
+            current_database: session.get_current_database(),
+            current_role: session.get_current_role().map(|r| r.name),
+            settings: session.get_changed_settings(),
+        }
+    }
 }
 
 impl Executor {
@@ -131,6 +154,14 @@ impl Executor {
             Starting(_) => None,
             Running(r) => r.ctx.get_affect(),
             Stopped(r) => r.affect.clone(),
+        }
+    }
+
+    pub fn get_session_state(&self) -> ExecutorSessionState {
+        match &self.state {
+            Starting(r) => ExecutorSessionState::new(r.ctx.get_current_session()),
+            Running(r) => ExecutorSessionState::new(r.ctx.get_current_session()),
+            Stopped(r) => r.session_state.clone(),
         }
     }
 
@@ -178,6 +209,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
+                    session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
                     affect: Default::default(),
                 }))
@@ -197,6 +229,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
+                    session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
                     affect: r.ctx.get_affect(),
                 }))

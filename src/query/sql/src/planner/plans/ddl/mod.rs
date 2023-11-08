@@ -14,6 +14,7 @@
 
 mod account;
 mod catalog;
+mod connection;
 mod database;
 mod file_format;
 mod index;
@@ -26,6 +27,7 @@ mod virtual_column;
 
 pub use account::*;
 pub use catalog::*;
+pub use connection::*;
 pub use database::*;
 pub use file_format::*;
 pub use index::*;

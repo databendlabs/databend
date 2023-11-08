@@ -283,8 +283,15 @@ pub enum TokenKind {
     #[token("||/")]
     CubeRoot,
     /// Placeholder used in prepared stmt
+    /// Also used as JSON operator.
     #[token("?")]
     Placeholder,
+    /// Used as JSON operator.
+    #[token("?|")]
+    QuestionOr,
+    /// Used as JSON operator.
+    #[token("?&")]
+    QuestionAnd,
 
     // Keywords
     //
@@ -377,6 +384,8 @@ pub enum TokenKind {
     COMPACT,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CONNECTIONS", ignore(ascii_case))]
+    CONNECTIONS,
     #[token("CONTENT_TYPE", ignore(ascii_case))]
     CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
@@ -884,6 +893,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
+    #[token("STORAGE_TYPE", ignore(ascii_case))]
+    STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -1020,6 +1031,14 @@ pub enum TokenKind {
     ADDRESS,
     #[token("OWNERSHIP", ignore(ascii_case))]
     OWNERSHIP,
+    #[token("READ", ignore(ascii_case))]
+    READ,
+    #[token("WRITE", ignore(ascii_case))]
+    WRITE,
+    #[token("UDF", ignore(ascii_case))]
+    UDF,
+    #[token("USAGEUDF", ignore(ascii_case))]
+    USAGEUDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
@@ -1113,6 +1132,8 @@ impl TokenKind {
                 | CubeRoot
                 | L2DISTANCE
                 | Placeholder
+                | QuestionOr
+                | QuestionAnd
                 | EOI
         )
     }
@@ -1288,6 +1309,7 @@ impl TokenKind {
             // | TokenKind::COLUMN
             // | TokenKind::CONCURRENTLY
             // | TokenKind::CONSTRAINT
+            | TokenKind::CONNECTION
             | TokenKind::CROSS
             // | TokenKind::CURRENT_CATALOG
             // | TokenKind::CURRENT_DATE

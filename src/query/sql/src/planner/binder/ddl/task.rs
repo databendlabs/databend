@@ -44,7 +44,7 @@ fn verify_scheduler_option(schedule_opts: &ScheduleOptions) -> Result<()> {
                 cron_expr
             )));
         }
-        if let Some(time_zone) = time_zone &&  !time_zone.is_empty() && chrono_tz::Tz::from_str(time_zone).is_err() {
+        if let Some(time_zone) = time_zone && !time_zone.is_empty() && chrono_tz::Tz::from_str(time_zone).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid time zone {}",
                 time_zone

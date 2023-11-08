@@ -408,7 +408,7 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                anyhow!("{v} is not allowed to be used as uri location"),
+                anyhow!("URI protocol {v} is not supported yet."),
             ));
         }
     };

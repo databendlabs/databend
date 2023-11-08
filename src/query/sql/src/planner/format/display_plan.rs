@@ -192,6 +192,12 @@ impl Plan {
             Plan::DescribeTask(p) => Ok(format!("{:?}", p)),
             Plan::ExecuteTask(p) => Ok(format!("{:?}", p)),
             Plan::ShowTasks(p) => Ok(format!("{:?}", p)),
+
+            // task
+            Plan::CreateConnection(p) => Ok(format!("{:?}", p)),
+            Plan::DescConnection(p) => Ok(format!("{:?}", p)),
+            Plan::DropConnection(p) => Ok(format!("{:?}", p)),
+            Plan::ShowConnections(p) => Ok(format!("{:?}", p)),
         }
     }
 }

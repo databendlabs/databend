@@ -338,7 +338,7 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-        select_builder.with_filter("dropped_on != 'NULL'".to_string());
+        select_builder.with_filter("dropped_on IS NOT NULL".to_string());
 
         let query = select_builder.build();
         debug!("show drop tables rewrite to: {:?}", query);
@@ -1031,6 +1031,7 @@ impl Binder {
             table,
             action,
             limit: limit.map(|v| v as usize),
+            need_lock: true,
         })))
     }
 

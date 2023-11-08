@@ -57,6 +57,11 @@ impl AsyncSystemTable for StagesTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
+        let visibility_checker = ctx.get_visibility_checker().await?;
+        let stages = stages
+            .into_iter()
+            .filter(|stage| visibility_checker.check_stage_visibility(&stage.stage_name))
+            .collect::<Vec<_>>();
         let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut stage_type: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut stage_params: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
