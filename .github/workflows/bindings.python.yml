@@ -37,7 +37,7 @@ jobs:
         if: inputs.tag
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.target }}
+          name: python
           path: src/bendpy/dist/*.whl
 
   macos:
@@ -59,7 +59,7 @@ jobs:
         if: inputs.tag
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.target }}
+          name: python
           path: src/bendpy/dist/*.whl
 
   publish:
@@ -70,8 +70,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v3
+        with:
+          name: python
+          path: src/bendpy/dist
       - name: Publish to PyPI
         timeout-minutes: 10
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+          packages-dir: src/bendpy/dist
