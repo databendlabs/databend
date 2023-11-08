@@ -35,7 +35,6 @@
 #![allow(incomplete_features)]
 #![feature(int_roundings)]
 #![feature(trait_upcasting)]
-#![feature(specialization)]
 
 #[allow(dead_code)]
 mod block;
