@@ -749,6 +749,33 @@ select * from tt1;
 ----
 0 2
 
+## issue #13298
+statement ok
+drop table if exists t11;
+
+statement ok
+drop table if exists t12;
+
+statement ok
+create table t12 (a int, b int);
+
+statement ok
+create table t11 (a int, b int);
+
+statement ok
+insert into t11 values (1, 10),(2, 20),(3, 30),(4, 40);
+
+statement ok
+insert into t12 values (1, 10),(2, 20),(3, 30),(4, 40);
+
+statement ok
+MERGE INTO t11 USING(SELECT NULL AS c0 FROM t12) AS t12 ON (t11.a OR TRUE) WHEN MATCHED AND TRUE THEN DELETE;
+
+query T
+select count(*) from t11;
+----
+0
+
 statement ok
 set enable_distributed_merge_into = 0;
 
