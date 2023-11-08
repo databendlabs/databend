@@ -59,6 +59,7 @@ use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
@@ -430,8 +431,8 @@ impl Binder {
             )
         };
 
-        let finder = Finder::new(&f);
-        let finder = scalar.accept(finder)?;
+        let mut finder = Finder::new(&f);
+        walk_expr(&mut finder, &scalar);
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Where clause can't contain aggregate or window functions".to_string(),

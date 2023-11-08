@@ -26,6 +26,7 @@ use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
+use crate::plans::walk_expr;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -67,8 +68,8 @@ impl Binder {
         bind_context.set_expr_context(ExprContext::HavingClause);
 
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
-        let finder = Finder::new(&f);
-        let finder = having.accept(finder)?;
+        let mut finder = Finder::new(&f);
+        walk_expr(&mut finder, &having);
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Having clause can't contain window functions".to_string(),

@@ -37,6 +37,7 @@ use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
+use crate::plans::walk_expr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -691,8 +692,8 @@ impl Binder {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
         let mut groups = Vec::new();
         for (idx, select_item) in select_list.items.iter().enumerate() {
-            let finder = Finder::new(&f);
-            let finder = select_item.scalar.accept(finder)?;
+            let mut finder = Finder::new(&f);
+            walk_expr(&mut finder, &select_item.scalar);
             if finder.scalars().is_empty() {
                 groups.push(Expr::Literal {
                     span: None,
@@ -811,8 +812,8 @@ impl Binder {
             )
         };
         for item in bind_context.aggregate_info.group_items.iter() {
-            let finder = Finder::new(&f);
-            let finder = item.scalar.accept(finder)?;
+            let mut finder = Finder::new(&f);
+            walk_expr(&mut finder, &item.scalar);
 
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(

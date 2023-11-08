@@ -23,6 +23,7 @@ use super::Finder;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
+use crate::plans::walk_expr;
 use crate::plans::Plan;
 use crate::plans::ScalarExpr;
 use crate::plans::UpdatePlan;
@@ -111,8 +112,8 @@ impl Binder {
                         | ScalarExpr::SubqueryExpr(_)
                 )
             };
-            let finder = Finder::new(&f);
-            let finder = scalar.accept(finder)?;
+            let mut finder = Finder::new(&f);
+            walk_expr(&mut finder, &scalar);
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "update_list in update statement can't contain subquery|window|aggregate functions".to_string(),

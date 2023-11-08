@@ -31,7 +31,6 @@ use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
-use crate::MetadataRef;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ScalarExpr {
@@ -52,98 +51,40 @@ impl ScalarExpr {
     }
 
     pub fn used_columns(&self) -> ColumnSet {
-        match self {
-            ScalarExpr::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
-            ScalarExpr::ConstantExpr(_) => ColumnSet::new(),
-            ScalarExpr::WindowFunction(scalar) => {
-                let mut result = scalar.func.used_columns();
-                for scalar in &scalar.partition_by {
-                    result = result.union(&scalar.used_columns()).cloned().collect();
-                }
-                for order in &scalar.order_by {
-                    result = result.union(&order.expr.used_columns()).cloned().collect();
-                }
-                result
-            }
-            ScalarExpr::AggregateFunction(scalar) => {
-                let mut result = ColumnSet::new();
-                for scalar in &scalar.args {
-                    result = result.union(&scalar.used_columns()).cloned().collect();
-                }
-                result
-            }
-            ScalarExpr::LambdaFunction(scalar) => {
-                let mut result = ColumnSet::new();
-                for scalar in &scalar.args {
-                    result = result.union(&scalar.used_columns()).cloned().collect();
-                }
-                result
-            }
-            ScalarExpr::FunctionCall(scalar) => {
-                let mut result = ColumnSet::new();
-                for scalar in &scalar.arguments {
-                    result = result.union(&scalar.used_columns()).cloned().collect();
-                }
-                result
-            }
-            ScalarExpr::CastExpr(scalar) => scalar.argument.used_columns(),
-            ScalarExpr::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
-            ScalarExpr::UDFServerCall(scalar) => {
-                let mut result = ColumnSet::new();
-                for scalar in &scalar.arguments {
-                    result = result.union(&scalar.used_columns()).cloned().collect();
-                }
-                result
+        struct UsedColumnsVisitor {
+            columns: ColumnSet,
+        }
+
+        impl<'a> Visitor<'a> for UsedColumnsVisitor {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) {
+                self.columns.insert(col.column.index);
             }
         }
+
+        let mut visitor = UsedColumnsVisitor {
+            columns: ColumnSet::new(),
+        };
+        visitor.visit_expr(self);
+        visitor.columns
     }
 
     // Get used tables in ScalarExpr
-    pub fn used_tables(&self, metadata: MetadataRef) -> Result<Vec<IndexType>> {
-        match self {
-            ScalarExpr::BoundColumnRef(scalar) => {
-                let mut tables = vec![];
-                if let Some(table_index) = scalar.column.table_index {
-                    tables = vec![table_index];
+    pub fn used_tables(&self) -> Result<Vec<IndexType>> {
+        struct UsedTablesVisitor {
+            tables: Vec<IndexType>,
+        }
+
+        impl<'a> Visitor<'a> for UsedTablesVisitor {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) {
+                if let Some(table_index) = col.column.table_index {
+                    self.tables.push(table_index);
                 }
-                Ok(tables)
-            }
-            ScalarExpr::ConstantExpr(_) => Ok(vec![]),
-            ScalarExpr::AggregateFunction(scalar) => {
-                let mut result = vec![];
-                for scalar in &scalar.args {
-                    result.append(&mut scalar.used_tables(metadata.clone())?);
-                }
-                Ok(result)
-            }
-            ScalarExpr::FunctionCall(scalar) => {
-                let mut result = vec![];
-                for scalar in &scalar.arguments {
-                    result.append(&mut scalar.used_tables(metadata.clone())?);
-                }
-                Ok(result)
-            }
-            ScalarExpr::LambdaFunction(scalar) => {
-                let mut result = vec![];
-                for scalar in &scalar.args {
-                    result.append(&mut scalar.used_tables(metadata.clone())?);
-                }
-                Ok(result)
-            }
-            ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata),
-            ScalarExpr::WindowFunction(_) | ScalarExpr::SubqueryExpr(_) => {
-                Err(ErrorCode::Unimplemented(
-                    "SubqueryExpr/WindowFunction doesn't support used_tables method".to_string(),
-                ))
-            }
-            ScalarExpr::UDFServerCall(scalar) => {
-                let mut result = vec![];
-                for scalar in &scalar.arguments {
-                    result.append(&mut scalar.used_tables(metadata.clone())?);
-                }
-                Ok(result)
             }
         }
+
+        let mut visitor = UsedTablesVisitor { tables: vec![] };
+        visitor.visit_expr(self);
+        Ok(visitor.tables)
     }
 
     pub fn span(&self) -> Span {
@@ -609,4 +550,157 @@ pub struct UDFServerCall {
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,
     pub arguments: Vec<ScalarExpr>,
+}
+
+pub trait Visitor<'a>: Sized {
+    fn visit_expr(&mut self, a: &'a ScalarExpr) {
+        walk_expr(self, a);
+    }
+
+    fn visit_bound_column_ref(&mut self, _col: &'a BoundColumnRef) {}
+    fn visit_constant_expr(&mut self, _constant: &'a ConstantExpr) {}
+    fn visit_window_function(&mut self, window: &'a WindowFunc) {
+        for expr in &window.partition_by {
+            self.visit_expr(expr);
+        }
+        for expr in &window.order_by {
+            self.visit_expr(&expr.expr);
+        }
+        match &window.func {
+            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(&func),
+            WindowFuncType::NthValue(func) => self.visit_expr(&func.arg),
+            WindowFuncType::LagLead(func) => {
+                self.visit_expr(&func.arg);
+                func.default
+                    .as_ref()
+                    .map(|default| self.visit_expr(default));
+            }
+            WindowFuncType::RowNumber
+            | WindowFuncType::CumeDist
+            | WindowFuncType::Rank
+            | WindowFuncType::DenseRank
+            | WindowFuncType::PercentRank
+            | WindowFuncType::Ntile(_) => (),
+        }
+    }
+    fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) {
+        for expr in &aggregate.args {
+            self.visit_expr(expr);
+        }
+    }
+    fn visit_lambda_function(&mut self, lambda: &'a LambdaFunc) {
+        for expr in &lambda.args {
+            self.visit_expr(expr);
+        }
+        self.visit_expr(&lambda.lambda_expr);
+    }
+    fn visit_function_call(&mut self, func: &'a FunctionCall) {
+        for expr in &func.arguments {
+            self.visit_expr(expr);
+        }
+    }
+    fn visit_cast_expr(&mut self, cast: &'a CastExpr) {
+        self.visit_expr(&cast.argument);
+    }
+    fn visit_subquery_expr(&mut self, subquery: &'a SubqueryExpr) {
+        subquery
+            .child_expr
+            .as_ref()
+            .map(|child_expr| self.visit_expr(child_expr));
+    }
+    fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) {
+        for expr in &udf.arguments {
+            self.visit_expr(expr);
+        }
+    }
+}
+
+pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) {
+    match expr {
+        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
+        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant_expr(expr),
+        ScalarExpr::WindowFunction(expr) => visitor.visit_window_function(expr),
+        ScalarExpr::AggregateFunction(expr) => visitor.visit_aggregate_function(expr),
+        ScalarExpr::LambdaFunction(expr) => visitor.visit_lambda_function(expr),
+        ScalarExpr::FunctionCall(expr) => visitor.visit_function_call(expr),
+        ScalarExpr::CastExpr(expr) => visitor.visit_cast_expr(expr),
+        ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
+        ScalarExpr::UDFServerCall(expr) => visitor.visit_udf_server_call(expr),
+    }
+}
+
+pub trait VisitorMut<'a>: Sized {
+    fn visit_expr(&mut self, a: &'a mut ScalarExpr) {
+        walk_expr_mut(self, a);
+    }
+    fn visit_bound_column_ref(&mut self, _col: &'a mut BoundColumnRef) {}
+    fn visit_constant_expr(&mut self, _constant: &'a mut ConstantExpr) {}
+    fn visit_window_function(&mut self, window: &'a mut WindowFunc) {
+        for expr in &mut window.partition_by {
+            self.visit_expr(expr);
+        }
+        for expr in &mut window.order_by {
+            self.visit_expr(&mut expr.expr);
+        }
+        match &mut window.func {
+            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func),
+            WindowFuncType::NthValue(func) => self.visit_expr(&mut func.arg),
+            WindowFuncType::LagLead(func) => {
+                self.visit_expr(&mut func.arg);
+                func.default
+                    .as_mut()
+                    .map(|default| self.visit_expr(default));
+            }
+            WindowFuncType::RowNumber
+            | WindowFuncType::CumeDist
+            | WindowFuncType::Rank
+            | WindowFuncType::DenseRank
+            | WindowFuncType::PercentRank
+            | WindowFuncType::Ntile(_) => (),
+        }
+    }
+    fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) {
+        for expr in &mut aggregate.args {
+            self.visit_expr(expr);
+        }
+    }
+    fn visit_lambda_function(&mut self, lambda: &'a mut LambdaFunc) {
+        for expr in &mut lambda.args {
+            self.visit_expr(expr);
+        }
+        self.visit_expr(&mut lambda.lambda_expr);
+    }
+    fn visit_function_call(&mut self, func: &'a mut FunctionCall) {
+        for expr in &mut func.arguments {
+            self.visit_expr(expr);
+        }
+    }
+    fn visit_cast_expr(&mut self, cast: &'a mut CastExpr) {
+        self.visit_expr(&mut cast.argument);
+    }
+    fn visit_subquery_expr(&mut self, subquery: &'a mut SubqueryExpr) {
+        subquery
+            .child_expr
+            .as_mut()
+            .map(|child_expr| self.visit_expr(child_expr));
+    }
+    fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) {
+        for expr in &mut udf.arguments {
+            self.visit_expr(expr);
+        }
+    }
+}
+
+pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(visitor: &mut V, expr: &'a mut ScalarExpr) {
+    match expr {
+        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
+        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant_expr(expr),
+        ScalarExpr::WindowFunction(expr) => visitor.visit_window_function(expr),
+        ScalarExpr::AggregateFunction(expr) => visitor.visit_aggregate_function(expr),
+        ScalarExpr::LambdaFunction(expr) => visitor.visit_lambda_function(expr),
+        ScalarExpr::FunctionCall(expr) => visitor.visit_function_call(expr),
+        ScalarExpr::CastExpr(expr) => visitor.visit_cast_expr(expr),
+        ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
+        ScalarExpr::UDFServerCall(expr) => visitor.visit_udf_server_call(expr),
+    }
 }
