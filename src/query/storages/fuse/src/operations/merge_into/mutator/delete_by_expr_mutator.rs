@@ -78,6 +78,17 @@ impl DeleteByExprMutator {
         )
     }
 
+    fn get_result_block(
+        &self,
+        predicate: &Value<BooleanType>,
+        predicate_not: &Value<BooleanType>,
+        data_block: DataBlock,
+    ) -> Result<(DataBlock, DataBlock)> {
+        let res_block = data_block.clone().filter_boolean_value(predicate)?;
+        let filtered_block = data_block.filter_boolean_value(predicate_not)?;
+        Ok((res_block, self.get_row_id_block(filtered_block)))
+    }
+
     // return block after delete, and the rowIds which are deleted
     pub fn delete_block(
         &self,
@@ -87,9 +98,7 @@ impl DeleteByExprMutator {
         if self.expr.is_none() {
             if has_filter {
                 let (old_predicate, filter_not) = self.get_filter(&data_block)?;
-                let block_after_delete = data_block.clone().filter_boolean_value(&old_predicate)?;
-                let block_delete_part = data_block.filter_boolean_value(&filter_not)?;
-                Ok((block_after_delete, self.get_row_id_block(block_delete_part)))
+                self.get_result_block(&old_predicate, &filter_not, data_block)
             } else {
                 // delete all
                 Ok((DataBlock::empty(), self.get_row_id_block(data_block)))
@@ -115,12 +124,7 @@ impl DeleteByExprMutator {
                 let res: Value<BooleanType> = res.try_downcast().unwrap();
                 let (res_not, _) = get_not(res.clone(), &self.func_ctx, data_block.num_rows())?;
 
-                let filtered_block = data_block.clone().filter_boolean_value(&res)?;
-
-                Ok((
-                    data_block.filter_boolean_value(&res_not.try_downcast().unwrap())?,
-                    self.get_row_id_block(filtered_block),
-                ))
+                self.get_result_block(&res_not.try_downcast().unwrap(), &res, data_block)
             } else {
                 let filtered_block = data_block.clone().filter_boolean_value(&predicates)?;
                 let (predicates_not, _) =

@@ -36,7 +36,7 @@ pub(crate) fn get_and(
             (filter1.upcast(), DataType::Boolean),
             (filter2.upcast(), DataType::Boolean),
         ],
-        &func_ctx,
+        func_ctx,
         rows,
         &BUILTIN_FUNCTIONS,
     )
@@ -51,7 +51,7 @@ pub(crate) fn get_not(
         None,
         "not",
         [(filter.upcast(), DataType::Boolean)],
-        &func_ctx,
+        func_ctx,
         rows,
         &BUILTIN_FUNCTIONS,
     )
@@ -78,7 +78,7 @@ pub(crate) fn get_or(
 
 pub(crate) fn expr2prdicate(evaluator: &Evaluator, filter: &Expr) -> Result<Value<BooleanType>> {
     Ok(evaluator
-        .run(&filter)
+        .run(filter)
         .map_err(|e| e.add_message("eval filter failed:"))?
         .try_downcast::<BooleanType>()
         .unwrap())
