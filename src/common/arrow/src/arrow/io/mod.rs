@@ -28,6 +28,3 @@ pub mod flight;
 #[cfg_attr(docsrs, doc(cfg(feature = "io_parquet")))]
 pub mod parquet;
 
-#[cfg(feature = "io_print")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io_print")))]
-pub mod print;

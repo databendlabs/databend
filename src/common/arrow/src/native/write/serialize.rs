@@ -21,14 +21,15 @@ use parquet2::schema::Repetition;
 use super::boolean::write_bitmap;
 use super::primitive::write_primitive;
 use super::WriteOptions;
-
-use crate::arrow::{
-    array::*,
-    bitmap::Bitmap,
-    datatypes::{DataType, PhysicalType},
-    error::Result,
-    io::parquet::write::{write_def_levels, write_rep_and_def, Nested, Version},
-};
+use crate::arrow::array::*;
+use crate::arrow::bitmap::Bitmap;
+use crate::arrow::datatypes::DataType;
+use crate::arrow::datatypes::PhysicalType;
+use crate::arrow::error::Result;
+use crate::arrow::io::parquet::write::write_def_levels;
+use crate::arrow::io::parquet::write::write_rep_and_def;
+use crate::arrow::io::parquet::write::Nested;
+use crate::arrow::io::parquet::write::Version;
 use crate::native::write::binary::write_binary;
 use crate::with_match_primitive_type;
 
