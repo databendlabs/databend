@@ -75,17 +75,19 @@ pub(crate) struct Node {
 
 impl Node {
     pub fn create(
+        pid: usize,
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
     ) -> Arc<Node> {
+        let p_name = unsafe { processor.name() };
         Arc::new(Node {
             state: std::sync::Mutex::new(State::Idle),
             processor: processor.clone(),
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
-            profile: Arc::new(Profile::default()),
+            profile: Arc::new(Profile::create(pid, p_name)),
         })
     }
 
@@ -148,7 +150,9 @@ impl ExecutingGraph {
             let mut pipe_edges = Vec::with_capacity(pipe.output_length);
 
             for item in &pipe.items {
-                let node = Node::create(&item.processor, &item.inputs_port, &item.outputs_port);
+                let pid = graph.node_count();
+                let node =
+                    Node::create(pid, &item.processor, &item.inputs_port, &item.outputs_port);
 
                 let graph_node_index = graph.add_node(node.clone());
                 unsafe {
