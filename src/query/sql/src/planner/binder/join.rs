@@ -253,15 +253,15 @@ impl Binder {
                         left_push_down.push(predicate.clone());
                         right_push_down.push(predicate.clone());
                     }
-                    JoinType::Left | JoinType::LeftSingle => {
+                    JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
                         need_push_down = true;
                         right_push_down.push(predicate.clone());
                     }
-                    JoinType::Right | JoinType::RightSingle => {
+                    JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
                         need_push_down = true;
                         left_push_down.push(predicate.clone());
                     }
-                    _ => (),
+                    JoinType::Full => non_equi_conditions.push(predicate.clone()),
                 },
                 JoinPredicate::Left(_) => {
                     need_push_down = true;

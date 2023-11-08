@@ -139,17 +139,7 @@ pub fn try_push_down_filter_join(
     let mut need_push = false;
 
     for predicate in predicates.into_iter() {
-        if is_falsy(&predicate)
-            && matches!(
-                join.join_type,
-                JoinType::Cross
-                    | JoinType::Inner
-                    | JoinType::LeftSemi
-                    | JoinType::LeftAnti
-                    | JoinType::RightSemi
-                    | JoinType::RightAnti
-            )
-        {
+        if is_falsy(&predicate) {
             left_push_down = vec![false_constant()];
             right_push_down = vec![false_constant()];
             need_push = true;
