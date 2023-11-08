@@ -85,7 +85,7 @@ impl DeleteByExprMutator {
             if has_filter {
                 let (old_predicate, filter_not) = self.get_filter(&data_block)?;
                 let block_after_delete = data_block.clone().filter_boolean_value(&old_predicate)?;
-                let block_delete_part = data_block.clone().filter_boolean_value(&filter_not)?;
+                let block_delete_part = data_block.filter_boolean_value(&filter_not)?;
                 Ok((
                     block_after_delete,
                     DataBlock::new(
@@ -154,7 +154,7 @@ impl DeleteByExprMutator {
                 let (predicates_not, _) = eval_function(
                     None,
                     "not",
-                    [(predicates.clone().upcast(), DataType::Boolean)],
+                    [(predicates.upcast(), DataType::Boolean)],
                     &self.func_ctx,
                     data_block.num_rows(),
                     &BUILTIN_FUNCTIONS,
