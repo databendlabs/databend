@@ -102,7 +102,7 @@ dyn-clone = "1"
 either = "1.9"
 foreign_vec = "0.1.0"
 num-traits = "0.2"
-parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
+parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async", "lz4"] }
 
 # for decimal i256
 ethnum = "1"
