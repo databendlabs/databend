@@ -254,7 +254,7 @@ impl Binder {
                     }
                     JoinType::Right | JoinType::RightSingle => {
                         need_push_down = true;
-                        right_push_down.push(predicate.clone());
+                        left_push_down.push(predicate.clone());
                     }
                     _ => (),
                 },
