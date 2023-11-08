@@ -733,6 +733,9 @@ select * from t1;
 
 ## issue 13454
 statement ok
+drop table if exists tt1;
+
+statement ok
 create table tt1(a bool, b int);
 
 statement ok
