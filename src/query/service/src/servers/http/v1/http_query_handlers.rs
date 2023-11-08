@@ -113,6 +113,7 @@ impl QueryResponseField {
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
+    pub node_id: String,
     pub session: Option<HttpSessionConf>,
     pub schema: Vec<QueryResponseField>,
     pub data: Vec<Vec<JsonValue>>,
@@ -180,6 +181,7 @@ impl QueryResponse {
             state: state.state,
             schema: QueryResponseField::from_schema(schema),
             session_id: Some(session_id),
+            node_id: r.node_id,
             session: r.session,
             stats,
             affect: state.affect,
@@ -205,6 +207,7 @@ impl QueryResponse {
             data: vec![],
             schema: vec![],
             session_id: None,
+            node_id: "".to_string(),
             session: None,
             next_uri: None,
             stats_uri: None,
