@@ -507,6 +507,12 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     append_sample_data(number_of_block, &fixture).await?;
 
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
     let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
         .await?
@@ -526,6 +532,13 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
         3,
     )
     .await?;
+
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+
     check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
 
     Ok(())
@@ -553,6 +566,12 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
 
+        fixture.ctx().evict_table_from_cache(
+            &fixture.default_catalog_name(),
+            &fixture.default_db_name(),
+            &fixture.default_table_name(),
+        )?;
+
         let data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
             .await?
             .try_collect()
@@ -563,6 +582,11 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
         let _ = table.truncate(ctx.clone()).await;
 
         // after truncate check data is empty
+        fixture.ctx().evict_table_from_cache(
+            &fixture.default_catalog_name(),
+            &fixture.default_db_name(),
+            &fixture.default_table_name(),
+        )?;
         let data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
             .await?
             .try_collect()
@@ -596,6 +620,11 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
     // step 2: append some data, it will vacuum all the truncated files
     let number_of_block = 1;
     append_sample_data(number_of_block, &fixture).await?;
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
     let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
         .await?
         .try_collect()
@@ -612,6 +641,11 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
         1,
     )
     .await?;
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
     check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
 
     Ok(())
