@@ -176,7 +176,7 @@ fn resolve_range_condition(
             for (idx, arg) in [arg1, arg2].iter().enumerate() {
                 let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
                 match join_predicate {
-                    JoinPredicate::Left(_) => {
+                    JoinPredicate::Left(_) | JoinPredicate::ALL(_) => {
                         left = Some(arg.type_check(left_schema.as_ref())?.project_column_ref(
                             |index| left_schema.index_of(&index.to_string()).unwrap(),
                         ));

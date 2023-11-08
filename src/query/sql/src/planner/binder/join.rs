@@ -181,6 +181,10 @@ impl Binder {
         mut left_child: SExpr,
         mut right_child: SExpr,
     ) -> Result<SExpr> {
+        dbg!("{:?}", &join_conditions.left_conditions);
+        dbg!("{:?}", &join_conditions.right_conditions);
+        dbg!("{:?}", &join_conditions.non_equi_conditions);
+        dbg!("{:?}", &join_conditions.other_conditions);
         let left_conditions = join_conditions.left_conditions;
         let right_conditions = join_conditions.right_conditions;
         let mut non_equi_conditions = join_conditions.non_equi_conditions;
@@ -193,6 +197,7 @@ impl Binder {
             ));
         }
         self.push_down_other_conditions(
+            &join_type,
             &mut left_child,
             &mut right_child,
             other_conditions,
@@ -222,6 +227,7 @@ impl Binder {
 
     fn push_down_other_conditions(
         &self,
+        join_type: &JoinType,
         left_child: &mut SExpr,
         right_child: &mut SExpr,
         other_conditions: Vec<ScalarExpr>,
@@ -240,6 +246,22 @@ impl Binder {
         for predicate in other_conditions.iter() {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
+                JoinPredicate::ALL(_) => match join_type {
+                    JoinType::Inner => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Left | JoinType::LeftSingle => {
+                        need_push_down = true;
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Right | JoinType::RightSingle => {
+                        need_push_down = true;
+                        right_push_down.push(predicate.clone());
+                    }
+                    _ => (),
+                },
                 JoinPredicate::Left(_) => {
                     need_push_down = true;
                     left_push_down.push(predicate.clone());

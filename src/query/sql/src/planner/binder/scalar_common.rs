@@ -96,12 +96,14 @@ pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
 /// Helper to determine join condition type from a scalar expression.
 /// Given a query: `SELECT * FROM t(a), t1(b) WHERE a = 1 AND b = 1 AND a = b AND a+b = 1`,
 /// the predicate types are:
+/// - ALL: `true`, `false`: SELECT * FROM t(a), t1(b) ON a = b AND true
 /// - Left: `a = 1`
 /// - Right: `b = 1`
 /// - Both: `a = b`
 /// - Other: `a+b = 1`
 #[derive(Clone, Debug)]
 pub enum JoinPredicate<'a> {
+    ALL(&'a ScalarExpr),
     Left(&'a ScalarExpr),
     Right(&'a ScalarExpr),
     Both {
@@ -121,12 +123,14 @@ impl<'a> JoinPredicate<'a> {
         if contain_subquery(scalar) {
             return Self::Other(scalar);
         }
-        if satisfied_by(scalar, left_prop) {
-            return Self::Left(scalar);
-        }
 
-        if satisfied_by(scalar, right_prop) {
-            return Self::Right(scalar);
+        let satisfied_by_left = satisfied_by(scalar, left_prop);
+        let satisfied_by_right = satisfied_by(scalar, right_prop);
+        match (satisfied_by_left, satisfied_by_right) {
+            (true, true) => return Self::ALL(scalar),
+            (true, false) => return Self::Left(scalar),
+            (false, true) => return Self::Right(scalar),
+            _ => (),
         }
 
         if let ScalarExpr::FunctionCall(func) = scalar {
