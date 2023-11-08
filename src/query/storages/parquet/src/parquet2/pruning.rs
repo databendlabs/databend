@@ -303,9 +303,8 @@ impl PartitionPruner {
             stats.partitions_scanned += 1;
 
             // Currently, only blocking io is allowed to prune pages.
-            let part = self.make_row_group_part(
-                path, rg, rg_idx, &row_group_stats, operator.clone())?;
-            partitions.push(part);
+            let part =
+                self.make_row_group_part(path, rg, rg_idx, &row_group_stats, operator.clone())?;
         }
         Ok((stats, partitions))
     }
