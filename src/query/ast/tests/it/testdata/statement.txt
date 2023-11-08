@@ -13615,6 +13615,29 @@ CreateConnection(
 
 
 ---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = any_value 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+    },
+)
+
+
+---------- Input ----------
 DROP CONNECTION IF EXISTS my_conn;
 ---------- Output ---------
 CREATE CONNECTION IF NOT EXISTS my_conn 
