@@ -39,6 +39,7 @@ use databend_query::test_kits::create_query_context;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_always_call_on_finished() -> Result<()> {
     let settings = ExecutorSettings {
+        enable_profiling: false,
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
     };

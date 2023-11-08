@@ -33,6 +33,7 @@ use crate::Domain;
 use crate::Scalar;
 use crate::TableSchemaRef;
 use crate::Value;
+use crate::ValueRef;
 
 pub type SendableDataBlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
@@ -46,7 +47,7 @@ pub struct DataBlock {
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BlockEntry {
     pub data_type: DataType,
     pub value: Value<AnyType>,
@@ -56,6 +57,9 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
+            if let ValueRef::Column(c) = value.as_ref() {
+                c.check_valid().unwrap();
+            }
             check_type(&data_type, &value);
         }
 
@@ -110,16 +114,34 @@ impl DataBlock {
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        debug_assert!(columns.iter().all(|entry| match &entry.value {
-            Value::Scalar(_) => true,
-            Value::Column(c) => c.len() == num_rows && c.data_type() == entry.data_type,
-        }));
+        #[cfg(debug_assertions)]
+        Self::check_columns_valid(&columns, num_rows).unwrap();
 
         Self {
             columns,
             num_rows,
             meta,
         }
+    }
+
+    fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
+        for entry in columns.iter() {
+            if let Value::Column(c) = &entry.value {
+                c.check_valid()?;
+                if c.len() != num_rows {
+                    return Err(ErrorCode::Internal(format!(
+                        "DataBlock corrupted, column length mismatch, col: {}, num_rows: {}",
+                        c.len(),
+                        num_rows
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn check_valid(&self) -> Result<()> {
+        Self::check_columns_valid(&self.columns, self.num_rows)
     }
 
     #[inline]
@@ -300,12 +322,9 @@ impl DataBlock {
 
     #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
-        #[cfg(debug_assertions)]
-        if let Value::Column(col) = &entry.value {
-            assert_eq!(self.num_rows, col.len());
-            assert_eq!(col.data_type(), entry.data_type);
-        }
         self.columns.push(entry);
+        #[cfg(debug_assertions)]
+        self.check_valid().unwrap();
     }
 
     #[inline]

@@ -11,9 +11,6 @@ edition = { workspace = true }
 doctest = false
 test = false
 
-[features]
-enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/enable-histogram-metrics"]
-
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
@@ -54,7 +51,6 @@ futures = "0.3.24"
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = "0.10.5"
-lazy_static = { workspace = true }
 log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }

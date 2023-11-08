@@ -13594,6 +13594,97 @@ DescribeTask(
 
 
 ---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = any_value 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP CONNECTION IF EXISTS my_conn;
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn 
+---------- AST ------------
+DropConnection(
+    DropConnectionStmt {
+        if_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                26..33,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+DESC CONNECTION my_conn;
+---------- Output ---------
+CREATE CONNECTION my_conn 
+---------- AST ------------
+DescribeConnection(
+    DescribeConnectionStmt {
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                16..23,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW CONNECTIONS;
+---------- Output ---------
+SHOW CONNECTIONS
+---------- AST ------------
+ShowConnections(
+    ShowConnectionsStmt,
+)
+
+
+---------- Input ----------
 --各环节转各环节转各环节转各环节转各
   select 34343
 ---------- Output ---------

@@ -151,7 +151,7 @@ impl OptimizeTableInterpreter {
 
         // check if the table is locked.
         let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        if table_lock.check_lock(catalog.clone()).await? {
+        if self.plan.need_lock && table_lock.check_lock(catalog.clone()).await? {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table

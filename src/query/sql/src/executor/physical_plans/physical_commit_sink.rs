@@ -22,6 +22,7 @@ use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
 
 // TODO(sky): make TableMutationAggregator distributed
+/// The commit sink is used to commit the data to the table.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CommitSink {
     pub input: Box<PhysicalPlan>,

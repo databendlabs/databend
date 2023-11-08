@@ -15,6 +15,7 @@
 use common_base::base::mask_connection_info;
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use common_metrics::http::metrics_incr_http_response_errors_count;
 use highway::HighwayHash;
 use log::error;
 use log::info;
@@ -37,7 +38,6 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use crate::servers::http::metrics::metrics_incr_http_response_errors_count;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
