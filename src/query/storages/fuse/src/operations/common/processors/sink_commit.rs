@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
+use common_catalog::lock::Lock;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -27,24 +28,22 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_metrics::storage::*;
+use common_pipeline_core::LockGuard;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use storages_common_locks::set_backoff;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
-use table_lock::TableLockHandlerWrapper;
-use table_lock::TableLockHeartbeat;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::metrics::metrics_inc_commit_aborts;
-use crate::metrics::metrics_inc_commit_copied_files;
-use crate::metrics::metrics_inc_commit_milliseconds;
-use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::SnapshotGenerator;
@@ -92,7 +91,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     abort_operation: AbortOperation,
-    heartbeat: TableLockHeartbeat,
+    lock_guard: Option<LockGuard>,
     need_lock: bool,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
@@ -121,7 +120,7 @@ where F: SnapshotGenerator + Send + 'static
             copied_files,
             snapshot_gen,
             abort_operation: AbortOperation::default(),
-            heartbeat: TableLockHeartbeat::default(),
+            lock_guard: None,
             transient: table.transient(),
             backoff: ExponentialBackoff::default(),
             retries: 0,
@@ -163,7 +162,7 @@ where F: SnapshotGenerator + Send + 'static
 
         self.abort_operation = meta.abort_operation;
 
-        self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
+        self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
         self.snapshot_gen
             .set_conflict_resolve_context(meta.conflict_resolve_context);
@@ -205,6 +204,8 @@ where F: SnapshotGenerator + Send + 'static
         }
 
         if matches!(self.state, State::Finish) {
+            // release the lock manually.
+            std::mem::take(&mut self.lock_guard);
             return Ok(Event::Finished);
         }
 
@@ -287,11 +288,11 @@ where F: SnapshotGenerator + Send + 'static
                 }
             }
             State::TryLock => {
-                let table_info = self.table.get_table_info();
-                let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-                match handler.try_lock(self.ctx.clone(), table_info.clone()).await {
-                    Ok(heartbeat) => {
-                        self.heartbeat = heartbeat;
+                let table_lock =
+                    LockManager::create_table_lock(self.table.get_table_info().clone())?;
+                match table_lock.try_lock(self.ctx.clone()).await {
+                    Ok(guard) => {
+                        self.lock_guard = guard;
                         self.state = State::FillDefault;
                     }
                     Err(e) => {
@@ -378,7 +379,6 @@ where F: SnapshotGenerator + Send + 'static
                                 SegmentInfo::VERSION,
                             ))?;
                         }
-                        self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
@@ -440,7 +440,6 @@ where F: SnapshotGenerator + Send + 'static
                 metrics_inc_commit_aborts();
                 // todo: use histogram when it ready
                 metrics_inc_commit_milliseconds(duration.as_millis());
-                self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
                 return Err(ErrorCode::StorageOther(format!(

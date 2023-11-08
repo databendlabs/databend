@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::CopyIntoTablePhysicalPlan;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::MergeInto;
@@ -172,10 +172,7 @@ impl PhysicalPlanReplacer for Fragmenter {
     }
 
     //  TODO(Sky): remove rebudant code
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &CopyIntoTablePhysicalPlan,
-    ) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
                 self.state = State::SelectLeaf;
@@ -183,15 +180,13 @@ impl PhysicalPlanReplacer for Fragmenter {
             }
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(
-                    CopyIntoTablePhysicalPlan {
-                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                            plan: input,
-                            ..*query_ctx.clone()
-                        })),
-                        ..plan.clone()
-                    },
-                )))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
             }
         }
     }

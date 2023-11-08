@@ -27,6 +27,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_metrics::storage::*;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -40,7 +41,6 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::io::VirtualColumnReader;
-use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 
 pub struct DeserializeDataTransform {

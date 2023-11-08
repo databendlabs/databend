@@ -105,9 +105,6 @@ test: unit-test stateless-test sqllogic-test metactl-test
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 
-docs:
-	bash ./scripts/build/build-website.sh
-
 clean:
 	cargo clean
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e

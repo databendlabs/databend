@@ -36,12 +36,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_rows_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_rows_counter;
+use common_metrics::storage::*;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -236,21 +231,21 @@ impl MatchedAggregator {
                     "multi rows from source match one and the same row in the target_table multi times",
                 ));
             }
-            let handle = io_runtime.spawn(async_backtrace::location!().frame({
-                async move {
-                    let mutation_log_entry = aggregation_ctx
-                        .apply_update_and_deletion_to_data_block(
-                            segment_idx,
-                            block_idx,
-                            &block_meta,
-                            modified_offsets,
-                        )
-                        .await?;
 
-                    drop(permit);
-                    Ok::<_, ErrorCode>(mutation_log_entry)
-                }
-            }));
+            let query_id = aggregation_ctx.ctx.get_id();
+            let handle = io_runtime.spawn(query_id, async move {
+                let mutation_log_entry = aggregation_ctx
+                    .apply_update_and_deletion_to_data_block(
+                        segment_idx,
+                        block_idx,
+                        &block_meta,
+                        modified_offsets,
+                    )
+                    .await?;
+
+                drop(permit);
+                Ok::<_, ErrorCode>(mutation_log_entry)
+            });
             mutation_log_handlers.push(handle);
         }
 

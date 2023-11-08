@@ -17,12 +17,14 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_base::runtime::GlobalIORuntime;
+use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
+use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
-use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
@@ -31,6 +33,7 @@ use common_expression::SendableDataBlockStream;
 use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::bind_one_table;
 use common_sql::executor::CommitSink;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind::Merge;
@@ -48,24 +51,30 @@ use common_sql::plans::BoundColumnRef;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
 use common_sql::plans::FunctionCall;
+use common_sql::plans::JoinType;
 use common_sql::plans::MergeInto as MergePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::RelOperator;
 use common_sql::plans::ScalarItem;
 use common_sql::plans::UpdatePlan;
 use common_sql::BindContext;
+use common_sql::ColumnBinding;
 use common_sql::ColumnBindingBuilder;
 use common_sql::IndexType;
 use common_sql::MetadataRef;
+use common_sql::NameResolutionContext;
 use common_sql::ScalarExpr;
 use common_sql::TypeCheck;
+use common_sql::TypeChecker;
 use common_sql::Visibility;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
+use log::info;
+use log::warn;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLockHandlerWrapper;
 use tokio_stream::StreamExt;
 
 use super::Interpreter;
@@ -84,6 +93,47 @@ const DUMMY_COL_INDEX: usize = 1;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
     plan: MergePlan,
+}
+
+struct MergeStyleJoin<'a> {
+    source_conditions: &'a [ScalarExpr],
+    target_conditions: &'a [ScalarExpr],
+    source_sexpr: &'a SExpr,
+    target_sexpr: &'a SExpr,
+}
+
+impl MergeStyleJoin<'_> {
+    pub fn new(join: &SExpr) -> MergeStyleJoin {
+        let join_op = match join.plan() {
+            RelOperator::Join(j) => j,
+            _ => unreachable!(),
+        };
+        assert!(matches!(join_op.join_type, JoinType::Right));
+        let source_conditions = &join_op.right_conditions;
+        let target_conditions = &join_op.left_conditions;
+        let source_sexpr = join.child(1).unwrap();
+        let target_sexpr = join.child(0).unwrap();
+        MergeStyleJoin {
+            source_conditions,
+            target_conditions,
+            source_sexpr,
+            target_sexpr,
+        }
+    }
+
+    pub fn collect_column_map(&self) -> HashMap<String, ColumnBinding> {
+        let mut column_map = HashMap::new();
+        for (t, s) in self
+            .target_conditions
+            .iter()
+            .zip(self.source_conditions.iter())
+        {
+            if let (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) = (t, s) {
+                column_map.insert(t_col.column.column_name.clone(), s_col.column.clone());
+            }
+        }
+        column_map
+    }
 }
 
 impl MergeIntoInterpreter {
@@ -106,22 +156,10 @@ impl Interpreter for MergeIntoInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
-        // Add table lock heartbeat before execution.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler.try_lock(self.ctx.clone(), table_info).await?;
-
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
+        // Add table lock before execution.
+        let table_lock = LockManager::create_table_lock(table_info)?;
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -141,6 +179,7 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
+                false,
             )
             .await;
         }
@@ -180,7 +219,7 @@ impl MergeIntoInterpreter {
         };
 
         let optimized_input = self
-            .build_static_filter(&input, meta_data, self.ctx.clone())
+            .build_static_filter(&input, meta_data, self.ctx.clone(), check_table)
             .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
@@ -242,7 +281,7 @@ impl MergeIntoInterpreter {
                     table.get_table_info().engine(),
                 )))?;
 
-        let table_info = fuse_table.get_table_info();
+        let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
@@ -427,9 +466,10 @@ impl MergeIntoInterpreter {
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
             merge_meta: false,
+            need_lock: false,
         }));
 
-        Ok((physical_plan, table_info.clone()))
+        Ok((physical_plan, table_info))
     }
 
     async fn build_static_filter(
@@ -437,6 +477,7 @@ impl MergeIntoInterpreter {
         join: &SExpr,
         metadata: &MetadataRef,
         ctx: Arc<QueryContext>,
+        table: Arc<dyn Table>,
     ) -> Result<Box<SExpr>> {
         // 1. collect statistics from the source side
         // plan of source table is extended to:
@@ -448,40 +489,159 @@ impl MergeIntoInterpreter {
         //       EvalScalar(source_join_side_expr)
         //          \
         //         SourcePlan
-
-        let source_plan = join.child(1)?;
-        let join_op = match join.plan() {
-            RelOperator::Join(j) => j,
-            _ => unreachable!(),
-        };
-        if join_op.left_conditions.len() != 1 || join_op.right_conditions.len() != 1 {
+        let m_join = MergeStyleJoin::new(join);
+        let mut eval_scalar_items = Vec::with_capacity(m_join.source_conditions.len());
+        let mut min_max_binding = Vec::with_capacity(m_join.source_conditions.len() * 2);
+        let mut min_max_scalar_items = Vec::with_capacity(m_join.source_conditions.len() * 2);
+        let mut group_items = vec![];
+        if m_join.source_conditions.is_empty() {
             return Ok(Box::new(join.clone()));
         }
-        let source_side_expr = &join_op.right_conditions[0];
-        let target_side_expr = &join_op.left_conditions[0];
-
-        // eval source side join expr
-        let source_side_join_expr_index = metadata.write().add_derived_column(
-            "source_side_join_expr".to_string(),
-            source_side_expr.data_type()?,
-        );
-        let source_side_join_expr_binding = ColumnBindingBuilder::new(
-            "source_side_join_expr".to_string(),
-            source_side_join_expr_index,
-            Box::new(source_side_expr.data_type()?),
-            Visibility::Visible,
-        )
-        .build();
-        let evaled_source_side_join_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span: None,
-            column: source_side_join_expr_binding.clone(),
-        });
-        let eval_source_side_join_expr_op = EvalScalar {
-            items: vec![ScalarItem {
+        let column_map = m_join.collect_column_map();
+        let fuse_table =
+            table
+                .as_any()
+                .downcast_ref::<FuseTable>()
+                .ok_or(ErrorCode::Unimplemented(format!(
+                    "table {}, engine type {}, does not support MERGE INTO",
+                    table.name(),
+                    table.get_table_info().engine(),
+                )))?;
+        let mut group_exprs = vec![];
+        if let Some(cluster_key_str) = fuse_table.cluster_key_str() {
+            let sql_dialect = Dialect::MySQL;
+            let tokens = tokenize_sql(cluster_key_str)?;
+            let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+            let (mut bind_context, metadata) = bind_one_table(table)?;
+            if !ast_exprs.is_empty() {
+                let ast_expr = &ast_exprs[0];
+                let name_resolution_ctx =
+                    NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+                let mut type_checker = TypeChecker::new(
+                    &mut bind_context,
+                    ctx.clone(),
+                    &name_resolution_ctx,
+                    metadata.clone(),
+                    &[],
+                    false,
+                    false,
+                );
+                let (mut scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
+                if let ScalarExpr::FunctionCall(f) = &scalar_expr {
+                    if f.func_name == "tuple" {
+                        if f.arguments.is_empty() {
+                            warn!("cluster key is empty, use default plan");
+                            return Ok(Box::new(join.clone()));
+                        }
+                        scalar_expr = f.arguments[0].clone();
+                    }
+                }
+                let projected = scalar_expr.try_project_column_binding(|binding| {
+                    column_map.get(&binding.column_name).cloned()
+                });
+                if let Some(p) = projected {
+                    group_exprs.push(p);
+                }
+            }
+        }
+        for group_expr in group_exprs {
+            let index = metadata
+                .write()
+                .add_derived_column("".to_string(), group_expr.data_type()?);
+            let evaled = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "".to_string(),
+                    index,
+                    Box::new(group_expr.data_type()?),
+                    Visibility::Visible,
+                )
+                .build(),
+            });
+            eval_scalar_items.push(ScalarItem {
+                scalar: group_expr.clone(),
+                index,
+            });
+            group_items.push(ScalarItem {
+                scalar: evaled.clone(),
+                index,
+            });
+        }
+        for source_side_expr in m_join.source_conditions {
+            // eval source side join expr
+            let index = metadata
+                .write()
+                .add_derived_column("".to_string(), source_side_expr.data_type()?);
+            let evaled = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "".to_string(),
+                    index,
+                    Box::new(source_side_expr.data_type()?),
+                    Visibility::Visible,
+                )
+                .build(),
+            });
+            eval_scalar_items.push(ScalarItem {
                 scalar: source_side_expr.clone(),
-                index: source_side_join_expr_index,
-            }],
+                index,
+            });
+
+            // eval min/max of source side join expr
+            let min_display_name = format!("min({:?})", source_side_expr);
+            let max_display_name = format!("max({:?})", source_side_expr);
+            let min_index = metadata
+                .write()
+                .add_derived_column(min_display_name.clone(), source_side_expr.data_type()?);
+            let max_index = metadata
+                .write()
+                .add_derived_column(max_display_name.clone(), source_side_expr.data_type()?);
+            let min_binding = ColumnBindingBuilder::new(
+                min_display_name.clone(),
+                min_index,
+                Box::new(source_side_expr.data_type()?),
+                Visibility::Visible,
+            )
+            .build();
+            let max_binding = ColumnBindingBuilder::new(
+                max_display_name.clone(),
+                max_index,
+                Box::new(source_side_expr.data_type()?),
+                Visibility::Visible,
+            )
+            .build();
+            min_max_binding.push(min_binding);
+            min_max_binding.push(max_binding);
+            let min = ScalarItem {
+                scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                    func_name: "min".to_string(),
+                    distinct: false,
+                    params: vec![],
+                    args: vec![evaled.clone()],
+                    return_type: Box::new(source_side_expr.data_type()?),
+                    display_name: min_display_name.clone(),
+                }),
+                index: min_index,
+            };
+            let max = ScalarItem {
+                scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                    func_name: "max".to_string(),
+                    distinct: false,
+                    params: vec![],
+                    args: vec![evaled],
+                    return_type: Box::new(source_side_expr.data_type()?),
+                    display_name: max_display_name.clone(),
+                }),
+                index: max_index,
+            };
+            min_max_scalar_items.push(min);
+            min_max_scalar_items.push(max);
+        }
+
+        let eval_source_side_join_expr_op = EvalScalar {
+            items: eval_scalar_items,
         };
+        let source_plan = m_join.source_sexpr;
         let eval_target_side_condition_sexpr = if let RelOperator::Exchange(_) = source_plan.plan()
         {
             // there is another row_number operator here
@@ -496,57 +656,13 @@ impl MergeIntoInterpreter {
             )
         };
 
-        // eval min/max of source side join expr
-        let min_display_name = format!("min({:?})", source_side_expr);
-        let max_display_name = format!("max({:?})", source_side_expr);
-        let min_index = metadata
-            .write()
-            .add_derived_column(min_display_name.clone(), source_side_expr.data_type()?);
-        let max_index = metadata
-            .write()
-            .add_derived_column(max_display_name.clone(), source_side_expr.data_type()?);
         let mut bind_context = Box::new(BindContext::new());
-        let min_binding = ColumnBindingBuilder::new(
-            min_display_name.clone(),
-            min_index,
-            Box::new(source_side_expr.data_type()?),
-            Visibility::Visible,
-        )
-        .build();
-        let max_binding = ColumnBindingBuilder::new(
-            max_display_name.clone(),
-            max_index,
-            Box::new(source_side_expr.data_type()?),
-            Visibility::Visible,
-        )
-        .build();
-        bind_context.columns = vec![min_binding.clone(), max_binding.clone()];
-        let min = ScalarItem {
-            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                func_name: "min".to_string(),
-                distinct: false,
-                params: vec![],
-                args: vec![evaled_source_side_join_expr.clone()],
-                return_type: Box::new(source_side_expr.data_type()?),
-                display_name: min_display_name.clone(),
-            }),
-            index: min_index,
-        };
-        let max = ScalarItem {
-            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                func_name: "max".to_string(),
-                distinct: false,
-                params: vec![],
-                args: vec![evaled_source_side_join_expr],
-                return_type: Box::new(source_side_expr.data_type()?),
-                display_name: max_display_name.clone(),
-            }),
-            index: max_index,
-        };
+        bind_context.columns = min_max_binding;
+
         let agg_partial_op = Aggregate {
             mode: AggregateMode::Partial,
-            group_items: vec![],
-            aggregate_functions: vec![min.clone(), max.clone()],
+            group_items: group_items.clone(),
+            aggregate_functions: min_max_scalar_items.clone(),
             from_distinct: false,
             limit: None,
             grouping_sets: None,
@@ -557,8 +673,8 @@ impl MergeIntoInterpreter {
         );
         let agg_final_op = Aggregate {
             mode: AggregateMode::Final,
-            group_items: vec![],
-            aggregate_functions: vec![min.clone(), max.clone()],
+            group_items,
+            aggregate_functions: min_max_scalar_items,
             from_distinct: false,
             limit: None,
             grouping_sets: None,
@@ -577,55 +693,116 @@ impl MergeIntoInterpreter {
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
 
-        debug_assert_eq!(blocks.len(), 1);
-        let block = &blocks[0];
-        debug_assert_eq!(block.num_columns(), 2);
-
-        let get_scalar_expr = |block: &DataBlock, index: usize| {
-            let block_entry = &block.columns()[index];
-            let scalar = match &block_entry.value {
-                common_expression::Value::Scalar(scalar) => scalar.clone(),
-                common_expression::Value::Column(column) => {
-                    debug_assert_eq!(column.len(), 1);
-                    let value_ref = column.index(0).unwrap();
-                    value_ref.to_owned()
-                }
-            };
-            ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            })
-        };
-
-        let min_scalar = get_scalar_expr(block, 0);
-        let max_scalar = get_scalar_expr(block, 1);
-
         // 2. build filter and push down to target side
-        let gte_min = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "gte".to_string(),
-            params: vec![],
-            arguments: vec![target_side_expr.clone(), min_scalar],
-        });
-        let lte_max = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "lte".to_string(),
-            params: vec![],
-            arguments: vec![target_side_expr.clone(), max_scalar],
-        });
+        let mut filters = Vec::with_capacity(m_join.target_conditions.len());
 
-        let filters = vec![gte_min, lte_max];
-        let mut target_plan = join.child(0)?.clone();
+        for (i, target_side_expr) in m_join.target_conditions.iter().enumerate() {
+            let mut filter_parts = vec![];
+            for block in blocks.iter() {
+                let block = block.convert_to_full();
+                let min_column = block.get_by_offset(i * 2).value.as_column().unwrap();
+                let max_column = block.get_by_offset(i * 2 + 1).value.as_column().unwrap();
+                for (min_scalar, max_scalar) in min_column.iter().zip(max_column.iter()) {
+                    let gte_min = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "gte".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            target_side_expr.clone(),
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: None,
+                                value: min_scalar.to_owned(),
+                            }),
+                        ],
+                    });
+                    let lte_max = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "lte".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            target_side_expr.clone(),
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: None,
+                                value: max_scalar.to_owned(),
+                            }),
+                        ],
+                    });
+                    let and = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and".to_string(),
+                        params: vec![],
+                        arguments: vec![gte_min, lte_max],
+                    });
+                    filter_parts.push(and);
+                }
+            }
+            filters.extend(Self::combine_filter_parts(&filter_parts).into_iter());
+        }
+        let mut target_plan = m_join.target_sexpr.clone();
         Self::push_down_filters(&mut target_plan, &filters)?;
         let new_sexpr =
             join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
         Ok(Box::new(new_sexpr))
     }
 
+    fn combine_filter_parts(filter_parts: &[ScalarExpr]) -> Option<ScalarExpr> {
+        match filter_parts.len() {
+            0 => None,
+            1 => Some(filter_parts[0].clone()),
+            _ => {
+                let mid = filter_parts.len() / 2;
+                let left = Self::combine_filter_parts(&filter_parts[0..mid]);
+                let right = Self::combine_filter_parts(&filter_parts[mid..]);
+                if let Some(left) = left {
+                    if let Some(right) = right {
+                        Some(ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "or".to_string(),
+                            params: vec![],
+                            arguments: vec![left, right],
+                        }))
+                    } else {
+                        Some(left)
+                    }
+                } else {
+                    right
+                }
+            }
+        }
+    }
+
+    fn display_scalar_expr(s: &ScalarExpr) -> String {
+        match s {
+            ScalarExpr::BoundColumnRef(x) => x.column.column_name.clone(),
+            ScalarExpr::ConstantExpr(x) => x.value.to_string(),
+            ScalarExpr::WindowFunction(x) => format!("{:?}", x),
+            ScalarExpr::AggregateFunction(x) => format!("{:?}", x),
+            ScalarExpr::LambdaFunction(x) => format!("{:?}", x),
+            ScalarExpr::FunctionCall(x) => match x.func_name.as_str() {
+                "and" | "or" | "gte" | "lte" => {
+                    format!(
+                        "({} {} {})",
+                        Self::display_scalar_expr(&x.arguments[0]),
+                        x.func_name,
+                        Self::display_scalar_expr(&x.arguments[1])
+                    )
+                }
+                _ => format!("{:?}", x),
+            },
+            ScalarExpr::CastExpr(x) => format!("{:?}", x),
+            ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
+            ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
+        }
+    }
+
     fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
         match s_expr.plan() {
             RelOperator::Scan(s) => {
                 let mut new_scan = s.clone();
+                info!("push down {} filters:", filters.len());
+                for filter in filters {
+                    info!("{}", Self::display_scalar_expr(filter));
+                }
                 if let Some(preds) = new_scan.push_down_predicates {
                     new_scan.push_down_predicates =
                         Some(preds.iter().chain(filters).cloned().collect());

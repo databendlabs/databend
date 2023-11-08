@@ -34,7 +34,7 @@ impl Settings {
 
     fn try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => DefaultSettings::try_get_string(key),
         }
     }
@@ -66,6 +66,11 @@ impl Settings {
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
+    }
+
+    // Max block size for parquet reader
+    pub fn get_parquet_max_block_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_max_block_size")
     }
 
     // Get max_threads.
@@ -247,6 +252,10 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
     }
 
+    pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("http_handler_result_timeout_secs")
+    }
+
     pub fn get_query_result_cache_ttl_secs(&self) -> Result<u64> {
         self.try_get_u64("query_result_cache_ttl_secs")
     }
@@ -289,6 +298,10 @@ impl Settings {
 
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
         self.try_get_u64("table_lock_expire_secs")
+    }
+
+    pub fn get_acquire_lock_timeout(&self) -> Result<u64> {
+        self.try_get_u64("acquire_lock_timeout")
     }
 
     pub fn get_enterprise_license(&self) -> Result<String> {

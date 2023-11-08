@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_metrics::storage::*;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -25,9 +26,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_matched_rows;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_split_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_unmatched_rows;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;

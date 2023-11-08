@@ -69,10 +69,10 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
@@ -548,7 +548,7 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        build_fill_missing_columns_pipeline(
+        PipelineBuilder::build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),

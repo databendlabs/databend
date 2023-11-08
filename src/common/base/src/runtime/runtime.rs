@@ -39,7 +39,7 @@ pub trait TrySpawn {
     ///
     /// It allows to return an error before spawning the task.
     #[track_caller]
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, id: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static;
@@ -48,32 +48,32 @@ pub trait TrySpawn {
     ///
     /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
     #[track_caller]
-    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    fn spawn<T>(&self, id: impl Into<String>, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.try_spawn(task).unwrap()
+        self.try_spawn(id, task).unwrap()
     }
 }
 
 impl<S: TrySpawn> TrySpawn for Arc<S> {
     #[track_caller]
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, id: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.as_ref().try_spawn(task)
+        self.as_ref().try_spawn(id, task)
     }
 
     #[track_caller]
-    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    fn spawn<T>(&self, id: impl Into<String>, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.as_ref().spawn(task)
+        self.as_ref().spawn(id, task)
     }
 }
 
@@ -286,12 +286,19 @@ impl Runtime {
 
 impl TrySpawn for Runtime {
     #[track_caller]
-    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, id: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.handle.spawn(async_backtrace::location!().frame(task)))
+        let id = id.into();
+        let task = match id == GLOBAL_TASK {
+            true => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
+            false => {
+                async_backtrace::location!(format!("Running query {} spawn task", id)).frame(task)
+            }
+        };
+        Ok(self.handle.spawn(task))
     }
 }
 
@@ -373,3 +380,6 @@ where
         .await
         .map_err(|e| ErrorCode::Internal(format!("try join all futures failure, {}", e)))
 }
+
+pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";
+pub const GLOBAL_TASK_DESC: &str = "Global spawn task";

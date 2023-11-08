@@ -28,13 +28,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
+use common_metrics::storage::*;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentsIO;
-use crate::metrics::metrics_inc_compact_block_build_task_milliseconds;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::compact::compact_part::CompactExtraInfo;
@@ -235,21 +235,25 @@ impl BlockCompactMutator {
             let semaphore = semaphore.clone();
 
             let batch = lazy_parts.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(async move {
-                let mut res = vec![];
-                for lazy_part in batch {
-                    let mut builder =
-                        CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
-                    let parts = builder
-                        .build_tasks(
-                            lazy_part.segment_indices,
-                            lazy_part.compact_segments,
-                            semaphore.clone(),
-                        )
-                        .await?;
-                    res.extend(parts);
+            works.push({
+                let ctx = ctx.clone();
+                async move {
+                    let mut res = vec![];
+                    for lazy_part in batch {
+                        let mut builder =
+                            CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
+                        let parts = builder
+                            .build_tasks(
+                                ctx.clone(),
+                                lazy_part.segment_indices,
+                                lazy_part.compact_segments,
+                                semaphore.clone(),
+                            )
+                            .await?;
+                        res.extend(parts);
+                    }
+                    Ok::<_, ErrorCode>(res)
                 }
-                Ok::<_, ErrorCode>(res)
             });
         }
 
@@ -472,6 +476,7 @@ impl CompactTaskBuilder {
     // through the blocks, and finds the blocks >= N and blocks < 2N as a task.
     async fn build_tasks(
         &mut self,
+        ctx: Arc<dyn TableContext>,
         segment_indices: Vec<usize>,
         compact_segments: Vec<Arc<CompactSegmentInfo>>,
         semaphore: Arc<Semaphore>,
@@ -486,13 +491,11 @@ impl CompactTaskBuilder {
         let mut handlers = Vec::with_capacity(compact_segments.len());
         for segment in compact_segments.into_iter().rev() {
             let permit = acquire_task_permit(semaphore.clone()).await?;
-            let handler = runtime.spawn(async_backtrace::location!().frame({
-                async move {
-                    let blocks = segment.block_metas()?;
-                    drop(permit);
-                    Ok::<_, ErrorCode>((blocks, segment.summary.clone()))
-                }
-            }));
+            let handler = runtime.spawn(ctx.get_id(), async move {
+                let blocks = segment.block_metas()?;
+                drop(permit);
+                Ok::<_, ErrorCode>((blocks, segment.summary.clone()))
+            });
             handlers.push(handler);
         }
 

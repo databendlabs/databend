@@ -1849,6 +1849,12 @@ Functions overloads:
 0 json_array FACTORY
 0 json_array_elements FACTORY
 0 json_each FACTORY
+0 json_exists_all_keys(Variant, Array(String)) :: Boolean
+1 json_exists_all_keys(Variant NULL, Array(String) NULL) :: Boolean NULL
+0 json_exists_any_keys(Variant, Array(String)) :: Boolean
+1 json_exists_any_keys(Variant NULL, Array(String) NULL) :: Boolean NULL
+0 json_exists_key(Variant, String) :: Boolean
+1 json_exists_key(Variant NULL, String NULL) :: Boolean NULL
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
 0 json_object FACTORY

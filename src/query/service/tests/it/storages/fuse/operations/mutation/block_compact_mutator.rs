@@ -118,6 +118,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             snapshot,
             catalog_info,
             false,
+            true,
         )?;
 
         let build_res =

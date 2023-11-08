@@ -43,11 +43,18 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("parquet_max_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "Max block size for parquet reader",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -92,6 +99,16 @@ impl DefaultSettings {
                 ("flight_client_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum time in seconds that a flight client request can be processed.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("http_handler_result_timeout_secs", DefaultSettingValue {
+                    value: {
+                        let result_timeout_secs = global_conf.map(|conf| conf.query.http_handler_result_timeout_secs)
+                            .unwrap_or(60);
+                        UserSettingValue::UInt64(result_timeout_secs)
+                    },
+                    desc: "Set the timeout in seconds that a http query session expires without any polls.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -326,6 +343,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("acquire_lock_timeout", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Sets the maximum timeout in seconds for acquire a lock.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Sql duplicate label for deduplication.",
@@ -333,7 +356,7 @@ impl DefaultSettings {
                     display_in_show_settings: false,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of copy into.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -585,7 +608,7 @@ impl DefaultSettings {
 
     pub fn try_get_string(key: &str) -> Result<String> {
         match DefaultSettings::instance()?.settings.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => Err(ErrorCode::UnknownVariable(format!(
                 "Unknown variable: {:?}",
                 key

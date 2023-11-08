@@ -515,6 +515,7 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     // check that orphan files and lase snapshot file has been purged
     orphan_files.extend(vacuum_snapshot_file_set);
     let purge_files: HashSet<String> = orphan_files.into_iter().collect();
+    println!("purge_files: {:?}", purge_files);
     check_vacuum(
         &fixture,
         purge_files,

@@ -1,16 +1,9 @@
 name: "Build Linux with AddressSanitizer"
 description: "Build with AddressSanitizer"
 inputs:
-  sha:
-    description: "Git commit sha"
-    required: true
   target:
     description: ""
     required: true
-  upload:
-    description: "Upload artifact"
-    required: false
-    default: "false"
   artifacts:
     description: "Artifacts to build"
     required: false
@@ -19,10 +12,6 @@ inputs:
     description: "Features to build"
     required: false
     default: "default"
-  category:
-    description: "Category to upload"
-    required: false
-    default: "false"
 runs:
   using: "composite"
   steps:
@@ -66,7 +55,6 @@ runs:
           echo "==> building databend-$artifact with sanitizer ..."
           cargo -Zbuild-std -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
         done
-        cargo -Zbuild-std -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Read elf

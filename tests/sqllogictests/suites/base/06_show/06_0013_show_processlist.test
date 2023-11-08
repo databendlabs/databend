@@ -1,0 +1,11 @@
+statement ok
+SHOW PROCESSLIST
+
+statement ok
+SHOW PROCESSLIST LIKE 't%' LIMIT 2
+
+statement ok
+SHOW PROCESSLIST WHERE database='default' LIMIT 2
+
+statement error
+SHOW PROCESSLIST WHERE tt='default' LIMIT 2

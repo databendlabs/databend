@@ -180,6 +180,35 @@ impl ScalarExpr {
             ScalarExpr::CastExpr(expr) => expr.argument.evaluable(),
         }
     }
+
+    pub fn try_project_column_binding(
+        &self,
+        f: impl Fn(&ColumnBinding) -> Option<ColumnBinding> + Copy,
+    ) -> Option<Self> {
+        match self {
+            ScalarExpr::BoundColumnRef(expr) => f(&expr.column).map(|x| {
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: x,
+                })
+            }),
+            ScalarExpr::FunctionCall(expr) => {
+                // Any of the arguments return None, then return None
+                let arguments = expr
+                    .arguments
+                    .iter()
+                    .map(|x| x.try_project_column_binding(f))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: expr.func_name.clone(),
+                    params: expr.params.clone(),
+                    arguments,
+                }))
+            }
+            _ => None,
+        }
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

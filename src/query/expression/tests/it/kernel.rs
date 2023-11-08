@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::block_debug::assert_block_value_eq;
 use common_expression::types::number::*;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -24,6 +25,8 @@ use common_expression::Value;
 use goldenfile::Mint;
 
 use crate::common::*;
+use crate::get_all_test_data_types;
+use crate::rand_block_for_all_types;
 
 #[test]
 pub fn test_pass() {
@@ -202,90 +205,42 @@ pub fn test_pass() {
 /// This test covers take.rs, take_chunks.rs, take_compact.rs, filter.rs, concat.rs.
 #[test]
 pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
-    use common_expression::types::decimal::DecimalSize;
     use common_expression::types::DataType;
-    use common_expression::types::DecimalDataType;
-    use common_expression::types::NumberDataType;
-    use common_expression::BlockEntry;
     use common_expression::Column;
     use common_expression::DataBlock;
-    use common_expression::Value;
     use common_hashtable::RowPtr;
     use itertools::Itertools;
     use rand::Rng;
 
     let mut rng = rand::thread_rng();
     let num_blocks = rng.gen_range(5..30);
-    let data_types = vec![
-        DataType::Null,
-        DataType::EmptyArray,
-        DataType::EmptyMap,
-        DataType::Boolean,
-        DataType::String,
-        DataType::Bitmap,
-        DataType::Variant,
-        DataType::Timestamp,
-        DataType::Date,
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::UInt32),
-        DataType::Number(NumberDataType::UInt64),
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::Int64),
-        DataType::Number(NumberDataType::Float32),
-        DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-        DataType::Nullable(Box::new(DataType::String)),
-        DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
-        DataType::Map(Box::new(DataType::Tuple(vec![
-            DataType::Number(NumberDataType::UInt64),
-            DataType::String,
-        ]))),
-    ];
+    let data_types: Vec<DataType> = get_all_test_data_types();
 
     let mut count = 0;
     let mut take_indices = Vec::new();
     let mut take_chunks_indices = Vec::new();
     let mut take_compact_indices = Vec::new();
     let mut idx = 0;
-    let mut blocks = Vec::with_capacity(data_types.len());
+    let mut blocks = Vec::with_capacity(num_blocks);
     let mut filtered_blocks = Vec::with_capacity(data_types.len());
+
     for i in 0..num_blocks {
-        let len = rng.gen_range(5..100);
-        let filter = Column::random(&DataType::Boolean, len)
+        let len = rng.gen_range(2..100);
+        let slice_start = rng.gen_range(0..len - 1);
+        let slice_end = rng.gen_range(slice_start..len);
+        let slice_len = slice_end - slice_start;
+
+        let mut filter = Column::random(&DataType::Boolean, len)
             .into_boolean()
             .unwrap();
+        filter.slice(slice_start, slice_len);
 
-        let mut columns = Vec::with_capacity(data_types.len());
-        for data_type in data_types.iter() {
-            columns.push(Column::random(data_type, len));
-        }
+        let random_block = rand_block_for_all_types(len);
+        let random_block = random_block.slice(slice_start..slice_end);
 
-        let mut block_entries = Vec::with_capacity(data_types.len());
-        let mut filtered_block_entries = Vec::with_capacity(data_types.len());
-        for (col, data_type) in columns.into_iter().zip(data_types.iter()) {
-            filtered_block_entries.push(BlockEntry::new(
-                data_type.clone(),
-                Value::Column(col.filter(&filter)),
-            ));
-            block_entries.push(BlockEntry::new(data_type.clone(), Value::Column(col)));
-        }
+        filtered_blocks.push(random_block.clone().filter_with_bitmap(&filter)?);
 
-        blocks.push(DataBlock::new(block_entries, len));
-        filtered_blocks.push(DataBlock::new(
-            filtered_block_entries,
-            len - filter.unset_bits(),
-        ));
+        blocks.push(random_block);
 
         for (j, val) in filter.iter().enumerate() {
             if val {
@@ -358,67 +313,13 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
 /// Add more tests for take_compact.rs.
 #[test]
 pub fn test_take_compact() -> common_exception::Result<()> {
-    use common_expression::types::decimal::DecimalSize;
-    use common_expression::types::DataType;
-    use common_expression::types::DecimalDataType;
-    use common_expression::types::NumberDataType;
-    use common_expression::BlockEntry;
-    use common_expression::Column;
-    use common_expression::DataBlock;
-    use common_expression::Value;
     use rand::Rng;
 
     let mut rng = rand::thread_rng();
-    let data_types = vec![
-        DataType::Null,
-        DataType::EmptyArray,
-        DataType::EmptyMap,
-        DataType::Boolean,
-        DataType::String,
-        DataType::Bitmap,
-        DataType::Variant,
-        DataType::Timestamp,
-        DataType::Date,
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::UInt32),
-        DataType::Number(NumberDataType::UInt64),
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::Int64),
-        DataType::Number(NumberDataType::Float32),
-        DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-        DataType::Nullable(Box::new(DataType::String)),
-        DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
-        DataType::Map(Box::new(DataType::Tuple(vec![
-            DataType::Number(NumberDataType::UInt64),
-            DataType::String,
-        ]))),
-    ];
-
     for _ in 0..rng.gen_range(5..30) {
         let len = rng.gen_range(5..100);
 
-        let mut columns = Vec::with_capacity(data_types.len());
-        for data_type in data_types.iter() {
-            columns.push(Column::random(data_type, len));
-        }
-
-        let mut block_entries = Vec::with_capacity(data_types.len());
-        for (col, data_type) in columns.into_iter().zip(data_types.iter()) {
-            block_entries.push(BlockEntry::new(data_type.clone(), Value::Column(col)));
-        }
-        let block = DataBlock::new(block_entries, len);
+        let block = rand_block_for_all_types(len);
 
         let mut count = 0;
         let mut take_indices = Vec::new();
@@ -441,6 +342,73 @@ pub fn test_take_compact() -> common_exception::Result<()> {
         for idx in 0..columns_1.len() {
             assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
             assert_eq!(columns_1[idx].value, columns_2[idx].value);
+        }
+    }
+
+    Ok(())
+}
+
+/// Random Block A
+/// +----+----+----+----+----+----+----+----+----+----+
+/// B = A + A + A,  l = A.len()
+/// B.slice(0,l ) == B.slice(l, l) == A
+#[test]
+pub fn test_filters() -> common_exception::Result<()> {
+    use common_expression::types::DataType;
+    use common_expression::Column;
+    use common_expression::DataBlock;
+    use rand::Rng;
+
+    let mut rng = rand::thread_rng();
+    let num_rows = 24;
+    let blocks = 10;
+    for _ in 0..rng.gen_range(5..30) {
+        let a = rand_block_for_all_types(num_rows);
+        let b = DataBlock::concat(&vec![a.clone(); blocks])?;
+        let c = b.clone();
+
+        assert!(c.num_rows() == a.num_rows() * blocks);
+        assert!(c.num_columns() == a.num_columns());
+
+        // slice and filters and take
+        for i in 0..blocks - 1 {
+            let offset = rng.gen_range(0..num_rows);
+
+            let start = i * num_rows + offset;
+            let end = (start + rng.gen_range(1..num_rows)).min(c.num_rows() - a.num_rows());
+
+            // random filter
+            let mut f = Column::random(&DataType::Boolean, num_rows * blocks)
+                .into_boolean()
+                .unwrap();
+            f.slice(start, end - start);
+
+            let bb = b.slice(start..end);
+            let cc = c.slice(a.num_rows()..c.num_rows()).slice(start..end);
+
+            assert_eq!(f.len(), end - start);
+            assert_eq!(f.len(), bb.num_rows());
+            assert_eq!(f.len(), cc.num_rows());
+
+            assert_block_value_eq(&bb, &cc);
+
+            let indices = f
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| *v)
+                .map(|(i, _)| i as u32)
+                .collect::<Vec<_>>();
+
+            let t_b = bb.take(&indices, &mut None)?;
+            let t_c = cc.take(&indices, &mut None)?;
+
+            let f_b = bb.filter_with_bitmap(&f)?;
+            let f_c = cc.filter_with_bitmap(&f)?;
+
+            assert_block_value_eq(&f_b, &f_c);
+
+            assert_block_value_eq(&f_b, &t_b);
+            assert_block_value_eq(&f_c, &t_c);
         }
     }
 
