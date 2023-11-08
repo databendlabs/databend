@@ -17,6 +17,7 @@ pub mod processor;
 
 mod duplicate_processor;
 mod port_trigger;
+pub mod profile;
 mod resize_processor;
 mod shuffle_processor;
 
