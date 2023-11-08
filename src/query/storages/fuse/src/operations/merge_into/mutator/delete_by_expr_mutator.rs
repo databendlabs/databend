@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::eval_function;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -24,6 +23,10 @@ use common_expression::FunctionContext;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+
+use super::utils::get_not;
+use crate::operations::merge_into::mutator::utils::expr2prdicate;
+use crate::operations::merge_into::mutator::utils::get_and;
 pub struct DeleteByExprMutator {
     expr: Option<Expr>,
     row_id_idx: usize,
@@ -47,9 +50,8 @@ impl DeleteByExprMutator {
     }
 
     pub fn delete_by_expr(&self, data_block: DataBlock) -> Result<(DataBlock, DataBlock)> {
-        // it's the first update, after update, we need to add a filter column
+        // it's the first delete, after delete, we need to add a filter column
         if data_block.num_columns() == self.origin_input_columns {
-            // assert_eq!(expr.data_type(), &DataType::Boolean);
             self.delete_block(data_block, false)
         } else {
             self.delete_block(data_block, true)
@@ -64,16 +66,16 @@ impl DeleteByExprMutator {
         let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
         let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
         // false means this row is not processed, so use `not` to reverse it.
-        let (filter_not, _) = eval_function(
-            None,
-            "not",
-            [(old_filter.clone().upcast(), DataType::Boolean)],
-            &self.func_ctx,
-            data_block.num_rows(),
-            &BUILTIN_FUNCTIONS,
-        )?;
+        let (filter_not, _) = get_not(old_filter.clone(), &self.func_ctx, data_block.num_rows())?;
         let filter_not = filter_not.try_downcast().unwrap();
         Ok((old_filter, filter_not))
+    }
+
+    pub(crate) fn get_row_id_block(&self, block: DataBlock) -> DataBlock {
+        DataBlock::new(
+            vec![block.get_by_offset(self.row_id_idx).clone()],
+            block.num_rows(),
+        )
     }
 
     // return block after delete, and the rowIds which are deleted
@@ -87,22 +89,10 @@ impl DeleteByExprMutator {
                 let (old_predicate, filter_not) = self.get_filter(&data_block)?;
                 let block_after_delete = data_block.clone().filter_boolean_value(&old_predicate)?;
                 let block_delete_part = data_block.filter_boolean_value(&filter_not)?;
-                Ok((
-                    block_after_delete,
-                    DataBlock::new(
-                        vec![block_delete_part.get_by_offset(self.row_id_idx).clone()],
-                        block_delete_part.num_rows(),
-                    ),
-                ))
+                Ok((block_after_delete, self.get_row_id_block(block_delete_part)))
             } else {
                 // delete all
-                Ok((
-                    DataBlock::empty(),
-                    DataBlock::new(
-                        vec![data_block.get_by_offset(self.row_id_idx).clone()],
-                        data_block.num_rows(),
-                    ),
-                ))
+                Ok((DataBlock::empty(), self.get_row_id_block(data_block)))
             }
         } else {
             let filter: Expr = cast_expr_to_non_null_boolean(self.expr.as_ref().unwrap().clone())?;
@@ -110,56 +100,32 @@ impl DeleteByExprMutator {
 
             let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let predicates = evaluator
-                .run(&filter)
-                .map_err(|e| e.add_message("eval filter failed:"))?
-                .try_downcast::<BooleanType>()
-                .unwrap();
+            let predicates = expr2prdicate(&evaluator, &filter)?;
 
             // for delete, we don't need to add new filter to the result block,
             // just filter it.
             if has_filter {
                 let (_, filter_not) = self.get_filter(&data_block)?;
-
-                let (res, _) = eval_function(
-                    None,
-                    "and",
-                    [
-                        (filter_not.upcast(), DataType::Boolean),
-                        (predicates.upcast(), DataType::Boolean),
-                    ],
+                let (res, _) = get_and(
+                    filter_not,
+                    predicates,
                     &self.func_ctx,
                     data_block.num_rows(),
-                    &BUILTIN_FUNCTIONS,
                 )?;
-
                 let res: Value<BooleanType> = res.try_downcast().unwrap();
-                let (res_not, _) = eval_function(
-                    None,
-                    "not",
-                    [(res.clone().upcast(), DataType::Boolean)],
-                    &self.func_ctx,
-                    data_block.num_rows(),
-                    &BUILTIN_FUNCTIONS,
-                )?;
+                let (res_not, _) = get_not(res.clone(), &self.func_ctx, data_block.num_rows())?;
+
                 let filtered_block = data_block.clone().filter_boolean_value(&res)?;
+
                 Ok((
                     data_block.filter_boolean_value(&res_not.try_downcast().unwrap())?,
-                    DataBlock::new(
-                        vec![filtered_block.get_by_offset(self.row_id_idx).clone()],
-                        filtered_block.num_rows(),
-                    ),
+                    self.get_row_id_block(filtered_block),
                 ))
             } else {
                 let filtered_block = data_block.clone().filter_boolean_value(&predicates)?;
-                let (predicates_not, _) = eval_function(
-                    None,
-                    "not",
-                    [(predicates.upcast(), DataType::Boolean)],
-                    &self.func_ctx,
-                    data_block.num_rows(),
-                    &BUILTIN_FUNCTIONS,
-                )?;
+                let (predicates_not, _) =
+                    get_not(predicates, &self.func_ctx, data_block.num_rows())?;
+
                 // we need to add filter at the end of result block
                 let mut res_block = data_block
                     .clone()
@@ -171,24 +137,14 @@ impl DeleteByExprMutator {
                     data_type: DataType::Boolean,
                 };
 
-                let const_predicates = evaluator
-                    .run(&const_expr)
-                    .map_err(|e| e.add_message("eval filter failed:"))?
-                    .try_downcast::<BooleanType>()
-                    .unwrap();
+                let const_predicates = expr2prdicate(&evaluator, &const_expr)?;
 
                 res_block.add_column(BlockEntry::new(
                     DataType::Boolean,
                     Value::upcast(const_predicates),
                 ));
 
-                Ok((
-                    res_block,
-                    DataBlock::new(
-                        vec![filtered_block.get_by_offset(self.row_id_idx).clone()],
-                        filtered_block.num_rows(),
-                    ),
-                ))
+                Ok((res_block, self.get_row_id_block(filtered_block)))
             }
         }
     }
