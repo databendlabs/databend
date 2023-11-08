@@ -54,7 +54,6 @@ ORDER BY 1, 2
 r2	s2
 
 # Test string comparisons
-onlyif todo
 query II
 WITH weststr AS (
 	SELECT rid, time::VARCHAR AS time, cost::VARCHAR as cost
