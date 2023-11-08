@@ -38,7 +38,7 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
-fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
+pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
     move |i| {
         let string_options = map(
             rule! {

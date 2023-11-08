@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod role;
-mod share;
-mod stage;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
+mod connection_api;
+mod connection_mgr;
+
+pub use connection_api::ConnectionApi;
+pub use connection_mgr::ConnectionMgr;

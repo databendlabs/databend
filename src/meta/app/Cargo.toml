@@ -26,6 +26,7 @@ chrono-tz = { workspace = true }
 cron = "0.12.0"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 hex = "0.4.3"
+itertools = { workspace = true }
 maplit = "1.0.2"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
