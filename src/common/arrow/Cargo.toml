@@ -165,3 +165,5 @@ arrow-schema = { workspace = true, optional = true }
 [dev-dependencies]
 proptest = { version = "1", default_features = false, features = ["std"] }
 quanta = "0.11.1"
+async-std = "1.12"
+

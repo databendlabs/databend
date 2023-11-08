@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![forbid(unsafe_code)]
-//! Contains modules to interface with other formats such as [`csv`],
-//! [`parquet`], [`json`], [`ipc`], [`mod@print`] and [`avro`].
+// this landed on 1.60. Let's not force everyone to bump just yet
+#![allow(clippy::unnecessary_lazy_evaluations)]
 
-#[cfg(feature = "io_ipc")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io_ipc")))]
-pub mod ipc;
-
-#[cfg(feature = "io_flight")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io_flight")))]
-pub mod flight;
-
-#[cfg(feature = "io_parquet")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io_parquet")))]
-pub mod parquet;
+mod io;
+mod read_meta;
