@@ -370,7 +370,7 @@ impl MergeIntoInterpreter {
         impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
             fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) {
                 if let Some(new_column) = self.column_map.get(&column.column.column_name) {
-                    *column.column = new_column.clone();
+                    column.column = new_column.clone();
                 } else {
                     self.failed = true;
                 }
