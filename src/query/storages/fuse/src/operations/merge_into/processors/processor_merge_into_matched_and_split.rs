@@ -139,6 +139,7 @@ impl MatchedSplitProcessor {
                         filter.clone(),
                         ctx.get_function_context()?,
                         row_id_idx,
+                        input_schema.num_fields(),
                     ),
                 }))
             } else {
@@ -268,6 +269,7 @@ impl Processor for MatchedSplitProcessor {
             }
             let start = Instant::now();
             let mut current_block = data_block;
+
             for op in self.ops.iter() {
                 match op {
                     MutationKind::Update(update_mutation) => {
