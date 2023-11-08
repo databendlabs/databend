@@ -37,7 +37,6 @@ pub struct TransformDistributedMergeIntoBlockDeserialize;
 
 /// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockDeserialize {
-    #[allow(dead_code)]
     fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(
             input,
@@ -46,7 +45,6 @@ impl TransformDistributedMergeIntoBlockDeserialize {
         ))
     }
 
-    #[allow(dead_code)]
     fn create_distributed_merge_into_transform_item() -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
@@ -57,7 +55,6 @@ impl TransformDistributedMergeIntoBlockDeserialize {
         )
     }
 
-    #[allow(dead_code)]
     pub fn into_pipe() -> Pipe {
         let pipe_item = Self::create_distributed_merge_into_transform_item();
         Pipe::create(1, 1, vec![pipe_item])

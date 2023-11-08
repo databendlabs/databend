@@ -122,7 +122,6 @@ pub struct MatchedSplitProcessor {
 }
 
 impl MatchedSplitProcessor {
-    #[allow(dead_code)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         row_id_idx: usize,
@@ -183,7 +182,6 @@ impl MatchedSplitProcessor {
         })
     }
 
-    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port_row_id = self.output_port_row_id.clone();
