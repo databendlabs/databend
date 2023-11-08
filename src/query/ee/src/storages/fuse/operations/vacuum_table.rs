@@ -40,20 +40,28 @@ const BATCH_PURGE_FILE_NUM: usize = 1000;
 
 type SnapshotLocationWithTime = (Option<DateTime<Utc>>, String);
 type TableVersionSet = HashSet<TableVersion>;
+type PrefixAndReferencedFileSet = (Option<String>, HashSet<String>);
 
 struct VacuumOperator {
     pub fuse_table: FuseTable,
+    pub current_snapshot: Arc<TableSnapshot>,
+    pub current_snapshot_location: String,
     pub ctx: Arc<dyn TableContext>,
     pub retention_time: DateTime<Utc>,
     pub start: Instant,
-    pub root_snapshot_location: String,
 }
 
 #[derive(Debug)]
 struct SnapshotReferencedFileSet {
-    pub segments: HashSet<String>,
-    pub blocks: HashSet<String>,
-    pub blocks_index: HashSet<String>,
+    pub segments: PrefixAndReferencedFileSet,
+    pub blocks: PrefixAndReferencedFileSet,
+    pub blocks_index: PrefixAndReferencedFileSet,
+}
+
+struct ReferencedFilesPrefix {
+    pub segment_prefix: Option<String>,
+    pub block_prefix: Option<String>,
+    pub block_index_prefix: Option<String>,
 }
 
 struct VacuumContext {
@@ -69,10 +77,10 @@ impl VacuumOperator {
     async fn list_snapshot_files_with_time(&self) -> Result<Vec<SnapshotLocationWithTime>> {
         // List all the snapshot file paths
         // note that snapshot file paths of ongoing txs might be included
-        let root_snapshot_location = &self.root_snapshot_location;
         let operator = self.fuse_table.get_operator();
         let mut snapshot_files = vec![];
-        if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(root_snapshot_location) {
+        if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(&self.current_snapshot_location)
+        {
             snapshot_files = SnapshotsIO::list_files(operator, &prefix, None).await?;
         }
 
@@ -131,26 +139,13 @@ impl VacuumOperator {
         &self,
         snapshot_files_with_time: &mut Vec<SnapshotLocationWithTime>,
     ) -> Result<Option<usize>> {
-        let fuse_table = &self.fuse_table;
-        let current_snapshot_loc =
-            if let Some(current_snapshot_loc) = fuse_table.snapshot_loc().await? {
-                current_snapshot_loc
-            } else {
-                let status = format!(
-                    "do_vacuum with table {}: get current snapshot fail",
-                    self.fuse_table.get_table_info().name,
-                );
-                self.log_status(status);
-                return Ok(None);
-            };
-
         Self::reform_snapshot_files_with_time_if_needed(
             snapshot_files_with_time,
-            &current_snapshot_loc,
+            &self.current_snapshot_location,
         );
 
         let snapshot_file_with_time = &snapshot_files_with_time[0];
-        if current_snapshot_loc != snapshot_file_with_time.1 {
+        if self.current_snapshot_location != snapshot_file_with_time.1 {
             let status = format!(
                 "do_vacuum with table {}: snapshot_file_with_time[0] snapshot is not current snapshot",
                 self.fuse_table.get_table_info().name,
@@ -163,24 +158,11 @@ impl VacuumOperator {
         let timestamp = if let Some(timestamp) = snapshot_file_with_time.0 {
             timestamp
         } else {
-            let snapshot = fuse_table
-                .read_table_snapshot_by_location(current_snapshot_loc)
-                .await?;
-            if let Some(snapshot) = snapshot {
-                if let Some(timestamp) = snapshot.timestamp {
-                    timestamp
-                } else {
-                    let status = format!(
-                        "do_vacuum with table {}: snapshot {:?} has no timestamp",
-                        self.fuse_table.get_table_info().name,
-                        snapshot_file_with_time.1,
-                    );
-                    self.log_status(status);
-                    return Ok(None);
-                }
+            if let Some(timestamp) = self.current_snapshot.timestamp {
+                timestamp
             } else {
                 let status = format!(
-                    "do_vacuum with table {}: read snapshot {:?} return None",
+                    "do_vacuum with table {}: snapshot {:?} has no timestamp",
                     self.fuse_table.get_table_info().name,
                     snapshot_file_with_time.1,
                 );
@@ -208,13 +190,9 @@ impl VacuumOperator {
         snapshot_files_with_time: &[SnapshotLocationWithTime],
         index: usize,
     ) -> Result<bool> {
-        let fuse_table = &self.fuse_table;
         let snapshot_file_with_time = &snapshot_files_with_time[index];
         if index == 0 {
-            if let Some(current_snapshot_loc) = fuse_table.snapshot_loc().await? {
-                return Ok(current_snapshot_loc == snapshot_file_with_time.1);
-            }
-            return Ok(false);
+            return Ok(self.current_snapshot_location == snapshot_file_with_time.1);
         }
 
         let next_index = index - 1;
@@ -249,10 +227,10 @@ impl VacuumOperator {
     //
     //                              snapshot timestamp >= retention time          snapshot timestamp < retention time
     //                           +--------------------------------------+ prev  +-----------------------------------+
-    //           +---------+     |                                      |       |                                   |        +---------+
-    // case 1:   |   ....  +-----|          root gc snapshot            |------->   root snapshot'prev snapshot     |------->|   ....  |
-    //           |         |     |                                      |       |                                   |        |         |
-    //           +---------+     +--------------------------------------+       +-----------------------------------+        +---------+
+    //           +---------+     |                                      |       |                                   |     +------+
+    // case 1:   |   ....  +-----|          root gc snapshot            |------->   root snapshot'prev snapshot     |---->| .... |
+    //           |         |     |                                      |       |                                   |     |      |
+    //           +---------+     +--------------------------------------+       +-----------------------------------+     +------+
     //                              snapshot file name in new format            snapshot file name in new format
     //
     //
@@ -337,7 +315,7 @@ impl VacuumOperator {
 
         // if root_gc_index is not the last index, check last index + 1 snapshot has been committed success
         if root_gc_index != snapshot_files_with_time.len() - 1 {
-            if self
+            if !self
                 .check_if_has_committed_success(snapshot_files_with_time, root_gc_index + 1)
                 .await?
             {
@@ -373,12 +351,52 @@ impl VacuumOperator {
         table_version_set
     }
 
+    #[async_backtrace::framed]
+    async fn get_reference_files_prefix(&self) -> Result<ReferencedFilesPrefix> {
+        fn get_prefix(referenced_file: Option<String>) -> Option<String> {
+            if let Some(referenced_file) = referenced_file {
+                SnapshotsIO::get_s3_prefix_from_file(&referenced_file)
+            } else {
+                None
+            }
+        }
+
+        let current_snapshot_segment = &self.current_snapshot.segments;
+        let segments = if !current_snapshot_segment.is_empty() {
+            vec![current_snapshot_segment[0].clone()]
+        } else {
+            vec![]
+        };
+        let locations_referenced = self
+            .fuse_table
+            .get_block_locations(self.ctx.clone(), &segments, false, false)
+            .await?;
+
+        let segment = if let Some(segment) = segments.iter().next().cloned() {
+            Some(segment.0)
+        } else {
+            None
+        };
+        let segment_prefix = get_prefix(segment);
+        let block_prefix = get_prefix(locations_referenced.block_location.iter().next().cloned());
+        let block_index_prefix =
+            get_prefix(locations_referenced.bloom_location.iter().next().cloned());
+
+        Ok(ReferencedFilesPrefix {
+            segment_prefix,
+            block_prefix,
+            block_index_prefix,
+        })
+    }
+
     // get all root gc snapshot file referenced files: segments\block\block index
     #[async_backtrace::framed]
     async fn get_root_gc_snapshot_reference_files(
         &self,
         root_gc_snapshot: &TableSnapshot,
     ) -> Result<SnapshotReferencedFileSet> {
+        let prefix_set = self.get_reference_files_prefix().await?;
+
         let segments: HashSet<String> = root_gc_snapshot
             .segments
             .iter()
@@ -395,9 +413,9 @@ impl VacuumOperator {
         );
 
         Ok(SnapshotReferencedFileSet {
-            segments,
-            blocks,
-            blocks_index,
+            segments: (prefix_set.segment_prefix.clone(), segments),
+            blocks: (prefix_set.block_prefix.clone(), blocks),
+            blocks_index: (prefix_set.block_index_prefix, blocks_index),
         })
     }
 
@@ -425,17 +443,12 @@ impl VacuumOperator {
     async fn gc_files_in_dir(
         &self,
         context: &VacuumContext,
-        referenced_files: &HashSet<String>,
+        prefix_referenced_files: &PrefixAndReferencedFileSet,
         purge_files: &mut Option<&mut Vec<String>>,
     ) -> Result<bool> {
-        let referenced_file = if let Some(referenced_file) = referenced_files.iter().next().cloned()
-        {
-            referenced_file
-        } else {
-            return Ok(false);
-        };
+        let (prefix, referenced_files) = prefix_referenced_files;
 
-        let prefix = if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(&referenced_file) {
+        let prefix = if let Some(prefix) = prefix {
             prefix
         } else {
             return Ok(false);
@@ -596,7 +609,7 @@ impl VacuumOperator {
                 self.log_status(format!(
                     "do_vacuum with table {}: get_root_gc_snapshot_file {:?}",
                     self.fuse_table.get_table_info().name,
-                    self.root_snapshot_location,
+                    root_gc_snapshot_location,
                 ));
                 (index, root_gc_snapshot_location)
             }
@@ -630,9 +643,9 @@ impl VacuumOperator {
             .await?;
         self.log_status(format!(
             "do_vacuum with table {}: get_root_gc_snapshot_reference_files segment:{}, block:{}, index:{}, cost:{} sec",
-            root_gc_snapshot_reference_files.segments.len(),
-            root_gc_snapshot_reference_files.blocks.len(),
-            root_gc_snapshot_reference_files.blocks_index.len(),
+            root_gc_snapshot_reference_files.segments.1.len(),
+            root_gc_snapshot_reference_files.blocks.1.len(),
+            root_gc_snapshot_reference_files.blocks_index.1.len(),
             self.fuse_table.get_table_info().name,
             self.start.elapsed().as_secs()
         ));
@@ -684,7 +697,7 @@ pub async fn do_vacuum(
     let table_id = fuse_table.get_table_info().ident.table_id;
 
     // Read the root snapshot location.
-    let root_snapshot_location = match fuse_table.snapshot_loc().await? {
+    let current_snapshot_location = match fuse_table.snapshot_loc().await? {
         Some(root_snapshot_location) => root_snapshot_location,
         None => {
             let status = format!(
@@ -696,12 +709,20 @@ pub async fn do_vacuum(
             return Ok(None);
         }
     };
+    let current_snapshot = match fuse_table
+        .read_table_snapshot_by_location(current_snapshot_location.clone())
+        .await?
+    {
+        Some(snapshot) => snapshot,
+        None => return Ok(None),
+    };
 
     let vacuum_operator = VacuumOperator {
         fuse_table: fuse_table.clone(),
+        current_snapshot,
+        current_snapshot_location,
         ctx,
         retention_time,
-        root_snapshot_location,
         start,
     };
     if dry_run {

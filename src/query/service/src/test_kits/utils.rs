@@ -27,7 +27,6 @@ use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;
 use common_storages_factory::Table;
 use common_storages_fuse::io::MetaWriter;
-use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::merge_statistics;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -104,13 +103,32 @@ pub async fn generate_orphan_files(
     fuse_table: &FuseTable,
     orphan_segment_number: usize,
     orphan_block_number_per_segment: usize,
-) -> Result<Vec<(Location, SegmentInfoV2)>> {
-    generate_segments_v2(
+) -> Result<Vec<(Location, SegmentInfo)>> {
+    generate_segments(
         fuse_table,
         orphan_segment_number,
         orphan_block_number_per_segment,
     )
     .await
+}
+
+pub async fn generate_segments(
+    fuse_table: &FuseTable,
+    number_of_segments: usize,
+    blocks_per_segment: usize,
+) -> Result<Vec<(Location, SegmentInfo)>> {
+    let mut segs = vec![];
+    for _ in 0..number_of_segments {
+        let dal = fuse_table.get_operator_ref();
+        let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
+        let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
+        let segment_info = SegmentInfo::new(block_metas, summary);
+        let generator = fuse_table.meta_location_generator();
+        let location = generator.gen_segment_info_location();
+        write_v2_to_storage(dal, &location, &segment_info).await?;
+        segs.push(((location, SegmentInfoV2::VERSION), segment_info))
+    }
+    Ok(segs)
 }
 
 pub async fn generate_segments_v2(
@@ -134,24 +152,6 @@ pub async fn generate_segments_v2(
         );
         write_v2_to_storage(dal, &location, &segment_info).await?;
         segs.push(((location, SegmentInfoV2::VERSION), segment_info))
-    }
-    Ok(segs)
-}
-
-pub async fn generate_segments(
-    fuse_table: &FuseTable,
-    number_of_segments: usize,
-    blocks_per_segment: usize,
-) -> Result<Vec<(Location, SegmentInfo)>> {
-    let mut segs = vec![];
-    for _ in 0..number_of_segments {
-        let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
-        let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
-        let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
-        let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
-        segs.push((segment_location, segment_info))
     }
     Ok(segs)
 }

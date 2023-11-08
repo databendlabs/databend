@@ -75,7 +75,6 @@ async fn generate_test_orphan_files(
             )
             .await?;
 
-            orphan_files.push(snapshot_location.clone());
             Some(snapshot_location)
         } else {
             None
@@ -434,21 +433,25 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+    // save the first snapshot into vacuum_snapshot_file_set
+    let mut vacuum_snapshot_file_set = HashSet::new();
+    vacuum_snapshot_file_set.insert(snapshot_loc);
 
     // generate some orphan files
     let orphan_segment_file_num = 1;
     let orphan_block_per_segment_num = 1;
 
     // generate orphan snapshot and segments
-    let (mut orphan_files, _) = generate_test_orphan_files(
+    let (mut orphan_files, orphan_snapshot_file) = generate_test_orphan_files(
         &fixture,
         Some(true),
         orphan_segment_file_num,
         orphan_block_per_segment_num,
     )
     .await?;
-    // save first snapshot location into orphan_files
-    orphan_files.push(snapshot_loc);
+    // save orphan snapshot location into vacuum_snapshot_file_set
+    vacuum_snapshot_file_set.insert(orphan_snapshot_file.unwrap());
+
     // generate orphan segments(without snapshot)
     let (orphan_files_2, _) = generate_test_orphan_files(
         &fixture,
@@ -472,8 +475,8 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     )
     .await?;
 
-    // append some data and do vacuum
-    // it will not vacuum any files, cause cannot find root gc snapshot
+    // append some data and do vacuum, it will not vacuum any files,
+    // cause `orphan_snapshot_file` is not commit success, so there will not root gc snapshot
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     append_sample_data(number_of_block, &fixture).await?;
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
@@ -481,6 +484,7 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
         .await?
         .try_collect()
         .await?;
+    // let purge_files: HashSet<String> = vacuum_snapshot_file_set.into_iter().collect();
     check_vacuum(
         &fixture,
         HashSet::new(),
@@ -493,26 +497,28 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     .await?;
     check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
 
-    // save the last snapshot into orphan_files
+    // save thea current snapshot into orphan_files
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     orphan_files.push(fuse_table.snapshot_loc().await?.unwrap());
 
-    // sleep and append some data again
-    // this time will vacuum all the orphan files and first snapshot file
+    // append some data again
+    // this time will vacuum all the orphan files and prev snapshot file
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     append_sample_data(number_of_block, &fixture).await?;
+
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
     let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
         .await?
         .try_collect()
         .await?;
-    // check that orphan files and first snapshot file has been purged
+    // check that orphan files and lase snapshot file has been purged
+    orphan_files.extend(vacuum_snapshot_file_set);
     let purge_files: HashSet<String> = orphan_files.into_iter().collect();
     check_vacuum(
         &fixture,
         purge_files,
-        "test_fuse_vacuum_orphan_files step 2: verify files",
+        "test_fuse_vacuum_orphan_files step 3: verify files",
         retention_time,
         1,
         3,
