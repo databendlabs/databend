@@ -15,6 +15,7 @@ default = ["arrow-default", "parquet-default"]
 
 arrow = ["arrow-buffer", "arrow-schema", "arrow-data", "arrow-array"]
 io_ipc = []
+io_ipc_compression = []
 io_flight = ["io_ipc", "arrow-format/flight-data"]
 
 # base64 + io_ipc because arrow schemas are stored as base64-encoded ipc format.
@@ -23,7 +24,6 @@ io_parquet_async = ["futures", "io_parquet", "parquet2/async"]
 
 io_parquet_compression = [
     "io_parquet_zstd",
-    "io_parquet_gzip",
     "io_parquet_snappy",
     "io_parquet_lz4",
     "io_parquet_brotli",
@@ -35,8 +35,6 @@ io_parquet_sample_test = ["io_parquet_async"]
 # compression backends
 io_parquet_zstd = ["parquet2/zstd"]
 io_parquet_snappy = ["parquet2/snappy"]
-io_parquet_gzip = ["parquet2/gzip"]
-io_parquet_lz4_flex = ["parquet2/lz4_flex"]
 io_parquet_lz4 = ["parquet2/lz4"]
 io_parquet_brotli = ["parquet2/brotli"]
 
@@ -64,6 +62,7 @@ simd = []
 arrow-default = [
     "arrow",
     "io_ipc",
+    "io_ipc_compression",
     "io_flight",
     "io_parquet_async",
     "io_parquet_compression",
@@ -102,7 +101,7 @@ dyn-clone = "1"
 either = "1.9"
 foreign_vec = "0.1.0"
 num-traits = "0.2"
-parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async", "lz4"] }
+parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
 
 # for decimal i256
 ethnum = "1"

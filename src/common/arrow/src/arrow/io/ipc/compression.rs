@@ -75,7 +75,7 @@ pub fn compress_zstd(_input_buf: &[u8], _output_buf: &[u8]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
 
     #[cfg(feature = "io_ipc_compression")]
     #[test]
