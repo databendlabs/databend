@@ -33,7 +33,7 @@ use common_metrics::storage::*;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use common_sql::executor::MutationKind;
+use common_sql::executor::physical_plans::MutationKind;
 use log::debug;
 use log::info;
 use log::warn;

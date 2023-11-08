@@ -39,7 +39,7 @@ use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_metrics::storage::*;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::OnConflictField;
 use log::info;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::ColumnStatistics;

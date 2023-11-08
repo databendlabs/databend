@@ -23,8 +23,8 @@ use common_pipeline_transforms::processors::TransformProfileWrapper;
 use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::Project;
-use common_sql::executor::ProjectSet;
+use common_sql::executor::physical_plans::Project;
+use common_sql::executor::physical_plans::ProjectSet;
 use common_sql::ColumnBinding;
 
 use crate::pipelines::PipelineBuilder;

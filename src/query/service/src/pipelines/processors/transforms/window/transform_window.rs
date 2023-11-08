@@ -37,7 +37,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_sql::executor::LagLeadDefault;
+use common_sql::executor::physical_plans::LagLeadDefault;
 use common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;

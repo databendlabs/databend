@@ -21,7 +21,7 @@ use common_pipeline_transforms::processors::TransformProfileWrapper;
 use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::Filter;
+use common_sql::executor::physical_plans::Filter;
 
 use crate::pipelines::PipelineBuilder;
 

@@ -41,7 +41,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::Transform;
 use common_pipeline_transforms::processors::Transformer;
 
-use crate::executor::LambdaFunctionDesc;
+use crate::executor::physical_plans::LambdaFunctionDesc;
 use crate::optimizer::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.

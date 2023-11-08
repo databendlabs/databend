@@ -34,7 +34,7 @@ use common_expression::Value;
 use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::sort_merge;
-use common_sql::executor::RangeJoin;
+use common_sql::executor::physical_plans::RangeJoin;
 
 use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_block;
 use crate::pipelines::processors::transforms::range_join::ie_join_util::order_match;

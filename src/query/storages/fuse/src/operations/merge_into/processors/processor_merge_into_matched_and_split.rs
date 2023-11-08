@@ -35,7 +35,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
 use common_sql::evaluator::BlockOperator;
-use common_sql::executor::MatchExpr;
+use common_sql::executor::physical_plans::MatchExpr;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;

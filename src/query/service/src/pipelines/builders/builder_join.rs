@@ -24,11 +24,11 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::ProfileStub;
 use common_pipeline_transforms::processors::Transformer;
-use common_sql::executor::HashJoin;
-use common_sql::executor::MaterializedCte;
+use common_sql::executor::physical_plans::HashJoin;
+use common_sql::executor::physical_plans::MaterializedCte;
+use common_sql::executor::physical_plans::RangeJoin;
+use common_sql::executor::physical_plans::RuntimeFilterSource;
 use common_sql::executor::PhysicalPlan;
-use common_sql::executor::RangeJoin;
-use common_sql::executor::RuntimeFilterSource;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 

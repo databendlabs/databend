@@ -34,7 +34,7 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_metrics::storage::*;
 use common_sql::evaluator::BlockOperator;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::OnConflictField;
 use log::info;
 use log::warn;
 use opendal::Operator;

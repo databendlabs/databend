@@ -27,7 +27,7 @@ use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::TransformDummy;
 use common_profile::SharedProcessorProfiles;
-use common_sql::executor::FragmentKind;
+use common_sql::executor::physical_plans::FragmentKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
 use common_sql::ColumnBinding;

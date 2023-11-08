@@ -39,7 +39,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::operations::replace_into::mutator::ReplaceIntoMutator;

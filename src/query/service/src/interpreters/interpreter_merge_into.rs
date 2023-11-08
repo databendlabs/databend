@@ -34,13 +34,13 @@ use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_sql::bind_one_table;
-use common_sql::executor::CommitSink;
-use common_sql::executor::Exchange;
-use common_sql::executor::FragmentKind::Merge;
-use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoAppendNotMatched;
-use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationKind;
+use common_sql::executor::physical_plans::CommitSink;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::FragmentKind;
+use common_sql::executor::physical_plans::MergeInto;
+use common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
+use common_sql::executor::physical_plans::MergeIntoSource;
+use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::optimizer::SExpr;
@@ -446,7 +446,7 @@ impl MergeIntoInterpreter {
                 input: Box::new(PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,
                     input: Box::new(merge_append),
-                    kind: Merge,
+                    kind: FragmentKind::Merge,
                     keys: vec![],
                     ignore_exchange: false,
                 })),

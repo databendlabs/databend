@@ -26,9 +26,9 @@ use common_pipeline_transforms::processors::ProfileStub;
 use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CteScan;
-use common_sql::executor::TableScan;
+use common_sql::executor::physical_plans::ConstantTableScan;
+use common_sql::executor::physical_plans::CteScan;
+use common_sql::executor::physical_plans::TableScan;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 
 use crate::pipelines::processors::transforms::MaterializedCteSource;

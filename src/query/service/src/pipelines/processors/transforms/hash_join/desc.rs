@@ -17,7 +17,7 @@ use common_expression::type_check::check_function;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::HashJoin;
+use common_sql::executor::physical_plans::HashJoin;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;

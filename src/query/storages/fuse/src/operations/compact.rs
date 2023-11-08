@@ -25,7 +25,7 @@ use common_expression::ColumnId;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use common_sql::executor::MutationKind;
+use common_sql::executor::physical_plans::MutationKind;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;

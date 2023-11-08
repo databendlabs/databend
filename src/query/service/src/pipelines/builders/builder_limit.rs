@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_sql::executor::Limit;
+use common_sql::executor::physical_plans::Limit;
 
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuilder;
