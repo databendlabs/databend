@@ -192,7 +192,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
     }
 
     pub fn build_full_reader(&mut self) -> Result<ParquetRSFullReader> {
-        let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let batch_size = self.ctx.get_settings().get_parquet_max_block_size()? as usize;
 
         self.build_predicate()?;
         self.build_output()?;
