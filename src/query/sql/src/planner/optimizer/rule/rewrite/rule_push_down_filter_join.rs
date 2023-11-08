@@ -139,7 +139,16 @@ pub fn try_push_down_filter_join(
     let mut need_push = false;
 
     for predicate in predicates.into_iter() {
-        if is_falsy(&predicate) {
+        if is_falsy(&predicate)
+            && matches!(
+                join.join_type,
+                JoinType::Inner
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti
+            )
+        {
             left_push_down = vec![false_constant()];
             right_push_down = vec![false_constant()];
             need_push = true;
@@ -147,7 +156,27 @@ pub fn try_push_down_filter_join(
         }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
-            JoinPredicate::Left(_) | JoinPredicate::ALL(_) => {
+            JoinPredicate::ALL(_) => match join.join_type {
+                JoinType::Inner
+                | JoinType::LeftSemi
+                | JoinType::LeftAnti
+                | JoinType::RightSemi
+                | JoinType::RightAnti => {
+                    need_push = true;
+                    left_push_down.push(predicate.clone());
+                    right_push_down.push(predicate.clone());
+                }
+                JoinType::Left | JoinType::LeftSingle => {
+                    need_push = true;
+                    right_push_down.push(predicate.clone());
+                }
+                JoinType::Right | JoinType::RightSingle => {
+                    need_push = true;
+                    left_push_down.push(predicate.clone());
+                }
+                _ => original_predicates.push(predicate),
+            },
+            JoinPredicate::Left(_) => {
                 if matches!(join.join_type, JoinType::Right) {
                     original_predicates.push(predicate);
                     continue;

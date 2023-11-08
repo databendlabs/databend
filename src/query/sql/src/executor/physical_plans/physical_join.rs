@@ -83,9 +83,9 @@ fn check_condition(
         for arg in func.arguments.iter() {
             let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
             match join_predicate {
-                JoinPredicate::Left(_) | JoinPredicate::ALL(_) => left = true,
+                JoinPredicate::Left(_) => left = true,
                 JoinPredicate::Right(_) => right = true,
-                JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
+                JoinPredicate::Both { .. } | JoinPredicate::Other(_) | JoinPredicate::ALL(_) => {
                     return;
                 }
             }

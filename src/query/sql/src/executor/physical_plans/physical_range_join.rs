@@ -176,7 +176,7 @@ fn resolve_range_condition(
             for (idx, arg) in [arg1, arg2].iter().enumerate() {
                 let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
                 match join_predicate {
-                    JoinPredicate::Left(_) | JoinPredicate::ALL(_) => {
+                    JoinPredicate::Left(_) => {
                         left = Some(arg.type_check(left_schema.as_ref())?.project_column_ref(
                             |index| left_schema.index_of(&index.to_string()).unwrap(),
                         ));
@@ -189,7 +189,9 @@ fn resolve_range_condition(
                             |index| right_schema.index_of(&index.to_string()).unwrap(),
                         ));
                     }
-                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => unreachable!(),
+                    JoinPredicate::ALL(_)
+                    | JoinPredicate::Both { .. }
+                    | JoinPredicate::Other(_) => unreachable!(),
                 }
             }
             let op = if opposite {

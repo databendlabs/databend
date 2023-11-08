@@ -124,13 +124,16 @@ impl<'a> JoinPredicate<'a> {
             return Self::Other(scalar);
         }
 
-        let satisfied_by_left = satisfied_by(scalar, left_prop);
-        let satisfied_by_right = satisfied_by(scalar, right_prop);
-        match (satisfied_by_left, satisfied_by_right) {
-            (true, true) => return Self::ALL(scalar),
-            (true, false) => return Self::Left(scalar),
-            (false, true) => return Self::Right(scalar),
-            _ => (),
+        if scalar.used_columns().is_empty() {
+            return Self::ALL(scalar);
+        }
+
+        if satisfied_by(scalar, left_prop) {
+            return Self::Left(scalar);
+        }
+
+        if satisfied_by(scalar, right_prop) {
+            return Self::Right(scalar);
         }
 
         if let ScalarExpr::FunctionCall(func) = scalar {

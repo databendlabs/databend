@@ -243,7 +243,11 @@ impl Binder {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
                 JoinPredicate::ALL(_) => match join_type {
-                    JoinType::Inner => {
+                    JoinType::Inner
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti => {
                         need_push_down = true;
                         left_push_down.push(predicate.clone());
                         right_push_down.push(predicate.clone());
