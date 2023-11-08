@@ -182,14 +182,6 @@ macro_rules! impl_fast_hash_for_primitive_types {
         impl FastHash for $t {
             #[inline(always)]
             fn fast_hash(&self) -> u64 {
-                // let mut hasher = *self as u64;
-                // hasher ^= hasher >> 32;
-                // hasher = hasher.wrapping_mul(0xd6e8feb86659fd93_u64);
-                // hasher ^= hasher >> 32;
-                // hasher = hasher.wrapping_mul(0xd6e8feb86659fd93_u64);
-                // hasher ^= hasher >> 32;
-                // hasher
-
                 cfg_if::cfg_if! {
                     if #[cfg(target_feature = "sse4.2")] {
                         unsafe { std::arch::x86_64::_mm_crc32_u64(u64::MAX, *self as u64) }

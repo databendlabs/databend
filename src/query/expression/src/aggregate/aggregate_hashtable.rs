@@ -339,6 +339,10 @@ impl AggregateHashTable {
     }
 
     pub fn resize(&mut self, new_capacity: usize) {
+        if new_capacity == self.capacity {
+            return;
+        }
+
         let mask = (new_capacity - 1) as u64;
 
         let mut entries = Self::new_entries(new_capacity);
