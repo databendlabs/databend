@@ -24,7 +24,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 
-use crate::pipelines::processors::transforms::RangeJoinState;
+use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 
 enum RangeJoinStep {
     Sink,

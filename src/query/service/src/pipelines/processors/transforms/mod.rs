@@ -14,7 +14,7 @@
 
 mod aggregator;
 pub mod group_by;
-pub(crate) mod hash_join;
+mod hash_join;
 mod processor_accumulate_row_number;
 mod processor_deduplicate_row_number;
 mod processor_extract_hash_table_by_row_number;
@@ -55,6 +55,7 @@ pub use aggregator::TransformPartialGroupBy;
 pub use hash_join::FixedKeyHashJoinHashTable;
 pub use hash_join::HashJoinDesc;
 pub use hash_join::HashJoinState;
+pub use hash_join::*;
 pub use processor_accumulate_row_number::AccumulateRowNumber;
 pub use processor_deduplicate_row_number::DeduplicateRowNumber;
 pub use processor_extract_hash_table_by_row_number::ExtractHashTableByRowNumber;

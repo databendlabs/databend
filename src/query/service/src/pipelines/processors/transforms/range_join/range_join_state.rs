@@ -35,7 +35,7 @@ use common_sql::executor::physical_plans::RangeJoinType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
+use crate::pipelines::processors::transforms::range_join::IEJoinState;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {

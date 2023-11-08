@@ -28,7 +28,7 @@ use common_sql::IndexType;
 use super::PipelineBuilderData;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;

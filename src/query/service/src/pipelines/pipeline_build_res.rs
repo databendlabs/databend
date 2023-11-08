@@ -23,9 +23,9 @@ use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
 use common_profile::SharedProcessorProfiles;
 
-use super::processors::transforms::hash_join::HashJoinBuildState;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::pipelines::processors::transforms::HashJoinBuildState;
 
 #[derive(Clone)]
 pub struct PipelineBuilderData {

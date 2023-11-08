@@ -26,7 +26,7 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-pub(crate) fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<DataBlock> {
+pub fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<DataBlock> {
     let filter = filter.as_expr(&BUILTIN_FUNCTIONS);
     let other_predicate = cast_expr_to_non_null_boolean(filter)?;
     assert_eq!(other_predicate.data_type(), &DataType::Boolean);
@@ -41,7 +41,7 @@ pub(crate) fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<Data
     block.filter_boolean_value(&predicate)
 }
 
-pub(crate) fn order_match(op: &str, order: Ordering) -> bool {
+pub fn order_match(op: &str, order: Ordering) -> bool {
     match op {
         "gt" => order == Ordering::Greater,
         "gte" => order == Ordering::Equal || order == Ordering::Greater,
@@ -52,7 +52,7 @@ pub(crate) fn order_match(op: &str, order: Ordering) -> bool {
 }
 
 // Exponential search
-pub(crate) fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
+pub fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
     let mut step = 1;
     let n = l1.len();
     let mut hi = pos;
