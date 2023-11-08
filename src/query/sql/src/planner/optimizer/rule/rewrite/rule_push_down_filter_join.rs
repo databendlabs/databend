@@ -142,7 +142,8 @@ pub fn try_push_down_filter_join(
         if is_falsy(&predicate)
             && matches!(
                 join.join_type,
-                JoinType::Inner
+                JoinType::Cross
+                    | JoinType::Inner
                     | JoinType::LeftSemi
                     | JoinType::LeftAnti
                     | JoinType::RightSemi
@@ -157,7 +158,8 @@ pub fn try_push_down_filter_join(
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
             JoinPredicate::ALL(_) => match join.join_type {
-                JoinType::Inner
+                JoinType::Cross
+                | JoinType::Inner
                 | JoinType::LeftSemi
                 | JoinType::LeftAnti
                 | JoinType::RightSemi
