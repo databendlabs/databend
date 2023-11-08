@@ -25,7 +25,6 @@ use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
