@@ -541,6 +541,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
+        let external_server_connect_timeout_secs = self
+            .get_settings()
+            .get_external_server_connect_timeout_secs()?;
+        let external_server_request_timeout_secs = self
+            .get_settings()
+            .get_external_server_request_timeout_secs()?;
+
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
@@ -558,6 +565,9 @@ impl TableContext for QueryContext {
             openai_api_embedding_base_url: query_config.openai_api_embedding_base_url.clone(),
             openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
             openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+
+            external_server_connect_timeout_secs,
+            external_server_request_timeout_secs,
         })
     }
 
