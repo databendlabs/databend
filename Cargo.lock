@@ -2221,6 +2221,7 @@ dependencies = [
  "cron",
  "enumflags2",
  "hex",
+ "itertools 0.10.5",
  "maplit",
  "num-derive",
  "num-traits",
