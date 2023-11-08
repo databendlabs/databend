@@ -349,19 +349,19 @@ impl MergeIntoInterpreter {
 
         let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
 
-        match &scalar_expr {
+        let left_most_expr = match &scalar_expr {
             ScalarExpr::FunctionCall(f) if f.func_name == "tuple" && !f.arguments.is_empty() => {
-                let left_most_expr = f.arguments[0].clone();
-                let projected = left_most_expr.try_project_column_binding(|binding| {
-                    column_map.get(&binding.column_name).cloned()
-                });
-                Ok(projected)
+                f.arguments[0].clone()
             }
-            _ => {
+            ScalarExpr::FunctionCall(_) => {
                 warn!("cluster key expr is not a (suitable) tuple expression");
-                Ok(None)
+                return Ok(None);
             }
-        }
+            _ => scalar_expr,
+        };
+        let projected = left_most_expr
+            .try_project_column_binding(|binding| column_map.get(&binding.column_name).cloned());
+        Ok(projected)
     }
 
     async fn build_min_max_group_by_left_most_cluster_key_expr_plan(
