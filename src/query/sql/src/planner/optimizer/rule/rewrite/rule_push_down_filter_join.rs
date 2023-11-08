@@ -158,15 +158,15 @@ pub fn try_push_down_filter_join(
                     left_push_down.push(predicate.clone());
                     right_push_down.push(predicate.clone());
                 }
-                JoinType::Left | JoinType::LeftSingle => {
+                JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
                     need_push = true;
                     right_push_down.push(predicate.clone());
                 }
-                JoinType::Right | JoinType::RightSingle => {
+                JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
                     need_push = true;
                     left_push_down.push(predicate.clone());
                 }
-                _ => original_predicates.push(predicate),
+                JoinType::Full => original_predicates.push(predicate),
             },
             JoinPredicate::Left(_) => {
                 if matches!(join.join_type, JoinType::Right) {
