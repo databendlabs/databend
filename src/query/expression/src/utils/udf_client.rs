@@ -32,7 +32,11 @@ use tonic::Request;
 use crate::types::DataType;
 use crate::DataSchema;
 
-const UDF_REQUEST_TIMEOUT_SEC: u64 = 180; // 180 seconds
+const UDF_CONNECT_TIMEOUT_SEC: u64 = 10;
+const UDF_REQUEST_TIMEOUT_SEC: u64 = 180; // TODO: should be configurable?
+const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
+const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
+const UDF_KEEP_ALIVE_TIMEOUT_SEC: u64 = 20;
 
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
@@ -46,7 +50,13 @@ impl UDFFlightClient {
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))
             })?
-            .connect_timeout(Duration::from_secs(UDF_REQUEST_TIMEOUT_SEC));
+            .connect_timeout(Duration::from_secs(UDF_CONNECT_TIMEOUT_SEC))
+            .timeout(Duration::from_secs(UDF_REQUEST_TIMEOUT_SEC))
+            .tcp_nodelay(true)
+            .tcp_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)))
+            .http2_keep_alive_interval(Duration::from_secs(UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC))
+            .keep_alive_timeout(Duration::from_secs(UDF_KEEP_ALIVE_TIMEOUT_SEC))
+            .keep_alive_while_idle(true);
         let inner = FlightServiceClient::connect(endpoint)
             .await
             .map_err(|err| {
