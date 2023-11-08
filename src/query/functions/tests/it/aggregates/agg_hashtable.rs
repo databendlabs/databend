@@ -48,6 +48,7 @@ use common_expression::FromData;
 use common_expression::PayloadFlushState;
 use common_expression::ProbeState;
 use common_functions::aggregates::AggregateFunctionFactory;
+use itertools::Itertools;
 
 // cargo test --package common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
 #[test]
@@ -56,14 +57,18 @@ fn test_agg_hashtable() {
     let m: usize = 4;
     for n in [100, 1000, 10_000, 100_000] {
         let columns = vec![
-            StringType::from_data((0..n).map(|x| format!("{}", x % m).as_bytes().to_vec())),
-            Int64Type::from_data((0..n).map(|x| (x % m) as i64)),
-            Int32Type::from_data((0..n).map(|x| (x % m) as i32)),
-            Int16Type::from_data((0..n).map(|x| (x % m) as i16)),
-            Int8Type::from_data((0..n).map(|x| (x % m) as i8)),
-            Float32Type::from_data((0..n).map(|x| F32::from((x % m) as f32))),
-            Float64Type::from_data((0..n).map(|x| F64::from((x % m) as f64))),
-            BooleanType::from_data((0..n).map(|x| (x % m) != 0)),
+            StringType::from_data(
+                (0..n)
+                    .map(|x| format!("{}", x % m).as_bytes().to_vec())
+                    .collect_vec(),
+            ),
+            Int64Type::from_data((0..n).map(|x| (x % m) as i64).collect_vec()),
+            Int32Type::from_data((0..n).map(|x| (x % m) as i32).collect_vec()),
+            Int16Type::from_data((0..n).map(|x| (x % m) as i16).collect_vec()),
+            Int8Type::from_data((0..n).map(|x| (x % m) as i8).collect_vec()),
+            Float32Type::from_data((0..n).map(|x| F32::from((x % m) as f32)).collect_vec()),
+            Float64Type::from_data((0..n).map(|x| F64::from((x % m) as f64)).collect_vec()),
+            BooleanType::from_data((0..n).map(|x| (x % m) != 0).collect_vec()),
         ];
 
         let group_columns = columns.clone();
