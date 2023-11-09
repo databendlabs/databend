@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use ahash::HashMap;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
@@ -23,23 +22,13 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::Filter;
-use crate::plans::FunctionCall;
-use crate::plans::LagLeadFunction;
-use crate::plans::LambdaFunc;
-use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::plans::UDFServerCall;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
-use crate::plans::WindowFunc;
-use crate::plans::WindowFuncType;
-use crate::plans::WindowOrderBy;
 use crate::IndexType;
 use crate::Visibility;
 
@@ -148,7 +137,7 @@ fn replace_column_binding(
         index_pairs: &'a HashMap<IndexType, IndexType>,
     }
 
-    impl<'a> VisitorMut for ReplaceColumnVisitor<'a> {
+    impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
         fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
             let index = column.column.index;
             if self.index_pairs.contains_key(&index) {
