@@ -343,33 +343,25 @@ fn rewrite_scalar_index(
     columns: &HashMap<String, IndexType>,
     scalar: &mut ScalarExpr,
 ) {
-    match scalar {
-        ScalarExpr::BoundColumnRef(col) => {
-            if let Some(index) = columns.get(&col.column.column_name) {
-                col.column.table_index = Some(table_index);
+    struct RewriteVisitor<'a> {
+        table_index: IndexType,
+        columns: &'a HashMap<String, IndexType>,
+    }
+
+    impl<'a> VisitorMut<'a> for RewriteVisitor<'a> {
+        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) {
+            if let Some(index) = self.columns.get(&col.column.column_name) {
+                col.column.table_index = Some(self.table_index);
                 col.column.index = *index;
             }
         }
-        ScalarExpr::AggregateFunction(agg) => {
-            agg.args
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        ScalarExpr::FunctionCall(func) => {
-            func.arguments
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        ScalarExpr::CastExpr(cast) => {
-            rewrite_scalar_index(table_index, columns, &mut cast.argument);
-        }
-        ScalarExpr::UDFServerCall(udf) => {
-            udf.arguments
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        _ => { /*  do nothing */ }
     }
+
+    let mut visitor = RewriteVisitor {
+        table_index,
+        columns,
+    };
+    walk_expr_mut(&mut visitor, scalar)
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.
