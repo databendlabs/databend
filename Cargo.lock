@@ -2389,6 +2389,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "futures-async-stream",
  "futures-util",
  "hostname",
  "lazy_static",
