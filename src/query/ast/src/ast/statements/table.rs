@@ -106,6 +106,7 @@ impl Display for ShowTablesStatusStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowDropTablesStmt {
     pub database: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
 }
 
 impl Display for ShowDropTablesStmt {
@@ -113,6 +114,9 @@ impl Display for ShowDropTablesStmt {
         write!(f, "SHOW DROP TABLE")?;
         if let Some(database) = &self.database {
             write!(f, " FROM {database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
         }
 
         Ok(())

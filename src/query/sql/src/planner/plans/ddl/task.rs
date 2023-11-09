@@ -55,6 +55,7 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("owner", DataType::String),
         DataField::new("comment", DataType::String.wrap_nullable()),
         DataField::new("schedule", DataType::String.wrap_nullable()),
+        DataField::new("warehouse", DataType::String.wrap_nullable()),
         DataField::new("state", DataType::String),
         DataField::new("definition", DataType::String),
         DataField::new("run_id", DataType::String),
