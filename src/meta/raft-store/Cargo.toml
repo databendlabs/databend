@@ -33,6 +33,7 @@ byteorder = "1.4.3"
 chrono = { workspace = true }
 derive_more = { workspace = true }
 futures = { workspace = true }
+futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
 hostname = "0.3.1"
 lazy_static = { workspace = true }

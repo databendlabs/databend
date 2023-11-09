@@ -40,6 +40,11 @@ impl StaticLevels {
         }
     }
 
+    /// Return an iterator of all Arc of levels from newest to oldest.
+    pub(in crate::sm_v002) fn iter_arc_levels(&self) -> impl Iterator<Item = &Arc<Level>> {
+        self.levels.iter().rev()
+    }
+
     /// Return an iterator of all levels from newest to oldest.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         self.levels.iter().map(|x| x.as_ref()).rev()
@@ -68,13 +73,14 @@ impl<K> MapApiRO<K> for StaticLevels
 where
     K: MapKey,
     Level: MapApiRO<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        let levels = self.iter_levels();
+        let levels = self.iter_arc_levels();
         compacted_get(key, levels).await
     }
 
@@ -82,9 +88,9 @@ where
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
     {
-        let levels = self.iter_levels();
-        compacted_range(range, levels).await
+        let levels = self.iter_arc_levels();
+        compacted_range::<_, _, _, _, Level>(range, None, levels).await
     }
 }

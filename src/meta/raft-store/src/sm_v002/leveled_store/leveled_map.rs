@@ -64,6 +64,13 @@ impl LeveledMap {
             .chain(self.frozen.iter_levels())
     }
 
+    /// Return the top level and an iterator of all frozen levels, in newest to oldest order.
+    pub(in crate::sm_v002) fn iter_shared_levels(
+        &self,
+    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
+        (Some(&self.writable), self.frozen.iter_arc_levels())
+    }
+
     /// Freeze the current writable level and create a new empty writable level.
     pub fn freeze_writable(&mut self) -> &StaticLevels {
         let new_writable = self.writable.new_level();
@@ -109,6 +116,7 @@ impl<K> MapApiRO<K> for LeveledMap
 where
     K: MapKey + fmt::Debug,
     Level: MapApiRO<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
@@ -123,10 +131,10 @@ where
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
     {
-        let levels = self.iter_levels();
-        compacted_range(range, levels).await
+        let (top, levels) = self.iter_shared_levels();
+        compacted_range(range, top, levels).await
     }
 }
 
@@ -135,6 +143,7 @@ impl<K> MapApi<K> for LeveledMap
 where
     K: MapKey,
     Level: MapApi<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn set(
         &mut self,
