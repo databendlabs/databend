@@ -433,48 +433,24 @@ ORDER BY 1, 2;
 5	9
 
 query II
-EXPLAIN
 SELECT lhs.i, rhs.i
 FROM wide_nulls lhs, wide_nulls rhs
 WHERE lhs.c3 < rhs.c0
   AND lhs.c8 IS DISTINCT FROM rhs.c3
 ORDER BY 1, 2;
 ----
-Sort
-├── output columns: [rhs.i (#11), lhs.i (#0)]
-├── sort keys: [i ASC NULLS LAST, i ASC NULLS LAST]
-├── estimated rows: 16.20
-└── Filter
-    ├── output columns: [rhs.i (#11), lhs.i (#0)]
-    ├── filters: [assume_not_null(if(CAST(NOT is_not_null(lhs.c8 (#9)) AND NOT is_not_null(rhs.c3 (#15)) AS Boolean NULL), false, CAST(NOT is_not_null(lhs.c8 (#9)) OR NOT is_not_null(rhs.c3 (#15)) AS Boolean NULL), true, lhs.c8 (#9) <> rhs.c3 (#15)))]
-    ├── estimated rows: 16.20
-    └── MergeJoin
-        ├── output columns: [rhs.i (#11), rhs.c0 (#12), rhs.c3 (#15), lhs.i (#0), lhs.c3 (#4), lhs.c8 (#9)]
-        ├── join type: INNER
-        ├── range join conditions: [CAST(rhs.c0 (#12) AS Int64 NULL) "gt" lhs.c3 (#4)]
-        ├── other conditions: []
-        ├── estimated rows: 81.00
-        ├── TableScan(Left)
-        │   ├── table: default.default.wide_nulls
-        │   ├── output columns: [i (#11), c0 (#12), c3 (#15)]
-        │   ├── read rows: 9
-        │   ├── read bytes: 190
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 9.00
-        └── TableScan(Right)
-            ├── table: default.default.wide_nulls
-            ├── output columns: [i (#0), c3 (#4), c8 (#9)]
-            ├── read rows: 9
-            ├── read bytes: 191
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 9.00
-
+1 5
+1 7
+1 8
+1 9
+2 6
+2 7
+2 8
+2 9
+3 7
+3 9
+4 8
+5 9
 
 # Multi-predicate merge joins with many matches
 # (similar to test/sql/join/inner/test_unequal_join_duplicates.test
