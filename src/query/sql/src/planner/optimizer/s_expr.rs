@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -20,13 +21,16 @@ use common_exception::Result;
 use educe::Educe;
 
 use super::RelationalProperty;
+use crate::binder::Finder;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::StatInfo;
+use crate::plans::{Exchange, Visitor};
 use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -199,6 +203,153 @@ impl SExpr {
         true
     }
 
+    pub fn get_udfs(&self) -> Result<HashSet<String>> {
+        let mut udfs = HashSet::new();
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::UDFServerCall(_) | ScalarExpr::UDFLambdaCall(_)
+            )
+        };
+
+        let udfs_pad = |udfs: &mut HashSet<String>,
+                        f: fn(&ScalarExpr) -> bool,
+                        scalar: &ScalarExpr|
+         -> Result<(), ErrorCode> {
+            let mut finder = Finder::new(&f);
+            finder.visit(scalar)?;
+            finder.scalars().iter().for_each(|scalar| match scalar {
+                ScalarExpr::UDFServerCall(udf) => {
+                    udfs.insert(udf.func_name.clone());
+                }
+                ScalarExpr::UDFLambdaCall(udf) => {
+                    udfs.insert(udf.func_name.clone());
+                }
+                _ => {}
+            });
+            Ok(())
+        };
+        match self.plan.as_ref() {
+            RelOperator::Scan(scan) => {
+                let Scan {
+                    push_down_predicates,
+                    prewhere,
+                    agg_index,
+                    ..
+                } = scan;
+
+                if let Some(push_down_predicates) = push_down_predicates {
+                    for push_down_predicate in push_down_predicates {
+                        udfs_pad(&mut udfs, f, push_down_predicate)?
+                    }
+                }
+                if let Some(prewhere) = prewhere {
+                    for predicate in &prewhere.predicates {
+                        udfs_pad(&mut udfs, f, predicate)?
+                    }
+                }
+                if let Some(agg_index) = agg_index {
+                    for predicate in &agg_index.predicates {
+                        udfs_pad(&mut udfs, f, predicate)?
+                    }
+                    for selection in &agg_index.selection {
+                        udfs_pad(&mut udfs, f, &selection.scalar)?
+                    }
+                }
+            }
+            RelOperator::Exchange(exchange) => {
+                if let Exchange::Hash(hash) = exchange {
+                    for hash in hash {
+                        udfs_pad(&mut udfs, f, hash)?
+                    }
+                }
+            }
+            RelOperator::Join(op) => {
+                for left in &op.left_conditions {
+                    udfs_pad(&mut udfs, f, left)?
+                }
+                for right in &op.right_conditions {
+                    udfs_pad(&mut udfs, f, right)?
+                }
+                for non in &op.non_equi_conditions {
+                    udfs_pad(&mut udfs, f, non)?
+                }
+            }
+            RelOperator::EvalScalar(op) => {
+                for item in &op.items {
+                    udfs_pad(&mut udfs, f, &item.scalar)?
+                }
+            }
+            RelOperator::Filter(op) => {
+                for predicate in &op.predicates {
+                    udfs_pad(&mut udfs, f, predicate)?
+                }
+            }
+            RelOperator::Aggregate(op) => {
+                for group_items in &op.group_items {
+                    udfs_pad(&mut udfs, f, &group_items.scalar)?
+                }
+                for agg_func in &op.aggregate_functions {
+                    udfs_pad(&mut udfs, f, &agg_func.scalar)?
+                }
+            }
+            RelOperator::Window(op) => {
+                match &op.function {
+                    WindowFuncType::Aggregate(agg) => {
+                        for arg in &agg.args {
+                            udfs_pad(&mut udfs, f, arg)?
+                        }
+                    }
+                    WindowFuncType::LagLead(lag_lead) => {
+                        udfs_pad(&mut udfs, f, &lag_lead.arg)?;
+                        if let Some(default) = &lag_lead.default {
+                            udfs_pad(&mut udfs, f, default)?;
+                        }
+                    }
+                    WindowFuncType::NthValue(nth) => {
+                        udfs_pad(&mut udfs, f, &nth.arg)?;
+                    }
+                    _ => {}
+                }
+                for arg in &op.arguments {
+                    udfs_pad(&mut udfs, f, &arg.scalar)?
+                }
+                for order_by in &op.order_by {
+                    udfs_pad(&mut udfs, f, &order_by.order_by_item.scalar)?
+                }
+                for partition_by in &op.partition_by {
+                    udfs_pad(&mut udfs, f, &partition_by.scalar)?
+                }
+            }
+            RelOperator::ProjectSet(op) => {
+                for srf in &op.srfs {
+                    udfs_pad(&mut udfs, f, &srf.scalar)?
+                }
+            }
+            RelOperator::Lambda(op) => {
+                for item in &op.items {
+                    udfs_pad(&mut udfs, f, &item.scalar)?
+                }
+            }
+            RelOperator::Udf(udf) => {
+                for item in &udf.items {
+                    udfs_pad(&mut udfs, f, &item.scalar)?
+                }
+            }
+            RelOperator::Limit(_)
+            | RelOperator::UnionAll(_)
+            | RelOperator::Sort(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::AddRowNumber(_)
+            | RelOperator::RuntimeFilterSource(_)
+            | RelOperator::Pattern(_)
+            | RelOperator::MaterializedCte(_)
+            | RelOperator::ConstantTableScan(_) => {}
+        };
+        Ok(udfs)
+    }
+
     // Add (table_index, column_index) into `Scan` node recursively.
     pub fn add_internal_column_index(
         expr: &SExpr,
@@ -320,5 +471,6 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
         ScalarExpr::SubqueryExpr(_) => true,
         ScalarExpr::UDFServerCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
+        ScalarExpr::UDFLambdaCall(expr) => find_subquery_in_expr(&expr.scalar),
     }
 }

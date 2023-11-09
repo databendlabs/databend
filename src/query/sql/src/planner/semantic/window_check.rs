@@ -19,6 +19,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::BindContext;
 use crate::ScalarExpr;
@@ -112,6 +113,15 @@ impl<'a> WindowChecker<'a> {
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: new_args,
+                }
+                .into())
+            }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let new_scalar = self.resolve(&udf.scalar)?;
+                Ok(UDFLambdaCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    scalar: Box::new(new_scalar),
                 }
                 .into())
             }

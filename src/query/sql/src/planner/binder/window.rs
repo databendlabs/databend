@@ -33,6 +33,7 @@ use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::plans::Window;
 use crate::plans::WindowFunc;
@@ -321,6 +322,15 @@ impl<'a> WindowRewriter<'a> {
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: new_args,
+                }
+                .into())
+            }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let new_scalar = self.visit(&udf.scalar)?;
+                Ok(UDFLambdaCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    scalar: Box::new(new_scalar),
                 }
                 .into())
             }

@@ -21,8 +21,10 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
-use common_sql::plans::PresignAction;
+use common_sql::planner::binder::Finder;
+use common_sql::plans::{PresignAction, Visitor};
 use common_sql::plans::RewriteKind;
+use common_sql::ScalarExpr;
 use common_users::RoleCacheManager;
 
 use crate::interpreters::access::AccessChecker;
@@ -119,6 +121,39 @@ impl PrivilegeAccess {
 
         session.validate_privilege(object, privileges).await
     }
+
+    async fn check_udf_priv(&self, scalar: &ScalarExpr) -> Result<()> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::UDFServerCall(_) | ScalarExpr::UDFLambdaCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        for scalar in finder.scalars() {
+            match scalar {
+                ScalarExpr::UDFServerCall(udf) => {
+                        self.validate_access(
+                            &GrantObject::UDF(udf.func_name.clone()),
+                            vec![UserPrivilegeType::Usage],
+                            false,
+                        )
+                            .await?
+                }
+                ScalarExpr::UDFLambdaCall(udf) => {
+                        self.validate_access(
+                            &GrantObject::UDF(udf.func_name.clone()),
+                            vec![UserPrivilegeType::Usage],
+                            false,
+                        )
+                            .await?
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -133,6 +168,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Query {
                 metadata,
                 rewrite_kind,
+                s_expr,
                 ..
             } => {
                 match rewrite_kind {
@@ -166,7 +202,26 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     _ => {}
                 };
+
+                match s_expr.get_udfs() {
+                    Ok(udfs) => {
+                        if !udfs.is_empty() {
+                            for udf in udfs {
+                                self.validate_access(
+                                    &GrantObject::UDF(udf),
+                                    vec![UserPrivilegeType::Usage],
+                                    false,
+                                ).await?
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        return Err(err.add_message("get udf error on validating access"));
+                    }
+                }
+
                 let metadata = metadata.read().clone();
+
                 for table in metadata.tables() {
                     if table.is_source_of_view() {
                         continue;
@@ -299,6 +354,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::CreateTable(plan) => {
+                // TODO(TCeason): as_select need check privilege.
                 self.validate_access(
                     &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                     vec![UserPrivilegeType::Create],
@@ -433,6 +489,9 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::ReclusterTable(plan) => {
+                if let Some(scalar) = &plan.push_downs {
+                    self.check_udf_priv(scalar).await?;
+                }
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -502,6 +561,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
+                //TODO(TCeason): source need to check privileges.
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -514,6 +574,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Replace(plan) => {
+                //TODO(TCeason): source and delete_when need to check privileges.
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -526,6 +587,43 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::MergeInto(plan) => {
+                let s_expr = &plan.input;
+                match s_expr.get_udfs() {
+                    Ok(udfs) => {
+                        if !udfs.is_empty() {
+                            for udf in udfs {
+                                self.validate_access(
+                                    &GrantObject::UDF(udf),
+                                    vec![UserPrivilegeType::Usage],
+                                    false,
+                                ).await?
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        return Err(err.add_message("get udf error on validating access"));
+                    }
+                }
+                let matched_evaluators = &plan.matched_evaluators;
+                let unmatched_evaluators = &plan.unmatched_evaluators;
+                for matched_evaluator in matched_evaluators {
+                    if let Some(condition) = &matched_evaluator.condition {
+                        self.check_udf_priv(condition).await?
+                    }
+                    if let Some(updates) = &matched_evaluator.update {
+                        for scalar in updates.values() {
+                            self.check_udf_priv(scalar).await?
+                        }
+                    }
+                }
+                for unmatched_evaluator in unmatched_evaluators {
+                    if let Some(condition) = &unmatched_evaluator.condition {
+                        self.check_udf_priv(condition).await?
+                    }
+                    for value in &unmatched_evaluator.values {
+                        self.check_udf_priv(value).await?
+                    }
+                }
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -538,6 +636,27 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Delete(plan) => {
+                if let Some(selection) = &plan.selection {
+                    self.check_udf_priv(selection).await?
+                }
+                for subquery in &plan.subquery_desc {
+                    match subquery.input_expr.get_udfs() {
+                        Ok(udfs) => {
+                            if !udfs.is_empty() {
+                                for udf in udfs {
+                                    self.validate_access(
+                                        &GrantObject::UDF(udf),
+                                        vec![UserPrivilegeType::Usage],
+                                        false,
+                                    ).await?
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            return Err(err.add_message("get udf error on validating access"));
+                        }
+                    }
+                }
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog_name.clone(),
@@ -550,6 +669,30 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Update(plan) => {
+                for scalar in plan.update_list.values() {
+                    self.check_udf_priv(scalar).await?
+                }
+                if let Some(selection) = &plan.selection {
+                    self.check_udf_priv(selection).await?
+                }
+                for subquery in &plan.subquery_desc {
+                    match subquery.input_expr.get_udfs() {
+                        Ok(udfs) => {
+                            if !udfs.is_empty() {
+                                for udf in udfs {
+                                    self.validate_access(
+                                        &GrantObject::UDF(udf),
+                                        vec![UserPrivilegeType::Usage],
+                                        false,
+                                    ).await?
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            return Err(err.add_message("get udf error on validating access"));
+                        }
+                    }
+                }
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -643,6 +786,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
+                // TODO(TCeason): need to check plan.query privileges.
                 let stage_name = &plan.stage_table_info.stage_info.stage_name;
                 self
                     .validate_access(

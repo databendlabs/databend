@@ -23,6 +23,7 @@ use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::BindContext;
 
@@ -207,6 +208,17 @@ impl<'a> GroupingChecker<'a> {
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: args,
+                }
+                .into())
+            }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let span = udf.span;
+                let scalar = &udf.scalar;
+                let new_scalar = self.resolve(scalar, span)?;
+                Ok(UDFLambdaCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    scalar: Box::new(new_scalar),
                 }
                 .into())
             }
