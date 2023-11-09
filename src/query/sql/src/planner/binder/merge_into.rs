@@ -40,7 +40,6 @@ use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::MatchedEvaluator;
 use crate::plans::MergeInto;
@@ -350,8 +349,8 @@ impl Binder {
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
-            let mut finder = Finder::new(&f);
-            walk_expr(&mut finder, &scalar_expr);
+            let finder = Finder::new(&f);
+            let finder = scalar_expr.accept(finder)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "update clause's condition can't contain subquery|window|aggregate functions"
@@ -408,8 +407,8 @@ impl Binder {
                         )));
                     }
 
-                    let mut finder = Finder::new(&f);
-                    walk_expr(&mut finder, &scalar_expr);
+                    let finder = Finder::new(&f);
+                    let finder = scalar_expr.accept(finder)?;
                     if !finder.scalars().is_empty() {
                         return Err(ErrorCode::SemanticError(
                             "update_list in update clause can't contain subquery|window|aggregate functions".to_string(),
