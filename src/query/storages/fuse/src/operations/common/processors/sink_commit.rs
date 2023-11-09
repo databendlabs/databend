@@ -95,6 +95,8 @@ pub struct CommitSink<F: SnapshotGenerator> {
     need_lock: bool,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
+
+    change_tracking: bool,
 }
 
 impl<F> CommitSink<F>
@@ -129,6 +131,7 @@ where F: SnapshotGenerator + Send + 'static
             need_lock,
             start_time: Instant::now(),
             prev_snapshot_id,
+            change_tracking: table.change_tracking_enabled(),
         })))
     }
 
@@ -228,24 +231,32 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
                 table_info,
             } => {
-                let schema = self.table.schema().as_ref().clone();
-                match self
-                    .snapshot_gen
-                    .generate_new_snapshot(schema, cluster_key_meta, previous)
-                {
-                    Ok(snapshot) => {
-                        self.state = State::TryCommit {
-                            data: snapshot.to_bytes()?,
-                            snapshot,
-                            table_info,
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            "commit mutation failed after {} retries, error: {:?}",
-                            self.retries, e,
-                        );
-                        self.state = State::AbortOperation;
+                if !self.change_tracking && self.table.change_tracking_enabled() {
+                    // If change tracing is disabled when the txn start, but is enabled when commit,
+                    // then the txn should be aborted.
+                    error!("commit mutation failed cause change tracking is enabled when commit");
+                    self.state = State::AbortOperation;
+                } else {
+                    let schema = self.table.schema().as_ref().clone();
+                    match self.snapshot_gen.generate_new_snapshot(
+                        schema,
+                        cluster_key_meta,
+                        previous,
+                    ) {
+                        Ok(snapshot) => {
+                            self.state = State::TryCommit {
+                                data: snapshot.to_bytes()?,
+                                snapshot,
+                                table_info,
+                            };
+                        }
+                        Err(e) => {
+                            error!(
+                                "commit mutation failed after {} retries, error: {:?}",
+                                self.retries, e,
+                            );
+                            self.state = State::AbortOperation;
+                        }
                     }
                 }
             }
