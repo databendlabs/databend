@@ -137,6 +137,9 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
                     .join(", ")
             )
         }
+        ScalarExpr::UDFLambdaCall(udf) => {
+            format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
+        }
     }
 }
 

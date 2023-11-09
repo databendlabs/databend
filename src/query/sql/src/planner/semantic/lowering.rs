@@ -239,6 +239,10 @@ impl ScalarExpr {
                 data_type: (*udf.return_type).clone(),
                 display_name: udf.display_name.clone(),
             },
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let scalar = &udf.scalar;
+                scalar.as_raw_expr()
+            }
         }
     }
 

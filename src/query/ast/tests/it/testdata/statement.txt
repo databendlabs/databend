@@ -11307,6 +11307,131 @@ Grant(
 
 
 ---------- Input ----------
+REVOKE write ON stage s1 FROM a;
+---------- Output ---------
+REVOKE Write ON STAGE s1 FROM USER 'a'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Write,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON UDF a TO 'test-grant';
+---------- Output ---------
+GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON UDF a TO 'test-grant';
+---------- Output ---------
+GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON UDF a FROM 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON UDF a FROM 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a;
 ---------- Output ---------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a
