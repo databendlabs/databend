@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_expression::SendableDataBlockStream;
 use common_sql::bind_one_table;
 use common_sql::optimizer::SExpr;
-use common_sql::plans::walk_expr_mut;
 use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
 use common_sql::plans::AggregateMode;
