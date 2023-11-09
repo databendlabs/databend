@@ -54,15 +54,16 @@ where F: Fn(&ScalarExpr) -> bool
 impl<'a, F> Visitor<'a> for Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
-    fn visit(&mut self, expr: &'a ScalarExpr) {
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
         if (self.find_fn)(expr) {
             if !(self.scalars.contains(expr)) {
                 self.scalars.push((*expr).clone())
             }
             // stop recursing down this expr once we find a match
         } else {
-            walk_expr(self, expr);
+            walk_expr(self, expr)?;
         }
+        Ok(())
     }
 }
 

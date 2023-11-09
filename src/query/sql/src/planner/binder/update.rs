@@ -113,7 +113,7 @@ impl Binder {
                 )
             };
             let mut finder = Finder::new(&f);
-            finder.visit(&scalar);
+            finder.visit(&scalar)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "update_list in update statement can't contain subquery|window|aggregate functions".to_string(),

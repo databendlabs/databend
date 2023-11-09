@@ -348,11 +348,12 @@ fn rewrite_scalar_index(
     }
 
     impl<'a> VisitorMut<'a> for RewriteVisitor<'a> {
-        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) {
+        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) -> Result<()> {
             if let Some(index) = self.columns.get(&col.column.column_name) {
                 col.column.table_index = Some(self.table_index);
                 col.column.index = *index;
             }
+            Ok(())
         }
     }
 
@@ -360,7 +361,7 @@ fn rewrite_scalar_index(
         table_index,
         columns,
     };
-    visitor.visit(scalar);
+    visitor.visit(scalar).unwrap();
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.

@@ -351,7 +351,7 @@ impl Binder {
                 columns.insert(idx);
             }
             let mut finder = Finder::new(&f);
-            finder.visit(&scalar_expr);
+            finder.visit(&scalar_expr)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "update clause's condition can't contain subquery|window|aggregate functions"
@@ -409,7 +409,7 @@ impl Binder {
                     }
 
                     let mut finder = Finder::new(&f);
-                    finder.visit(&scalar_expr);
+                    finder.visit(&scalar_expr)?;
                     if !finder.scalars().is_empty() {
                         return Err(ErrorCode::SemanticError(
                             "update_list in update clause can't contain subquery|window|aggregate functions".to_string(),

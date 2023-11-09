@@ -363,29 +363,25 @@ impl MergeIntoInterpreter {
 
         struct ReplaceColumnVisitor<'a> {
             column_map: &'a HashMap<String, ColumnBinding>,
-            failed: bool,
         }
 
         impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
-            fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) {
+            fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
                 if let Some(new_column) = self.column_map.get(&column.column.column_name) {
                     column.column = new_column.clone();
+                    Ok(())
                 } else {
-                    self.failed = true;
+                    Err(ErrorCode::from_string_no_backtrace(String::new()))
                 }
             }
         }
 
-        let mut visitor = ReplaceColumnVisitor {
-            column_map,
-            failed: false,
-        };
-        visitor.visit(&mut left_most_expr);
+        let mut visitor = ReplaceColumnVisitor { column_map };
 
-        if visitor.failed {
-            Ok(None)
-        } else {
+        if visitor.visit(&mut left_most_expr).is_ok() {
             Ok(Some(left_most_expr))
+        } else {
+            Ok(None)
         }
     }
 

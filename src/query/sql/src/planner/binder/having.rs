@@ -69,7 +69,7 @@ impl Binder {
 
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
         let mut finder = Finder::new(&f);
-        finder.visit(&having);
+        finder.visit(&having)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Having clause can't contain window functions".to_string(),

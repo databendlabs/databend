@@ -693,7 +693,7 @@ impl Binder {
         let mut groups = Vec::new();
         for (idx, select_item) in select_list.items.iter().enumerate() {
             let mut finder = Finder::new(&f);
-            finder.visit(&select_item.scalar);
+            finder.visit(&select_item.scalar)?;
             if finder.scalars().is_empty() {
                 groups.push(Expr::Literal {
                     span: None,
@@ -813,7 +813,7 @@ impl Binder {
         };
         for item in bind_context.aggregate_info.group_items.iter() {
             let mut finder = Finder::new(&f);
-            finder.visit(&item.scalar);
+            finder.visit(&item.scalar)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "GROUP BY items can't contain aggregate functions or window functions"

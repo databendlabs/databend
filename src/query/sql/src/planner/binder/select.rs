@@ -432,7 +432,7 @@ impl Binder {
         };
 
         let mut finder = Finder::new(&f);
-        finder.visit(&scalar);
+        finder.visit(&scalar)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Where clause can't contain aggregate or window functions".to_string(),
