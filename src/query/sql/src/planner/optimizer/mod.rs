@@ -50,3 +50,4 @@ pub use rule::RuleFactory;
 pub use rule::RuleID;
 pub use rule::RuleSet;
 pub use s_expr::SExpr;
+pub use s_expr::get_udf_names;

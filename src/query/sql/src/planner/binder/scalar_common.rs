@@ -224,6 +224,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             .arguments
             .iter()
             .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::UDFLambdaCall(udf) => prune_by_children(&udf.scalar, columns),
     }
 }
 
