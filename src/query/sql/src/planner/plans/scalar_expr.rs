@@ -64,7 +64,7 @@ impl ScalarExpr {
         let mut visitor = UsedColumnsVisitor {
             columns: ColumnSet::new(),
         };
-        visitor.visit_expr(self);
+        visitor.visit(self);
         visitor.columns
     }
 
@@ -83,7 +83,7 @@ impl ScalarExpr {
         }
 
         let mut visitor = UsedTablesVisitor { tables: vec![] };
-        visitor.visit_expr(self);
+        visitor.visit(self);
         Ok(visitor.tables)
     }
 
@@ -553,7 +553,7 @@ pub struct UDFServerCall {
 }
 
 pub trait Visitor<'a>: Sized {
-    fn visit_expr(&mut self, a: &'a ScalarExpr) {
+    fn visit(&mut self, a: &'a ScalarExpr) {
         walk_expr(self, a);
     }
 
@@ -561,18 +561,18 @@ pub trait Visitor<'a>: Sized {
     fn visit_constant_expr(&mut self, _constant: &'a ConstantExpr) {}
     fn visit_window_function(&mut self, window: &'a WindowFunc) {
         for expr in &window.partition_by {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
         for expr in &window.order_by {
-            self.visit_expr(&expr.expr);
+            self.visit(&expr.expr);
         }
         match &window.func {
             WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func),
-            WindowFuncType::NthValue(func) => self.visit_expr(&func.arg),
+            WindowFuncType::NthValue(func) => self.visit(&func.arg),
             WindowFuncType::LagLead(func) => {
-                self.visit_expr(&func.arg);
+                self.visit(&func.arg);
                 if let Some(default) = func.default.as_ref() {
-                    self.visit_expr(default)
+                    self.visit(default)
                 }
             }
             WindowFuncType::RowNumber
@@ -585,31 +585,31 @@ pub trait Visitor<'a>: Sized {
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) {
         for expr in &aggregate.args {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
     }
     fn visit_lambda_function(&mut self, lambda: &'a LambdaFunc) {
         for expr in &lambda.args {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
-        self.visit_expr(&lambda.lambda_expr);
+        self.visit(&lambda.lambda_expr);
     }
     fn visit_function_call(&mut self, func: &'a FunctionCall) {
         for expr in &func.arguments {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
     }
     fn visit_cast_expr(&mut self, cast: &'a CastExpr) {
-        self.visit_expr(&cast.argument);
+        self.visit(&cast.argument);
     }
     fn visit_subquery_expr(&mut self, subquery: &'a SubqueryExpr) {
         if let Some(child_expr) = subquery.child_expr.as_ref() {
-            self.visit_expr(child_expr)
+            self.visit(child_expr)
         }
     }
     fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) {
         for expr in &udf.arguments {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
     }
 }
@@ -629,25 +629,25 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) {
 }
 
 pub trait VisitorMut<'a>: Sized {
-    fn visit_expr(&mut self, a: &'a mut ScalarExpr) {
+    fn visit(&mut self, a: &'a mut ScalarExpr) {
         walk_expr_mut(self, a);
     }
     fn visit_bound_column_ref(&mut self, _col: &'a mut BoundColumnRef) {}
     fn visit_constant_expr(&mut self, _constant: &'a mut ConstantExpr) {}
     fn visit_window_function(&mut self, window: &'a mut WindowFunc) {
         for expr in &mut window.partition_by {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
         for expr in &mut window.order_by {
-            self.visit_expr(&mut expr.expr);
+            self.visit(&mut expr.expr);
         }
         match &mut window.func {
             WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func),
-            WindowFuncType::NthValue(func) => self.visit_expr(&mut func.arg),
+            WindowFuncType::NthValue(func) => self.visit(&mut func.arg),
             WindowFuncType::LagLead(func) => {
-                self.visit_expr(&mut func.arg);
+                self.visit(&mut func.arg);
                 if let Some(default) = func.default.as_mut() {
-                    self.visit_expr(default)
+                    self.visit(default)
                 }
             }
             WindowFuncType::RowNumber
@@ -660,31 +660,31 @@ pub trait VisitorMut<'a>: Sized {
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) {
         for expr in &mut aggregate.args {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
     }
     fn visit_lambda_function(&mut self, lambda: &'a mut LambdaFunc) {
         for expr in &mut lambda.args {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
-        self.visit_expr(&mut lambda.lambda_expr);
+        self.visit(&mut lambda.lambda_expr);
     }
     fn visit_function_call(&mut self, func: &'a mut FunctionCall) {
         for expr in &mut func.arguments {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
     }
     fn visit_cast_expr(&mut self, cast: &'a mut CastExpr) {
-        self.visit_expr(&mut cast.argument);
+        self.visit(&mut cast.argument);
     }
     fn visit_subquery_expr(&mut self, subquery: &'a mut SubqueryExpr) {
         if let Some(child_expr) = subquery.child_expr.as_mut() {
-            self.visit_expr(child_expr)
+            self.visit(child_expr)
         }
     }
     fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) {
         for expr in &mut udf.arguments {
-            self.visit_expr(expr);
+            self.visit(expr);
         }
     }
 }

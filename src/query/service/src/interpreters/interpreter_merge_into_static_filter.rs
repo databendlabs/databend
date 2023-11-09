@@ -381,7 +381,7 @@ impl MergeIntoInterpreter {
             column_map,
             failed: false,
         };
-        walk_expr_mut(&mut visitor, &mut left_most_expr);
+        visitor.visit(&mut left_most_expr);
 
         if visitor.failed {
             Ok(None)

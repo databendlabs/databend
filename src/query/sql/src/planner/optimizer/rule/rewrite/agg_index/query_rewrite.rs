@@ -29,7 +29,6 @@ use log::info;
 use crate::binder::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
@@ -361,7 +360,7 @@ fn rewrite_scalar_index(
         table_index,
         columns,
     };
-    walk_expr_mut(&mut visitor, scalar)
+    visitor.visit(scalar);
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.
