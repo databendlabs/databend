@@ -59,6 +59,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_metrics::storage::*;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
@@ -809,6 +810,10 @@ impl TableContext for QueryContext {
         self.get_settings()
             .get_enterprise_license()
             .unwrap_or_default()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        SessionManager::instance().get_queries_profile()
     }
 }
 

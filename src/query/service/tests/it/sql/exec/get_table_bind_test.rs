@@ -114,6 +114,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use common_pipeline_core::processors::profile::Profile;
 use storages_common_table_meta::meta::Location;
 
 type MetaType = (String, String, String);
@@ -697,7 +698,12 @@ impl TableContext for CtxDelegation {
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        todo!()
+    }
 }
+
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {

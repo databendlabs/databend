@@ -122,6 +122,7 @@ use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 use walkdir::WalkDir;
+use common_pipeline_core::processors::profile::Profile;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -652,6 +653,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_license_key(&self) -> String {
+        todo!()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
         todo!()
     }
 }
