@@ -62,12 +62,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = d
-        .str_map()
-        .range::<str, _>(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = d.str_map().range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (s("a"), Marked::new_with_meta(1, b("a0"), None)),
@@ -98,12 +93,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let d = compacted.newest().unwrap().as_ref();
 
-    let got = d
-        .str_map()
-        .range::<String, _>(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = d.str_map().range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (
