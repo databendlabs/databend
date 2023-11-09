@@ -77,7 +77,7 @@ impl InnerConfig {
         cfg.query.node_id = GlobalUniqName::unique();
 
         // Handle auto detect for storage params.
-        cfg.storage.params = cfg.storage.params.auto_detect().await;
+        cfg.storage.params = cfg.storage.params.auto_detect().await?;
 
         // Only check meta config when cmd is empty.
         if cfg.subcommand.is_none() {

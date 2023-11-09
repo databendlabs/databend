@@ -28,13 +28,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
+use common_metrics::storage::*;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentsIO;
-use crate::metrics::metrics_inc_compact_block_build_task_milliseconds;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::compact::compact_part::CompactExtraInfo;

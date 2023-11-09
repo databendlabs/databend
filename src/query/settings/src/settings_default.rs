@@ -52,6 +52,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("parquet_max_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "Max block size for parquet reader",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
                     desc: "Sets the maximum number of threads to execute a request.",
@@ -469,6 +475,21 @@ impl DefaultSettings {
                         possible_values: None,
                         display_in_show_settings: true,
                 }),
+
+                ("external_server_connect_timeout_secs", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(10),
+                        desc: "Connection timeout to external server",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+
+                ("external_server_request_timeout_secs", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(180),
+                        desc: "Request timeout to external server",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+
                 ("enable_parquet_prewhere", DefaultSettingValue {
                         value: UserSettingValue::UInt64(0),
                         desc: "Enables parquet prewhere",

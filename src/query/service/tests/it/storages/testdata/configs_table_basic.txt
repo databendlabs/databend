@@ -34,6 +34,9 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'stderr.format'                            | 'text'                                                         | ''       |
 | 'log'     | 'stderr.level'                             | 'WARN'                                                         | ''       |
 | 'log'     | 'stderr.on'                                | 'true'                                                         | ''       |
+| 'log'     | 'tracing.capture_log_level'                | 'TRACE'                                                        | ''       |
+| 'log'     | 'tracing.on'                               | 'false'                                                        | ''       |
+| 'log'     | 'tracing.otlp_endpoint'                    | 'http://127.0.0.1:4317'                                        | ''       |
 | 'meta'    | 'auto_sync_interval'                       | '0'                                                            | ''       |
 | 'meta'    | 'client_timeout_in_second'                 | '10'                                                           | ''       |
 | 'meta'    | 'embedded_dir'                             | ''                                                             | ''       |

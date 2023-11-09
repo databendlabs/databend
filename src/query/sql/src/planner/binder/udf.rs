@@ -89,7 +89,16 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
-                let mut client = UDFFlightClient::connect(address).await?;
+                let mut client = UDFFlightClient::connect(
+                    address,
+                    self.ctx
+                        .get_settings()
+                        .get_external_server_connect_timeout_secs()?,
+                    self.ctx
+                        .get_settings()
+                        .get_external_server_request_timeout_secs()?,
+                )
+                .await?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;

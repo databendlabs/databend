@@ -315,10 +315,10 @@ impl RangeJoinState {
                     continue;
                 }
             }
+            let idx_val = unsafe { l2.index_unchecked(idx) };
             while off2 < len {
-                let order =
-                    unsafe { l2.index_unchecked(idx) }.cmp(&unsafe { l2.index_unchecked(off2) });
-                if !order_match(&self.conditions[1].operator, order) {
+                let off2_val = unsafe { l2.index_unchecked(off2) };
+                if !order_match(&self.conditions[1].operator, &idx_val, &off2_val) {
                     break;
                 }
                 let p2 = p_array[off2];

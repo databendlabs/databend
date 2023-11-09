@@ -198,7 +198,7 @@ impl SubqueryRewriter {
         for pred in filter.predicates.iter() {
             let join_condition = JoinPredicate::new(pred, &input_prop, &filter_prop);
             match join_condition {
-                JoinPredicate::Left(filter) => {
+                JoinPredicate::Left(filter) | JoinPredicate::ALL(filter) => {
                     left_filters.push(filter.clone());
                 }
                 JoinPredicate::Right(filter) => {

@@ -18,6 +18,4 @@ mod embedding;
 #[allow(clippy::module_inception)]
 mod openai;
 
-pub(crate) mod metrics;
-
 pub use openai::OpenAI;

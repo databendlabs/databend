@@ -700,4 +700,9 @@ pub trait Visitor<'ast>: Sized {
     fn visit_window_definition(&mut self, window_definition: &'ast WindowDefinition) {
         walk_window_definition(self, window_definition);
     }
+
+    fn visit_create_connection(&mut self, _stmt: &'ast CreateConnectionStmt) {}
+    fn visit_drop_connection(&mut self, _stmt: &'ast DropConnectionStmt) {}
+    fn visit_describe_connection(&mut self, _stmt: &'ast DescribeConnectionStmt) {}
+    fn visit_show_connections(&mut self, _stmt: &'ast ShowConnectionsStmt) {}
 }

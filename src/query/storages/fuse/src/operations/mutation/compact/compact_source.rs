@@ -22,12 +22,12 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_metrics::storage::*;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::metrics::*;
 use crate::operations::mutation::compact::compact_part::CompactPartInfo;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::mutation_meta::SerializeBlock;
