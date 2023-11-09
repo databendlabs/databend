@@ -84,13 +84,9 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let levels = self.iter_arc_levels();
-        compacted_range::<_, _, _, _, Level>(range, None, levels).await
+        compacted_range::<_, _, _, Level>(range, None, levels).await
     }
 }

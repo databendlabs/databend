@@ -84,12 +84,8 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let (top, levels) = self.iter_shared_levels();
         compacted_range(range, top, levels).await
     }
@@ -115,7 +111,7 @@ where
 
         // No such entry at all, no need to create a tombstone for delete
         if prev.not_found() && value.is_none() {
-            return Ok((prev, Marked::new_tomb_stone(0)));
+            return Ok((prev, Marked::new_tombstone(0)));
         }
 
         // `writeable` is a single level map and the returned `_prev` is only from that level.
