@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::SendableDataBlockStream;
 use common_sql::bind_one_table;
 use common_sql::optimizer::SExpr;
+use common_sql::plans::walk_expr_mut;
 use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
 use common_sql::plans::AggregateMode;
@@ -34,6 +35,7 @@ use common_sql::plans::JoinType;
 use common_sql::plans::Plan;
 use common_sql::plans::RelOperator;
 use common_sql::plans::ScalarItem;
+use common_sql::plans::VisitorMut;
 use common_sql::BindContext;
 use common_sql::ColumnBinding;
 use common_sql::ColumnBindingBuilder;
@@ -349,7 +351,7 @@ impl MergeIntoInterpreter {
 
         let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
 
-        let left_most_expr = match &scalar_expr {
+        let mut left_most_expr = match &scalar_expr {
             ScalarExpr::FunctionCall(f) if f.func_name == "tuple" && !f.arguments.is_empty() => {
                 f.arguments[0].clone()
             }
@@ -359,9 +361,33 @@ impl MergeIntoInterpreter {
             }
             _ => scalar_expr,
         };
-        let projected = left_most_expr
-            .try_project_column_binding(|binding| column_map.get(&binding.column_name).cloned());
-        Ok(projected)
+
+        struct ReplaceColumnVisitor<'a> {
+            column_map: &'a HashMap<String, ColumnBinding>,
+            failed: bool,
+        }
+
+        impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
+            fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) {
+                if let Some(new_column) = self.column_map.get(&column.column.column_name) {
+                    column.column = new_column.clone();
+                } else {
+                    self.failed = true;
+                }
+            }
+        }
+
+        let mut visitor = ReplaceColumnVisitor {
+            column_map,
+            failed: false,
+        };
+        walk_expr_mut(&mut visitor, &mut left_most_expr);
+
+        if visitor.failed {
+            Ok(None)
+        } else {
+            Ok(Some(left_most_expr))
+        }
     }
 
     async fn build_min_max_group_by_left_most_cluster_key_expr_plan(
