@@ -59,6 +59,7 @@ def create_task_run_from_task(task):
     task_run.owner = task.owner
     task_run.query_text = task.query_text
     task_run.schedule_options.CopyFrom(task.schedule_options)
+    task.warehouse_options.CopyFrom(task.warehouse_options)
     task_run.state = task_pb2.TaskRun.SUCCEEDED
     task_run.attempt_number = 0
     task_run.comment = task.comment
