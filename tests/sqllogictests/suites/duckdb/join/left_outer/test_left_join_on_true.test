@@ -38,7 +38,7 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE AND integers.i=integers
 # this is just a cross product
 
 query IIII
-SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i
+SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i, j, k, l
 ----
 1	2	1	10
 1	2	2	20
