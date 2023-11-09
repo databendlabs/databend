@@ -70,12 +70,8 @@ impl MapApiRO<String> for Arc<Level> {
         self.as_ref().str_map().get(key).await
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<String>, io::Error>
-    where
-        String: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<String>, io::Error>
+    where R: RangeBounds<String> + Clone + Send + Sync + 'static {
         let strm = self.clone().str_range(range);
         Ok(strm)
     }
@@ -92,12 +88,8 @@ impl MapApiRO<ExpireKey> for Arc<Level> {
         self.as_ref().expire_map().get(key).await
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>
-    where
-        ExpireKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>
+    where R: RangeBounds<ExpireKey> + Clone + Send + Sync + 'static {
         let strm = self.clone().expire_range(range);
         Ok(strm)
     }

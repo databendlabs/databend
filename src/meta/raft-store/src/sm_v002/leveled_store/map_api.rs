@@ -90,11 +90,8 @@ where K: MapKey
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Send + Sync + Clone + 'static;
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Send + Sync + Clone + 'static;
 }
 
 /// Trait for using Self as an implementation of the MapApi.
@@ -163,7 +160,7 @@ impl MapApiExt {
     {
         //
         let got = s.get(&key).await?;
-        if got.is_tomb_stone() {
+        if got.is_tombstone() {
             return Ok((got.clone(), got.clone()));
         }
 
@@ -228,16 +225,14 @@ where
 /// The `L` is the type of frozen levels.
 ///
 /// Because the top level is very likely to be a different type from the frozen levels, i.e., it is writable.
-pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R, L, TOP>(
+pub(in crate::sm_v002) async fn compacted_range<'d, K, R, L, TOP>(
     range: R,
     top: Option<&'d TOP>,
     levels: impl IntoIterator<Item = &'d L>,
 ) -> Result<KVResultStream<K>, io::Error>
 where
     K: MapKey,
-    K: Borrow<Q>,
-    R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    Q: Ord + Send + Sync + ?Sized,
+    R: RangeBounds<K> + Clone + Send + Sync + 'static,
     L: MapApiRO<K> + 'static,
     TOP: MapApiRO<K> + 'static,
 {
@@ -285,10 +280,10 @@ mod tests {
         assert_eq!(got, Marked::new_normal(1, b("a")));
 
         let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l1, &l0]).await?;
-        assert_eq!(got, Marked::new_tomb_stone(1));
+        assert_eq!(got, Marked::new_tombstone(1));
 
         let got = compacted_get::<String, _, _>(&s("a"), [&l1, &l0]).await?;
-        assert_eq!(got, Marked::new_tomb_stone(1));
+        assert_eq!(got, Marked::new_tombstone(1));
 
         let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l0]).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
@@ -317,45 +312,41 @@ mod tests {
 
         // With top level
         {
-            let got =
-                compacted_range::<String, String, _, _, _>(s("").., Some(&l2), [&l1, &l0]).await?;
+            let got = compacted_range(s("").., Some(&l2), [&l1, &l0]).await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
-                (s("a"), Marked::new_tomb_stone(2)),
+                (s("a"), Marked::new_tombstone(2)),
                 (s("b"), Marked::new_normal(3, b("b2"))),
-                (s("c"), Marked::new_tomb_stone(2)),
+                (s("c"), Marked::new_tombstone(2)),
             ]);
 
-            let got =
-                compacted_range::<String, String, _, _, _>(s("b").., Some(&l2), [&l1, &l0]).await?;
+            let got = compacted_range(s("b").., Some(&l2), [&l1, &l0]).await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
                 (s("b"), Marked::new_normal(3, b("b2"))),
-                (s("c"), Marked::new_tomb_stone(2)),
+                (s("c"), Marked::new_tombstone(2)),
             ]);
         }
 
         // Without top level
         {
-            let got =
-                compacted_range::<String, String, _, _, Level>(s("").., None, [&l1, &l0]).await?;
+            let got = compacted_range::<_, _, _, Level>(s("").., None, [&l1, &l0]).await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
-                (s("a"), Marked::new_tomb_stone(2)),
+                (s("a"), Marked::new_tombstone(2)),
                 (s("b"), Marked::new_normal(2, b("b"))),
-                (s("c"), Marked::new_tomb_stone(2)),
+                (s("c"), Marked::new_tombstone(2)),
             ]);
 
-            let got =
-                compacted_range::<String, String, _, _, Level>(s("b").., None, [&l1, &l0]).await?;
+            let got = compacted_range::<_, _, _, Level>(s("b").., None, [&l1, &l0]).await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
                 (s("b"), Marked::new_normal(2, b("b"))),
-                (s("c"), Marked::new_tomb_stone(2)),
+                (s("c"), Marked::new_tombstone(2)),
             ]);
         }
 
