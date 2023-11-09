@@ -43,7 +43,7 @@ statement ok
 INSERT INTO u VALUES (-32768), (32767);
 
 query II
-SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
 ----
 -32768	 -32768
 32767	32767
@@ -68,7 +68,7 @@ statement ok
 INSERT INTO u VALUES (-2147483648), (2147483647);
 
 query II
-SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
 ----
 -2147483648	 -2147483648
 2147483647	2147483647
@@ -93,7 +93,7 @@ statement ok
 INSERT INTO u VALUES (-9223372036854775808), (9223372036854775807);
 
 query II
-SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
 ----
 -9223372036854775808	 -9223372036854775808
 9223372036854775807	9223372036854775807
