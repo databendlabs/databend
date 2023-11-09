@@ -17,6 +17,7 @@ from decimal import Decimal
 import time
 from typing import List, Dict, Any, Tuple, Optional
 
+# https://github.com/datafuselabs/databend-udf
 from databend_udf import udf, UDFServer
 
 
