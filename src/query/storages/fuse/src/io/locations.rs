@@ -75,6 +75,20 @@ impl TableMetaLocationGenerator {
         &self.part_prefix
     }
 
+    pub fn gen_block_location_of_version4(&self) -> (Location, Uuid) {
+        let part_uuid = Uuid::new_v4();
+        let location_path = format!(
+            "{}/{}/{}{}_v{}.parquet",
+            &self.prefix,
+            FUSE_TBL_BLOCK_PREFIX,
+            &self.part_prefix,
+            part_uuid.as_simple(),
+            2,
+        );
+
+        ((location_path, DataBlock::VERSION), part_uuid)
+    }
+
     pub fn gen_block_location(&self) -> (Location, Uuid) {
         let part_uuid = Uuid::new_v4();
         let location_path = format!(
@@ -88,6 +102,19 @@ impl TableMetaLocationGenerator {
         );
 
         ((location_path, DataBlock::VERSION), part_uuid)
+    }
+
+    pub fn block_bloom_index_location_of_version4(&self, block_id: &Uuid) -> Location {
+        (
+            format!(
+                "{}/{}/{}_v{}.parquet",
+                &self.prefix,
+                FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
+                block_id.as_simple(),
+                BlockFilter::VERSION,
+            ),
+            3,
+        )
     }
 
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
@@ -104,6 +131,14 @@ impl TableMetaLocationGenerator {
         )
     }
 
+    pub fn gen_segment_info_location_of_version4(&self) -> String {
+        let segment_uuid = Uuid::new_v4().simple().to_string();
+        format!(
+            "{}/{}/{}_v4.mpk",
+            &self.prefix, FUSE_TBL_SEGMENT_PREFIX, segment_uuid,
+        )
+    }
+
     pub fn gen_segment_info_location(&self) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
@@ -114,6 +149,11 @@ impl TableMetaLocationGenerator {
             self.snapshot_table_version,
             SegmentInfo::VERSION,
         )
+    }
+
+    pub fn gen_snapshot_location_of_version4(&self, id: &Uuid, version: u64) -> Result<String> {
+        let snapshot_version = SnapshotVersion::try_from(version)?;
+        Ok(snapshot_version.create(id, &self.prefix, None))
     }
 
     pub fn gen_snapshot_location(

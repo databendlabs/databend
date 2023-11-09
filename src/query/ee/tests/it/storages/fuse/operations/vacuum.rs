@@ -27,6 +27,7 @@ use common_expression::DataBlock;
 use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::append_sample_data;
+use databend_query::test_kits::table_test_fixture::append_sample_data_of_v4;
 use databend_query::test_kits::table_test_fixture::check_data_dir;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
@@ -119,6 +120,11 @@ async fn check_query_data(
     query: &str,
     expected_data_blocks: &[DataBlock],
 ) -> Result<()> {
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
     let ctx = fixture.ctx();
     let data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), query)
         .await?
@@ -521,7 +527,6 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     // check that orphan files and lase snapshot file has been purged
     orphan_files.extend(vacuum_snapshot_file_set);
     let purge_files: HashSet<String> = orphan_files.into_iter().collect();
-    println!("purge_files: {:?}", purge_files);
     check_vacuum(
         &fixture,
         purge_files,
@@ -532,12 +537,6 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
         3,
     )
     .await?;
-
-    fixture.ctx().evict_table_from_cache(
-        &fixture.default_catalog_name(),
-        &fixture.default_db_name(),
-        &fixture.default_table_name(),
-    )?;
 
     check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
 
@@ -641,11 +640,354 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
         1,
     )
     .await?;
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+
+    Ok(())
+}
+
+// test case2 with old format files
+//
+//      snapshot timestamp < retention time
+//          +-----------------+   prev  +---------+
+// case 2:  |root gc snapshot |         |   ....  |
+//          |                 |-------> |         |
+//          +-----------------+         +---------+
+//          current snapshot
+//
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_old_format_files_case2() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    let data_qry = format!(
+        "select * from {}.{} order by id",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+
+    // append data of version 4
+    let number_of_block = 1;
+    append_sample_data_of_v4(number_of_block, &fixture).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+    let mut purged_files = HashSet::new();
+    purged_files.insert(snapshot_loc);
+    let first_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+
+    // append data of version 4
+    append_sample_data_of_v4(number_of_block, &fixture).await?;
+
     fixture.ctx().evict_table_from_cache(
         &fixture.default_catalog_name(),
         &fixture.default_db_name(),
         &fixture.default_table_name(),
     )?;
+    let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
+        .await?
+        .try_collect()
+        .await?;
+
+    // make sure first snapshot timestamp > retention time
+    let retention_time = std::cmp::min(
+        chrono::Utc::now() - chrono::Duration::seconds(2),
+        first_snapshot.timestamp.unwrap() - chrono::Duration::seconds(1),
+    );
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_old_format_files step 1: verify files",
+        retention_time,
+        2,
+        2,
+        2,
+    )
+    .await?;
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let retention_time = chrono::Utc::now();
+    check_vacuum(
+        &fixture,
+        purged_files,
+        "test_fuse_vacuum_old_format_files step 2: verify files",
+        retention_time,
+        1,
+        2,
+        2,
+    )
+    .await?;
+
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+    Ok(())
+}
+
+//      snapshot timestamp < retention time
+//          +-----------------+   prev  +---------+
+// case 2:  |root gc snapshot |         |   ....  |
+//          |                 |-------> |         |
+//          +-----------------+         +---------+
+//          current snapshot
+//
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_files_case2() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    let data_qry = format!(
+        "select * from {}.{} order by id",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+    let mut purged_files = HashSet::new();
+    purged_files.insert(snapshot_loc);
+    let first_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+
+    append_sample_data(number_of_block, &fixture).await?;
+
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+    let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
+        .await?
+        .try_collect()
+        .await?;
+
+    // make sure first snapshot timestamp > retention time
+    let retention_time = std::cmp::min(
+        chrono::Utc::now() - chrono::Duration::seconds(2),
+        first_snapshot.timestamp.unwrap() - chrono::Duration::seconds(1),
+    );
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_old_format_files step 1: verify files",
+        retention_time,
+        2,
+        2,
+        2,
+    )
+    .await?;
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let retention_time = chrono::Utc::now();
+    check_vacuum(
+        &fixture,
+        purged_files,
+        "test_fuse_vacuum_old_format_files step 2: verify files",
+        retention_time,
+        1,
+        2,
+        2,
+    )
+    .await?;
+
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_files_with_old_format() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    let data_qry = format!(
+        "select * from {}.{} order by id",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+
+    // first append data of version 4
+    let number_of_block = 1;
+    append_sample_data_of_v4(number_of_block, &fixture).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+
+    let mut purged_files = HashSet::new();
+    purged_files.insert(snapshot_loc);
+
+    // then append data of new file name format
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    append_sample_data(number_of_block, &fixture).await?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+    let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
+        .await?
+        .try_collect()
+        .await?;
+
+    // make sure snapshot timestamp > retention time
+    let retention_time = std::cmp::min(
+        chrono::Utc::now() - chrono::Duration::seconds(2),
+        snapshot.timestamp.unwrap() - chrono::Duration::seconds(1),
+    );
+    // when current snapshot timestamp > retention time, cannot find root gc snapshot
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_old_format_files step 1: verify files",
+        retention_time,
+        2,
+        2,
+        2,
+    )
+    .await?;
+
+    // when current snapshot timestamp <= retention time, use current snapshot as root gc snapshot
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    let retention_time = chrono::Utc::now();
+    check_vacuum(
+        &fixture,
+        purged_files,
+        "test_fuse_vacuum_old_format_files step 2: verify files",
+        retention_time,
+        1,
+        2,
+        2,
+    )
+    .await?;
+
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_files_check_commit_success() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    let data_qry = format!(
+        "select * from {}.{} order by id",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+
+    // first append some data
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let first_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let first_snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+
+    // generate some orphan files
+    let orphan_segment_file_num = 1;
+    let orphan_block_per_segment_num = 1;
+
+    // generate orphan snapshot and segments
+    let (_orphan_files, orphan_snapshot_file) = generate_test_orphan_files(
+        &fixture,
+        Some(true),
+        orphan_segment_file_num,
+        orphan_block_per_segment_num,
+    )
+    .await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let orphan_snapshot = fuse_table
+        .read_table_snapshot_by_location(orphan_snapshot_file.clone().unwrap())
+        .await?
+        .unwrap();
+    let mut purge_files = HashSet::new();
+    purge_files.insert(orphan_snapshot_file.unwrap());
+    purge_files.insert(first_snapshot_loc);
+
+    // then append some data
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    append_sample_data(number_of_block, &fixture).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+
+    fixture.ctx().evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+    let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
+        .await?
+        .try_collect()
+        .await?;
+
+    // make sure first retention time between [current snapshot timestamp, orphan snapshot timestamp]
+    // in this case, cause orphan snapshot is not committed success, so no root gc snapshot.
+    let retention_time = std::cmp::min(
+        snapshot.timestamp.unwrap() - chrono::Duration::seconds(1),
+        std::cmp::max(
+            chrono::Utc::now() - chrono::Duration::seconds(2),
+            orphan_snapshot.timestamp.unwrap() + chrono::Duration::seconds(1),
+        ),
+    );
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_files_check_commit_success step 1: verify files",
+        retention_time,
+        3,
+        3,
+        3,
+    )
+    .await?;
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+
+    // if retentime < first snapshot time, first snapshot will be root gc snapshot
+    // but it will not vacuum any files because table version
+    let retention_time = first_snapshot.timestamp.unwrap() - chrono::Duration::seconds(1);
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_files_check_commit_success step 2: verify files",
+        retention_time,
+        3,
+        3,
+        3,
+    )
+    .await?;
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+
+    // if retentime > current snapshot time, current snapshot will be root gc snapshot
+    // it will vacuum orphan snapshot file and first snapshot
+    // but will not vacuum orphan segment/block files because table version.
+    let retention_time = snapshot.timestamp.unwrap() + chrono::Duration::seconds(1);
+    check_vacuum(
+        &fixture,
+        purge_files,
+        "test_fuse_vacuum_files_check_commit_success step 3: verify files",
+        retention_time,
+        1,
+        3,
+        3,
+    )
+    .await?;
     check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
 
     Ok(())

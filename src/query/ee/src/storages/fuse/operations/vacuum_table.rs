@@ -105,7 +105,7 @@ impl VacuumOperator {
     // reform `snapshot_files_with_time` to make current snapshot in index 0
     // if all the snapshot file in old format
     fn reform_snapshot_files_with_time_if_needed(
-        snapshot_files_with_time: &mut Vec<SnapshotLocationWithTime>,
+        snapshot_files_with_time: &mut [SnapshotLocationWithTime],
         current_snapshot_location: &String,
     ) {
         // timestamp is_some means that not all the snapshot file name in old format
@@ -137,7 +137,7 @@ impl VacuumOperator {
     #[async_backtrace::framed]
     async fn check_if_current_snapshot_root_gc(
         &self,
-        snapshot_files_with_time: &mut Vec<SnapshotLocationWithTime>,
+        snapshot_files_with_time: &mut [SnapshotLocationWithTime],
     ) -> Result<Option<usize>> {
         Self::reform_snapshot_files_with_time_if_needed(
             snapshot_files_with_time,
@@ -157,22 +157,20 @@ impl VacuumOperator {
         // now snapshot_files_with_time[0] is current snapshot, check if timestamp < retentime time
         let timestamp = if let Some(timestamp) = snapshot_file_with_time.0 {
             timestamp
+        } else if let Some(timestamp) = self.current_snapshot.timestamp {
+            timestamp
         } else {
-            if let Some(timestamp) = self.current_snapshot.timestamp {
-                timestamp
-            } else {
-                let status = format!(
-                    "do_vacuum with table {}: snapshot {:?} has no timestamp",
-                    self.fuse_table.get_table_info().name,
-                    snapshot_file_with_time.1,
-                );
-                self.log_status(status);
-                return Ok(None);
-            }
+            let status = format!(
+                "do_vacuum with table {}: snapshot {:?} has no timestamp",
+                self.fuse_table.get_table_info().name,
+                snapshot_file_with_time.1,
+            );
+            self.log_status(status);
+            return Ok(None);
         };
 
         if timestamp < self.retention_time {
-            return Ok(Some(0));
+            Ok(Some(0))
         } else {
             let status = format!(
                 "do_vacuum with table {}: currerent snapshot {:?} timestamp >= retention_time",
@@ -180,7 +178,7 @@ impl VacuumOperator {
                 snapshot_file_with_time.1,
             );
             self.log_status(status);
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -251,7 +249,6 @@ impl VacuumOperator {
         }
 
         let retention_time = &self.retention_time;
-
         // last snapshot index that snapshot's timestamp >= retention time
         let mut last_snapshot_index_opt = None;
 
@@ -282,17 +279,15 @@ impl VacuumOperator {
             if timestamp >= retention_time {
                 // save the last snapshot index that timestamp >= retention time
                 last_snapshot_index_opt = Some(i);
+            } else if last_snapshot_index_opt.is_none() {
+                // case 2: all the snapshot in new snapshot file format
+                // check if current snapshot is the root gc
+                return self
+                    .check_if_current_snapshot_root_gc(snapshot_files_with_time)
+                    .await;
             } else {
-                if last_snapshot_index_opt.is_none() {
-                    // case 2: all the snapshot in new snapshot file format
-                    // check if current snapshot is the root gc
-                    return self
-                        .check_if_current_snapshot_root_gc(snapshot_files_with_time)
-                        .await;
-                } else {
-                    // now get the last snapshot timestamp < retention time, break the loop
-                    break;
-                }
+                // now get the last snapshot timestamp < retention time, break the loop
+                break;
             }
         }
 
@@ -314,19 +309,18 @@ impl VacuumOperator {
         }
 
         // if root_gc_index is not the last index, check last index + 1 snapshot has been committed success
-        if root_gc_index != snapshot_files_with_time.len() - 1 {
-            if !self
+        if root_gc_index != snapshot_files_with_time.len() - 1
+            && !self
                 .check_if_has_committed_success(snapshot_files_with_time, root_gc_index + 1)
                 .await?
-            {
-                let status = format!(
-                    "do_vacuum with table {}: cannot make sure last index + 1 snapshot {:?} has been committed success",
-                    self.fuse_table.get_table_info().name,
-                    snapshot_files_with_time[root_gc_index + 1].1,
-                );
-                self.log_status(status);
-                return Ok(None);
-            }
+        {
+            let status = format!(
+                "do_vacuum with table {}: cannot make sure last index + 1 snapshot {:?} has been committed success",
+                self.fuse_table.get_table_info().name,
+                snapshot_files_with_time[root_gc_index + 1].1,
+            );
+            self.log_status(status);
+            return Ok(None);
         }
 
         Ok(Some(root_gc_index))
@@ -344,9 +338,11 @@ impl VacuumOperator {
         {
             let snapshot_file = &snapshot_file_with_time.1;
             // all snapshot file commit after root_gc_snapshot will with table version, so safe to unwrap()
-            let table_version =
-                TableMetaLocationGenerator::location_table_version(snapshot_file).unwrap();
-            table_version_set.insert(table_version);
+            if let Some(table_version) =
+                TableMetaLocationGenerator::location_table_version(snapshot_file)
+            {
+                table_version_set.insert(table_version);
+            }
         }
         table_version_set
     }
@@ -372,11 +368,7 @@ impl VacuumOperator {
             .get_block_locations(self.ctx.clone(), &segments, false, false)
             .await?;
 
-        let segment = if let Some(segment) = segments.iter().next().cloned() {
-            Some(segment.0)
-        } else {
-            None
-        };
+        let segment = segments.first().map(|segment| segment.0.clone());
         let segment_prefix = get_prefix(segment);
         let block_prefix = get_prefix(locations_referenced.block_location.iter().next().cloned());
         let block_index_prefix =
@@ -455,7 +447,7 @@ impl VacuumOperator {
         };
 
         let operator = self.fuse_table.get_operator();
-        let mut ds = operator.lister_with(&prefix).metakey(Metakey::Mode).await?;
+        let mut ds = operator.lister_with(prefix).metakey(Metakey::Mode).await?;
         let keep_snapshot_table_versions = &context.keep_snapshot_table_versions;
         let mut batch_purge_files = Vec::with_capacity(BATCH_PURGE_FILE_NUM);
         let mut count = 0;
