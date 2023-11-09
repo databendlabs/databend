@@ -11113,6 +11113,78 @@ GrantShareObject(
 
 
 ---------- Input ----------
+GRANT all ON stage s1 TO a;
+---------- Output ---------
+GRANT ALL PRIVILEGES ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT read ON stage s1 TO a;
+---------- Output ---------
+GRANT Read ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Read,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT write ON stage s1 TO a;
+---------- Output ---------
+GRANT Write ON STAGE s1 TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Write,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a;
 ---------- Output ---------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a
@@ -13518,6 +13590,97 @@ DescribeTask(
     DescribeTaskStmt {
         name: "MyTask",
     },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = any_value 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP CONNECTION IF EXISTS my_conn;
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn 
+---------- AST ------------
+DropConnection(
+    DropConnectionStmt {
+        if_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                26..33,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+DESC CONNECTION my_conn;
+---------- Output ---------
+CREATE CONNECTION my_conn 
+---------- AST ------------
+DescribeConnection(
+    DescribeConnectionStmt {
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                16..23,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW CONNECTIONS;
+---------- Output ---------
+SHOW CONNECTIONS
+---------- AST ------------
+ShowConnections(
+    ShowConnectionsStmt,
 )
 
 

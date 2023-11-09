@@ -408,12 +408,17 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                anyhow!("{v} is not allowed to be used as uri location"),
+                anyhow!("URI protocol {v} is not supported yet."),
             ));
         }
     };
 
-    let sp = sp.auto_detect().await;
+    let sp = sp.auto_detect().await.map_err(|err| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("storage params is invalid for it's auto detect failed for {err:?}"),
+        )
+    })?;
 
     Ok((sp, path))
 }

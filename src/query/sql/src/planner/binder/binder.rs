@@ -44,6 +44,8 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
+use crate::plans::DescConnectionPlan;
+use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
@@ -53,6 +55,7 @@ use crate::plans::MaterializedCte;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
+use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
@@ -424,7 +427,6 @@ impl<'a> Binder {
                     file_format_params: file_format_options.clone().try_into()?,
                 }))
             }
-
             Statement::DropFileFormat {
                 if_exists,
                 name,
@@ -434,6 +436,17 @@ impl<'a> Binder {
             })),
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
+            // Connections
+            Statement::CreateConnection(stmt) => self.bind_create_connection(stmt).await?,
+            Statement::DropConnection(stmt) => Plan::DropConnection(Box::new(DropConnectionPlan {
+                if_exists: stmt.if_exists,
+                name: stmt.name.to_string(),
+            })),
+            Statement::DescribeConnection(stmt) => Plan::DescConnection(Box::new(DescConnectionPlan {
+                name: stmt.name.to_string(),
+            })),
+            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan{})),
+
             // UDFs
             Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
             Statement::AlterUDF(stmt) => self.bind_alter_udf(stmt).await?,
@@ -442,7 +455,7 @@ impl<'a> Binder {
                 udf_name,
             } => Plan::DropUDF(Box::new(DropUDFPlan {
                 if_exists: *if_exists,
-                name: udf_name.to_string(),
+                udf: udf_name.to_string(),
             })),
             Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 

@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::Scalar;
 use common_expression::Value;
+use common_metrics::storage::*;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -34,7 +35,6 @@ use common_pipeline_core::processors::Processor;
 
 use super::hash_join::HashJoinBuildState;
 use super::processor_deduplicate_row_number::get_row_number;
-
 pub struct ExtractHashTableByRowNumber {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
@@ -112,12 +112,15 @@ impl Processor for ExtractHashTableByRowNumber {
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.is_empty() {
+                merge_into_distributed_hashtable_empty_block(1);
                 return Ok(());
             }
 
-            let row_number_vec = get_row_number(&data_block, 0)?;
-            let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
-            assert_eq!(row_number_set.len(), row_number_vec.len());
+            merge_into_distributed_hashtable_fetch_row_number(data_block.num_rows() as u32);
+            let row_number_vec = get_row_number(&data_block, 0);
+            let length = row_number_vec.len();
+            let row_number_set: HashSet<u64> = row_number_vec.into_iter().collect();
+            assert_eq!(row_number_set.len(), length);
 
             // get datablocks from hashstate.
             unsafe {
@@ -126,8 +129,8 @@ impl Processor for ExtractHashTableByRowNumber {
                         block.columns()[block.num_columns() - 1].data_type,
                         DataType::Number(NumberDataType::UInt64)
                     );
-                    let mut bitmap = MutableBitmap::new();
-                    let row_numbers = get_row_number(block, block.num_columns() - 1)?;
+                    let row_numbers = get_row_number(block, block.num_columns() - 1);
+                    let mut bitmap = MutableBitmap::with_capacity(row_numbers.len());
                     for row_number in row_numbers.iter() {
                         if row_number_set.contains(row_number) {
                             bitmap.push(true);
@@ -147,6 +150,14 @@ impl Processor for ExtractHashTableByRowNumber {
                         filtered_block.num_rows(),
                     );
                     null_block.merge_block(filtered_block);
+                    if null_block.is_empty() {
+                        merge_into_distributed_hashtable_push_empty_null_block(1);
+                    } else {
+                        merge_into_distributed_hashtable_push_null_block(1);
+                        merge_into_distributed_hashtable_push_null_block_rows(
+                            null_block.num_rows() as u32,
+                        );
+                    }
                     self.output_data.push(null_block);
                 }
             }

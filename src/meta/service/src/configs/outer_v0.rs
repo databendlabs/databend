@@ -286,6 +286,7 @@ pub struct ConfigViaEnv {
     pub kvsrv_install_snapshot_timeout: u64,
     pub kvsrv_wait_leader_timeout: u64,
     pub raft_max_applied_log_to_keep: u64,
+    pub raft_snapshot_chunk_size: u64,
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
     pub kvsrv_id: u64,
@@ -330,6 +331,7 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
             kvsrv_wait_leader_timeout: cfg.raft_config.wait_leader_timeout,
             raft_max_applied_log_to_keep: cfg.raft_config.max_applied_log_to_keep,
+            raft_snapshot_chunk_size: cfg.raft_config.snapshot_chunk_size,
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
             kvsrv_id: cfg.raft_config.id,
@@ -355,6 +357,7 @@ impl Into<Config> for ConfigViaEnv {
             install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
             wait_leader_timeout: self.kvsrv_wait_leader_timeout,
             max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
+            snapshot_chunk_size: self.raft_snapshot_chunk_size,
             single: self.kvsrv_single,
             join: self.metasrv_join,
             // Do not allow to leave via environment variable
@@ -457,6 +460,10 @@ pub struct RaftConfig {
     #[clap(long, default_value = "1000")]
     pub max_applied_log_to_keep: u64,
 
+    /// The size of chunk for transmitting snapshot. The default is 4MB
+    #[clap(long, default_value = "4194304")]
+    pub snapshot_chunk_size: u64,
+
     /// Start databend-meta in single node mode.
     /// It initialize a single node cluster, if meta data is not initialized.
     /// If on-disk data is already initialized, this argument has no effect.
@@ -498,7 +505,7 @@ pub struct RaftConfig {
     pub cluster_name: String,
 
     /// Max timeout(in milli seconds) when waiting a cluster leader.
-    #[clap(long, default_value = "70000")]
+    #[clap(long, default_value = "180000")]
     pub wait_leader_timeout: u64,
 }
 
@@ -521,6 +528,7 @@ impl From<RaftConfig> for InnerRaftConfig {
             heartbeat_interval: x.heartbeat_interval,
             install_snapshot_timeout: x.install_snapshot_timeout,
             max_applied_log_to_keep: x.max_applied_log_to_keep,
+            snapshot_chunk_size: x.snapshot_chunk_size,
             single: x.single,
             join: x.join,
             leave_via: x.leave_via,
@@ -546,6 +554,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             heartbeat_interval: inner.heartbeat_interval,
             install_snapshot_timeout: inner.install_snapshot_timeout,
             max_applied_log_to_keep: inner.max_applied_log_to_keep,
+            snapshot_chunk_size: inner.snapshot_chunk_size,
             single: inner.single,
             join: inner.join,
             leave_via: inner.leave_via,
@@ -584,7 +593,7 @@ impl Into<InnerLogConfig> for LogConfig {
                 on: false,
                 dir: "".to_string(),
             },
-            tracing: TracingConfig::from_env(),
+            tracing: TracingConfig::default(),
         }
     }
 }

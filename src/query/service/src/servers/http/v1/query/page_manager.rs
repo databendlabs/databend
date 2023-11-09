@@ -165,18 +165,18 @@ impl PageManager {
                     match tokio::time::timeout(d, self.block_receiver.recv()).await {
                         Ok(Some(block)) => {
                             debug!(
-                                "http query {} got new block with {} rows",
+                                "http query {}: got new block with {} rows",
                                 &self.query_id,
                                 block.num_rows()
                             );
                             self.append_block(&mut res, block, remain)?;
                         }
                         Ok(None) => {
-                            info!("http query {} reach end of blocks", &self.query_id);
+                            info!("{}: http query reach end of blocks", &self.query_id);
                             break;
                         }
                         Err(_) => {
-                            debug!("http query {} long pulling timeout", &self.query_id);
+                            debug!("{}: http query long pulling timeout", &self.query_id);
                             break;
                         }
                     }

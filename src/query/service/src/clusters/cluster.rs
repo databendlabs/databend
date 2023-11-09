@@ -43,6 +43,7 @@ use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
+use common_metrics::cluster::*;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -199,7 +200,7 @@ impl ClusterDiscovery {
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(
+                metric_incr_cluster_error_count(
                     &self.local_id,
                     "discover",
                     &self.cluster_id,
@@ -228,7 +229,7 @@ impl ClusterDiscovery {
                     res.push(Arc::new(node.clone()));
                 }
 
-                super::metrics::metrics_gauge_discovered_nodes(
+                metrics_gauge_discovered_nodes(
                     &self.local_id,
                     &self.cluster_id,
                     &self.tenant_id,
@@ -245,7 +246,7 @@ impl ClusterDiscovery {
         let current_nodes_info = match self.api_provider.get_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(
+                metric_incr_cluster_error_count(
                     &self.local_id,
                     "drop_invalid_ndes.get_nodes",
                     &self.cluster_id,
@@ -406,7 +407,7 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
-                            super::metrics::metric_incr_cluster_heartbeat_count(
+                            metric_incr_cluster_heartbeat_count(
                                 &node.id,
                                 &node.flight_address,
                                 &cluster_id,

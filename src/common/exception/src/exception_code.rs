@@ -273,6 +273,11 @@ build_exceptions! {
     IllegalFileFormat(2508),
     FileFormatAlreadyExists(2509),
 
+    // Connection error codes.
+    UnknownConnection(2510),
+    IllegalConnection(2511),
+    ConnectionAlreadyExists(2512),
+
     // User defined function error codes.
     IllegalUDFFormat(2601),
     UnknownUDF(2602),

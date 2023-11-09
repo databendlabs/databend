@@ -31,7 +31,6 @@ use common_expression::types::TimestampType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -48,7 +47,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut state: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut status: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
@@ -67,7 +66,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
                 .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
         );
         schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
-        state.push(tsk.status.to_string().into_bytes());
+        status.push(tsk.status.to_string().into_bytes());
         definition.push(tsk.query_text.into_bytes());
         suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
@@ -82,7 +81,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         StringType::from_opt_data(comment),
         StringType::from_opt_data(warehouse),
         StringType::from_opt_data(schedule),
-        StringType::from_data(state),
+        StringType::from_data(status),
         StringType::from_data(definition),
         UInt64Type::from_opt_data(suspend_after_num_failures),
         TimestampType::from_opt_data(next_schedule_time),

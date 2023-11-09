@@ -28,15 +28,6 @@ io-uring = [
     # "common-meta-raft-store/io-uring",
 ]
 
-enable-histogram-metrics = [
-    "default",
-    "common-metrics/enable-histogram",
-    "common-storages-fuse/enable-histogram-metrics",
-    "common-storages-system/enable-histogram-metrics",
-    "metrics/enable-histogram",
-    "storages-common-cache/enable-histogram-metrics",
-]
-
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
@@ -57,8 +48,7 @@ common-io = { path = "../../common/io" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-jsonb = { workspace = true }
-# common-meta-embedded = { path = "../../meta/embedded" }
+
 aggregating-index = { path = "../ee_features/aggregating_index" }
 background-service = { path = "../ee_features/background_service" }
 common-cloud-control = { path = "../../common/cloud_control" }
@@ -93,12 +83,13 @@ common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee_features/data_mask" }
+jsonb = { workspace = true }
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 storages-common-index = { path = "../storages/common/index" }
+storages-common-locks = { path = "../storages/common/locks" }
 storages-common-table-meta = { path = "../storages/common/table_meta" }
-table-lock = { path = "../ee_features/table_lock" }
 vacuum-handler = { path = "../ee_features/vacuum_handler" }
 virtual-column = { path = "../ee_features/virtual_column" }
 

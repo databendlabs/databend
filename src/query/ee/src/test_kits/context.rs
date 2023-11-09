@@ -85,6 +85,11 @@ pub async fn create_ee_query_context(
             UserPrivilegeSet::available_privileges_on_global(),
         );
 
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
+        );
+
         current_user = Some(user_info);
     }
 

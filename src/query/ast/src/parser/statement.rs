@@ -1201,6 +1201,51 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    // connections
+    let connection_opt = connection_opt("=");
+    let create_connection = map_res(
+        rule! {
+            CREATE ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
+        },
+        |(_, _, opt_if_not_exists, connection_name, _, _, storage_type, options)| {
+            let options =
+                BTreeMap::from_iter(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
+            Ok(Statement::CreateConnection(CreateConnectionStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: connection_name,
+                storage_type,
+                storage_params: options,
+            }))
+        },
+    );
+
+    let drop_connection = map(
+        rule! {
+            DROP ~ CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, connection_name)| {
+            Statement::DropConnection(DropConnectionStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: connection_name,
+            })
+        },
+    );
+
+    let desc_connection = map(
+        rule! {
+            (DESC | DESCRIBE) ~ CONNECTION ~ #ident
+        },
+        |(_, _, name)| Statement::DescribeConnection(DescribeConnectionStmt { name }),
+    );
+
+    let show_connections = map(
+        rule! {
+              SHOW ~ CONNECTIONS
+        },
+        |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
+    );
+
     let call = map(
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
@@ -1676,6 +1721,12 @@ AS
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
         ),
+        rule!(
+        #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+        | #show_connections: "`SHOW CONNECTIONS`"
+        ),
     ));
 
     map(
@@ -1751,9 +1802,20 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         }
     });
 
+    let source_table = map(
+        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
+        |((catalog, database, table), alias)| MergeSource::Table {
+            catalog,
+            database,
+            table,
+            alias,
+        },
+    );
+
     rule!(
           #streaming_v2
         | #query
+        | #source_table
     )(i)
 }
 
@@ -1944,13 +2006,45 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
     let all = map(
-        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_all_level },
         |(_, _, _, level)| AccountMgrSource::ALL { level },
+    );
+
+    // TODO(TCeason): next pr, add a priv to control query UDF query
+    // let udf_privs = map(
+    // rule! {
+    // USAGEUDF ~ ON ~ UDF ~ #ident
+    // },
+    // |(_, _, _, udf)| AccountMgrSource::Privs {
+    // privileges: vec![UserPrivilegeType::UsageUDF],
+    // level: AccountMgrLevel::UDF(udf.to_string()),
+    // },
+    // );
+    //
+    // let udf_all_privs = map(
+    // rule! {
+    // ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+    // },
+    // |(_, _, _, _, udf)| AccountMgrSource::Privs {
+    // privileges: vec![UserPrivilegeType::UsageUDF],
+    // level: AccountMgrLevel::UDF(udf.to_string()),
+    // },
+    // );
+
+    let stage_privs = map(
+        rule! {
+            #comma_separated_list1(stage_priv_type) ~ ON ~ STAGE ~ #ident
+        },
+        |(privileges, _, _, stage_name)| AccountMgrSource::Privs {
+            privileges,
+            level: AccountMgrLevel::Stage(stage_name.to_string()),
+        },
     );
 
     rule!(
         #role : "ROLE <role_name>"
         | #privs : "<privileges> ON <privileges_level>"
+        | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
 }
@@ -1974,6 +2068,13 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
         value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
+    ))(i)
+}
+
+pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(UserPrivilegeType::Read, rule! { READ }),
+        value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
 }
 
@@ -2042,6 +2143,39 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
+    )(i)
+}
+
+pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
+    // *.*
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
+        AccountMgrLevel::Stage(stage_name.to_string())
+    });
+    rule!(
+        #global : "*.*"
+        | #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #stage : "STAGE <stage_name>"
     )(i)
 }
 

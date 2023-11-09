@@ -31,6 +31,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_metrics::storage::*;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -41,9 +42,6 @@ use common_pipeline_core::processors::Processor;
 use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::metrics::metrics_inc_replace_append_blocks_rows;
-use crate::metrics::metrics_inc_replace_block_number_input;
-use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 
 pub struct ReplaceIntoProcessor {

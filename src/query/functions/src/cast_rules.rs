@@ -206,16 +206,10 @@ pub const GENERAL_CAST_RULES: AutoCastRules = &[
 /// used to allow `add_hours('2023-01-01 00:00:00', '1')`. But they should be disabled
 /// for comparison functions, because `1 < '1'` should be an error.
 pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
-    (DataType::String, DataType::Number(NumberDataType::UInt8)),
-    (DataType::String, DataType::Number(NumberDataType::UInt16)),
-    (DataType::String, DataType::Number(NumberDataType::UInt32)),
-    (DataType::String, DataType::Number(NumberDataType::UInt64)),
-    (DataType::String, DataType::Number(NumberDataType::Int8)),
-    (DataType::String, DataType::Number(NumberDataType::Int16)),
-    (DataType::String, DataType::Number(NumberDataType::Int32)),
     (DataType::String, DataType::Number(NumberDataType::Int64)),
-    (DataType::String, DataType::Number(NumberDataType::Float32)),
+    (DataType::String, DataType::Number(NumberDataType::UInt64)),
     (DataType::String, DataType::Number(NumberDataType::Float64)),
+    (DataType::String, DataType::Number(NumberDataType::Float32)),
 ];
 
 #[allow(non_snake_case)]

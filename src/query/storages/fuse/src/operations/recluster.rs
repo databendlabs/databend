@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PushDownInfo;
@@ -27,6 +28,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::CatalogInfo;
+use common_metrics::storage::*;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
@@ -38,9 +40,6 @@ use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::metrics::metrics_inc_recluster_block_bytes_to_read;
-use crate::metrics::metrics_inc_recluster_block_nums_to_read;
-use crate::metrics::metrics_inc_recluster_row_nums_to_read;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::TransformSerializeBlock;
@@ -372,7 +371,7 @@ impl FuseTable {
             remain -= gap_size;
 
             let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(pruning_ctx.pruning_runtime.spawn({
+            works.push(pruning_ctx.pruning_runtime.spawn(GLOBAL_TASK, {
                 let segment_pruner = segment_pruner.clone();
 
                 async move {

@@ -24,6 +24,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::Value;
+use common_metrics::storage::*;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -34,7 +35,7 @@ const PREFIX_OFFSET: usize = 48;
 
 pub struct TransformAddRowNumberColumnProcessor {
     // node_id
-    prefix: u16,
+    prefix: u64,
     // current row number, row_number shouldn't be overflow 48bits
     row_number: Arc<AtomicU64>,
 }
@@ -50,7 +51,7 @@ impl TransformAddRowNumberColumnProcessor {
             input,
             output,
             TransformAddRowNumberColumnProcessor {
-                prefix: node_id,
+                prefix: (node_id as u64) << PREFIX_OFFSET,
                 row_number,
             },
         )))
@@ -60,9 +61,7 @@ impl TransformAddRowNumberColumnProcessor {
 impl TransformAddRowNumberColumnProcessor {
     fn generate_row_number(&mut self, num_rows: u64) -> u64 {
         let row_number = self.row_number.fetch_add(num_rows, Ordering::SeqCst);
-        let mut prefix_u64 = self.prefix as u64;
-        prefix_u64 <<= PREFIX_OFFSET;
-        prefix_u64 | row_number
+        self.prefix | row_number
     }
 }
 
@@ -76,11 +75,13 @@ impl Transform for TransformAddRowNumberColumnProcessor {
         for number in row_number..row_number + num_rows {
             row_numbers.push(number);
         }
+        merge_into_distributed_generate_row_numbers(row_numbers.len() as u32);
         let mut data_block = data;
         let row_number_entry = BlockEntry::new(
             DataType::Number(NumberDataType::UInt64),
             Value::Column(UInt64Type::from_data(row_numbers)),
         );
+
         data_block.add_column(row_number_entry);
         Ok(data_block)
     }

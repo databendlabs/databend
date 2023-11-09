@@ -32,6 +32,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
 use common_expression::ColumnId;
+use common_metrics::storage::*;
 use opendal::Operator;
 use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryCacheReader;
@@ -42,8 +43,6 @@ use storages_common_cache_manager::CachedObject;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::SingleColumnMeta;
-
-use crate::metrics::metrics_inc_block_index_read_bytes;
 
 type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader, BloomIndexFilterMeter>;
 

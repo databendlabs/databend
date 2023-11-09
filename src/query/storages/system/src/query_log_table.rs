@@ -39,6 +39,17 @@ pub enum LogType {
     Aborted = 4,
 }
 
+impl std::fmt::Debug for LogType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogType::Start => write!(f, "Start"),
+            LogType::Finish => write!(f, "Finish"),
+            LogType::Error => write!(f, "Error"),
+            LogType::Aborted => write!(f, "Aborted"),
+        }
+    }
+}
+
 fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
     let t = NaiveDateTime::from_timestamp_opt(i64::from(*dt) * 24 * 3600, 0).unwrap();
