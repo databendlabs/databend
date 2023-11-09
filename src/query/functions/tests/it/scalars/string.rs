@@ -521,10 +521,10 @@ fn test_translate(file: &mut impl Write) {
     let table = [
         (
             "a",
-            StringType::from_data(&["abcdef", "abcdef", "abcdef", "abcdef"]),
+            StringType::from_data(vec!["abcdef", "abcdef", "abcdef", "abcdef"]),
         ),
-        ("b", StringType::from_data(&["dc", "", "dc", "dc"])),
-        ("c", StringType::from_data(&["zy", "zy", "", "dc"])),
+        ("b", StringType::from_data(vec!["dc", "", "dc", "dc"])),
+        ("c", StringType::from_data(vec!["zy", "zy", "", "dc"])),
     ];
     run_ast(file, "translate(a, b, c)", &table);
 }
