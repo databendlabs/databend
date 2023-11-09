@@ -624,11 +624,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_drop_tables_status = map(
         rule! {
-            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )?
+            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, _, opt_database)| {
+        |(_, _, _, opt_database, limit)| {
             Statement::ShowDropTables(ShowDropTablesStmt {
                 database: opt_database.map(|(_, database)| database),
+                limit,
             })
         },
     );
