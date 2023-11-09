@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import datetime
-from udf import *
 from decimal import Decimal
 import time
+from typing import List, Dict, Any, Tuple, Optional
+
+from databend_udf import udf, UDFServer
 
 
 @udf(input_types=["TINYINT", "SMALLINT", "INT", "BIGINT"], result_type="BIGINT")
@@ -64,7 +66,8 @@ def hex_to_dec(hex: str) -> Decimal:
         chunk = hex[:16]
         chunk_value = int(hex[:16], 16)
         dec = dec * (1 << (4 * len(chunk))) + chunk_value
-        hex = hex[len(chunk) :]
+        chunk_len = len(chunk)
+        hex = hex[chunk_len:]
     return dec
 
 
@@ -133,9 +136,23 @@ def tuple_access(
     return v1, v2
 
 
-ALL_SCALAR_TYPES = "BOOLEAN,TINYINT,SMALLINT,INT,BIGINT,UINT8,UINT16,UINT32,UINT64,FLOAT,DOUBLE,DATE,TIMESTAMP,VARCHAR,VARIANT".split(
-    ","
-)
+ALL_SCALAR_TYPES = [
+    "BOOLEAN",
+    "TINYINT",
+    "SMALLINT",
+    "INT",
+    "BIGINT",
+    "UINT8",
+    "UINT16",
+    "UINT32",
+    "UINT64",
+    "FLOAT",
+    "DOUBLE",
+    "DATE",
+    "TIMESTAMP",
+    "VARCHAR",
+    "VARIANT",
+]
 
 
 @udf(
