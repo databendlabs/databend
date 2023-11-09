@@ -351,7 +351,7 @@ pub fn test_take_compact() -> common_exception::Result<()> {
 /// Random Block A
 /// +----+----+----+----+----+----+----+----+----+----+
 /// B = A + A + A,  l = A.len()
-/// B.slice(0,l ) == B.slice(l, l) == A
+/// B.slice(0, l) == B.slice(l, l) == A
 #[test]
 pub fn test_filters() -> common_exception::Result<()> {
     use common_expression::types::DataType;
@@ -409,6 +409,96 @@ pub fn test_filters() -> common_exception::Result<()> {
 
             assert_block_value_eq(&f_b, &t_b);
             assert_block_value_eq(&f_c, &t_c);
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+pub fn test_divide_indices_by_scatter_size() -> common_exception::Result<()> {
+    use common_expression::DataBlock;
+    use itertools::Itertools;
+    use rand::Rng;
+
+    let mut rng = rand::thread_rng();
+    let num_blocks = rng.gen_range(5..30);
+
+    for _ in 0..num_blocks {
+        let len = rng.gen_range(2..100);
+        let scatter_size = rng.gen_range(2..50);
+
+        let random_indices = (0..len)
+            .map(|_| rng.gen_range(0..scatter_size) as u32)
+            .collect_vec();
+        let scatter_indices =
+            DataBlock::divide_indices_by_scatter_size(&random_indices, scatter_size);
+        let mut blocks_idx = 0;
+        let mut row_idx = 0;
+
+        for i in 0..scatter_size as u32 {
+            for (j, index) in random_indices.iter().enumerate() {
+                if *index == i {
+                    while row_idx == scatter_indices[blocks_idx].len() {
+                        blocks_idx += 1;
+                        assert!(blocks_idx < scatter_indices.len());
+                        row_idx = 0;
+                    }
+                    assert_eq!(j as u32, scatter_indices[blocks_idx][row_idx]);
+                    row_idx += 1;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// This test covers scatter.rs.
+#[test]
+pub fn test_scatter() -> common_exception::Result<()> {
+    use common_expression::DataBlock;
+    use itertools::Itertools;
+    use rand::Rng;
+
+    let mut rng = rand::thread_rng();
+    let num_blocks = rng.gen_range(5..30);
+
+    for _ in 0..num_blocks {
+        let len = rng.gen_range(2..300);
+        let slice_start = rng.gen_range(0..len - 1);
+        let slice_end = rng.gen_range(slice_start..len);
+        let scatter_size = rng.gen_range(2..25);
+
+        let random_block = rand_block_for_all_types(len);
+        let random_block = random_block.slice(slice_start..slice_end);
+        let len = slice_end - slice_start;
+
+        let random_indices: Vec<u32> = (0..len)
+            .map(|_| rng.gen_range(0..scatter_size))
+            .collect_vec();
+        let scattered_blocks = random_block.scatter(&random_indices, scatter_size as usize)?;
+
+        let mut take_indices = Vec::with_capacity(len);
+        for i in 0..scatter_size {
+            for (j, index) in random_indices.iter().enumerate() {
+                if *index == i {
+                    take_indices.push(j as u32);
+                }
+            }
+        }
+
+        let block_1 = random_block.take(&take_indices, &mut None)?;
+        let block_2 = DataBlock::concat(&scattered_blocks)?;
+
+        assert_eq!(block_1.num_columns(), block_2.num_columns());
+        assert_eq!(block_1.num_rows(), block_2.num_rows());
+
+        let columns_1 = block_1.columns();
+        let columns_2 = block_2.columns();
+        for idx in 0..columns_1.len() {
+            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
+            assert_eq!(columns_1[idx].value, columns_2[idx].value);
         }
     }
 

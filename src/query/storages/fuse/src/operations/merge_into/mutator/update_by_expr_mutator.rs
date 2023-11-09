@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Not;
 
 use common_exception::Result;
-use common_expression::eval_function;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -30,6 +28,11 @@ use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+
+use super::utils::expr2prdicate;
+use super::utils::get_and;
+use super::utils::get_not;
+use super::utils::get_or;
 
 #[derive(Clone)]
 pub struct UpdateByExprMutator {
@@ -88,11 +91,7 @@ impl UpdateByExprMutator {
         has_filter: bool,
     ) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut predicates = evaluator
-            .run(&expr)
-            .map_err(|e| e.add_message("eval filter failed:"))?
-            .try_downcast::<BooleanType>()
-            .unwrap();
+        let mut predicates = expr2prdicate(&evaluator, &expr)?;
 
         let mut data_block = data_block.clone();
         let (last_filter, origin_block) = if has_filter {
@@ -103,21 +102,16 @@ impl UpdateByExprMutator {
             // has pop old filter
             let origin_block = data_block.clone();
             // add filter
-            let old_predicate = old_filter.clone().into_column().unwrap();
+            let (old_filter_not, _) =
+                get_not(old_filter.clone(), &self.func_ctx, data_block.num_rows())?;
 
-            let filter_not = old_predicate.not();
-            let old_filter_not: Value<BooleanType> = Value::Column(filter_not);
+            let old_filter_not: Value<BooleanType> = old_filter_not.try_downcast().unwrap();
 
-            let (res, _) = eval_function(
-                None,
-                "and",
-                [
-                    (old_filter_not.upcast(), DataType::Boolean),
-                    (predicates.upcast(), DataType::Boolean),
-                ],
+            let (res, _) = get_and(
+                old_filter_not,
+                predicates,
                 &self.func_ctx,
                 data_block.num_rows(),
-                &BUILTIN_FUNCTIONS,
             )?;
 
             predicates = res.try_downcast().unwrap();
@@ -126,17 +120,13 @@ impl UpdateByExprMutator {
                 DataType::Boolean,
                 Value::upcast(predicates.clone()),
             ));
-            let (last_filter, _) = eval_function(
-                None,
-                "or",
-                [
-                    (old_filter.upcast(), DataType::Boolean),
-                    (predicates.upcast(), DataType::Boolean),
-                ],
+            let (last_filter, _) = get_or(
+                old_filter,
+                predicates,
                 &self.func_ctx,
                 data_block.num_rows(),
-                &BUILTIN_FUNCTIONS,
             )?;
+
             (last_filter, origin_block)
         } else {
             let origin_block = data_block.clone();

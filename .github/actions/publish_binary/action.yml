@@ -40,7 +40,7 @@ runs:
       shell: bash
       # Reference: https://cli.github.com/manual/gh_release_upload
       run: |
-        gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}.*
+        gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}.* --clobber
 
     - name: Sync normal release to R2
       shell: bash
