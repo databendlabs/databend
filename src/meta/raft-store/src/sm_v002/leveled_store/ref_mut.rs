@@ -15,6 +15,7 @@
 use std::borrow::Borrow;
 use std::io;
 use std::ops::RangeBounds;
+use std::sync::Arc;
 
 use common_meta_types::KVMeta;
 
@@ -57,6 +58,12 @@ impl<'d> RefMut<'d> {
             .into_iter()
             .chain(self.frozen.iter_levels())
     }
+
+    pub(in crate::sm_v002) fn iter_shared_levels(
+        &self,
+    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
+        (Some(self.writable), self.frozen.iter_arc_levels())
+    }
 }
 
 // Because `LeveledRefMut` has a mut ref of lifetime 'd,
@@ -66,6 +73,7 @@ impl<'d, K> MapApiRO<K> for RefMut<'d>
 where
     K: MapKey,
     Level: MapApiRO<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
@@ -80,10 +88,10 @@ where
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
     {
-        let levels = self.iter_levels();
-        compacted_range(range, levels).await
+        let (top, levels) = self.iter_shared_levels();
+        compacted_range(range, top, levels).await
     }
 }
 
@@ -92,6 +100,7 @@ impl<'d, K> MapApi<K> for RefMut<'d>
 where
     K: MapKey,
     Level: MapApi<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn set(
         &mut self,

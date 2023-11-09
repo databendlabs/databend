@@ -45,13 +45,13 @@ impl MapKey for ExpireKey {
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    sys_data: SysData,
+    pub(in crate::sm_v002) sys_data: SysData,
 
     /// Generic Key-value store.
-    kv: BTreeMap<String, Marked<Vec<u8>>>,
+    pub(in crate::sm_v002) kv: BTreeMap<String, Marked<Vec<u8>>>,
 
     /// The expiration queue of generic kv.
-    expire: BTreeMap<ExpireKey, Marked<String>>,
+    pub(in crate::sm_v002) expire: BTreeMap<ExpireKey, Marked<String>>,
 }
 
 impl Level {
@@ -104,8 +104,9 @@ impl MapApiRO<String> for Level {
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
     {
+        // Level is borrowed. It has to copy the result to make the returning stream static.
         let vec = self
             .kv
             .range(range)
@@ -157,12 +158,13 @@ impl MapApiRO<ExpireKey> for Level {
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
     {
+        // Level is borrowed. It has to copy the result to make the returning stream static.
         let vec = self
             .expire
             .range(range)
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .map(|(k, v)| (*k, v.clone()))
             .collect::<Vec<_>>();
 
         let strm = futures::stream::iter(vec.into_iter()).map(Ok).boxed();
