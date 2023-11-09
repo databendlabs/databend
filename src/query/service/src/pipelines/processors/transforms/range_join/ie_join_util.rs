@@ -23,6 +23,7 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
+use common_expression::ScalarRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
@@ -41,7 +42,11 @@ pub(crate) fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<Data
     block.filter_boolean_value(&predicate)
 }
 
-pub(crate) fn order_match(op: &str, order: Ordering) -> bool {
+pub(crate) fn order_match(op: &str, v1: &ScalarRef, v2: &ScalarRef) -> bool {
+    if v1.is_null() || v2.is_null() {
+        return false;
+    }
+    let order = v1.cmp(v2);
     match op {
         "gt" => order == Ordering::Greater,
         "gte" => order == Ordering::Equal || order == Ordering::Greater,
@@ -54,7 +59,7 @@ pub(crate) fn order_match(op: &str, order: Ordering) -> bool {
 // Exponential search
 pub(crate) fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
     let mut step = 1;
-    let n = l1.len();
+    let n = l1.len() - 1;
     let mut hi = pos;
     let mut lo = pos;
     let mut off1;
@@ -62,40 +67,34 @@ pub(crate) fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
         lo -= min(step, lo);
         step *= 2;
         off1 = lo;
-        while lo > 0
-            && order_match(
-                op1,
-                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-            )
-        {
+        let pos_val = unsafe { l1.index_unchecked(pos) };
+        let mut off1_val = unsafe { l1.index_unchecked(off1) };
+        while lo > 0 && order_match(op1, &pos_val, &off1_val) {
             hi = lo;
             lo -= min(step, lo);
             step *= 2;
-            off1 = lo;
+            off1_val = unsafe { l1.index_unchecked(lo) };
         }
     } else {
         hi += min(step, n - hi);
         step *= 2;
         off1 = hi;
-        while hi < n
-            && !order_match(
-                op1,
-                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-            )
-        {
+        let pos_val = unsafe { l1.index_unchecked(pos) };
+        let mut off1_val = unsafe { l1.index_unchecked(off1) };
+        while hi < n && !order_match(op1, &pos_val, &off1_val) {
             lo = hi;
             hi += min(step, n - hi);
             step *= 2;
-            off1 = hi;
+            off1_val = unsafe { l1.index_unchecked(hi) };
         }
     }
     while lo < hi {
         let mid = lo + (hi - lo) / 2;
         off1 = mid;
-        if order_match(
-            op1,
-            unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-        ) {
+        let pos_val = unsafe { l1.index_unchecked(pos) };
+        let off1_val = unsafe { l1.index_unchecked(off1) };
+
+        if order_match(op1, &pos_val, &off1_val) {
             hi = mid;
         } else {
             lo = mid + 1;

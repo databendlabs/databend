@@ -20,7 +20,6 @@ env:
 
 jobs:
   build:
-    name: build_hdfs_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
