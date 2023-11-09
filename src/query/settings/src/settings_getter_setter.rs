@@ -68,6 +68,11 @@ impl Settings {
         self.try_get_u64("max_block_size")
     }
 
+    // Max block size for parquet reader
+    pub fn get_parquet_max_block_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_max_block_size")
+    }
+
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         match self.try_get_u64("max_threads")? {
@@ -422,5 +427,13 @@ impl Settings {
 
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
+    }
+
+    pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_connect_timeout_secs")
+    }
+
+    pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_timeout_secs")
     }
 }

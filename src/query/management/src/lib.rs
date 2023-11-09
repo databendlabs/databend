@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cluster;
+mod connection;
 mod file_format;
 mod network_policy;
 mod quota;
@@ -27,6 +28,8 @@ mod user;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
+pub use connection::ConnectionApi;
+pub use connection::ConnectionMgr;
 pub use file_format::FileFormatApi;
 pub use file_format::FileFormatMgr;
 pub use network_policy::NetworkPolicyApi;

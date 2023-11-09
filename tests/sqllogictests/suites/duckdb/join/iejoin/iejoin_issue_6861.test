@@ -5,8 +5,8 @@ statement ok
 CREATE TABLE test(x INT);
 
 query II
-SELECT * 
-FROM test AS a, test AS b 
+SELECT *
+FROM test AS a, test AS b
 WHERE (a.x BETWEEN b.x AND b.x);
 ----
 
@@ -23,19 +23,19 @@ statement ok
 UPDATE all_null SET x=(NULL);
 
 query II
-SELECT * 
-FROM all_null AS a, all_null AS b 
+SELECT *
+FROM all_null AS a, all_null AS b
 WHERE (a.x BETWEEN b.x AND b.x);
 ----
 
 query II
-SELECT * 
-FROM test AS a, all_null AS b 
+SELECT *
+FROM test AS a, all_null AS b
 WHERE (a.x BETWEEN b.x AND b.x);
 ----
 
 query II
-SELECT * 
-FROM all_null AS a, test AS b 
+SELECT *
+FROM all_null AS a, test AS b
 WHERE (a.x BETWEEN b.x AND b.x);
 ----

@@ -14,8 +14,15 @@ drop table if exists distributed_source_test;
 statement ok
 create table distributed_target_test(a int,b string);
 
+## multi blocks
 statement ok
 insert into distributed_target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+insert into distributed_target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
 
 statement ok
 insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
@@ -24,10 +31,16 @@ query TT
 select * from distributed_target_test order by a;
 ----
 1 a
+1 a
+2 b
 2 b
 3 c
+3 c
+6 z
 6 z
 7 y
+7 y
+8 x
 8 x
 
 statement ok
@@ -56,7 +69,9 @@ query TT
 select * from distributed_target_test order by a;
 ----
 3 f
+3 f
 5 f
+8 j
 8 j
 10 l
 

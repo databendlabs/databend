@@ -38,7 +38,9 @@ fn test_create(file: &mut impl Write) {
     run_ast(file, "(1, 2, ('a', 'b'))", &[]);
     run_ast(file, "(s, s)", &[(
         "s",
-        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(vec!["a", "b", "c", "d"], vec![
+            true, true, false, true,
+        ]),
     )]);
 }
 
@@ -53,13 +55,15 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "(1, 2, ('a', 'b')).3.1", &[]);
     run_ast(file, "(s, s).1", &[(
         "s",
-        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(vec!["a", "b", "c", "d"], vec![
+            true, true, false, true,
+        ]),
     )]);
     run_ast(file, "col.1", &[(
         "col",
         Column::Nullable(Box::new(NullableColumn {
             column: Column::Tuple(vec![StringType::from_data_with_validity(
-                &["a", "b", "c", "d"],
+                vec!["a", "b", "c", "d"],
                 vec![true, true, false, false],
             )]),
             validity: vec![true, false, true, false].into(),

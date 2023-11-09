@@ -166,6 +166,7 @@ pub struct HttpQueryResponseInternal {
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
     pub state: ResponseState,
+    pub node_id: String,
 }
 
 pub enum ExpireState {
@@ -183,6 +184,7 @@ pub enum ExpireResult {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
+    pub(crate) node_id: String,
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
@@ -290,8 +292,9 @@ impl HttpQuery {
         ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
+        let node_id = ctx.get_cluster().local_id.clone();
         let sql = &request.sql;
-        info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
+        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
@@ -369,9 +372,11 @@ impl HttpQuery {
             schema,
             format_settings,
         )));
+
         let query = HttpQuery {
             id: query_id,
             session_id,
+            node_id,
             request,
             state,
             page_manager: data,
@@ -393,6 +398,7 @@ impl HttpQuery {
             data,
             state,
             session: Some(session),
+            node_id: self.node_id.clone(),
             session_id: self.session_id.clone(),
         })
     }
@@ -405,6 +411,7 @@ impl HttpQuery {
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
+            node_id: self.node_id.clone(),
             state,
             session: Some(session),
         }

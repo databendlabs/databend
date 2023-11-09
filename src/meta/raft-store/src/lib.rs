@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(generators)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(return_position_impl_trait_in_trait)]
 

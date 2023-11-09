@@ -102,6 +102,9 @@ pub struct FunctionContext {
     pub openai_api_version: String,
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
+
+    pub external_server_connect_timeout_secs: u64,
+    pub external_server_request_timeout_secs: u64,
 }
 
 #[derive(Clone)]

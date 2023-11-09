@@ -501,10 +501,11 @@ async fn test_system_tables() -> Result<()> {
         .collect::<Vec<_>>();
 
     let skipped = vec![
-        "credits", // slow for ci (> 1s) and maybe flaky
-        "metrics", // QueryError: "Prometheus recorder is not initialized yet"
-        "tasks",   // need to connect grpc server, tested on sqllogic test
-        "tracing", // Could be very large.
+        "credits",      // slow for ci (> 1s) and maybe flaky
+        "metrics",      // QueryError: "Prometheus recorder is not initialized yet"
+        "tasks",        // need to connect grpc server, tested on sqllogic test
+        "task_history", // same with tasks
+        "tracing",      // Could be very large.
     ];
     for table_name in table_names {
         if skipped.contains(&table_name.as_str()) {
@@ -1273,7 +1274,8 @@ async fn test_affect() -> Result<()> {
             serde_json::json!({"sql": "unset timezone", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
             Some(QueryAffect::ChangeSettings {
                 keys: vec!["timezone".to_string()],
-                values: vec!["UTC".to_string()], /* TODO(liyz): consider to return the complete settings after set or unset */
+                values: vec!["UTC".to_string()],
+                // TODO(liyz): consider to return the complete settings after set or unset
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
