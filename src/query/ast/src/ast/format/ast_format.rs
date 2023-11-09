@@ -1298,6 +1298,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let database_node = FormatTreeNode::new(database_format_ctx);
             children.push(database_node);
         }
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
+        }
         let name = "ShowDropTables".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
