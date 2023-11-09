@@ -286,7 +286,7 @@ impl Rows {
     /// Returns `true` if the number of rows is 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        (self.offsets.len() - 1) == 0
+        self.len() == 0
     }
 
     #[inline]

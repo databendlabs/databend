@@ -193,7 +193,7 @@ impl<O: Offset> MutableUtf8ValuesArray<O> {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.offsets.len_proxy() == 0
+        self.len() == 0
     }
 
     /// Pushes a new item to the array.

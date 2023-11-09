@@ -49,6 +49,11 @@ pub trait Nested: std::fmt::Debug + Send + Sync {
     /// number of rows
     fn len(&self) -> usize;
 
+    /// Returns `true` if the number of rows is 0.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// number of values associated to the primitive type this nested tracks
     fn num_values(&self) -> usize;
 }
@@ -370,7 +375,7 @@ impl NestedState {
     /// Returns `true` if the number of rows is 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.nested[0].len() == 0
+        self.len() == 0
     }
 }
 

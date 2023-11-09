@@ -228,7 +228,7 @@ impl<O: Offset, M: MutableArray> MutableListArray<O, M> {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.offsets.len_proxy() == 0
+        self.len() == 0
     }
 
     /// The values

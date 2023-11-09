@@ -132,7 +132,7 @@ impl BooleanArray {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.len() == 0
     }
 
     /// The values [`Bitmap`].

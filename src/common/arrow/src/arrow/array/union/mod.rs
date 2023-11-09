@@ -284,7 +284,7 @@ impl UnionArray {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.types.is_empty()
+        self.len() == 0
     }
 
     /// The optional offsets.

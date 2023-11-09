@@ -175,7 +175,7 @@ impl<O: Offset> Utf8Array<O> {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.offsets.len_proxy() == 0
+        self.len() == 0
     }
 
     /// Returns the value of the element at index `i`, ignoring the array's validity.
