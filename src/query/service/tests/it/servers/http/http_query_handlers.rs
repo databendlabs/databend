@@ -500,7 +500,7 @@ async fn test_system_tables() -> Result<()> {
         .map(|j| j.as_str().unwrap().to_string())
         .collect::<Vec<_>>();
 
-    let skipped = vec![
+    let skipped = [
         "credits",      // slow for ci (> 1s) and maybe flaky
         "metrics",      // QueryError: "Prometheus recorder is not initialized yet"
         "tasks",        // need to connect grpc server, tested on sqllogic test
@@ -819,11 +819,11 @@ async fn test_auth_jwt() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(session_middleware);
 
-    let now = Some(Clock::now_since_epoch());
+    let now = Clock::now_since_epoch();
     let claims = JWTClaims {
-        issued_at: now,
-        expires_at: Some(now.unwrap() + jwt_simple::prelude::Duration::from_secs(10)),
-        invalid_before: now,
+        issued_at: Some(now),
+        expires_at: Some(now + jwt_simple::prelude::Duration::from_secs(10)),
+        invalid_before: Some(now),
         audiences: None,
         issuer: None,
         jwt_id: None,
@@ -1008,11 +1008,11 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(session_middleware);
 
-    let now = Some(Clock::now_since_epoch());
+    let now = Clock::now_since_epoch();
     let claims = JWTClaims {
-        issued_at: now,
-        expires_at: Some(now.unwrap() + jwt_simple::prelude::Duration::from_secs(10)),
-        invalid_before: now,
+        issued_at: Some(now),
+        expires_at: Some(now + jwt_simple::prelude::Duration::from_secs(10)),
+        invalid_before: Some(now),
         audiences: None,
         issuer: None,
         jwt_id: None,
