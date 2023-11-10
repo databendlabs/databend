@@ -446,10 +446,18 @@ impl HttpQuery {
             .map(|v| v.keep_server_session_secs)
             .unwrap_or(None);
 
-        // TODO: add current role here
+        // TODO(liyz): known issue here, this will make SET ROLE statement not work in bendsql, refactor using the secondary role in the short time.
+        // https://github.com/datafuselabs/databend/issues/13544
+        let role = self
+            .request
+            .session
+            .as_ref()
+            .map(|s| s.role.clone())
+            .unwrap_or_default();
+
         HttpSessionConf {
             database: Some(session_state.current_database),
-            role: session_state.current_role,
+            role,
             keep_server_session_secs,
             settings: Some(settings),
         }
