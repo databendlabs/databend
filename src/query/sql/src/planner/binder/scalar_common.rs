@@ -69,7 +69,7 @@ where F: Fn(&ScalarExpr) -> bool
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
     match scalar {
-        ScalarExpr::FunctionCall(func) if func.func_name == "and" => vec![
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => [
             split_conjunctions(&func.arguments[0]),
             split_conjunctions(&func.arguments[1]),
         ]

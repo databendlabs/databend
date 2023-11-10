@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
-#![feature(io_error_other)]
 #![feature(iter_order_by)]
 #![feature(let_chains)]
 #![feature(impl_trait_in_assoc_type)]
