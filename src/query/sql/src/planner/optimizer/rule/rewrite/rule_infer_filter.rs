@@ -84,15 +84,17 @@ impl Rule for RuleInferFilter {
                 }
             }
 
-            state.add_result(SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: new_predicates,
-                    }
-                    .into(),
-                ),
-                Arc::new(s_expr.child(0)?.clone()),
-            ));
+            if filter.predicates != new_predicates {
+                state.add_result(SExpr::create_unary(
+                    Arc::new(
+                        Filter {
+                            predicates: new_predicates,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(s_expr.child(0)?.clone()),
+                ));
+            }
         }
 
         Ok(())
