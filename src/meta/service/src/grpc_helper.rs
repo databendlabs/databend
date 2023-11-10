@@ -22,6 +22,13 @@ use common_meta_types::protobuf::RaftRequest;
 pub struct GrpcHelper;
 
 impl GrpcHelper {
+    #[allow(dead_code)]
+    /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
+    fn traced_req<T>(t: T) -> tonic::Request<T> {
+        let req = tonic::Request::new(t);
+        common_tracing::inject_span_to_tonic_request(req)
+    }
+
     /// Parse tonic::Request and decode it into required type.
     pub fn parse_req<T>(request: tonic::Request<RaftRequest>) -> Result<T, tonic::Status>
     where T: serde::de::DeserializeOwned {
