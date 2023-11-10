@@ -26,7 +26,6 @@ use crate::plans::Lambda;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::Binder;
@@ -131,11 +130,6 @@ impl<'a, 'b> VisitorMut<'a> for LambdaRewriter<'b> {
                 scalar: lambda_func.clone().into(),
             });
 
-        Ok(())
-    }
-
-    fn visit_subquery_expr(&mut self, _subquery: &'a mut SubqueryExpr) -> Result<()> {
-        // TODO(leiysky): should we stop recursively process subquery here?
         Ok(())
     }
 }
