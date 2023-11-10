@@ -110,6 +110,8 @@ impl HashJoinProbeState {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let string_items_buf = &mut probe_state.string_items_buf;
+        let mut unmatched_idx = 0;
+        let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -129,8 +131,6 @@ impl HashJoinProbeState {
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
 
-        // The unmatched indices are in the range [unmatched_idx, input.num_rows()).
-        let mut unmatched_idx = input.num_rows();
         for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
                 if self.hash_join_state.hash_join_desc.from_correlated_subquery
@@ -147,8 +147,8 @@ impl HashJoinProbeState {
                     continue;
                 }
                 false => {
-                    unmatched_idx -= 1;
-                    probe_indexes[unmatched_idx] = i as u32;
+                    probe_unmatched_indexes[unmatched_idx] = i as u32;
+                    unmatched_idx += 1;
                     continue;
                 }
                 true => (),
@@ -244,11 +244,10 @@ impl HashJoinProbeState {
             }
         }
 
-        // The unmatched indices are in the range [unmatched_idx, input.num_rows()).
-        if unmatched_idx < input.num_rows() {
+        if unmatched_idx > 0 {
             result_blocks.push(DataBlock::take(
                 input,
-                &probe_indexes[unmatched_idx..input.num_rows()],
+                &probe_unmatched_indexes[0..unmatched_idx],
                 string_items_buf,
             )?);
         }
