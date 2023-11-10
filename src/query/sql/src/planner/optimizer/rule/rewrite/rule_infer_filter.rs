@@ -72,10 +72,10 @@ impl Rule for RuleInferFilter {
 
             let mut new_predicates = constraints.unsupported_constraints;
             for (origin, constraint) in constraints.constraints {
-                if let Some(new_contraints) = simplify::simplify(&constraint) {
+                if let Some(new_constraints) = simplify::simplify(&constraint) {
                     let columns = origin.used_column_refs();
-                    for new_contraint in new_contraints {
-                        new_predicates.push(crate::optimizer::from_mir(&new_contraint, |col| {
+                    for new_constraint in new_constraints {
+                        new_predicates.push(crate::optimizer::from_mir(&new_constraint, |col| {
                             columns[&col.parse().unwrap()].clone()
                         }));
                     }
