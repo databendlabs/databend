@@ -1,10 +1,16 @@
 [package]
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
+authors = [
+    "Jorge C. Leitao <jorgecarleitao@gmail.com>",
+    "Apache Arrow <dev@arrow.apache.org>",
+    "Sundy-li <543950155@qq.com>",
+    "Databend Authors <opensource@datafuselabs.com>",
+]
 edition = "2021"
 license = "Apache-2.0"
 name = "common-arrow"
 publish = false
 version = "0.1.0"
+description = "Arrow implementation forked from arrow2 and native format implementation forked from strawboat."
 
 [lib]
 doctest = false
