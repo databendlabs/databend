@@ -360,11 +360,12 @@ impl Binder {
             let push_item =
                 empty_exclude || exclude_cols.get(&column_binding.column_name).is_none();
             if star {
-                if column_binding.column_name.starts_with('_')
+                if column_binding.column_name.starts_with("_$")
                     && column_binding.database_name == Some("system".to_string())
+                    && column_binding.table_name == Some("stage".to_string())
                 {
                     return Err(ErrorCode::SemanticError(
-                        "can not select * from csv/ndjson file",
+                        "select * from file only support parquet format",
                     ));
                 }
                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
@@ -388,11 +389,12 @@ impl Binder {
                         &self.name_resolution_ctx,
                     )
                 {
-                    if column_binding.column_name.starts_with('_')
+                    if column_binding.column_name.starts_with("_$")
                         && column_binding.database_name == Some("system".to_string())
+                        && column_binding.table_name == Some("stage".to_string())
                     {
                         return Err(ErrorCode::SemanticError(
-                            "can not select * from csv/ndjson file",
+                            "select * from file only support parquet format",
                         ));
                     }
                     match_table = true;
