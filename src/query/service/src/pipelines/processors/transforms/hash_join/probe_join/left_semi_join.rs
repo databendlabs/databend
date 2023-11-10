@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -129,11 +128,9 @@ impl HashJoinProbeState {
             .unwrap();
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
-        let dummy_probed_row = RowPtr {
-            chunk_index: 0,
-            row_index: 0,
-        };
 
+        // The unmatched indices are in the range [unmatched_idx, input.num_rows() - 1].
+        let mut unmatched_idx = input.num_rows() - 1;
         for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
                 if self.hash_join_state.hash_join_desc.from_correlated_subquery
@@ -150,11 +147,9 @@ impl HashJoinProbeState {
                     continue;
                 }
                 false => {
-                    // dummy_probed_row
-                    unsafe {
-                        std::ptr::write(build_indexes_ptr.add(matched_num), dummy_probed_row)
-                    };
-                    match_count = 1;
+                    probe_indexes[unmatched_idx] = i as u32;
+                    unmatched_idx -= 1;
+                    continue;
                 }
                 true => (),
             };
@@ -247,6 +242,15 @@ impl HashJoinProbeState {
                     }
                 }
             }
+        }
+
+        // The unmatched indices are in the range [unmatched_idx, input.num_rows() - 1].
+        if unmatched_idx < input.num_rows() - 1 {
+            result_blocks.push(DataBlock::take(
+                input,
+                &probe_indexes[unmatched_idx..input.num_rows()],
+                string_items_buf,
+            )?);
         }
 
         if matched_num == 0 {
