@@ -1262,7 +1262,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1280,7 +1280,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1293,7 +1293,7 @@ async fn test_affect() -> Result<()> {
             None,
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1308,7 +1308,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
-                role: Some("account_admin".to_string()),
+                role: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
