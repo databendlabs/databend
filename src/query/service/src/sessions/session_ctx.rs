@@ -48,6 +48,8 @@ pub struct SessionContext {
     // The user can switch to another available role by `SET ROLE`. If the current_role is not set, 
     // it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
+    // When an user comes from an external authenticator, the session is usually mapped to a single role.
+    auth_role: RwLock<Option<String>>,
     // To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
     // SET SEONCDARY ROLES NONE will disable all the roles except the current role.
     // By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY 
@@ -72,6 +74,7 @@ impl SessionContext {
             abort: Default::default(),
             current_user: Default::default(),
             current_role: Default::default(),
+            auth_role: Default::default(),
             secondary_roles: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
@@ -142,6 +145,16 @@ impl SessionContext {
 
     pub fn set_current_role(&self, role: Option<RoleInfo>) {
         let mut lock = self.current_role.write();
+        *lock = role
+    }
+
+    pub fn get_auth_role(&self) -> Option<String> {
+        let lock = self.auth_role.read();
+        lock.clone()
+    }
+
+    pub fn set_auth_role(&self, role: Option<String>) {
+        let mut lock = self.auth_role.write();
         *lock = role
     }
 
