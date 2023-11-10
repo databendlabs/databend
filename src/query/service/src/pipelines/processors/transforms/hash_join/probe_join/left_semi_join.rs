@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
+use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -111,7 +112,14 @@ impl HashJoinProbeState {
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let string_items_buf = &mut probe_state.string_items_buf;
         let mut unmatched_idx = 0;
-        let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
+        // We will refactor the following code in https://github.com/datafuselabs/databend/pull/13393.
+        let mut _unmatched_indexes = vec![];
+        let probe_unmatched_indexes =
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftAnti {
+                probe_state.probe_unmatched_indexes.as_mut().unwrap()
+            } else {
+                &mut _unmatched_indexes
+            };
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
