@@ -555,7 +555,7 @@ impl kvapi::TestSuite {
 
         // test again with if condition
         {
-            let txn_key = unmatch_keys.get(0).unwrap().to_string();
+            let txn_key = unmatch_keys.first().unwrap().to_string();
             let condition = vec![TxnCondition {
                 key: txn_key.clone(),
                 expected: ConditionResult::Gt as i32,
@@ -601,7 +601,7 @@ impl kvapi::TestSuite {
         // test again with else condition
         {
             let txn_key = "unmatch_keys".to_string();
-            let unmatch_prefix = unmatch_keys.get(0).unwrap().to_string();
+            let unmatch_prefix = unmatch_keys.first().unwrap().to_string();
             let condition = vec![TxnCondition {
                 key: txn_key.clone(),
                 expected: ConditionResult::Gt as i32,

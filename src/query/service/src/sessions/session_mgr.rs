@@ -30,6 +30,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::session::*;
+use common_pipeline_core::processors::profile::Profile;
 use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
@@ -306,5 +307,40 @@ impl SessionManager {
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
         status_t
+    }
+
+    pub fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let active_sessions = {
+            // Here the situation is the same of method `graceful_shutdown`:
+            //
+            // We should drop the read lock before
+            // - acquiring upgraded session reference: the Arc<Session>,
+            // - extracting the ProcessInfo from it
+            // - and then drop the Arc<Session>
+            // Since there are chances that we are the last one that holding the reference, and the
+            // destruction of session need to acquire the write lock of `active_sessions`, which leads
+            // to dead lock.
+            //
+            // Although online expression can also do this, to make this clearer, we wrap it in a block
+
+            let active_sessions_guard = self.active_sessions.read();
+            active_sessions_guard.values().cloned().collect::<Vec<_>>()
+        };
+
+        let mut queries_profiles = HashMap::new();
+        for weak_ptr in active_sessions {
+            if let Some(session_ctx) = weak_ptr.upgrade().map(|x| x.session_ctx.clone()) {
+                if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                    if let Some(executor) = context_shared.executor.read().upgrade() {
+                        queries_profiles.insert(
+                            context_shared.init_query_id.as_ref().read().clone(),
+                            executor.get_profiles(),
+                        );
+                    }
+                }
+            }
+        }
+
+        queries_profiles
     }
 }

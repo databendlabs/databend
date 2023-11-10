@@ -41,6 +41,7 @@ use common_storages_system::MallocStatsTotalsTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::OneTable;
 use common_storages_system::ProcessesTable;
+use common_storages_system::ProcessorProfileTable;
 use common_storages_system::QueryCacheTable;
 use common_storages_system::QueryLogTable;
 use common_storages_system::QueryProfileTable;
@@ -119,6 +120,7 @@ impl SystemDatabase {
             QuerySummaryTable::create(sys_db_meta.next_table_id()),
             TasksTable::create(sys_db_meta.next_table_id()),
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
+            ProcessorProfileTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

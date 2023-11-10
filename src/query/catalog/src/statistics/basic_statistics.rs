@@ -114,7 +114,7 @@ impl BasicColumnStatistics {
             self.max.clone().unwrap(),
         );
         let ndv = match ndv {
-            Some(ndv) if ndv == 0 => Some(num_rows),
+            Some(0) => Some(num_rows),
             None => Some(num_rows),
             _ => ndv,
         };

@@ -100,6 +100,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
@@ -652,6 +653,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_license_key(&self) -> String {
+        todo!()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
         todo!()
     }
 }

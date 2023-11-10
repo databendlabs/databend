@@ -381,17 +381,23 @@ fn bitmap_logic_operate(
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {
-    let Some(rb1) = RoaringTreemap::deserialize_from(arg1).map_err(|e| {
-        ctx.set_error(builder.len(), e.to_string());
-        builder.commit_row();
-    }).ok() else {
+    let Some(rb1) = RoaringTreemap::deserialize_from(arg1)
+        .map_err(|e| {
+            ctx.set_error(builder.len(), e.to_string());
+            builder.commit_row();
+        })
+        .ok()
+    else {
         return;
     };
 
-    let Some(rb2) = RoaringTreemap::deserialize_from(arg2).map_err(|e| {
-        ctx.set_error(builder.len(), e.to_string());
-        builder.commit_row();
-    }).ok() else {
+    let Some(rb2) = RoaringTreemap::deserialize_from(arg2)
+        .map_err(|e| {
+            ctx.set_error(builder.len(), e.to_string());
+            builder.commit_row();
+        })
+        .ok()
+    else {
         return;
     };
 

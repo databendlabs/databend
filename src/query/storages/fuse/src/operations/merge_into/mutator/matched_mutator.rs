@@ -118,7 +118,7 @@ impl MatchedAggregator {
             io_request_semaphore,
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
-            segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+            segment_locations: AHashMap::from_iter(segment_locations),
         })
     }
 

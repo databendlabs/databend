@@ -65,7 +65,16 @@ pub struct StageTable {
 
 impl StageTable {
     pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
-        let table_info_placeholder = TableInfo::default().set_schema(table_info.schema());
+        let table_info_placeholder = TableInfo {
+            ident: Default::default(),
+            desc: "".to_string(),
+            // `system.stage` is used to forbidden the user to select * from text files.
+            name: "stage".to_string(),
+            meta: Default::default(),
+            tenant: "".to_string(),
+            db_type: Default::default(),
+        }
+        .set_schema(table_info.schema());
 
         Ok(Arc::new(Self {
             table_info,

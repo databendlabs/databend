@@ -52,7 +52,7 @@ impl<T: IntegerType> IntegerCompression<T> for DeltaBitpacking {
 
             let out_slice = unsafe {
                 core::slice::from_raw_parts_mut(
-                    output.as_mut_ptr().add(output.len()) as *mut u8,
+                    output.as_mut_ptr().add(output.len()),
                     BitPacker4x::BLOCK_LEN * 4,
                 )
             };
