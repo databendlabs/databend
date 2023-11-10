@@ -20,6 +20,7 @@ use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use itertools::Itertools;
 
@@ -96,6 +97,7 @@ pub struct Scan {
     pub agg_index: Option<AggIndexInfo>,
 
     pub statistics: Statistics,
+    pub block_bloom_pruner: Option<(Vec<DataBlock>, Vec<usize>)>,
 }
 
 impl Scan {
@@ -120,6 +122,7 @@ impl Scan {
             },
             prewhere,
             agg_index: self.agg_index.clone(),
+            block_bloom_pruner: self.block_bloom_pruner.clone(),
         }
     }
 

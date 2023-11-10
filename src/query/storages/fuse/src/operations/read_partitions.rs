@@ -133,6 +133,7 @@ impl FuseTable {
         table_info: TableInfo,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
+        block_bloom_pruner: Option<(Vec<DataBlock>, Vec<usize>)>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(

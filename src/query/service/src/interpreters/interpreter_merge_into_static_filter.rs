@@ -20,6 +20,9 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataBlock;
 use common_expression::SendableDataBlockStream;
 use common_sql::bind_one_table;
 use common_sql::optimizer::SExpr;
@@ -47,6 +50,7 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use log::info;
 use log::warn;
+use storages_common_index::BloomIndex;
 use tokio_stream::StreamExt;
 
 use super::InterpreterPtr;
@@ -93,9 +97,89 @@ impl MergeStyleJoin<'_> {
         }
         column_map
     }
+
+    fn choose_bloom_filter_condition(&self) -> (Vec<usize>, Vec<usize>) {
+        let mut bloom_filter_conditions = vec![];
+        let mut target_columns = vec![];
+        for (i, target_side_expr) in self.target_conditions.iter().enumerate() {
+            if let ScalarExpr::BoundColumnRef(t_col) = target_side_expr {
+                if BloomIndex::supported_data_type(&t_col.column.data_type) {
+                    bloom_filter_conditions.push(i);
+                    target_columns.push(t_col.column.index);
+                }
+            }
+        }
+        (bloom_filter_conditions, target_columns)
+    }
 }
 
 impl MergeIntoInterpreter {
+    async fn build_bloom_filter(
+        m_join: &MergeStyleJoin<'_>,
+        metadata: &MetadataRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<(Vec<DataBlock>, Vec<usize>)> {
+        const U64: DataType = DataType::Number(NumberDataType::UInt64);
+        // calculate bloom filter conditions
+        // EvalScalar(siphash(source_join_side_expr))
+        //        \
+        //     SourcePlan
+        let (bloom_filter_conditions, target_columns) = m_join.choose_bloom_filter_condition();
+        let mut eval_scalar_items = Vec::new();
+        let mut bind_context = Box::new(BindContext::new());
+        for idx in bloom_filter_conditions {
+            let index = metadata.write().add_derived_column("".to_string(), U64);
+            let source_side_expr = &m_join.source_conditions[idx];
+            let siphash = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "siphash".to_string(),
+                params: vec![],
+                arguments: vec![source_side_expr.clone()],
+            });
+            eval_scalar_items.push(ScalarItem {
+                scalar: siphash,
+                index,
+            });
+            let binding = ColumnBindingBuilder::new(
+                "".to_string(),
+                index,
+                Box::new(U64),
+                Visibility::Visible,
+            )
+            .build();
+            bind_context.columns.push(binding);
+        }
+
+        let eval_scalar_op = EvalScalar {
+            items: eval_scalar_items,
+        };
+        let source_plan = m_join.source_sexpr;
+        let eval_scalar_sexpr = if let RelOperator::Exchange(_) = source_plan.plan() {
+            // there is another row_number operator here
+            SExpr::create_unary(
+                Arc::new(eval_scalar_op.into()),
+                Arc::new(source_plan.child(0)?.child(0)?.clone()),
+            )
+        } else {
+            SExpr::create_unary(
+                Arc::new(eval_scalar_op.into()),
+                Arc::new(source_plan.clone()),
+            )
+        };
+
+        let plan = Plan::Query {
+            s_expr: Box::new(eval_scalar_sexpr),
+            metadata: metadata.clone(),
+            bind_context,
+            rewrite_kind: None,
+            formatted_ast: None,
+            ignore_result: false,
+        };
+        let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
+        let blocks = stream.collect::<Result<Vec<_>>>().await?;
+        Ok((blocks, target_columns))
+    }
     pub async fn build_static_filter(
         join: &SExpr,
         metadata: &MetadataRef,
@@ -206,8 +290,11 @@ impl MergeIntoInterpreter {
             }
             filters.extend(Self::combine_filter_parts(&filter_parts).into_iter());
         }
+
+        let bloom_filter = Self::build_bloom_filter(&m_join, metadata, ctx.clone()).await?;
+
         let mut target_plan = m_join.target_sexpr.clone();
-        Self::push_down_filters(&mut target_plan, &filters)?;
+        Self::push_down_filters(&mut target_plan, &filters, bloom_filter)?;
         let source_plan = m_join.source_sexpr;
         let new_sexpr =
             join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
@@ -266,7 +353,11 @@ impl MergeIntoInterpreter {
         }
     }
 
-    fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
+    fn push_down_filters(
+        s_expr: &mut SExpr,
+        filters: &[ScalarExpr],
+        bloom_filter: (Vec<DataBlock>, Vec<usize>),
+    ) -> Result<()> {
         match s_expr.plan() {
             RelOperator::Scan(s) => {
                 let mut new_scan = s.clone();
@@ -280,6 +371,7 @@ impl MergeIntoInterpreter {
                 } else {
                     new_scan.push_down_predicates = Some(filters.to_vec());
                 }
+                new_scan.block_bloom_pruner = Some(bloom_filter);
                 *s_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(new_scan)));
             }
             RelOperator::EvalScalar(_)
@@ -288,7 +380,7 @@ impl MergeIntoInterpreter {
             | RelOperator::Sort(_)
             | RelOperator::Limit(_) => {
                 let mut new_child = s_expr.child(0)?.clone();
-                Self::push_down_filters(&mut new_child, filters)?;
+                Self::push_down_filters(&mut new_child, filters, bloom_filter)?;
                 *s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
             }
             RelOperator::CteScan(_) => {}

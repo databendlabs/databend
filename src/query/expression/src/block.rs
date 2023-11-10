@@ -40,14 +40,14 @@ pub type SendableDataBlockStream =
 pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 
 /// DataBlock is a lightweight container for a group of columns.
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct DataBlock {
     columns: Vec<BlockEntry>,
     num_rows: usize,
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BlockEntry {
     pub data_type: DataType,
     pub value: Value<AnyType>,

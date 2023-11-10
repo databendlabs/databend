@@ -86,7 +86,7 @@ use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, serde::Serialize, serde::Deserialize)]
 pub enum Value<T: ValueType> {
     Scalar(T::Scalar),
     Column(T::Column),

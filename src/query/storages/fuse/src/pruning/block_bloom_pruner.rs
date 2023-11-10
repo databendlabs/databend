@@ -12,20 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block_bloom_pruner;
-mod block_pruner;
-mod bloom_pruner;
-mod fuse_pruner;
-mod pruner_location;
-mod pruning_statistics;
-mod segment_pruner;
+use common_expression::DataBlock;
 
-pub use block_pruner::BlockPruner;
-pub use bloom_pruner::BloomPruner;
-pub use bloom_pruner::BloomPrunerCreator;
-pub use fuse_pruner::FusePruner;
-pub use fuse_pruner::PruningContext;
-pub use pruner_location::create_segment_location_vector;
-pub use pruner_location::SegmentLocation;
-pub use pruning_statistics::FusePruningStatistics;
-pub use segment_pruner::SegmentPruner;
+pub struct BlockBloomPruner {
+    blocks: Vec<DataBlock>,
+    columns: Vec<usize>,
+}
+
+impl BlockBloomPruner {
+    pub fn new(blocks: Vec<DataBlock>, columns: Vec<usize>) -> Self {
+        Self { blocks, columns }
+    }
+}

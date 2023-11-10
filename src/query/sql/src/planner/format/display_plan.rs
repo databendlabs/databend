@@ -237,13 +237,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
     } else {
         let scan = RelOperator::Scan(Scan {
             table_index,
-            columns: Default::default(),
-            push_down_predicates: None,
-            limit: None,
-            order_by: None,
-            prewhere: None,
-            agg_index: None,
-            statistics: Default::default(),
+            ..Default::default()
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
         let mut predicates = vec![];

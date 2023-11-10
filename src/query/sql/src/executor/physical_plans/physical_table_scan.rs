@@ -31,6 +31,7 @@ use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -73,6 +74,7 @@ pub struct TableScan {
     // Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
+    pub block_bloom_pruner: Option<(Vec<DataBlock>, Vec<usize>)>,
 }
 
 impl TableScan {
@@ -261,6 +263,7 @@ impl PhysicalPlanBuilder {
             table_index: scan.table_index,
             stat_info: Some(stat_info),
             internal_column,
+            block_bloom_pruner: scan.block_bloom_pruner,
         }))
     }
 
@@ -293,6 +296,7 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             internal_column: None,
+            block_bloom_pruner: None,
         }))
     }
 
