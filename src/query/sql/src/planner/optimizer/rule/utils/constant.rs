@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
 use common_expression::Scalar;
-use ordered_float::OrderedFloat;
 
-use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::ScalarExpr;
 
