@@ -1062,8 +1062,10 @@ impl Binder {
 
                 match new_expr {
                     common_expression::Expr::Constant {
-                        scalar, data_type, ..
-                    } if data_type == DataType::Timestamp => {
+                        scalar,
+                        data_type: DataType::Timestamp,
+                        ..
+                    } => {
                         let value = scalar.as_timestamp().unwrap();
                         Ok(NavigationPoint::TimePoint(
                             Utc.timestamp_nanos(*value * 1000),

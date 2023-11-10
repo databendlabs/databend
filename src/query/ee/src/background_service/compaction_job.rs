@@ -503,16 +503,13 @@ impl CompactionJob {
                     1 => {
                         // Only table name provided, assuming no database
                         let table = parts[0].to_owned();
-                        result
-                            .entry("default".to_owned())
-                            .or_insert(Vec::new())
-                            .push(table);
+                        result.entry("default".to_owned()).or_default().push(table);
                     }
                     2 => {
                         // Both database and table names provided
                         let db = parts[0].to_owned();
                         let table = parts[1].to_owned();
-                        result.entry(db).or_insert(Vec::new()).push(table);
+                        result.entry(db).or_default().push(table);
                     }
                     _ => {
                         // Invalid input, skipping entry

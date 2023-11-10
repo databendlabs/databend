@@ -913,8 +913,8 @@ impl SchemaApiTestSuite {
     async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
-        let db_names = vec!["db1", "db2"];
-        let engines = vec!["eng1", "eng2"];
+        let db_names = ["db1", "db2"];
+        let engines = ["eng1", "eng2"];
         let tenant = "tenant1";
         {
             let res = self.create_database(mt, tenant, "db1", "eng1").await?;
@@ -3784,7 +3784,7 @@ impl SchemaApiTestSuite {
             let resp = mt.get_drop_table_infos(req).await?;
             assert_eq!(resp.drop_ids, drop_ids_1);
 
-            let expected: BTreeSet<String> = vec![
+            let expected: BTreeSet<String> = [
                 "'tenant1'.'db1'.'tb1'".to_string(),
                 "'tenant1'.'db2'.'tb1'".to_string(),
                 "'tenant1'.'db3'.'tb1'".to_string(),
@@ -3812,7 +3812,7 @@ impl SchemaApiTestSuite {
             let resp = mt.get_drop_table_infos(req).await?;
             assert_eq!(resp.drop_ids, drop_ids_2);
 
-            let expected: BTreeSet<String> = vec![
+            let expected: BTreeSet<String> = [
                 "'tenant1'.'db1'.'tb1'".to_string(),
                 "'tenant1'.'db2'.'tb1'".to_string(),
                 "'tenant1'.'db2'.'tb2'".to_string(),

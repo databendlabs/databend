@@ -982,6 +982,8 @@ impl MetaGrpcClient {
 
         let raft_req: RaftRequest = grpc_req.into();
 
+        let mut failures = vec![];
+
         for i in 0..RPC_RETRIES {
             let (mut client, _server_version) = self
                 .make_client()
@@ -1003,6 +1005,7 @@ impl MetaGrpcClient {
             if let Err(ref e) = result {
                 if status_is_retryable(e) {
                     self.mark_current_endpoint_unhealthy();
+                    failures.push(e.clone());
                     continue;
                 }
             }
@@ -1013,7 +1016,15 @@ impl MetaGrpcClient {
             return Ok(resp);
         }
 
-        unreachable!("impossible to quit loop without error or success");
+        let net_err = MetaNetworkError::ConnectionError(ConnectionError::new(
+            AnyError::error(format_args!(
+                "failed after {} retries: {:?}",
+                RPC_RETRIES, failures
+            )),
+            "failed to connect to meta-service",
+        ));
+
+        Err(net_err.into())
     }
 
     #[minitrace::trace]
@@ -1025,6 +1036,8 @@ impl MetaGrpcClient {
             req = as_debug!(&grpc_req);
             "MetaGrpcClient::kv_read_v1 request"
         );
+
+        let mut failures = vec![];
 
         for i in 0..RPC_RETRIES {
             let (mut client, server_version) = self
@@ -1064,6 +1077,7 @@ impl MetaGrpcClient {
                     if let Err(ref e) = result {
                         if status_is_retryable(e) {
                             self.mark_current_endpoint_unhealthy();
+                            failures.push(e.clone());
                             continue;
                         }
                     }
@@ -1094,6 +1108,7 @@ impl MetaGrpcClient {
             if let Err(ref e) = result {
                 if status_is_retryable(e) {
                     self.mark_current_endpoint_unhealthy();
+                    failures.push(e.clone());
                     continue;
                 }
             }
@@ -1103,7 +1118,15 @@ impl MetaGrpcClient {
             return Ok(strm.boxed());
         }
 
-        unreachable!("impossible to quit loop without error or success");
+        let net_err = MetaNetworkError::ConnectionError(ConnectionError::new(
+            AnyError::error(format_args!(
+                "failed after {} retries: {:?}",
+                RPC_RETRIES, failures
+            )),
+            "failed to connect to meta-service",
+        ));
+
+        Err(net_err.into())
     }
 
     #[minitrace::trace]
