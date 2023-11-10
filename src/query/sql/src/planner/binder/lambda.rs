@@ -134,7 +134,7 @@ impl<'a, 'b> VisitorMut<'a> for LambdaRewriter<'b> {
         Ok(())
     }
 
-    fn visit_subquery_expr(&mut self, subquery: &'a mut SubqueryExpr) -> Result<()> {
+    fn visit_subquery_expr(&mut self, _subquery: &'a mut SubqueryExpr) -> Result<()> {
         // TODO(leiysky): should we stop recursively process subquery here?
         Ok(())
     }
