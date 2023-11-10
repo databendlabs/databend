@@ -35,7 +35,6 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
-use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ScalarExpr;
 
@@ -185,27 +184,35 @@ impl Binder {
         table_expr: SExpr,
         subquery_desc: &mut Vec<SubqueryDesc>,
     ) -> Result<()> {
-        struct FindSubquery<'a> {
-            subqueries: Vec<&'a SubqueryExpr>,
-        }
-
-        impl<'a> Visitor<'a> for FindSubquery<'a> {
-            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
-                self.subqueries.push(subquery);
-                Ok(())
+        match scalar {
+            ScalarExpr::FunctionCall(scalar) => {
+                for arg in scalar.arguments.iter() {
+                    self.subquery_desc(arg, table_expr.clone(), subquery_desc)
+                        .await?;
+                }
             }
+            ScalarExpr::CastExpr(scalar) => {
+                self.subquery_desc(scalar.argument.as_ref(), table_expr, subquery_desc)
+                    .await?;
+            }
+            ScalarExpr::SubqueryExpr(subquery) => {
+                let desc = self
+                    .process_subquery(scalar, subquery, table_expr.clone())
+                    .await?;
+                subquery_desc.push(desc);
+            }
+            ScalarExpr::UDFServerCall(scalar) => {
+                for arg in scalar.arguments.iter() {
+                    self.subquery_desc(arg, table_expr.clone(), subquery_desc)
+                        .await?;
+                }
+            }
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::WindowFunction(_)
+            | ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::LambdaFunction(_) => {}
         }
-
-        let mut find_subquery = FindSubquery { subqueries: vec![] };
-        find_subquery.visit(scalar)?;
-
-        for subquery in find_subquery.subqueries {
-            let desc = self
-                .process_subquery(scalar, subquery, table_expr.clone())
-                .await?;
-            subquery_desc.push(desc);
-        }
-
         Ok(())
     }
 }
