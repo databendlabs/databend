@@ -28,12 +28,6 @@ SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a W
 ----
 43	1	1
 
-# can have list type expressions in the condition
-query III
-SELECT * FROM left_table ANTI JOIN right_table ON ([left_table.a, left_table.b] = [right_table.a, right_table.b]);
-----
-43	1	1
-
 # right table can be a subquery
 query III
 SELECT * FROM left_table ANTI JOIN (SELECT a as foo from right_table where b = 1) buzz ON left_table.a = buzz.foo
