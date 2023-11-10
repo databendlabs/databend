@@ -38,6 +38,7 @@ use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
 use crate::binder::lambda::LambdaInfo;
+use crate::binder::udf::UdfInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
@@ -119,6 +120,8 @@ pub struct BindContext {
 
     pub lambda_info: LambdaInfo,
 
+    pub udf_info: UdfInfo,
+
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
 
@@ -171,6 +174,7 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             lambda_info: LambdaInfo::default(),
+            udf_info: Default::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
             allow_internal_columns: true,
@@ -190,7 +194,8 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
-            lambda_info: LambdaInfo::default(),
+            lambda_info: Default::default(),
+            udf_info: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
             allow_internal_columns: parent.allow_internal_columns,

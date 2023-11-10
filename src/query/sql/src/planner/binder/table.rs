@@ -853,6 +853,7 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             lambda_info: Default::default(),
+            udf_info: Default::default(),
             cte_name: Some(table_name.to_string()),
             cte_map_ref: Box::default(),
             in_grouping: false,

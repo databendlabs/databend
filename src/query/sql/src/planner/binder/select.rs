@@ -171,6 +171,9 @@ impl Binder {
         // analyze lambda
         self.analyze_lambda(&mut from_context, &mut select_list)?;
 
+        // analyze udf
+        self.analyze_udf(&mut from_context, &mut select_list)?;
+
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -241,6 +244,10 @@ impl Binder {
 
         if !from_context.lambda_info.lambda_functions.is_empty() {
             s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
+        }
+
+        if !from_context.udf_info.udf_functions.is_empty() {
+            s_expr = self.bind_udf(&mut from_context, s_expr).await?;
         }
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()

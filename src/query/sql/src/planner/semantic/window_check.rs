@@ -19,7 +19,6 @@ use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
-use crate::plans::UDFServerCall;
 use crate::BindContext;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -99,20 +98,15 @@ impl<'a> WindowChecker<'a> {
 
             ScalarExpr::AggregateFunction(_) => unreachable!(),
             ScalarExpr::UDFServerCall(udf) => {
-                let new_args = udf
-                    .arguments
-                    .iter()
-                    .map(|arg| self.resolve(arg))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-                Ok(UDFServerCall {
-                    span: udf.span,
-                    func_name: udf.func_name.clone(),
-                    server_addr: udf.server_addr.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments: new_args,
+                if let Some(column_ref) = self
+                    .bind_context
+                    .udf_info
+                    .udf_functions_map
+                    .get(&udf.display_name)
+                {
+                    return Ok(column_ref.clone().into());
                 }
-                .into())
+                Err(ErrorCode::Internal("Window Check: Invalid udf function"))
             }
         }
     }
