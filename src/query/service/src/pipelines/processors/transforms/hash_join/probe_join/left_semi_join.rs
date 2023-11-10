@@ -129,7 +129,7 @@ impl HashJoinProbeState {
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
 
-        // The unmatched indices are in the range [unmatched_idx, input.num_rows() - 1].
+        // The unmatched indices are in the range (unmatched_idx, input.num_rows()).
         let mut unmatched_idx = input.num_rows() - 1;
         for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
@@ -244,11 +244,11 @@ impl HashJoinProbeState {
             }
         }
 
-        // The unmatched indices are in the range [unmatched_idx, input.num_rows() - 1].
+        // The unmatched indices are in the range (unmatched_idx, input.num_rows()).
         if unmatched_idx < input.num_rows() - 1 {
             result_blocks.push(DataBlock::take(
                 input,
-                &probe_indexes[unmatched_idx..input.num_rows()],
+                &probe_indexes[unmatched_idx + 1..input.num_rows()],
                 string_items_buf,
             )?);
         }
