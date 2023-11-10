@@ -183,8 +183,8 @@ impl FromToProto for mt::ShareMeta {
             },
             entries,
             comment: p.comment.clone(),
-            accounts: BTreeSet::from_iter(p.accounts.clone().into_iter()),
-            share_from_db_ids: BTreeSet::from_iter(p.share_from_db_ids.clone().into_iter()),
+            accounts: BTreeSet::from_iter(p.accounts.clone()),
+            share_from_db_ids: BTreeSet::from_iter(p.share_from_db_ids.clone()),
             share_on: DateTime::<Utc>::from_pb(p.share_on)?,
             update_on: match p.update_on {
                 Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
@@ -207,8 +207,8 @@ impl FromToProto for mt::ShareMeta {
                 None => None,
             },
             entries,
-            accounts: Vec::from_iter(self.accounts.clone().into_iter()),
-            share_from_db_ids: Vec::from_iter(self.share_from_db_ids.clone().into_iter()),
+            accounts: Vec::from_iter(self.accounts.clone()),
+            share_from_db_ids: Vec::from_iter(self.share_from_db_ids.clone()),
             comment: self.comment.clone(),
             share_on: self.share_on.to_pb()?,
             update_on: match &self.update_on {

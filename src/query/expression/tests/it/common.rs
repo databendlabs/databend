@@ -22,7 +22,7 @@ use common_expression::DataBlock;
 use common_expression::Value;
 
 pub fn new_block(columns: &[Column]) -> DataBlock {
-    let len = columns.get(0).map_or(1, |c| c.len());
+    let len = columns.first().map_or(1, |c| c.len());
     let columns = columns
         .iter()
         .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))

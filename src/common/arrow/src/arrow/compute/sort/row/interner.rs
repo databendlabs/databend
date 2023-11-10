@@ -55,10 +55,7 @@ trait HashSingle: BuildHasher {
         }
         #[cfg(not(feature = "nightly_build"))]
         {
-            use std::hash::Hasher;
-            let mut hasher = self.build_hasher();
-            x.hash(&mut hasher);
-            hasher.finish()
+            self.hash_one(&x)
         }
     }
 }
@@ -413,7 +410,7 @@ mod tests {
     #[test]
     fn test_intern_duplicates() {
         // Unsorted with duplicates
-        let values = vec![0_u8, 1, 8, 4, 1, 0];
+        let values = [0_u8, 1, 8, 4, 1, 0];
         let mut interner = OrderPreservingInterner::default();
 
         let interned = interner.intern(values.iter().map(std::slice::from_ref).map(Some));

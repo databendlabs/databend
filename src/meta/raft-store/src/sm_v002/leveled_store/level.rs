@@ -109,7 +109,7 @@ impl MapApiRO<String> for Level {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Vec<_>>();
 
-        let strm = futures::stream::iter(vec.into_iter()).map(Ok).boxed();
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
     }
 }
@@ -159,7 +159,7 @@ impl MapApiRO<ExpireKey> for Level {
             .map(|(k, v)| (*k, v.clone()))
             .collect::<Vec<_>>();
 
-        let strm = futures::stream::iter(vec.into_iter()).map(Ok).boxed();
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
     }
 }
