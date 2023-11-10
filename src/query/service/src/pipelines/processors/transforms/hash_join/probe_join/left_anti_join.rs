@@ -92,16 +92,14 @@ impl HashJoinProbeState {
         let build_indexes = &mut mutable_indexes.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
+        // Safe to unwrap.
+        let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
 
         // Build states.
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };
 
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
-        let dummy_probed_row = RowPtr {
-            chunk_index: 0,
-            row_index: 0,
-        };
         let other_predicate = self
             .hash_join_state
             .hash_join_desc
@@ -111,6 +109,7 @@ impl HashJoinProbeState {
 
         // Results.
         let mut matched_idx = 0;
+        let mut unmatched_idx = 0;
         let mut result_blocks = vec![];
 
         // Probe hash table and generate data blocks.
@@ -122,15 +121,13 @@ impl HashJoinProbeState {
             let (mut match_count, mut incomplete_ptr) =
                 hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
-            let true_match_count = match_count;
             if match_count == 0 {
-                // dummy_probed_row
-                unsafe { std::ptr::write(build_indexes_ptr.add(matched_idx), dummy_probed_row) };
-                match_count = 1;
+                unsafe { *probe_unmatched_indexes.get_unchecked_mut(unmatched_idx) = idx as u32 };
+                unmatched_idx += 1;
+                continue;
             }
-            if true_match_count > 0 {
-                unsafe { *row_state.get_unchecked_mut(idx) += true_match_count as u32 };
-            }
+
+            unsafe { *row_state.get_unchecked_mut(idx) += match_count as u32 };
 
             // Fill `probe_indexes`.
             for _ in 0..match_count {
@@ -158,12 +155,20 @@ impl HashJoinProbeState {
                     matched_idx,
                     max_block_size,
                 );
-                unsafe { *row_state.get_unchecked_mut(idx) += true_match_count as u32 };
+                unsafe { *row_state.get_unchecked_mut(idx) += match_count as u32 };
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
                     matched_idx += 1;
                 }
             }
+        }
+
+        if unmatched_idx > 0 {
+            result_blocks.push(DataBlock::take(
+                input,
+                &probe_unmatched_indexes[0..unmatched_idx],
+                &mut probe_state.generation_state.string_items_buf,
+            )?);
         }
 
         if matched_idx > 0 {
