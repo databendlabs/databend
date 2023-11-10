@@ -38,7 +38,7 @@ use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::error::Result;
 
-pub(self) mod physical_binary;
+mod physical_binary;
 
 /// A trait representing an immutable Arrow array. Arrow arrays are trait objects
 /// that are infallibly downcasted to concrete types according to the [`Array::data_type`].

@@ -131,7 +131,7 @@ pub fn slice_nested_leaf(nested: &[Nested]) -> (usize, usize) {
     out
 }
 
-pub(self) fn decimal_length_from_precision(precision: usize) -> usize {
+fn decimal_length_from_precision(precision: usize) -> usize {
     // digits = floor(log_10(2^(8*n - 1) - 1))
     // ceil(digits) = log10(2^(8*n - 1) - 1)
     // 10^ceil(digits) = 2^(8*n - 1) - 1
