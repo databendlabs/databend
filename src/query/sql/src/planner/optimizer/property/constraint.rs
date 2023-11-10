@@ -25,15 +25,16 @@ use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::IndexType;
 use crate::ScalarExpr;
 
 #[derive(Debug)]
 pub struct ConstraintSet {
-    constraints: Vec<(ScalarExpr, MirExpr)>,
-    #[allow(dead_code)]
-    unsupported_constraints: Vec<ScalarExpr>,
+    pub constraints: Vec<(ScalarExpr, MirExpr)>,
+    pub unsupported_constraints: Vec<ScalarExpr>,
 }
 
 impl ConstraintSet {
@@ -170,6 +171,93 @@ pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
             Some(MirExpr::Variable { name, data_type })
         }
         _ => None,
+    }
+}
+
+/// Transform a MIR expression into a logical expression.
+pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + Copy) -> ScalarExpr {
+    match mir {
+        MirExpr::Constant(constant) => {
+            let value = match constant {
+                MirConstant::Bool(value) => Scalar::Boolean(*value),
+                MirConstant::Int(value) => Scalar::Number(NumberScalar::Int64(*value)),
+                MirConstant::Null => Scalar::Null,
+            };
+            ConstantExpr { span: None, value }.into()
+        }
+        MirExpr::Variable { name, .. } => name_mapping(name).into(),
+        MirExpr::UnaryOperator {
+            op: MirUnaryOperator::Not,
+            arg:
+                box MirExpr::UnaryOperator {
+                    op: MirUnaryOperator::IsNull,
+                    arg,
+                },
+        } => {
+            let arg = from_mir(arg, name_mapping);
+            FunctionCall {
+                span: None,
+                func_name: "is_not_null".to_string(),
+                params: vec![],
+                arguments: vec![arg],
+            }
+            .into()
+        }
+        MirExpr::UnaryOperator { op, arg } => {
+            let arg = from_mir(arg, name_mapping);
+            let func_name = match op {
+                MirUnaryOperator::Minus => "minus",
+                MirUnaryOperator::RemoveNullable => "remove_nullable",
+                MirUnaryOperator::Not => "not",
+                MirUnaryOperator::IsNull => {
+                    return FunctionCall {
+                        span: None,
+                        func_name: "not".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            FunctionCall {
+                                span: None,
+                                func_name: "is_not_null".to_string(),
+                                params: vec![],
+                                arguments: vec![arg],
+                            }
+                            .into(),
+                        ],
+                    }
+                    .into();
+                }
+            };
+            FunctionCall {
+                span: None,
+                func_name: func_name.to_string(),
+                params: vec![],
+                arguments: vec![arg],
+            }
+            .into()
+        }
+        MirExpr::BinaryOperator { op, left, right } => {
+            let left = from_mir(left, name_mapping);
+            let right = from_mir(right, name_mapping);
+            let func_name = match op {
+                MirBinaryOperator::Plus => "plus",
+                MirBinaryOperator::Minus => "minus",
+                MirBinaryOperator::Multiply => "multiply",
+                MirBinaryOperator::And => "and",
+                MirBinaryOperator::Or => "or",
+                MirBinaryOperator::Lt => "lt",
+                MirBinaryOperator::Lte => "lte",
+                MirBinaryOperator::Gt => "gt",
+                MirBinaryOperator::Gte => "gte",
+                MirBinaryOperator::Eq => "eq",
+            };
+            FunctionCall {
+                span: None,
+                func_name: func_name.to_string(),
+                params: vec![],
+                arguments: vec![left, right],
+            }
+            .into()
+        }
     }
 }
 

@@ -29,6 +29,10 @@ pub use column_stat::ColumnStat;
 pub use column_stat::ColumnStatSet;
 pub use column_stat::NewStatistic;
 #[cfg(feature = "z3-prove")]
+pub use constraint::as_mir;
+#[cfg(feature = "z3-prove")]
+pub use constraint::from_mir;
+#[cfg(feature = "z3-prove")]
 pub use constraint::ConstraintSet;
 pub use enforcer::require_property;
 pub use histogram::histogram_from_ndv;

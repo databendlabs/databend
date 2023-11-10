@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -85,6 +86,24 @@ impl ScalarExpr {
         let mut visitor = UsedTablesVisitor { tables: vec![] };
         visitor.visit_expr(self);
         Ok(visitor.tables)
+    }
+
+    pub fn used_column_refs(&self) -> HashMap<IndexType, BoundColumnRef> {
+        struct AllColumnBindingsVisitor {
+            columns: HashMap<IndexType, BoundColumnRef>,
+        }
+
+        impl<'a> Visitor<'a> for AllColumnBindingsVisitor {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) {
+                self.columns.insert(col.column.index, col.clone());
+            }
+        }
+
+        let mut visitor = AllColumnBindingsVisitor {
+            columns: HashMap::new(),
+        };
+        visitor.visit_expr(self);
+        visitor.columns
     }
 
     pub fn span(&self) -> Span {
