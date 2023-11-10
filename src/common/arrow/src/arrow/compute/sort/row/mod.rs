@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -285,7 +286,7 @@ impl Rows {
     /// Returns `true` if the number of rows is 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        (self.offsets.len() - 1) == 0
+        self.len() == 0
     }
 
     #[inline]
