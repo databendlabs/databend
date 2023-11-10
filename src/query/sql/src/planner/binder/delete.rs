@@ -38,9 +38,9 @@ use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
+use crate::plans::WindowFunc;
 use crate::BindContext;
 use crate::ScalarExpr;
-use crate::plans::WindowFunc;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn process_selection(
