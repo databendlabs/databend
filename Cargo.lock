@@ -2722,7 +2722,6 @@ dependencies = [
  "num-traits",
  "once_cell",
  "opendal",
- "ordered-float 3.7.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "regex",
