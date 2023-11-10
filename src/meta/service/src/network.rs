@@ -40,6 +40,7 @@ use common_meta_types::RaftError;
 use common_meta_types::TypeConfig;
 use common_meta_types::VoteRequest;
 use common_meta_types::VoteResponse;
+use common_metrics::count::Count;
 use log::debug;
 use log::info;
 use openraft::async_trait::async_trait;
@@ -304,7 +305,11 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             Network::incr_meta_metrics_sent_bytes_to_peer(&self.target, req.get_ref());
-            raft_metrics::network::incr_snapshot_send_inflights_to_peer(&self.target, 1);
+
+            let _g = (|n: i64| {
+                raft_metrics::network::incr_snapshot_send_inflights_to_peer(&self.target, n)
+            })
+            .counter_guard();
 
             let resp = client.install_snapshot(req).await;
             info!(
@@ -314,7 +319,6 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
             match resp {
                 Ok(resp) => {
-                    raft_metrics::network::incr_snapshot_send_inflights_to_peer(&self.target, -1);
                     raft_metrics::network::incr_snapshot_send_success_to_peer(&self.target);
                     let mes = resp.into_inner();
                     match serde_json::from_str(&mes.data) {

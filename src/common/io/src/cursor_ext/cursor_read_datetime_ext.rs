@@ -159,20 +159,15 @@ where T: AsRef<[u8]>
                         "err with parse micros second, format like this:[.123456]",
                     ));
                 }
-                let scales: i64 = lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
-
-                if size >= 9 {
-                    dt.checked_add_signed(Duration::nanoseconds(scales))
-                        .unwrap()
-                } else if size >= 6 {
-                    dt.checked_add_signed(Duration::microseconds(scales))
-                        .unwrap()
-                } else if size >= 3 {
-                    dt.checked_add_signed(Duration::milliseconds(scales))
-                        .unwrap()
+                let mut scales: i64 =
+                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                if size <= 9 {
+                    scales *= 10_i64.pow(9 - size as u32)
                 } else {
-                    dt
+                    scales /= (size as i64 - 9) * 10
                 }
+                dt.checked_add_signed(Duration::nanoseconds(scales))
+                    .unwrap()
             } else {
                 dt
             };

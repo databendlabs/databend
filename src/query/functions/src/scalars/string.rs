@@ -239,6 +239,30 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+        "translate",
+        |_, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+            |str, from, to, output, _| {
+            if from.is_empty() || from == to {
+                output.put_slice(str);
+                output.commit_row();
+                return;
+            }
+            let to_len = to.len();
+            str.iter().for_each(|x| {
+                if let Some(index) = from.find([*x]) {
+                    if index < to_len {
+                        output.put_u8(to[index]);
+                    }
+                } else {
+                    output.put_u8(*x);
+                }
+            });
+            output.commit_row();
+        }),
+    );
+
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
         |_, _, _| FunctionDomain::Full,
