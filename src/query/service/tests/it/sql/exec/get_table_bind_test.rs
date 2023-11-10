@@ -100,6 +100,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
@@ -114,7 +115,6 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use common_pipeline_core::processors::profile::Profile;
 use storages_common_table_meta::meta::Location;
 
 type MetaType = (String, String, String);
@@ -703,7 +703,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 }
-
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {

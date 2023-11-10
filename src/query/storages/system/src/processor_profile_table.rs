@@ -18,7 +18,8 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::{NumberDataType, StringType};
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
@@ -48,8 +49,10 @@ impl SyncSystemTable for ProcessorProfileTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let queries_profiles = ctx.get_queries_profile();
 
+        let local_id = ctx.get_cluster().local_id.clone();
         let total_size = queries_profiles.values().map(Vec::len).sum();
 
+        let mut node: Vec<Vec<u8>> = Vec::with_capacity(total_size);
         let mut queries_id: Vec<Vec<u8>> = Vec::with_capacity(total_size);
         let mut pid: Vec<u64> = Vec::with_capacity(total_size);
         let mut p_name: Vec<Vec<u8>> = Vec::with_capacity(total_size);
@@ -58,6 +61,7 @@ impl SyncSystemTable for ProcessorProfileTable {
 
         for (query_id, query_profiles) in queries_profiles {
             for query_profile in query_profiles {
+                node.push(local_id.clone().into_bytes());
                 queries_id.push(query_id.clone().into_bytes());
                 pid.push(query_profile.pid as u64);
                 p_name.push(query_profile.p_name.clone().into_bytes());
@@ -68,6 +72,7 @@ impl SyncSystemTable for ProcessorProfileTable {
         }
 
         Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(node),
             StringType::from_data(queries_id),
             UInt64Type::from_data(pid),
             StringType::from_data(p_name),
@@ -80,6 +85,7 @@ impl SyncSystemTable for ProcessorProfileTable {
 impl ProcessorProfileTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
             TableField::new("query_id", TableDataType::String),
             TableField::new("pid", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("pname", TableDataType::String),
