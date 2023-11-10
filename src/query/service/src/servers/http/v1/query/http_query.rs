@@ -243,8 +243,9 @@ impl HttpQuery {
                 session.set_current_database(db.clone());
             }
             if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role, true).await?;
+                session.set_current_role_checked(role).await?;
             }
+            // TODO(liyz): pass secondary roles here
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {

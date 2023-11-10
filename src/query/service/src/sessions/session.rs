@@ -207,10 +207,7 @@ impl Session {
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the `session.role` field in the HTTP query request body.
     #[async_backtrace::framed]
-    pub async fn set_current_role_checked(
-        self: &Arc<Self>,
-        role_name: &str,
-    ) -> Result<()> {
+    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
         self.privilege_mgr
             .set_current_role(Some(role_name.to_string()))
             .await

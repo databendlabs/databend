@@ -49,6 +49,8 @@ pub trait SessionPrivilegeManager {
 
     async fn set_current_role(&self, role: Option<String>) -> Result<()>;
 
+    async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()>;
+
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
@@ -144,6 +146,17 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         Ok(())
     }
 
+    #[async_backtrace::framed]
+    async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
+        if let Some(secondary_roles) = &secondary_roles {
+            for role_name in secondary_roles {
+                self.validate_available_role(role_name).await?;
+            }
+        }
+        self.session_ctx.set_secondary_roles(secondary_roles);
+        Ok(())
+    }
+
     fn get_current_user(&self) -> Result<UserInfo> {
         self.session_ctx
             .get_current_user()
@@ -168,23 +181,21 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         self.ensure_current_role().await?;
         let secondary_roles = secondary_roles.unwrap();
         if secondary_roles.len() == 0 {
-            return self.get_current_role().map(|r| vec![r]).unwrap_or_default();
+            return Ok(self.get_current_role().map(|r| vec![r]).unwrap_or_default());
         }
 
         // if secondary_roles is non-empty, take the current_role and the secondary_roles
         // as the effective roles
-        let mut role_names = self.get_current_role().map(|r| vec![r.name]).unwrap_or_default();
+        let mut role_names = self
+            .get_current_role()
+            .map(|r| vec![r.name])
+            .unwrap_or_default();
         role_names.extend(secondary_roles);
 
         // find the effective roles and their related roles
         let role_cache = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
-        let roles = role_cache
-            .find_roles(&tenant, &role_names)
-            .await?;
-        let effective_roles = role_cache
-            .find_related_roles(&tenant, &roles)
-            .await?;
+        let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
         Ok(effective_roles)
     }
 
@@ -204,7 +215,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
                 roles
             }
         };
-        // TODO: check the secondary roles
 
         let tenant = self.session_ctx.get_current_tenant();
         let mut related_roles = RoleCacheManager::instance()
