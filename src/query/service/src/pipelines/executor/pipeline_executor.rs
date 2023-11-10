@@ -242,19 +242,19 @@ impl PipelineExecutor {
             {
                 let finished_error_guard = self.finished_error.lock();
                 if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = Some(error.clone());
+                    let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    self.on_finished(&may_error)?;
-                    return Err(may_error.unwrap());
+                    self.on_finished(&Some(may_error.clone()))?;
+                    return Err(may_error);
                 }
             }
 
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = Some(thread_res.unwrap_err());
-                self.on_finished(&may_error)?;
-                return Err(may_error.unwrap());
+                let may_error = thread_res.unwrap_err();
+                self.on_finished(&Some(may_error.clone()))?;
+                return Err(may_error);
             }
         }
 

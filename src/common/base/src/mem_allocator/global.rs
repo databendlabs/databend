@@ -129,7 +129,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
                     null_mut()
                 }
             }
-            Equal => ptr.as_ptr() as *mut u8,
+            Equal => ptr.as_ptr(),
         }
     }
 }
