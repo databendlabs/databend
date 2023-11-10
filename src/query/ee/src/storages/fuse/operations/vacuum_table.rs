@@ -259,7 +259,7 @@ impl VacuumOperator {
             } else {
                 // now we get a snapshot with old file name(no timestamp in snapshot file name)
                 if last_snapshot_index_opt.is_some() {
-                    // if all the succed snapshots timestamp >= timestamp, return None
+                    // if all the succeed snapshots timestamp >= timestamp, return None
                     let status = format!(
                         "do_vacuum with table {}: reach snapshot {:?} in old format, but cannot find any snapshot that timestamp < retention_time",
                         self.fuse_table.get_table_info().name,
