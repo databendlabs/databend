@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -272,8 +273,8 @@ pub fn array_to_columns<A: AsRef<dyn Array> + Send + Sync>(
 
     values
         .iter()
-        .zip(nested.into_iter())
-        .zip(types.into_iter())
+        .zip(nested)
+        .zip(types)
         .zip(encoding.iter())
         .map(|(((values, nested), type_), encoding)| {
             array_to_pages(*values, type_, &nested, options, *encoding)

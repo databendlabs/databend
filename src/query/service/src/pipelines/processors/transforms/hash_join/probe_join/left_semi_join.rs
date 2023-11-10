@@ -21,7 +21,7 @@ use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::KeyAccessor;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
+use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;

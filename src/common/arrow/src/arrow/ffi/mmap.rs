@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -118,7 +119,7 @@ pub unsafe fn slice<T: NativeType>(slice: &[T]) -> PrimitiveArray<T> {
     let validity = None;
 
     let data: &[u8] = bytemuck::cast_slice(slice);
-    let ptr = data.as_ptr() as *const u8;
+    let ptr = data.as_ptr();
     let data = Arc::new(data);
 
     // safety: the underlying assumption of this function: the array will not be used
@@ -160,7 +161,7 @@ pub unsafe fn bitmap(data: &[u8], offset: usize, length: usize) -> Result<Boolea
     let null_count = 0;
     let validity = None;
 
-    let ptr = data.as_ptr() as *const u8;
+    let ptr = data.as_ptr();
     let data = Arc::new(data);
 
     // safety: the underlying assumption of this function: the array will not be used

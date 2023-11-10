@@ -407,7 +407,7 @@ impl FunctionRegistry {
         let id = self.next_function_id(&name);
         self.funcs
             .entry(name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((Arc::new(func), id));
     }
 
@@ -415,7 +415,7 @@ impl FunctionRegistry {
         let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((Box::new(factory), id));
     }
 
@@ -440,7 +440,7 @@ impl FunctionRegistry {
     ) {
         self.additional_cast_rules
             .entry(fn_name.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(additional_cast_rules.into_iter());
     }
 
