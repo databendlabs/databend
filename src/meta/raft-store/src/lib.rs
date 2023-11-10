@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(generators)]
+#![feature(coroutines)]
 #![feature(impl_trait_in_assoc_type)]
 #![allow(clippy::diverging_sub_expression)]
 
