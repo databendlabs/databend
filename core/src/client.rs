@@ -237,12 +237,11 @@ impl APIClient {
                 .await?;
         }
         if resp.status() != StatusCode::OK {
-            let resp_err = QueryError {
-                code: resp.status().as_u16(),
-                message: resp.text().await?,
-                detail: None,
-            };
-            return Err(Error::InvalidResponse(resp_err));
+            return Err(Error::Request(format!(
+                "StartQuery failed with status {}: {}",
+                resp.status(),
+                resp.text().await?
+            )));
         }
 
         let resp: QueryResponse = resp.json().await?;
@@ -272,17 +271,16 @@ impl APIClient {
             if resp.status() == StatusCode::NOT_FOUND {
                 return Err(Error::SessionTimeout(resp.text().await?));
             }
-            let resp_err = QueryError {
-                code: resp.status().as_u16(),
-                message: resp.text().await?,
-                detail: None,
-            };
-            return Err(Error::InvalidResponse(resp_err));
+            return Err(Error::Request(format!(
+                "QueryPage failed with status {}: {}",
+                resp.status(),
+                resp.text().await?
+            )));
         }
         let resp: QueryResponse = resp.json().await?;
         self.handle_session(&resp.session).await;
         match resp.error {
-            Some(err) => Err(Error::InvalidPage(err)),
+            Some(err) => Err(Error::InvalidResponse(err)),
             None => Ok(resp),
         }
     }

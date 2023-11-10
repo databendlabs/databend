@@ -24,7 +24,6 @@ pub enum Error {
     // on accessing this next page uri.
     SessionTimeout(String),
     InvalidResponse(response::QueryError),
-    InvalidPage(response::QueryError),
 }
 
 impl std::fmt::Display for Error {
@@ -41,7 +40,6 @@ impl std::fmt::Display for Error {
                 }
                 _ => write!(f, "ResponseError with {}: {}", e.code, e.message),
             },
-            Error::InvalidPage(e) => write!(f, "PageError with {}: {}", e.code, e.message),
         }
     }
 }
