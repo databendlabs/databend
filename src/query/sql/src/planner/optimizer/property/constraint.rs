@@ -93,57 +93,65 @@ impl ConstraintSet {
 pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
     match scalar {
         ScalarExpr::FunctionCall(func) => {
-            if let Some(unary_op) = match func.func_name.as_str() {
-                "minus" => Some(MirUnaryOperator::Minus),
-                "not" => Some(MirUnaryOperator::Not),
-                "is_null" => Some(MirUnaryOperator::IsNull),
-                "is_not_null" => {
-                    return Some(MirExpr::UnaryOperator {
-                        op: MirUnaryOperator::Not,
-                        arg: Box::new(as_mir(&ScalarExpr::FunctionCall(FunctionCall {
-                            func_name: "is_null".to_string(),
-                            ..func.clone()
-                        }))?),
-                    });
+            match func.arguments.len() {
+                1 => {
+                    let unary_op = match func.func_name.as_str() {
+                        "minus" => Some(MirUnaryOperator::Minus),
+                        "not" => Some(MirUnaryOperator::Not),
+                        "is_null" => Some(MirUnaryOperator::IsNull),
+                        "is_not_null" => {
+                            return Some(MirExpr::UnaryOperator {
+                                op: MirUnaryOperator::Not,
+                                arg: Box::new(as_mir(&ScalarExpr::FunctionCall(FunctionCall {
+                                    func_name: "is_null".to_string(),
+                                    ..func.clone()
+                                }))?),
+                            });
+                        }
+                        _ => None,
+                    };
+                    if let Some(unary_op) = unary_op {
+                        let arg = as_mir(&func.arguments[0])?;
+                        return Some(MirExpr::UnaryOperator {
+                            op: unary_op,
+                            arg: Box::new(arg),
+                        });
+                    }
                 }
-                _ => None,
-            } {
-                let arg = as_mir(&func.arguments[0])?;
-                return Some(MirExpr::UnaryOperator {
-                    op: unary_op,
-                    arg: Box::new(arg),
-                });
-            }
-
-            if let Some(binary_op) = match func.func_name.as_str() {
-                "plus" => Some(MirBinaryOperator::Plus),
-                "minus" => Some(MirBinaryOperator::Minus),
-                "multiply" => Some(MirBinaryOperator::Multiply),
-                "and" => Some(MirBinaryOperator::And),
-                "or" => Some(MirBinaryOperator::Or),
-                "lt" => Some(MirBinaryOperator::Lt),
-                "lte" => Some(MirBinaryOperator::Lte),
-                "gt" => Some(MirBinaryOperator::Gt),
-                "gte" => Some(MirBinaryOperator::Gte),
-                "eq" => Some(MirBinaryOperator::Eq),
-                "noteq" => {
-                    return Some(MirExpr::UnaryOperator {
-                        op: MirUnaryOperator::Not,
-                        arg: Box::new(as_mir(&ScalarExpr::FunctionCall(FunctionCall {
-                            func_name: "eq".to_string(),
-                            ..func.clone()
-                        }))?),
-                    });
+                2 => {
+                    let binary_op = match func.func_name.as_str() {
+                        "plus" => Some(MirBinaryOperator::Plus),
+                        "minus" => Some(MirBinaryOperator::Minus),
+                        "multiply" => Some(MirBinaryOperator::Multiply),
+                        "and" => Some(MirBinaryOperator::And),
+                        "or" => Some(MirBinaryOperator::Or),
+                        "lt" => Some(MirBinaryOperator::Lt),
+                        "lte" => Some(MirBinaryOperator::Lte),
+                        "gt" => Some(MirBinaryOperator::Gt),
+                        "gte" => Some(MirBinaryOperator::Gte),
+                        "eq" => Some(MirBinaryOperator::Eq),
+                        "noteq" => {
+                            return Some(MirExpr::UnaryOperator {
+                                op: MirUnaryOperator::Not,
+                                arg: Box::new(as_mir(&ScalarExpr::FunctionCall(FunctionCall {
+                                    func_name: "eq".to_string(),
+                                    ..func.clone()
+                                }))?),
+                            });
+                        }
+                        _ => None,
+                    };
+                    if let Some(binary_op) = binary_op {
+                        let left = as_mir(&func.arguments[0])?;
+                        let right = as_mir(&func.arguments[1])?;
+                        return Some(MirExpr::BinaryOperator {
+                            op: binary_op,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        });
+                    }
                 }
-                _ => None,
-            } {
-                let left = as_mir(&func.arguments[0])?;
-                let right = as_mir(&func.arguments[1])?;
-                return Some(MirExpr::BinaryOperator {
-                    op: binary_op,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                });
+                _ => (),
             }
 
             None
