@@ -118,7 +118,6 @@ impl Binder {
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
-        scalar: &ScalarExpr,
         subquery_expr: &SubqueryExpr,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
@@ -134,7 +133,7 @@ impl Binder {
         outer_columns.extend(subquery_expr.outer_columns.iter());
 
         let filter = Filter {
-            predicates: vec![scalar.clone()],
+            predicates: vec![subquery_expr.clone().into()],
         };
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {
@@ -197,27 +196,13 @@ impl Binder {
                 self.subqueries.push(subquery);
                 Ok(())
             }
-            fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
-                // Stop finding subquery in window function.
-                Ok(())
-            }
-            fn visit_aggregate_function(&mut self, _: &'a AggregateFunction) -> Result<()> {
-                // Stop finding subquery in aggregate function.
-                Ok(())
-            }
-            fn visit_lambda_function(&mut self, _: &'a LambdaFunc) -> Result<()> {
-                // Stop finding subquery in lambda function.
-                Ok(())
-            }
         }
 
         let mut find_subquery = FindSubquery { subqueries: vec![] };
         find_subquery.visit(scalar)?;
 
         for subquery in find_subquery.subqueries {
-            let desc = self
-                .process_subquery(scalar, subquery, table_expr.clone())
-                .await?;
+            let desc = self.process_subquery(subquery, table_expr.clone()).await?;
             subquery_desc.push(desc);
         }
 
