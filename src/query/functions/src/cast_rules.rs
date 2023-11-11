@@ -71,6 +71,7 @@ pub const GENERAL_CAST_RULES: AutoCastRules = &[
     (DataType::String, DataType::Timestamp),
     (DataType::String, DataType::Date),
     (DataType::String, DataType::Boolean),
+    (DataType::Number(NumberDataType::Int64), DataType::Timestamp),
     (DataType::Date, DataType::Timestamp),
     (
         DataType::Number(NumberDataType::UInt8),

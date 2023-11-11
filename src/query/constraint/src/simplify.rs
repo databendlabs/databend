@@ -28,10 +28,15 @@ pub fn simplify(expr: &MirExpr) -> Option<Vec<MirExpr>> {
     let variables = expr.variables();
     let ast = mir_to_z3_assertion(ctx, expr)?;
     let simplified = simplify_z3_ast(ctx, &ast)?;
-    simplified
-        .iter()
-        .map(|formula| MirExpr::from_z3_ast(formula, &variables))
-        .collect()
+    dbg!(&expr);
+    dbg!(&ast);
+    dbg!(&simplified);
+    dbg!(
+        simplified
+            .iter()
+            .map(|formula| MirExpr::from_z3_ast(formula, &variables))
+            .collect()
+    )
 }
 
 pub fn mir_to_z3_assertion<'ctx>(ctx: &'ctx Context, expr: &MirExpr) -> Option<Bool<'ctx>> {

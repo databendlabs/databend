@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_constraint::simplify;
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -70,21 +69,11 @@ impl Rule for RuleInferFilter {
             let filter: Filter = s_expr.plan().clone().try_into()?;
             let constraints = ConstraintSet::new(&filter.predicates);
 
-            let mut new_predicates = constraints.unsupported_constraints;
-            for (origin, constraint) in constraints.constraints {
-                if let Some(new_constraints) = simplify::simplify(&constraint) {
-                    let columns = origin.used_column_refs();
-                    for new_constraint in new_constraints {
-                        new_predicates.push(crate::optimizer::from_mir(&new_constraint, |col| {
-                            columns[&col.parse().unwrap()].clone()
-                        }));
-                    }
-                } else {
-                    new_predicates.push(origin);
-                }
-            }
+            let new_predicates = constraints.simplify();
 
             if filter.predicates != new_predicates {
+                dbg!(&filter.predicates);
+                dbg!(&new_predicates);
                 state.add_result(SExpr::create_unary(
                     Arc::new(
                         Filter {
