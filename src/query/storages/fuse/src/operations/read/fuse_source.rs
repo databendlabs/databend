@@ -24,7 +24,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use log::info;
@@ -33,10 +33,10 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::native_data_source_deserializer::NativeDeserializeDataTransform;
-use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
-use crate::operations::read::parquet_data_source_deserializer::DeserializeDataTransform;
-use crate::operations::read::parquet_data_source_reader::ReadParquetDataSource;
+use crate::operations::read::DeserializeDataTransform;
+use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::ReadNativeDataSource;
+use crate::operations::read::ReadParquetDataSource;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(

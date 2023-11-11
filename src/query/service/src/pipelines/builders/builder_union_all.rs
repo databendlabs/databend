@@ -15,11 +15,11 @@
 use async_channel::Receiver;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::UnionReceiveSink;
-use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
+use common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use common_sql::executor::physical_plans::UnionAll;
 use common_sql::executor::PhysicalPlan;
-use common_sql::executor::UnionAll;
 
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::PipelineBuilder;

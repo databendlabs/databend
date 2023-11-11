@@ -23,11 +23,10 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
-use common_pipeline_core::processors::port::InputPort;
-
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::Processor;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::Processor;
 
 pub struct FillInternalColumnProcessor {
     internal_columns: BTreeMap<FieldIndex, InternalColumn>,

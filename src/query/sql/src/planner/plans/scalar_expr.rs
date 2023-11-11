@@ -57,15 +57,16 @@ impl ScalarExpr {
         }
 
         impl<'a> Visitor<'a> for UsedColumnsVisitor {
-            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
                 self.columns.insert(col.column.index);
+                Ok(())
             }
         }
 
         let mut visitor = UsedColumnsVisitor {
             columns: ColumnSet::new(),
         };
-        visitor.visit_expr(self);
+        visitor.visit(self).unwrap();
         visitor.columns
     }
 
@@ -76,15 +77,16 @@ impl ScalarExpr {
         }
 
         impl<'a> Visitor<'a> for UsedTablesVisitor {
-            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
                 if let Some(table_index) = col.column.table_index {
                     self.tables.push(table_index);
                 }
+                Ok(())
             }
         }
 
         let mut visitor = UsedTablesVisitor { tables: vec![] };
-        visitor.visit_expr(self);
+        visitor.visit(self)?;
         Ok(visitor.tables)
     }
 
@@ -572,26 +574,31 @@ pub struct UDFServerCall {
 }
 
 pub trait Visitor<'a>: Sized {
-    fn visit_expr(&mut self, a: &'a ScalarExpr) {
-        walk_expr(self, a);
+    fn visit(&mut self, a: &'a ScalarExpr) -> Result<()> {
+        walk_expr(self, a)?;
+        Ok(())
     }
 
-    fn visit_bound_column_ref(&mut self, _col: &'a BoundColumnRef) {}
-    fn visit_constant_expr(&mut self, _constant: &'a ConstantExpr) {}
-    fn visit_window_function(&mut self, window: &'a WindowFunc) {
+    fn visit_bound_column_ref(&mut self, _col: &'a BoundColumnRef) -> Result<()> {
+        Ok(())
+    }
+    fn visit_constant(&mut self, _constant: &'a ConstantExpr) -> Result<()> {
+        Ok(())
+    }
+    fn visit_window_function(&mut self, window: &'a WindowFunc) -> Result<()> {
         for expr in &window.partition_by {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
         for expr in &window.order_by {
-            self.visit_expr(&expr.expr);
+            self.visit(&expr.expr)?;
         }
         match &window.func {
-            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func),
-            WindowFuncType::NthValue(func) => self.visit_expr(&func.arg),
+            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func)?,
+            WindowFuncType::NthValue(func) => self.visit(&func.arg)?,
             WindowFuncType::LagLead(func) => {
-                self.visit_expr(&func.arg);
+                self.visit(&func.arg)?;
                 if let Some(default) = func.default.as_ref() {
-                    self.visit_expr(default)
+                    self.visit(default)?
                 }
             }
             WindowFuncType::RowNumber
@@ -601,72 +608,84 @@ pub trait Visitor<'a>: Sized {
             | WindowFuncType::PercentRank
             | WindowFuncType::Ntile(_) => (),
         }
+        Ok(())
     }
-    fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) {
+    fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) -> Result<()> {
         for expr in &aggregate.args {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
+        Ok(())
     }
-    fn visit_lambda_function(&mut self, lambda: &'a LambdaFunc) {
+    fn visit_lambda_function(&mut self, lambda: &'a LambdaFunc) -> Result<()> {
         for expr in &lambda.args {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
-        self.visit_expr(&lambda.lambda_expr);
+        self.visit(&lambda.lambda_expr)?;
+        Ok(())
     }
-    fn visit_function_call(&mut self, func: &'a FunctionCall) {
+    fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
         for expr in &func.arguments {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
+        Ok(())
     }
-    fn visit_cast_expr(&mut self, cast: &'a CastExpr) {
-        self.visit_expr(&cast.argument);
+    fn visit_cast(&mut self, cast: &'a CastExpr) -> Result<()> {
+        self.visit(&cast.argument)?;
+        Ok(())
     }
-    fn visit_subquery_expr(&mut self, subquery: &'a SubqueryExpr) {
+    fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
         if let Some(child_expr) = subquery.child_expr.as_ref() {
-            self.visit_expr(child_expr)
+            self.visit(child_expr)?;
         }
+        Ok(())
     }
-    fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) {
+    fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) -> Result<()> {
         for expr in &udf.arguments {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
+        Ok(())
     }
 }
 
-pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) {
+pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
-        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant_expr(expr),
+        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(expr),
         ScalarExpr::WindowFunction(expr) => visitor.visit_window_function(expr),
         ScalarExpr::AggregateFunction(expr) => visitor.visit_aggregate_function(expr),
         ScalarExpr::LambdaFunction(expr) => visitor.visit_lambda_function(expr),
         ScalarExpr::FunctionCall(expr) => visitor.visit_function_call(expr),
-        ScalarExpr::CastExpr(expr) => visitor.visit_cast_expr(expr),
-        ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
+        ScalarExpr::CastExpr(expr) => visitor.visit_cast(expr),
+        ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFServerCall(expr) => visitor.visit_udf_server_call(expr),
     }
 }
 
 pub trait VisitorMut<'a>: Sized {
-    fn visit_expr(&mut self, a: &'a mut ScalarExpr) {
-        walk_expr_mut(self, a);
+    fn visit(&mut self, a: &'a mut ScalarExpr) -> Result<()> {
+        walk_expr_mut(self, a)?;
+        Ok(())
     }
-    fn visit_bound_column_ref(&mut self, _col: &'a mut BoundColumnRef) {}
-    fn visit_constant_expr(&mut self, _constant: &'a mut ConstantExpr) {}
-    fn visit_window_function(&mut self, window: &'a mut WindowFunc) {
+    fn visit_bound_column_ref(&mut self, _col: &'a mut BoundColumnRef) -> Result<()> {
+        Ok(())
+    }
+    fn visit_constant_expr(&mut self, _constant: &'a mut ConstantExpr) -> Result<()> {
+        Ok(())
+    }
+    fn visit_window_function(&mut self, window: &'a mut WindowFunc) -> Result<()> {
         for expr in &mut window.partition_by {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
         for expr in &mut window.order_by {
-            self.visit_expr(&mut expr.expr);
+            self.visit(&mut expr.expr)?;
         }
         match &mut window.func {
-            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func),
-            WindowFuncType::NthValue(func) => self.visit_expr(&mut func.arg),
+            WindowFuncType::Aggregate(func) => self.visit_aggregate_function(func)?,
+            WindowFuncType::NthValue(func) => self.visit(&mut func.arg)?,
             WindowFuncType::LagLead(func) => {
-                self.visit_expr(&mut func.arg);
+                self.visit(&mut func.arg)?;
                 if let Some(default) = func.default.as_mut() {
-                    self.visit_expr(default)
+                    self.visit(default)?
                 }
             }
             WindowFuncType::RowNumber
@@ -676,39 +695,49 @@ pub trait VisitorMut<'a>: Sized {
             | WindowFuncType::PercentRank
             | WindowFuncType::Ntile(_) => (),
         }
+        Ok(())
     }
-    fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) {
+    fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) -> Result<()> {
         for expr in &mut aggregate.args {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
+        Ok(())
     }
-    fn visit_lambda_function(&mut self, lambda: &'a mut LambdaFunc) {
+    fn visit_lambda_function(&mut self, lambda: &'a mut LambdaFunc) -> Result<()> {
         for expr in &mut lambda.args {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
-        self.visit_expr(&mut lambda.lambda_expr);
+        self.visit(&mut lambda.lambda_expr)?;
+        Ok(())
     }
-    fn visit_function_call(&mut self, func: &'a mut FunctionCall) {
+    fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {
         for expr in &mut func.arguments {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
+        Ok(())
     }
-    fn visit_cast_expr(&mut self, cast: &'a mut CastExpr) {
-        self.visit_expr(&mut cast.argument);
+    fn visit_cast_expr(&mut self, cast: &'a mut CastExpr) -> Result<()> {
+        self.visit(&mut cast.argument)?;
+        Ok(())
     }
-    fn visit_subquery_expr(&mut self, subquery: &'a mut SubqueryExpr) {
+    fn visit_subquery_expr(&mut self, subquery: &'a mut SubqueryExpr) -> Result<()> {
         if let Some(child_expr) = subquery.child_expr.as_mut() {
-            self.visit_expr(child_expr)
+            self.visit(child_expr)?;
         }
+        Ok(())
     }
-    fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) {
+    fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) -> Result<()> {
         for expr in &mut udf.arguments {
-            self.visit_expr(expr);
+            self.visit(expr)?;
         }
+        Ok(())
     }
 }
 
-pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(visitor: &mut V, expr: &'a mut ScalarExpr) {
+pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
+    visitor: &mut V,
+    expr: &'a mut ScalarExpr,
+) -> Result<()> {
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
         ScalarExpr::ConstantExpr(expr) => visitor.visit_constant_expr(expr),

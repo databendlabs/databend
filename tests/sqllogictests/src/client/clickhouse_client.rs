@@ -21,7 +21,6 @@ use sqllogictest::DefaultColumnType;
 
 use crate::error::DSqlLogicTestError::ClickHouseClient;
 use crate::error::Result;
-use crate::error::TextError;
 use crate::util::SET_SQL_RE;
 use crate::util::UNSET_SQL_RE;
 use crate::util::USE_SQL_RE;
@@ -98,8 +97,12 @@ impl ClickhouseHttpClient {
         let res = response.text().await?;
 
         if res.contains("error") {
-            let err: TextError = serde_json::from_str(&res).unwrap();
-            return Err(ClickHouseClient(err));
+            match serde_json::from_str(&res) {
+                Ok(err) => return Err(ClickHouseClient(err)),
+                Err(err) => {
+                    panic!("parser [{res}] json with {err}");
+                }
+            }
         }
 
         let rows: Vec<Vec<String>> = res
