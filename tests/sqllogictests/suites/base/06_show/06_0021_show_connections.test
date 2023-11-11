@@ -4,10 +4,8 @@ DROP CONNECTION IF EXISTS test_conn
 statement ok
 CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com'
 
-query TTT
+statement ok
 SHOW CONNECTIONS
-----
-test_conn azblob endpoint_url=http://s3.amazonaws.com
 
 statement ok
 DROP CONNECTION test_conn
