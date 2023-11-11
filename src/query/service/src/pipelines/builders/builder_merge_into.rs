@@ -51,6 +51,12 @@ use crate::pipelines::processors::DeduplicateRowNumber;
 use crate::pipelines::processors::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
 
+enum MergeIntoType {
+    MatechedOnly,
+    InsertOnly,
+    FullOperation,
+}
+
 impl PipelineBuilder {
     // Build and add row_number column
     pub(crate) fn build_add_row_number(
@@ -267,6 +273,8 @@ impl PipelineBuilder {
         } = merge_into;
 
         self.build_pipeline(input)?;
+
+        let merge_type = get_merge_type(matched.len(), unmatched.len())?;
 
         let tbl = self
             .ctx
@@ -654,5 +662,19 @@ impl PipelineBuilder {
         }
 
         Ok(())
+    }
+}
+
+fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoType> {
+    if matched_len == 0 && unmatched_len > 0 {
+        Ok(MergeIntoType::InsertOnly)
+    } else if unmatched_len == 0 && matched_len > 0 {
+        Ok(MergeIntoType::MatechedOnly)
+    } else if unmatched_len > 0 && matched_len > 0 {
+        Ok(MergeIntoType::FullOperation)
+    } else {
+        Err(ErrorCode::SemanticError(
+            "we must have macthed or unmatched clause at least one",
+        ))
     }
 }
