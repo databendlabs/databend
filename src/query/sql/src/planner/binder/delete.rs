@@ -27,10 +27,8 @@ use crate::binder::ScalarBinder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
-use crate::plans::AggregateFunction;
 use crate::plans::DeletePlan;
 use crate::plans::Filter;
-use crate::plans::LambdaFunc;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
@@ -38,7 +36,6 @@ use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
-use crate::plans::WindowFunc;
 use crate::BindContext;
 use crate::ScalarExpr;
 
