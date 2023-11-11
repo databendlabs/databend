@@ -15,8 +15,8 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_sources::EmptySource;
-use common_sql::executor::ReclusterSink;
-use common_sql::executor::ReclusterSource;
+use common_sql::executor::physical_plans::ReclusterSink;
+use common_sql::executor::physical_plans::ReclusterSource;
 use common_storages_fuse::FuseTable;
 
 use crate::pipelines::PipelineBuilder;

@@ -17,10 +17,10 @@ use common_expression::types::Int32Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_pipeline_core::processors::connect;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::DuplicateProcessor;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

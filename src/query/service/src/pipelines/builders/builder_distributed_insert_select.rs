@@ -14,7 +14,7 @@
 
 use common_catalog::table::AppendMode;
 use common_exception::Result;
-use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::physical_plans::DistributedInsertSelect;
 
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;

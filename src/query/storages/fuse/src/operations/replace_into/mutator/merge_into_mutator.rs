@@ -34,7 +34,7 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_metrics::storage::*;
 use common_sql::evaluator::BlockOperator;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::OnConflictField;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -63,11 +63,11 @@ use crate::operations::common::MutationLogs;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
-use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
-use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
-use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
-use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
+use crate::operations::replace_into::meta::DeletionByColumn;
+use crate::operations::replace_into::meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::UniqueKeyDigest;
+use crate::operations::replace_into::mutator::row_hash_of_columns;
+use crate::operations::replace_into::mutator::DeletionAccumulator;
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,

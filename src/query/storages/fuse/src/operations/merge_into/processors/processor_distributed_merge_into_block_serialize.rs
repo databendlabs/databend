@@ -22,13 +22,13 @@ use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Value;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 
 use super::processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
 use super::RowIdKind;
@@ -42,7 +42,6 @@ pub struct TransformDistributedMergeIntoBlockSerialize;
 
 /// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockSerialize {
-    #[allow(dead_code)]
     fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(
             input,

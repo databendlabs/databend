@@ -16,9 +16,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use crate::processors::port::InputPort;
-use crate::processors::port::OutputPort;
-use crate::processors::processor::ProcessorPtr;
+use crate::processors::InputPort;
+use crate::processors::OutputPort;
+use crate::processors::ProcessorPtr;
 
 #[derive(Clone)]
 pub struct PipeItem {

@@ -44,7 +44,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;

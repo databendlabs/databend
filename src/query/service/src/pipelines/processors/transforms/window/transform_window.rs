@@ -33,11 +33,11 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_sql::executor::LagLeadDefault;
+use common_sql::executor::physical_plans::LagLeadDefault;
 use common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
@@ -1252,9 +1252,9 @@ mod tests {
     use common_expression::FromData;
     use common_functions::aggregates::AggregateFunctionFactory;
     use common_pipeline_core::processors::connect;
-    use common_pipeline_core::processors::port::InputPort;
-    use common_pipeline_core::processors::port::OutputPort;
-    use common_pipeline_core::processors::processor::Event;
+    use common_pipeline_core::processors::Event;
+    use common_pipeline_core::processors::InputPort;
+    use common_pipeline_core::processors::OutputPort;
     use common_pipeline_core::processors::Processor;
     use common_sql::plans::WindowFuncFrameUnits;
 

@@ -14,12 +14,12 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::PipeItem;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 
 use crate::operations::merge_into::mutator::MatchedAggregator;
 
