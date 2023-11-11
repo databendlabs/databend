@@ -1,0 +1,23 @@
+statement ok
+drop table if exists onecolumn
+
+statement ok
+CREATE TABLE onecolumn (x INT NULL)
+
+statement ok
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42)
+
+statement ok
+drop table if exists empty
+
+statement ok
+CREATE TABLE empty (x INT)
+
+statement ok
+SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y)
+
+statement ok
+drop table onecolumn
+
+statement ok
+drop table empty
