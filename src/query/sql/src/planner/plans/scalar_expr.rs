@@ -96,15 +96,16 @@ impl ScalarExpr {
         }
 
         impl<'a> Visitor<'a> for AllColumnBindingsVisitor {
-            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
                 self.columns.insert(col.column.index, col.clone());
+                Ok(())
             }
         }
 
         let mut visitor = AllColumnBindingsVisitor {
             columns: HashMap::new(),
         };
-        visitor.visit_expr(self);
+        visitor.visit(self).unwrap();
         visitor.columns
     }
 
