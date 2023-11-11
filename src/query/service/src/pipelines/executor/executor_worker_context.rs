@@ -15,6 +15,8 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -68,21 +70,35 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task(&mut self) -> Result<Option<NodeIndex>> {
+    pub unsafe fn execute_task<const ENABLE_PROFILING: bool>(
+        &mut self,
+    ) -> Result<(NodeIndex, bool, Option<Duration>)> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
+            ExecutorTask::Sync(processor) => self.execute_sync_task::<ENABLE_PROFILING>(processor),
             ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok(Some(task.id)),
+                Ok(_) => Ok((task.id, true, task.elapsed)),
                 Err(cause) => Err(cause),
             },
         }
     }
 
     /// # Safety
-    unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<Option<NodeIndex>> {
-        processor.process()?;
-        Ok(Some(processor.id()))
+    unsafe fn execute_sync_task<const ENABLE_PROFILING: bool>(
+        &mut self,
+        proc: ProcessorPtr,
+    ) -> Result<(NodeIndex, bool, Option<Duration>)> {
+        match ENABLE_PROFILING {
+            true => {
+                let instant = Instant::now();
+                proc.process()?;
+                Ok((proc.id(), false, Some(instant.elapsed())))
+            }
+            false => {
+                proc.process()?;
+                Ok((proc.id(), false, None))
+            }
+        }
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {

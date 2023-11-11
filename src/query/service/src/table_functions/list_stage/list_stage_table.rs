@@ -29,7 +29,6 @@ use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;

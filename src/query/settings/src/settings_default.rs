@@ -338,13 +338,13 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(5),
+                    value: UserSettingValue::UInt64(10),
                     desc: "Sets the seconds that the table lock will expire in.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
+                    value: UserSettingValue::UInt64(15),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -475,6 +475,21 @@ impl DefaultSettings {
                         possible_values: None,
                         display_in_show_settings: true,
                 }),
+
+                ("external_server_connect_timeout_secs", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(10),
+                        desc: "Connection timeout to external server",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+
+                ("external_server_request_timeout_secs", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(180),
+                        desc: "Request timeout to external server",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+
                 ("enable_parquet_prewhere", DefaultSettingValue {
                         value: UserSettingValue::UInt64(0),
                         desc: "Enables parquet prewhere",

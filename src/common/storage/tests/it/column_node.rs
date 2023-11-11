@@ -53,7 +53,7 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
     let column_6_ids = vec![9];
     let column_7_ids = vec![10];
     let column_8_ids = vec![11, 12];
-    let expected_column_ids = vec![
+    let expected_column_ids = [
         ("u64", &column_1_ids),
         ("tuplearray", &column_2_ids),
         ("arraytuple", &column_3_ids),

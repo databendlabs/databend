@@ -469,7 +469,7 @@ mod tests {
         // ------|---
         // Hi      1
         // hello   2
-        let column1 = Value::Column(StringType::from_data(&["Hi", "Hello"]));
+        let column1 = Value::Column(StringType::from_data(vec!["Hi", "Hello"]));
         let column2 = Value::Column(NumberType::<u8>::from_data(vec![1, 2]));
         let mut saw = HashSet::new();
         let num_rows = 2;
@@ -483,7 +483,7 @@ mod tests {
         // ------|---
         // Hi      2
         // hello   3
-        let column1 = Value::Column(StringType::from_data(&["Hi", "Hello"]));
+        let column1 = Value::Column(StringType::from_data(vec!["Hi", "Hello"]));
         let column2 = Value::Column(NumberType::<u8>::from_data(vec![2, 3]));
         let columns = [&column1, &column2];
         let num_rows = 2;
@@ -496,7 +496,7 @@ mod tests {
         //  not_exist   1
         //  not_exist2  2
         //  Hi          1
-        let column1 = Value::Column(StringType::from_data(&["not_exist", "not_exist2", "Hi"]));
+        let column1 = Value::Column(StringType::from_data(vec!["not_exist", "not_exist2", "Hi"]));
         let column2 = Value::Column(NumberType::<u8>::from_data(vec![1, 2, 1]));
         let columns = [&column1, &column2];
         let num_rows = 3;

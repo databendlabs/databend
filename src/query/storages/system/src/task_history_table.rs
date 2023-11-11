@@ -33,7 +33,6 @@ use common_expression::types::TimestampType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -49,6 +48,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut definition: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
     let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
+    let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut state: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
     let mut exception_text: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut exception_code: Vec<i64> = Vec::with_capacity(task_runs.len());
@@ -65,6 +65,10 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         owner.push(tr.owner.into_bytes());
         comment.push(tr.comment.map(|s| s.into_bytes()));
         schedule.push(tr.schedule_options.map(|s| s.into_bytes()));
+        warehouse.push(
+            tr.warehouse_options
+                .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
+        );
         state.push(tr.state.to_string().into_bytes());
         exception_code.push(tr.error_code);
         exception_text.push(tr.error_message.map(|s| s.into_bytes()));
@@ -81,6 +85,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         StringType::from_data(owner),
         StringType::from_opt_data(comment),
         StringType::from_opt_data(schedule),
+        StringType::from_opt_data(warehouse),
         StringType::from_data(state),
         StringType::from_data(definition),
         StringType::from_data(run_id),

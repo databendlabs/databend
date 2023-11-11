@@ -3625,6 +3625,8 @@ Functions overloads:
 3 to_yyyymmddhhmmss(Timestamp NULL) :: UInt64 NULL
 0 today() :: Date
 0 tomorrow() :: Date
+0 translate(String, String, String) :: String
+1 translate(String NULL, String NULL, String NULL) :: String NULL
 0 trim(String) :: String
 1 trim(String NULL) :: String NULL
 0 trim_both(String, String) :: String

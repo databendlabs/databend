@@ -193,6 +193,7 @@ impl Binder {
             ));
         }
         self.push_down_other_conditions(
+            &join_type,
             &mut left_child,
             &mut right_child,
             other_conditions,
@@ -222,6 +223,7 @@ impl Binder {
 
     fn push_down_other_conditions(
         &self,
+        join_type: &JoinType,
         left_child: &mut SExpr,
         right_child: &mut SExpr,
         other_conditions: Vec<ScalarExpr>,
@@ -240,6 +242,27 @@ impl Binder {
         for predicate in other_conditions.iter() {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
+                JoinPredicate::ALL(_) => match join_type {
+                    JoinType::Cross
+                    | JoinType::Inner
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
+                        need_push_down = true;
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                    }
+                    JoinType::Full => non_equi_conditions.push(predicate.clone()),
+                },
                 JoinPredicate::Left(_) => {
                     need_push_down = true;
                     left_push_down.push(predicate.clone());

@@ -30,6 +30,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_pipeline_core::processors::profile::Profile;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
 use minitrace::prelude::*;
@@ -95,6 +96,24 @@ impl DataExchangeManager {
             "Query {} not found in cluster.",
             query_id
         )))
+    }
+
+    pub fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        let mut queries_profiles = HashMap::new();
+        for (query_id, coordinator) in queries_coordinator.iter() {
+            if let Some(executor) = coordinator
+                .info
+                .as_ref()
+                .and_then(|x| x.query_executor.as_ref())
+            {
+                queries_profiles.insert(query_id.clone(), executor.get_inner().get_profiles());
+            }
+        }
+
+        queries_profiles
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.
@@ -501,7 +520,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
+                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
                 .map(|(_, v)| v.convert_to_sender())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
@@ -533,7 +552,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
+                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
                 .map(|(_, v)| v.convert_to_receiver())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {

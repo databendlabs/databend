@@ -40,7 +40,7 @@ pub struct ProcessorAsyncTask {
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    inner: BoxFuture<'static, Result<()>>,
+    inner: BoxFuture<'static, (Duration, Result<()>)>,
 }
 
 impl ProcessorAsyncTask {
@@ -88,7 +88,7 @@ impl ProcessorAsyncTask {
                         );
                     }
                     Either::Right((res, _)) => {
-                        return res;
+                        return (start.elapsed(), res);
                     }
                 }
             }
@@ -116,17 +116,22 @@ impl Future for ProcessorAsyncTask {
 
         match catch_unwind(move || inner.poll(cx)) {
             Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready(res)) => {
+            Ok(Poll::Ready((elapsed, res))) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        res,
+                        Some(elapsed),
+                    ),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), None),
                 );
 
                 Poll::Ready(())

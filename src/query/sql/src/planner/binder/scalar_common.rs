@@ -69,7 +69,7 @@ where F: Fn(&ScalarExpr) -> bool
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
     match scalar {
-        ScalarExpr::FunctionCall(func) if func.func_name == "and" => vec![
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => [
             split_conjunctions(&func.arguments[0]),
             split_conjunctions(&func.arguments[1]),
         ]
@@ -96,12 +96,14 @@ pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
 /// Helper to determine join condition type from a scalar expression.
 /// Given a query: `SELECT * FROM t(a), t1(b) WHERE a = 1 AND b = 1 AND a = b AND a+b = 1`,
 /// the predicate types are:
+/// - ALL: `true`, `false`: SELECT * FROM t(a), t1(b) ON a = b AND true
 /// - Left: `a = 1`
 /// - Right: `b = 1`
 /// - Both: `a = b`
 /// - Other: `a+b = 1`
 #[derive(Clone, Debug)]
 pub enum JoinPredicate<'a> {
+    ALL(&'a ScalarExpr),
     Left(&'a ScalarExpr),
     Right(&'a ScalarExpr),
     Both {
@@ -121,6 +123,11 @@ impl<'a> JoinPredicate<'a> {
         if contain_subquery(scalar) {
             return Self::Other(scalar);
         }
+
+        if scalar.used_columns().is_empty() {
+            return Self::ALL(scalar);
+        }
+
         if satisfied_by(scalar, left_prop) {
             return Self::Left(scalar);
         }

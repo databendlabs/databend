@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::diverging_sub_expression)]
 
 mod config;
 mod log;

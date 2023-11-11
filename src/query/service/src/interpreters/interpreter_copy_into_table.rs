@@ -25,7 +25,6 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::physical_plans::CopyIntoTable;

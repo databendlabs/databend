@@ -89,8 +89,7 @@ impl PipelineBuilder {
         })?;
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines
-            .extend(build_res.sources_pipelines.into_iter());
+        self.pipelines.extend(build_res.sources_pipelines);
         Ok(rx)
     }
 }

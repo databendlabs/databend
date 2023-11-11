@@ -190,9 +190,7 @@ impl TableMutationAggregator {
             MutationLogEntry::CompactExtras { extras } => {
                 match self.mutations.entry(extras.segment_index) {
                     Entry::Occupied(mut v) => {
-                        v.get_mut()
-                            .replaced_blocks
-                            .extend(extras.unchanged_blocks.into_iter());
+                        v.get_mut().replaced_blocks.extend(extras.unchanged_blocks);
                     }
                     Entry::Vacant(v) => {
                         v.insert(BlockMutations {
