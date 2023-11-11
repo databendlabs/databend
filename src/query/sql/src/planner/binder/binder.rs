@@ -566,6 +566,8 @@ impl<'a> Binder {
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
             }
+            Statement::CreateStream(_) => todo!(),
+            Statement::DropStream(_) => todo!(),
         };
         Ok(plan)
     }

@@ -830,6 +830,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -879,6 +880,52 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     .map(|(_, columns, _)| columns)
                     .unwrap_or_default(),
                 query: Box::new(query),
+            })
+        },
+    );
+
+    let create_stream = map(
+        rule! {
+            CREATE ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ ON ~ TABLE ~ #dot_separated_idents_1_to_3
+            ~ (^#stream_point)?
+            ~ ( COMMENT ~ "=" ~ #literal_string )?
+        },
+        |(
+            _,
+            _,
+            opt_if_not_exists,
+            (catalog, database, stream),
+            _,
+            _,
+            (table_catalog, table_database, table),
+            stream_point,
+            opt_comment,
+        )| {
+            Statement::CreateStream(CreateStreamStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog,
+                database,
+                stream,
+                table_catalog,
+                table_database,
+                table,
+                stream_point,
+                comment: opt_comment.map(|(_, _, comment)| comment),
+            })
+        },
+    );
+    let drop_stream = map(
+        rule! {
+            DROP ~ STREAM ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, opt_if_exists, (catalog, database, stream))| {
+            Statement::DropStream(DropStreamStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                stream,
             })
         },
     );
@@ -1632,6 +1679,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+        ),
+        rule!(
+            #create_stream: "`CREATE STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<stream_point>] [COMMENT = '<string_literal>']`"
+            | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
         ),
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
@@ -3050,5 +3101,19 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
         rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
         |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
+    )(i)
+}
+
+pub fn stream_point(i: Input) -> IResult<StreamPoint> {
+    let mut at_stream = map(
+        rule! { AT ~ "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_3 ~ ")" },
+        |(_, _, _, _, (catalog, database, name), _)| StreamPoint::AtStream {
+            catalog,
+            database,
+            name,
+        },
+    );
+    rule!(
+        #at_stream
     )(i)
 }

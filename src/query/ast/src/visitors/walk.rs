@@ -287,6 +287,26 @@ pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a Tim
     }
 }
 
+pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
+    match point {
+        StreamPoint::AtStream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
+
+            if let Some(database) = database {
+                visitor.visit_identifier(database);
+            }
+
+            visitor.visit_identifier(name);
+        }
+    }
+}
+
 pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a JoinCondition) {
     match join_cond {
         JoinCondition::On(expr) => visitor.visit_expr(expr),
@@ -404,6 +424,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
+        Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),

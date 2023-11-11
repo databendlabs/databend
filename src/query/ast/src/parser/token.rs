@@ -885,6 +885,8 @@ pub enum TokenKind {
     STATUS,
     #[token("STORED", ignore(ascii_case))]
     STORED,
+    #[token("STREAM", ignore(ascii_case))]
+    STREAM,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]

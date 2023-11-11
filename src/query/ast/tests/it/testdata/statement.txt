@@ -2435,6 +2435,105 @@ AlterView(
 
 
 ---------- Input ----------
+create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COMMENT = 'this is a stream'
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    28..33,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                34..36,
+            ),
+        },
+        table_catalog: None,
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    46..50,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                51..52,
+            ),
+        },
+        stream_point: Some(
+            Stream {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        name: "test1",
+                        quote: None,
+                        span: Some(
+                            67..72,
+                        ),
+                    },
+                ),
+                name: Identifier {
+                    name: "s1",
+                    quote: None,
+                    span: Some(
+                        73..75,
+                    ),
+                },
+            },
+        ),
+        comment: Some(
+            "this is a stream",
+        ),
+    },
+)
+
+
+---------- Input ----------
+drop stream if exists test2.s2;
+---------- Output ---------
+DROP STREAM IF EXISTS test2.s2
+---------- AST ------------
+DropStream(
+    DropStreamStmt {
+        if_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    22..27,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                28..30,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 rename table d.t to e.s;
 ---------- Output ---------
 RENAME TABLE d.t TO e.s
