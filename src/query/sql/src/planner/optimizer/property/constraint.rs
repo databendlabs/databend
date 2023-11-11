@@ -92,7 +92,7 @@ impl ConstraintSet {
     pub fn simplify(&self) -> Vec<ScalarExpr> {
         let mut new_exprs = self.unsupported_constraints.clone();
         for (origin, constraint) in &self.constraints {
-            if let Some(new_constraints) = simplify(&constraint) {
+            if let Some(new_constraints) = simplify(constraint) {
                 let columns = origin.used_column_refs();
                 for new_constraint in new_constraints {
                     new_exprs.push(crate::optimizer::from_mir(&new_constraint, |col| {
