@@ -49,6 +49,7 @@ use crate::plans::CreateRolePlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
+use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -73,6 +74,7 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
+use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
@@ -210,6 +212,10 @@ pub enum Plan {
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
+
+    // Streams
+    CreateStream(Box<CreateStreamPlan>),
+    DropStream(Box<DropStreamPlan>),
 
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),

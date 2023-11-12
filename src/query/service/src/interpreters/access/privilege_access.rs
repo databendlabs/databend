@@ -585,6 +585,22 @@ impl AccessChecker for PrivilegeAccess {
                 )
                     .await?;
             }
+            Plan::CreateStream(plan) => {
+                self.validate_access(
+                    &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                    vec![UserPrivilegeType::Create],
+                    true,
+                )
+                    .await?;
+            }
+            Plan::DropStream(plan) => {
+                self.validate_access(
+                    &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                    vec![UserPrivilegeType::Drop],
+                    true,
+                )
+                    .await?;
+            }
             Plan::CreateUser(_) => {
                 self.validate_access(
                     &GrantObject::Global,

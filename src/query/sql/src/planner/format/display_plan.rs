@@ -100,6 +100,10 @@ impl Plan {
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
+            // Streams
+            Plan::CreateStream(create_stream) => Ok(format!("{:?}", create_stream)),
+            Plan::DropStream(drop_stream) => Ok(format!("{:?}", drop_stream)),
+
             // Indexes
             Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
             Plan::DropIndex(index) => Ok(format!("{:?}", index)),

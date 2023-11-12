@@ -236,6 +236,10 @@ impl InterpreterFactory {
                 *drop_view.clone(),
             )?)),
 
+            // Streams
+            Plan::CreateStream(_) => todo!(),
+            Plan::DropStream(_) => todo!(),
+
             // Indexes
             Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
                 ctx,
