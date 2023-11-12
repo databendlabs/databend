@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::TableMetaLocationGenerator;
@@ -27,10 +24,11 @@ use storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    table_ctx.get_settings().set_retention_period(0)?;
+    let fixture = TestFixture::new().await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_retention_period(0)?;
     fixture.create_variant_table().await?;
 
     let number_of_block = 2;
@@ -42,6 +40,7 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let dal = fuse_table.get_operator_ref();
 
     let virtual_columns = vec!["v:a".to_string(), "v:b".to_string()];
+    let table_ctx = fixture.new_query_ctx().await?;
     do_refresh_virtual_column(fuse_table, table_ctx, virtual_columns).await?;
 
     let snapshot_opt = fuse_table.read_table_snapshot().await?;

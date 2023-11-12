@@ -30,8 +30,6 @@ use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::schedulers::build_query_pipeline_without_render_result_set;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::execute_command;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use rand::thread_rng;
@@ -45,8 +43,8 @@ use crate::storages::fuse::operations::mutation::segments_compact_mutator::Compa
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
@@ -54,7 +52,7 @@ async fn test_compact() -> Result<()> {
 
     // insert
     let qry = format!("insert into {}.{}(id) values(10)", db_name, tbl_name);
-    execute_command(ctx.clone(), qry.as_str()).await?;
+    fixture.execute_command(qry.as_str()).await?;
 
     // compact
     let catalog = ctx
@@ -70,7 +68,7 @@ async fn test_compact() -> Result<()> {
     // insert
     for i in 0..9 {
         let qry = format!("insert into {}.{}(id) values({})", db_name, tbl_name, i);
-        execute_command(ctx.clone(), qry.as_str()).await?;
+        fixture.execute_command(qry.as_str()).await?;
     }
 
     // compact
@@ -98,7 +96,7 @@ async fn test_compact() -> Result<()> {
     );
     expects_ok(
         "check segment and block count",
-        execute_query(fixture.ctx(), qry.as_str()).await,
+        fixture.execute_query(qry.as_str()).await,
         expected,
     )
     .await?;
@@ -142,8 +140,8 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_data_operator()?.operator();
     let settings = ctx.get_settings();
     settings.set_max_threads(2)?;
