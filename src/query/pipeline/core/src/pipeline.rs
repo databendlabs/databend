@@ -14,6 +14,8 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -56,6 +58,9 @@ pub struct Pipeline {
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
+
+    plans_scope: Vec<PlanScope>,
+    scope_size: Arc<AtomicUsize>,
 }
 
 impl Debug for Pipeline {
@@ -77,6 +82,8 @@ impl Pipeline {
             on_init: None,
             on_finished: None,
             lock_guards: vec![],
+            plans_scope: vec![PlanScope::create(String::from("Result"))],
+            scope_size: Arc::new(AtomicUsize::new(1)),
         }
     }
 
@@ -113,7 +120,9 @@ impl Pipeline {
         )
     }
 
-    pub fn add_pipe(&mut self, pipe: Pipe) {
+    pub fn add_pipe(&mut self, mut pipe: Pipe) {
+        let scope_idx = self.scope_size.load(Ordering::SeqCst) - 1;
+        pipe.scope = self.plans_scope.get(scope_idx).cloned();
         self.pipes.push(pipe);
     }
 
@@ -235,14 +244,13 @@ impl Pipeline {
                 let processor = ResizeProcessor::create(pipe.output_length, new_size);
                 let inputs_port = processor.get_inputs();
                 let outputs_port = processor.get_outputs();
-                self.pipes
-                    .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
-                        PipeItem::create(
-                            ProcessorPtr::create(Box::new(processor)),
-                            inputs_port,
-                            outputs_port,
-                        ),
-                    ]));
+                self.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+                    PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        inputs_port,
+                        outputs_port,
+                    ),
+                ]));
                 Ok(())
             }
         }
@@ -280,8 +288,7 @@ impl Pipeline {
                         outputs_port,
                     ));
                 }
-                self.pipes
-                    .push(Pipe::create(input_len, output_len, pipe_items));
+                self.add_pipe(Pipe::create(input_len, output_len, pipe_items));
                 Ok(())
             }
         }
@@ -310,7 +317,7 @@ impl Pipeline {
                         vec![output1, output2],
                     ));
                 }
-                self.pipes.push(Pipe::create(
+                self.add_pipe(Pipe::create(
                     pipe.output_length,
                     pipe.output_length * 2,
                     items,
@@ -341,14 +348,9 @@ impl Pipeline {
                     outputs.push(OutputPort::create());
                 }
                 let processor = ShuffleProcessor::create(inputs.clone(), outputs.clone(), rule);
-                self.pipes
-                    .push(Pipe::create(inputs.len(), outputs.len(), vec![
-                        PipeItem::create(
-                            ProcessorPtr::create(Box::new(processor)),
-                            inputs,
-                            outputs,
-                        ),
-                    ]));
+                self.add_pipe(Pipe::create(inputs.len(), outputs.len(), vec![
+                    PipeItem::create(ProcessorPtr::create(Box::new(processor)), inputs, outputs),
+                ]));
             }
             _ => {}
         }
@@ -396,6 +398,21 @@ impl Pipeline {
             Some(on_finished) => on_finished,
         }
     }
+
+    pub fn add_plan_scope(&mut self, scope: PlanScope) -> PlanScopeGuard {
+        println!("add plan scope {:?}", scope.name);
+        let scope_idx = self.scope_size.fetch_add(1, Ordering::SeqCst);
+
+        if self.plans_scope.len() > scope_idx {
+            self.plans_scope[scope_idx] = scope;
+            self.plans_scope.shrink_to(scope_idx + 1);
+            return PlanScopeGuard::create(self.scope_size.clone(), scope_idx);
+        }
+
+        assert_eq!(self.plans_scope.len(), scope_idx);
+        self.plans_scope.push(scope);
+        PlanScopeGuard::create(self.scope_size.clone(), scope_idx)
+    }
 }
 
 impl Drop for Pipeline {
@@ -407,6 +424,44 @@ impl Drop for Pipeline {
             ));
 
             let _ = (on_finished)(&cause);
+        }
+    }
+}
+
+pub struct PlanScopeGuard {
+    idx: usize,
+    scope_size: Arc<AtomicUsize>,
+}
+
+impl PlanScopeGuard {
+    pub fn create(scope_size: Arc<AtomicUsize>, idx: usize) -> PlanScopeGuard {
+        PlanScopeGuard { idx, scope_size }
+    }
+}
+
+impl Drop for PlanScopeGuard {
+    fn drop(&mut self) {
+        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1 {
+            if !std::thread::panicking() {
+                panic!("");
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PlanScope {
+    id: usize,
+    parent_id: usize,
+    pub name: String,
+}
+
+impl PlanScope {
+    pub fn create(name: String) -> PlanScope {
+        PlanScope {
+            id: 0,
+            parent_id: 0,
+            name,
         }
     }
 }

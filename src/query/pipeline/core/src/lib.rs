@@ -33,3 +33,5 @@ pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
+pub use pipeline::PlanScope;
+pub use pipeline::PlanScopeGuard;

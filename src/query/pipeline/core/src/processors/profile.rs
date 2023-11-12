@@ -14,12 +14,16 @@
 
 use std::sync::atomic::AtomicU64;
 
+use crate::PlanScope;
+
 #[derive(Default)]
 pub struct Profile {
     /// The id of processor
     pub pid: usize,
     /// The name of processor
     pub p_name: String,
+
+    pub plan_name: Option<String>,
 
     /// The time spent to process in nanoseconds
     pub cpu_time: AtomicU64,
@@ -29,12 +33,13 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub fn create(pid: usize, p_name: String) -> Profile {
+    pub fn create(pid: usize, p_name: String, scope: Option<PlanScope>) -> Profile {
         Profile {
             pid,
             p_name,
             cpu_time: AtomicU64::new(0),
             wait_time: AtomicU64::new(0),
+            plan_name: scope.map(|x| x.name.clone()),
         }
     }
 }

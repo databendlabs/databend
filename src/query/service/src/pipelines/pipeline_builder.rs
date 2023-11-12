@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::FunctionContext;
 use common_pipeline_core::Pipeline;
+use common_pipeline_core::PlanScope;
 use common_profile::SharedProcessorProfiles;
 use common_settings::Settings;
 use common_sql::executor::PhysicalPlan;
@@ -104,6 +105,9 @@ impl PipelineBuilder {
     }
 
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
+        let _guard = self
+            .main_pipeline
+            .add_plan_scope(PlanScope::create(plan.name()));
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),

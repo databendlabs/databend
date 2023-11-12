@@ -56,6 +56,7 @@ impl SyncSystemTable for ProcessorProfileTable {
         let mut queries_id: Vec<Vec<u8>> = Vec::with_capacity(total_size);
         let mut pid: Vec<u64> = Vec::with_capacity(total_size);
         let mut p_name: Vec<Vec<u8>> = Vec::with_capacity(total_size);
+        let mut plan_name: Vec<Option<Vec<u8>>> = Vec::with_capacity(total_size);
         let mut cpu_time: Vec<u64> = Vec::with_capacity(total_size);
         let mut wait_time: Vec<u64> = Vec::with_capacity(total_size);
 
@@ -65,6 +66,7 @@ impl SyncSystemTable for ProcessorProfileTable {
                 queries_id.push(query_id.clone().into_bytes());
                 pid.push(query_profile.pid as u64);
                 p_name.push(query_profile.p_name.clone().into_bytes());
+                plan_name.push(query_profile.plan_name.clone().map(String::into_bytes));
 
                 cpu_time.push(query_profile.cpu_time.load(Ordering::Relaxed));
                 wait_time.push(query_profile.wait_time.load(Ordering::Relaxed));
@@ -76,6 +78,7 @@ impl SyncSystemTable for ProcessorProfileTable {
             StringType::from_data(queries_id),
             UInt64Type::from_data(pid),
             StringType::from_data(p_name),
+            StringType::from_opt_data(plan_name),
             UInt64Type::from_data(cpu_time),
             UInt64Type::from_data(wait_time),
         ]))
@@ -89,6 +92,10 @@ impl ProcessorProfileTable {
             TableField::new("query_id", TableDataType::String),
             TableField::new("pid", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("pname", TableDataType::String),
+            TableField::new(
+                "plan_name",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
             TableField::new("cpu_time", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("wait_time", TableDataType::Number(NumberDataType::UInt64)),
         ]);
