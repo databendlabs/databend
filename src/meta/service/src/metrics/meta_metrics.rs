@@ -370,12 +370,28 @@ pub mod raft_metrics {
                 .inc_by(bytes);
         }
 
+        pub fn incr_sent_result_to_peer(id: &NodeId, success: bool) {
+            if success {
+                // success is not collected.
+            } else {
+                incr_sent_failure_to_peer(id);
+            }
+        }
+
         pub fn incr_sent_failure_to_peer(id: &NodeId) {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_failures
                 .get_or_create(&ToLabels { to })
                 .inc();
+        }
+
+        pub fn incr_snapshot_send_result_to_peer(id: &NodeId, success: bool) {
+            if success {
+                incr_snapshot_send_success_to_peer(id);
+            } else {
+                incr_snapshot_send_failures_to_peer(id);
+            }
         }
 
         pub fn incr_snapshot_send_success_to_peer(id: &NodeId) {
