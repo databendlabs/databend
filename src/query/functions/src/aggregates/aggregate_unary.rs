@@ -32,12 +32,13 @@ use common_expression::StateAddr;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_skewness_v2::create_skewness;
+use crate::aggregates::aggregate_sum_v2::create_sum;
 use crate::aggregates::assert_unary_arguments;
 
 pub trait UnaryState<T>: Send + Sync + Default
 where T: ValueType
 {
-    fn add(&mut self, other: T::ScalarRef<'_>);
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self) -> Result<Option<Scalar>>;
@@ -136,13 +137,13 @@ where
             Some(bitmap) => {
                 for (value, is_valid) in column_iter.zip(bitmap.iter()) {
                     if is_valid {
-                        state.add(value);
+                        state.add(value)?;
                     }
                 }
             }
             None => {
                 for value in column_iter {
-                    state.add(value);
+                    state.add(value)?;
                 }
             }
         }
@@ -155,7 +156,7 @@ where
         let value = T::index_column(&column, row);
 
         let state: &mut S = place.get::<S>();
-        state.add(value.unwrap());
+        state.add(value.unwrap())?;
         Ok(())
     }
 
@@ -167,12 +168,12 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
-        let column_iter = T::iter_column(&column);
-        column_iter.zip(places.iter()).for_each(|(v, place)| {
-            let addr = place.next(offset);
-            let state: &mut S = addr.get::<S>();
-            state.add(v);
-        });
+
+        for (i, place) in places.iter().enumerate() {
+            let state: &mut S = place.next(offset).get::<S>();
+            state.add(T::index_column(&column, i).unwrap())?;
+        }
+
         Ok(())
     }
 
@@ -236,6 +237,7 @@ pub fn try_create_aggregate_unary_function(
 
     match display_name {
         "skewness_v2" => create_skewness(display_name, params, &arguments, &data_type),
+        "sum_v2" => create_sum(display_name, params, &arguments, &data_type),
         _ => Err(ErrorCode::UnknownAggregateFunction(format!(
             "{} aggregate function not exists",
             display_name

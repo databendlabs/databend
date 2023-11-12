@@ -136,7 +136,7 @@ impl Aggregators {
             aggregate_bitmap_intersect_count_function_desc(),
         );
 
-        let unary_func_names = vec!["skewness_v2"];
+        let unary_func_names = vec!["skewness_v2", "sum_v2"];
         for func_name in unary_func_names {
             factory.register(func_name, aggregate_unary_function_desc())
         }

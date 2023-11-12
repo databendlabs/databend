@@ -42,6 +42,7 @@ mod aggregate_skewness_v2;
 mod aggregate_stddev;
 mod aggregate_string_agg;
 mod aggregate_sum;
+mod aggregate_sum_v2;
 mod aggregate_unary;
 mod aggregate_window_funnel;
 mod aggregator;

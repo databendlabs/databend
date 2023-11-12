@@ -65,12 +65,13 @@ where
     T: ValueType + Sync + Send,
     T::Scalar: AsPrimitive<f64> + Sync + Send,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) {
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
         self.n += 1;
         self.sum += other;
         self.sum_sqr += other.powi(2);
         self.sum_cub += other.powi(3);
+        Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
