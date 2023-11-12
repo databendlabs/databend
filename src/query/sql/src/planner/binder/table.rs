@@ -466,25 +466,31 @@ impl Binder {
     async fn bind_subquery(
         &mut self,
         bind_context: &mut BindContext,
+        lateral: bool,
         subquery: &Query,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        // For subquery, we need to use a new context to bind it.
-        let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-        let (s_expr, mut res_bind_context) =
-            self.bind_query(&mut new_bind_context, subquery).await?;
+        // If the subquery is a lateral subquery, we need to let it see the columns
+        // from the previous queries.
+        let (result, mut result_bind_context) = if lateral {
+            let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            self.bind_query(&mut new_bind_context, subquery).await?
+        } else {
+            let mut new_bind_context = BindContext::new();
+            self.bind_query(&mut new_bind_context, subquery).await?
+        };
 
         if let Some(alias) = alias {
-            res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            result_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             // Reset column name as alias column name
             for i in 0..alias.columns.len() {
-                let column = &res_bind_context.columns[i];
+                let column = &result_bind_context.columns[i];
                 self.metadata
                     .write()
                     .change_derived_column_alias(column.index, column.column_name.clone());
             }
         }
-        Ok((s_expr, res_bind_context))
+        Ok((result, result_bind_context))
     }
 
     /// Bind a location.
@@ -561,9 +567,13 @@ impl Binder {
             }
             TableReference::Subquery {
                 span: _,
+                lateral,
                 subquery,
                 alias,
-            } => self.bind_subquery(bind_context, subquery, alias).await,
+            } => {
+                self.bind_subquery(bind_context, *lateral, subquery, alias)
+                    .await
+            }
             TableReference::Location {
                 span: _,
                 location,
@@ -756,7 +766,7 @@ impl Binder {
             match &*join.right {
                 TableReference::Join { .. } => {
                     let (left_expr, left_ctx) =
-                        self.bind_single_table(current_ctx, &join.left).await?;
+                        self.bind_single_table(&mut result_ctx, &join.left).await?;
                     let (join_expr, ctx) = self
                         .bind_join(
                             current_ctx,
@@ -772,7 +782,7 @@ impl Binder {
                 }
                 _ => {
                     let (right_expr, right_ctx) =
-                        self.bind_single_table(current_ctx, &join.right).await?;
+                        self.bind_single_table(&mut result_ctx, &join.right).await?;
                     let (join_expr, ctx) = self
                         .bind_join(
                             current_ctx,

@@ -110,6 +110,7 @@ impl VisitorMut for DistinctToGroupBy {
                         }],
                         from: vec![TableReference::Subquery {
                             span: None,
+                            lateral: false,
                             subquery: Box::new(subquery),
                             alias: Some(TableAlias {
                                 name: Identifier::from_name(sub_query_name),

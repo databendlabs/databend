@@ -2814,12 +2814,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             TableReference::Subquery {
                 span: _,
+                lateral,
                 subquery,
                 alias,
             } => {
                 self.visit_query(subquery);
                 let child = self.children.pop().unwrap();
-                let name = "Subquery".to_string();
+                let name = if *lateral {
+                    "LateralSubquery"
+                } else {
+                    "Subquery"
+                }
+                .to_string();
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(name, 1, Some(format!("{}", alias)))
                 } else {
