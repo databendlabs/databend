@@ -143,8 +143,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // File logger
     if cfg.file.on {
-        let (normal_log_file, flush_guard) =
-            new_file_log_writer(&cfg.file.dir, format!("databend-query-{name}"));
+        let (normal_log_file, flush_guard) = new_file_log_writer(&cfg.file.dir, name);
 
         guards.push(Box::new(flush_guard));
 
