@@ -7,6 +7,13 @@ grpc_api_address        = "0.0.0.0:9191"
 # in case databend-meta cluster changes.
 grpc_api_advertise_host = "127.0.0.1"
 
+[log]
+
+[log.file]
+level = "WARN"
+format = "text"
+dir = "/var/log/databend"
+
 [raft_config]
 id            = 1
 raft_dir      = "/var/lib/databend/raft"
