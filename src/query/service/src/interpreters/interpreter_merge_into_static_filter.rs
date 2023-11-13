@@ -530,6 +530,8 @@ impl MergeIntoInterpreter {
         };
         let agg_final_sexpr =
             SExpr::create_unary(Arc::new(agg_final_op.into()), Arc::new(agg_partial_sexpr));
+        // for ci testing only, will be removed later
+        info!("meaningless log");
         Ok(Plan::Query {
             s_expr: Box::new(agg_final_sexpr),
             metadata: metadata.clone(),
@@ -539,7 +541,4 @@ impl MergeIntoInterpreter {
             ignore_result: false,
         })
     }
-
-    // for ci testing only, will be removed later
-    pub fn meaningless() {}
 }
