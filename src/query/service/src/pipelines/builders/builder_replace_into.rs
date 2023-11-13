@@ -30,24 +30,24 @@ use common_formats::FastFieldDecoderValues;
 use common_formats::FastValuesDecodeFallback;
 use common_formats::FastValuesDecoder;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::Pipe;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_pipeline_transforms::processors::transforms::create_dummy_item;
-use common_sql::executor::ReplaceAsyncSourcer;
-use common_sql::executor::ReplaceDeduplicate;
-use common_sql::executor::ReplaceInto;
-use common_sql::executor::SelectCtx;
+use common_pipeline_transforms::processors::create_dummy_item;
+use common_sql::executor::physical_plans::ReplaceAsyncSourcer;
+use common_sql::executor::physical_plans::ReplaceDeduplicate;
+use common_sql::executor::physical_plans::ReplaceInto;
+use common_sql::executor::physical_plans::ReplaceSelectCtx;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
-use common_storages_fuse::operations::replace_into::BroadcastProcessor;
-use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
-use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
+use common_storages_fuse::operations::processors::BroadcastProcessor;
+use common_storages_fuse::operations::processors::ReplaceIntoProcessor;
+use common_storages_fuse::operations::processors::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
@@ -268,7 +268,7 @@ impl PipelineBuilder {
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;
         let mut opt_modified_schema = None;
-        if let Some(SelectCtx {
+        if let Some(ReplaceSelectCtx {
             select_column_bindings,
             select_schema,
         }) = select_ctx

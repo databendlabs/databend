@@ -30,4 +30,5 @@ pub use context::create_query_context_with_session;
 pub use context::ClusterDescriptor;
 pub use sessions::TestGlobalServices;
 pub use sessions::TestGuard;
+pub use table_test_fixture::Setup;
 pub use table_test_fixture::TestFixture;

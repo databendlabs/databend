@@ -599,6 +599,9 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		# for killall & timeout
 		install_pkg psmisc "$PACKAGE_MANAGER"
 		install_pkg coreutils "$PACKAGE_MANAGER"
+		# for graphviz, that fuzzingbook depends on
+		install_pkg graphviz "$PACKAGE_MANAGER"
+		install_pkg graphviz-dev "$PACKAGE_MANAGER"
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers

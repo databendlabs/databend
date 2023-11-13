@@ -25,7 +25,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
-use common_sql::executor::ReclusterTask;
+use common_sql::executor::physical_plans::ReclusterTask;
 use common_storage::ColumnNodes;
 use indexmap::IndexSet;
 use itertools::Itertools;

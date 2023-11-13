@@ -25,8 +25,8 @@ use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::StateAddr;
-use common_sql::executor::LagLeadDefault;
-use common_sql::executor::WindowFunction;
+use common_sql::executor::physical_plans::LagLeadDefault;
+use common_sql::executor::physical_plans::WindowFunction;
 
 use crate::pipelines::processors::transforms::group_by::Area;
 

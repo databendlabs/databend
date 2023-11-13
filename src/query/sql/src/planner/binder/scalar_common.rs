@@ -18,14 +18,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 
-use crate::binder::scalar_visitor::Recursion;
-use crate::binder::scalar_visitor::ScalarVisitor;
 use crate::optimizer::RelationalProperty;
+use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::Visitor;
 use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
@@ -51,19 +51,19 @@ where F: Fn(&ScalarExpr) -> bool
     }
 }
 
-impl<'a, F> ScalarVisitor for Finder<'a, F>
+impl<'a, F> Visitor<'a> for Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
-    fn pre_visit(mut self, scalar: &ScalarExpr) -> Result<Recursion<Self>> {
-        if (self.find_fn)(scalar) {
-            if !(self.scalars.contains(scalar)) {
-                self.scalars.push((*scalar).clone())
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if (self.find_fn)(expr) {
+            if !(self.scalars.contains(expr)) {
+                self.scalars.push((*expr).clone())
             }
             // stop recursing down this expr once we find a match
-            return Ok(Recursion::Stop(self));
+        } else {
+            walk_expr(self, expr)?;
         }
-
-        Ok(Recursion::Continue(self))
+        Ok(())
     }
 }
 

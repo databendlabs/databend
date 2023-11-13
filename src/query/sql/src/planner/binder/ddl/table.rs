@@ -118,6 +118,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
@@ -1120,9 +1121,10 @@ impl Binder {
                 _ => None,
             };
 
-            VacuumTableOption {
+            VacuumDropTableOption {
                 retain_hours,
                 dry_run: option.dry_run,
+                limit: option.limit,
             }
         };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {

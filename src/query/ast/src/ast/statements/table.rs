@@ -525,7 +525,7 @@ impl Display for VacuumTableStmt {
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    pub option: VacuumTableOption,
+    pub option: VacuumDropTableOption,
 }
 
 impl Display for VacuumDropTableStmt {
@@ -656,6 +656,32 @@ impl Display for VacuumTableOption {
             } else {
                 write!(f, "DRY RUN")?;
             }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumDropTableOption {
+    pub retain_hours: Option<Expr>,
+    pub dry_run: Option<()>,
+    pub limit: Option<usize>,
+}
+
+impl Display for VacuumDropTableOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(retain_hours) = &self.retain_hours {
+            write!(f, "RETAIN {} HOURS", retain_hours)?;
+        }
+        if self.dry_run.is_some() {
+            if self.retain_hours.is_some() {
+                write!(f, " DRY RUN")?;
+            } else {
+                write!(f, "DRY RUN")?;
+            }
+        }
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {}", limit)?;
         }
         Ok(())
     }

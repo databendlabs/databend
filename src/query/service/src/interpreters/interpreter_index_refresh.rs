@@ -31,7 +31,7 @@ use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::UpdateIndexReq;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::PhysicalPlan;

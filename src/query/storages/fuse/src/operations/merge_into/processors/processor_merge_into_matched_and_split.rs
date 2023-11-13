@@ -28,14 +28,14 @@ use common_expression::FieldIndex;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_metrics::storage::*;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::PipeItem;
 use common_sql::evaluator::BlockOperator;
-use common_sql::executor::MatchExpr;
+use common_sql::executor::physical_plans::MatchExpr;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
@@ -55,6 +55,7 @@ impl BlockMetaInfo for SourceFullMatched {
     }
 }
 
+#[allow(dead_code)]
 enum MutationKind {
     Update(UpdateDataBlockMutation),
     Delete(DeleteDataBlockMutation),

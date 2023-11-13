@@ -22,6 +22,7 @@ use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::AppendMode;
 use common_config::GlobalConfig;
+use common_config::InnerConfig;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
@@ -43,12 +44,17 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::PasswordHashMethod;
+use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_types::MatchSeq;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
@@ -57,6 +63,11 @@ use common_sql::plans::DeletePlan;
 use common_sql::plans::UpdatePlan;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
+use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
+use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
@@ -82,74 +93,157 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::Session;
+use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
-use crate::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
-use crate::storages::fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use crate::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
-use crate::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use crate::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::storages::Table;
-use crate::test_kits::create_query_context_with_config;
 use crate::test_kits::ConfigBuilder;
+use crate::test_kits::TestGlobalServices;
 use crate::test_kits::TestGuard;
 
 pub struct TestFixture {
-    ctx: Arc<QueryContext>,
-    _guard: TestGuard,
+    default_ctx: Arc<QueryContext>,
+    default_session: Arc<Session>,
+    conf: InnerConfig,
     prefix: String,
+    _guard: TestGuard,
+}
+
+#[async_trait::async_trait]
+pub trait Setup {
+    async fn setup(&self) -> Result<(TestGuard, InnerConfig)>;
+}
+
+struct OSSSetup {
+    config: InnerConfig,
+}
+
+#[async_trait::async_trait]
+impl Setup for OSSSetup {
+    async fn setup(&self) -> Result<(TestGuard, InnerConfig)> {
+        Ok((
+            TestGlobalServices::setup(&self.config).await?,
+            self.config.clone(),
+        ))
+    }
 }
 
 impl TestFixture {
-    pub async fn new() -> TestFixture {
-        let tmp_dir = TempDir::new().unwrap();
-        let mut conf = ConfigBuilder::create().config();
+    pub async fn new() -> Result<TestFixture> {
+        let mut config = ConfigBuilder::create().config();
+        let tmp_dir = TempDir::new().expect("create tmp dir failed");
+        let root = tmp_dir.path().to_str().unwrap().to_string();
+        config.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        Self::with_setup(OSSSetup { config }).await
+    }
+    pub async fn with_setup(setup: impl Setup) -> Result<TestFixture> {
+        let (guard, conf) = setup.setup().await?;
 
-        // make sure we are using `fs` storage
-        conf.storage.params = StorageParams::Fs(StorageFsConfig {
-            // use `TempDir` as root path (auto clean)
-            root: tmp_dir.path().to_str().unwrap().to_string(),
-        });
+        let default_session = Self::create_session(SessionType::Dummy).await?;
+        let default_ctx = default_session.create_query_context().await?;
 
-        let (_guard, ctx) = create_query_context_with_config(conf, None).await.unwrap();
-        TestFixture::new_with_ctx(_guard, ctx).await
+        let random_prefix: String = Uuid::new_v4().simple().to_string();
+
+        // prepare a randomly named default database
+        {
+            let tenant = default_ctx.get_tenant();
+            let db_name = gen_db_name(&random_prefix);
+            let plan = CreateDatabasePlan {
+                catalog: "default".to_owned(),
+                tenant,
+                if_not_exists: false,
+                database: db_name,
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..Default::default()
+                },
+            };
+
+            default_ctx
+                .get_catalog("default")
+                .await
+                .unwrap()
+                .create_database(plan.into())
+                .await?;
+        }
+
+        Ok(Self {
+            default_ctx,
+            default_session,
+            conf,
+            prefix: random_prefix,
+            _guard: guard,
+        })
+    }
+    pub async fn with_config(mut config: InnerConfig) -> Result<TestFixture> {
+        let tmp_dir = TempDir::new().expect("create tmp dir failed");
+        let root = tmp_dir.path().to_str().unwrap().to_string();
+        config.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        Self::with_setup(OSSSetup { config }).await
     }
 
-    pub async fn new_with_ctx(_guard: TestGuard, ctx: Arc<QueryContext>) -> TestFixture {
-        let tenant = ctx.get_tenant();
-        let random_prefix: String = Uuid::new_v4().simple().to_string();
-        // prepare a randomly named default database
-        let db_name = gen_db_name(&random_prefix);
-        let plan = CreateDatabasePlan {
-            catalog: "default".to_owned(),
-            tenant,
-            if_not_exists: false,
-            database: db_name,
-            meta: DatabaseMeta {
-                engine: "".to_string(),
-                ..Default::default()
-            },
-        };
-        ctx.get_catalog("default")
-            .await
-            .unwrap()
-            .create_database(plan.into())
-            .await
-            .unwrap();
+    async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        });
 
-        Self {
-            ctx,
-            _guard,
-            prefix: random_prefix,
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
+        );
+
+        let dummy_session = SessionManager::instance()
+            .create_session(session_type)
+            .await?;
+
+        dummy_session.set_authed_user(user_info, None).await?;
+        dummy_session.get_settings().set_max_threads(8)?;
+
+        Ok(dummy_session)
+    }
+
+    pub fn default_session(&self) -> Arc<Session> {
+        self.default_session.clone()
+    }
+
+    /// returns new QueryContext of default session
+    pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
+        self.default_session.create_query_context().await
+    }
+
+    /// returns a new session, for test cases that need to tweak session setting,
+    /// please use this method.
+    pub async fn new_session(&self) -> Result<Arc<Session>> {
+        Self::create_session(SessionType::Dummy).await
+    }
+
+    pub async fn new_session_with_type(&self, session_type: SessionType) -> Result<Arc<Session>> {
+        Self::create_session(session_type).await
+    }
+
+    pub fn conf(&self) -> &InnerConfig {
+        &self.conf
+    }
+
+    pub fn storage_root(&self) -> &str {
+        match &self.conf.storage.params {
+            StorageParams::Fs(fs) => &fs.root,
+            _ => {
+                unreachable!()
+            }
         }
     }
 
-    pub fn ctx(&self) -> Arc<QueryContext> {
-        self.ctx.clone()
-    }
-
     pub fn default_tenant(&self) -> String {
-        self.ctx().get_tenant()
+        self.conf.query.tenant_id.clone()
     }
 
     pub fn default_db_name(&self) -> String {
@@ -308,29 +402,33 @@ impl TestFixture {
 
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_create_table_plan();
-        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.ctx.clone()).await?;
+        let interpreter =
+            CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
     pub async fn create_normal_table(&self) -> Result<()> {
         let create_table_plan = self.normal_create_table_plan();
-        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.ctx.clone()).await?;
+        let interpreter =
+            CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
     pub async fn create_variant_table(&self) -> Result<()> {
         let create_table_plan = self.variant_create_table_plan();
-        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.ctx.clone()).await?;
+        let interpreter =
+            CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
     pub async fn create_computed_table(&self) -> Result<()> {
         let create_table_plan = self.computed_create_table_plan();
-        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.ctx.clone()).await?;
+        let interpreter =
+            CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -527,7 +625,8 @@ impl TestFixture {
     }
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
-        self.ctx
+        // table got from catalog is always fresh
+        self.default_ctx
             .get_catalog(CATALOG_DEFAULT)
             .await?
             .get_table(
@@ -549,28 +648,30 @@ impl TestFixture {
         let source_schema = &table.schema().remove_computed_fields();
         let mut build_res = PipelineBuildResult::create();
 
+        let ctx = self.new_query_ctx().await?;
+
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
         build_res.main_pipeline.add_source(
-            |output| BlocksSource::create(self.ctx.clone(), output, blocks.clone()),
+            |output| BlocksSource::create(ctx.clone(), output, blocks.clone()),
             1,
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
         PipelineBuilder::build_fill_missing_columns_pipeline(
-            self.ctx.clone(),
+            ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),
             data_schema,
         )?;
 
         table.append_data(
-            self.ctx.clone(),
+            ctx.clone(),
             &mut build_res.main_pipeline,
             AppendMode::Normal,
         )?;
         if commit {
             table.commit_insertion(
-                self.ctx.clone(),
+                ctx.clone(),
                 &mut build_res.main_pipeline,
                 None,
                 overwrite,
@@ -582,7 +683,21 @@ impl TestFixture {
                 .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         }
 
-        execute_pipeline(self.ctx.clone(), build_res)
+        execute_pipeline(ctx, build_res)
+    }
+
+    pub async fn execute_command(&self, query: &str) -> Result<()> {
+        let res = self.execute_query(query).await?;
+        res.try_collect::<Vec<DataBlock>>().await?;
+        Ok(())
+    }
+
+    pub async fn execute_query(&self, query: &str) -> Result<SendableDataBlockStream> {
+        let ctx = self.new_query_ctx().await?;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        executor.execute(ctx).await
     }
 }
 
@@ -765,11 +880,14 @@ pub async fn append_sample_data_of_v4(num_blocks: usize, fixture: &TestFixture) 
         copied_files: None,
         deduplicated_label: None,
     };
-    let catalog = fixture.ctx.get_catalog(table_info.catalog()).await?;
+    let catalog = fixture
+        .default_ctx
+        .get_catalog(table_info.catalog())
+        .await?;
     catalog.update_table_meta(table_info, req).await?;
 
     // evict the cache
-    fixture.ctx().evict_table_from_cache(
+    fixture.new_query_ctx().await?.evict_table_from_cache(
         &fixture.default_catalog_name(),
         &fixture.default_db_name(),
         &fixture.default_table_name(),
@@ -780,7 +898,7 @@ pub async fn append_sample_data_of_v4(num_blocks: usize, fixture: &TestFixture) 
 
 pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     let table = fixture.latest_default_table().await?;
-    table.analyze(fixture.ctx.clone()).await
+    table.analyze(fixture.default_ctx.clone()).await
 }
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
@@ -976,7 +1094,7 @@ pub async fn check_data_dir(
                 table_statistic_files.push(entry_path.to_string());
             } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
                 let content = fixture
-                    .ctx
+                    .default_ctx
                     .get_data_operator()?
                     .operator()
                     .read(entry_path)
@@ -1073,7 +1191,7 @@ pub async fn history_should_have_item(
 
     expects_ok(
         format!("{}: count_of_history_item_should_be_1", case_name),
-        execute_query(fixture.ctx(), qry.as_str()).await,
+        fixture.execute_query(qry.as_str()).await,
         expected,
     )
     .await

@@ -706,7 +706,7 @@ impl TableContext for CtxDelegation {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",
         fixture.default_db_name().as_str(),
@@ -717,7 +717,7 @@ async fn test_get_same_table_once() -> Result<()> {
         fixture.default_table_name().as_str()
     );
     fixture.create_default_table().await?;
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
     let faked_catalog = FakedCatalog {
         cat: catalog,

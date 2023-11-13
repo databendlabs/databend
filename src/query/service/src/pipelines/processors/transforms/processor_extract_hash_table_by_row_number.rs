@@ -26,12 +26,12 @@ use common_expression::DataField;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_metrics::storage::*;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::PipeItem;
 
 use super::hash_join::HashJoinBuildState;
 use super::processor_deduplicate_row_number::get_row_number;
