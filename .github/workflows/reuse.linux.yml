@@ -184,19 +184,23 @@ jobs:
           - "ydb"
           - "tpcds"
           - "tpch"
+        handler:
+          - "mysql"
+          - "http"
+          - "clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: http
+          handlers: ${{ matrix.handler }}
           storage-format: all
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}
+          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
 
   sqllogic_standalone_udf_server:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -285,18 +289,22 @@ jobs:
           - "tpcds"
           - "tpch"
           - "cluster"
+        handler:
+          - "mysql"
+          - "http"
+          - "clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: http
+          handlers: ${{ matrix.handler }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-cluster-${{ matrix.dirs }}
+          name: test-sqllogic-cluster-${{ matrix.dirs }}-${{ matrix.handler }}
 
   sqllogic_stage:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
