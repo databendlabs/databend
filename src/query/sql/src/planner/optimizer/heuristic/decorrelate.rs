@@ -426,7 +426,7 @@ impl SubqueryRewriter {
         }
     }
 
-    fn flatten(
+    pub fn flatten(
         &mut self,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
@@ -862,7 +862,7 @@ impl SubqueryRewriter {
         }
     }
 
-    fn add_equi_conditions(
+    pub fn add_equi_conditions(
         &self,
         span: Span,
         correlated_columns: &HashSet<IndexType>,
