@@ -225,7 +225,7 @@ impl Session {
         self.privilege_mgr.get_current_role()
     }
 
-    pub fn get_secondary_roles(self: &Arc<Self>) -> Option<Vec<RoleInfo>> {
+    pub fn get_secondary_roles(self: &Arc<Self>) -> Option<Vec<String>> {
         self.privilege_mgr.get_secondary_roles()
     }
 

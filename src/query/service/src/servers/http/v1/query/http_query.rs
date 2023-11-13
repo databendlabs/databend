@@ -439,13 +439,6 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     async fn get_response_session(&self) -> HttpSessionConf {
-        let executor = self.state.read().await;
-        let session_state = executor.get_session_state();
-        let settings = session_state
-            .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
-            .collect::<BTreeMap<_, _>>();
         let keep_server_session_secs = self
             .request
             .session
@@ -453,23 +446,25 @@ impl HttpQuery {
             .map(|v| v.keep_server_session_secs)
             .unwrap_or(None);
 
-        // TODO(liyz): known issue here, this will make SET ROLE statement not work in bendsql, refactor using the secondary role in the short time.
-        // https://github.com/datafuselabs/databend/issues/13544
-        let role = self
-            .request
-            .session
-            .as_ref()
-            .map(|s| s.role.clone())
-            .unwrap_or_default();
-        let secondary_roles = self
-            .request
-            .session
-            .as_ref()
-            .map(|s| s.secondary_roles.clone())
-            .unwrap_or_default();
+        // reply the updated session state, includes:
+        // - current_database: updated by USE XXX;
+        // - role: updated by SET ROLE;
+        // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
+        // - settings: updated by SET XXX = YYY;
+        let executor = self.state.read().await;
+        let session_state = executor.get_session_state();
+
+        let settings = session_state
+            .settings
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let database = session_state.current_database.clone();
+        let role = session_state.current_role.clone();
+        let secondary_roles = session_state.secondary_roles.clone();
 
         HttpSessionConf {
-            database: Some(session_state.current_database),
+            database: Some(database),
             role,
             secondary_roles,
             keep_server_session_secs,
