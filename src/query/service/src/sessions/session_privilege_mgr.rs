@@ -192,7 +192,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             .map(|r| vec![r.name])
             .unwrap_or_default();
 
-        // if secondary_roles is set to be empty, return the current role and its related roles.
+        // if secondary_roles is set to be Some([]), only return the current role and its related roles.
         // if the secondary_roles is set to be non-empty, return both current_role and the secondary_roles
         // and their related roles.
         let secondary_roles = secondary_roles.unwrap_or_default();
