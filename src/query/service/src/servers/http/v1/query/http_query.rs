@@ -136,6 +136,8 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
@@ -245,6 +247,10 @@ impl HttpQuery {
             if let Some(role) = &session_conf.role {
                 session.set_current_role_checked(role).await?;
             }
+            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+            session
+                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
+                .await?;
             // TODO(liyz): pass secondary roles here
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
@@ -455,10 +461,17 @@ impl HttpQuery {
             .as_ref()
             .map(|s| s.role.clone())
             .unwrap_or_default();
+        let secondary_roles = self
+            .request
+            .session
+            .as_ref()
+            .map(|s| s.secondary_roles.clone())
+            .unwrap_or_default();
 
         HttpSessionConf {
             database: Some(session_state.current_database),
             role,
+            secondary_roles,
             keep_server_session_secs,
             settings: Some(settings),
         }
