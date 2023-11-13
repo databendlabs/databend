@@ -18,6 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
@@ -112,7 +113,7 @@ impl AccessChecker for ManagementModeAccess {
                     let database = &plan.database;
                     let table = &plan.table;
                     let table = ctx.get_table(catalog, database, table).await?;
-                    table.get_table_info().engine() != VIEW_ENGINE
+                    matches!(table.get_table_info().engine(), VIEW_ENGINE|STREAM_ENGINE)
                 },
                 _ => false,
             };

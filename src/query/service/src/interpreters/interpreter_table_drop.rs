@@ -23,6 +23,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropTablePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_spec;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 
@@ -66,10 +67,16 @@ impl Interpreter for DropTableInterpreter {
             )));
         }
         if let Some(tbl) = tbl {
-            if tbl.get_table_info().engine() == VIEW_ENGINE {
+            let engine = tbl.get_table_info().engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is VIEW that doesn't support drop, use `DROP VIEW {}.{}` instead",
-                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                    "{}.{} engine is {} that doesn't support drop, use `DROP {} {}.{}` instead",
+                    &self.plan.database,
+                    &self.plan.table,
+                    engine,
+                    engine,
+                    &self.plan.database,
+                    &self.plan.table
                 )));
             }
             let catalog = self.ctx.get_catalog(catalog_name).await?;

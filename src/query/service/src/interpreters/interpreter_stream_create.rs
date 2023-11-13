@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
@@ -28,6 +29,7 @@ use common_storages_stream::stream_table::StreamTable;
 use common_storages_stream::stream_table::MODE_APPEND_ONLY;
 use common_storages_stream::stream_table::OPT_KEY_MODE;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
+use common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use common_storages_stream::stream_table::STREAM_ENGINE;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -64,7 +66,7 @@ impl Interpreter for CreateStreamInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_info = fuse_table.get_table_info();
-        let table_id = table_info.ident.table_id;
+        let table_id = table_info.ident.table_id.to_string();
         let table_version = table_info.ident.seq;
 
         let mut options = BTreeMap::new();
@@ -72,9 +74,20 @@ impl Interpreter for CreateStreamInterpreter {
             Some(StreamNavigation::AtStream { database, name }) => {
                 let stream = catalog.get_table(tenant.as_str(), database, name).await?;
                 let stream = StreamTable::try_from_table(stream.as_ref())?;
+                let stream_opts = stream.get_table_info().options();
+                let stream_table_id = stream_opts
+                    .get(OPT_KEY_TABLE_ID)
+                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
+                if stream_table_id != &table_id {
+                    return Err(ErrorCode::IllegalStream(format!(
+                        "The stream '{name}' is not match the table '{}'",
+                        plan.table_name
+                    )));
+                }
                 options = stream.get_table_info().options().clone();
             }
             None => {
+                options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
                 options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
                 options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
                 options.insert(OPT_KEY_MODE.to_string(), MODE_APPEND_ONLY.to_string());

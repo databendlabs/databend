@@ -61,11 +61,13 @@ impl Interpreter for DropViewInterpreter {
         }
 
         if let Some(table) = &tbl {
-            if table.get_table_info().engine() != VIEW_ENGINE {
+            let engine = table.get_table_info().engine();
+            if engine != VIEW_ENGINE {
                 return Err(ErrorCode::Internal(format!(
-                    "{}.{} is not VIEW, please use `DROP TABLE {}.{}`",
+                    "{}.{} is not VIEW, please use `DROP {} {}.{}`",
                     &self.plan.database,
                     &self.plan.view_name,
+                    engine,
                     &self.plan.database,
                     &self.plan.view_name
                 )));

@@ -3089,6 +3089,7 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-meta-app",
+ "storages-common-table-meta",
 ]
 
 [[package]]

@@ -889,7 +889,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
-            ~ (^#stream_point)?
+            ~ ( #stream_point )?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
         },
         |(

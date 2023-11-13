@@ -229,6 +229,7 @@ build_exceptions! {
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
+    IllegalStream(2305),
     ViewAlreadyExists(2306),
     CreateTableWithDropTime(2307),
     UndropTableAlreadyExists(2308),

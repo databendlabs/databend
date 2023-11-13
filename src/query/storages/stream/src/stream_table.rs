@@ -13,15 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 pub const STREAM_ENGINE: &str = "STREAM";
+
+pub const OPT_KEY_TABLE_NAME: &str = "table_name";
 pub const OPT_KEY_TABLE_ID: &str = "table_id";
 pub const OPT_KEY_TABLE_VER: &str = "table_version";
 pub const OPT_KEY_MODE: &str = "mode";
@@ -29,16 +31,43 @@ pub const OPT_KEY_MODE: &str = "mode";
 pub const MODE_APPEND_ONLY: &str = "append_only";
 
 pub struct StreamTable {
-    table_info: TableInfo,
+    stream_info: TableInfo,
+
+    table_name: String,
+    table_id: u64,
+    table_version: u64,
+    append_only: bool,
+    snapshot_location: Option<String>,
 }
 
 impl StreamTable {
-    pub fn try_create(_table_info: TableInfo) -> Result<Box<dyn Table>> {
-        todo!()
-    }
-
-    pub fn create(_table_info: TableInfo) -> Arc<dyn Table> {
-        todo!()
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let options = table_info.options();
+        let table_name = options
+            .get(OPT_KEY_TABLE_NAME)
+            .ok_or_else(|| ErrorCode::Internal("table name must be set"))?
+            .clone();
+        let table_id = options
+            .get(OPT_KEY_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+            .parse::<u64>()?;
+        let table_version = options
+            .get(OPT_KEY_TABLE_VER)
+            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
+            .parse::<u64>()?;
+        let append_only = options
+            .get(OPT_KEY_MODE)
+            .map(|v| v == MODE_APPEND_ONLY)
+            .unwrap_or(false);
+        let snapshot_location = options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
+        Ok(Box::new(StreamTable {
+            stream_info: table_info,
+            table_name,
+            table_id,
+            table_version,
+            append_only,
+            snapshot_location,
+        }))
     }
 
     pub fn description() -> StorageDescription {
@@ -66,6 +95,6 @@ impl Table for StreamTable {
     }
 
     fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
+        &self.stream_info
     }
 }

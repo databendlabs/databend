@@ -62,11 +62,13 @@ impl Interpreter for DropStreamInterpreter {
         }
 
         if let Some(table) = &tbl {
-            if table.get_table_info().engine() != STREAM_ENGINE {
+            let engine = table.get_table_info().engine();
+            if engine != STREAM_ENGINE {
                 return Err(ErrorCode::Internal(format!(
-                    "{}.{} is not STREAM, please use `DROP TABLE {}.{}`",
+                    "{}.{} is not STREAM, please use `DROP {} {}.{}`",
                     &self.plan.database,
                     &self.plan.stream_name,
+                    engine,
                     &self.plan.database,
                     &self.plan.stream_name
                 )));

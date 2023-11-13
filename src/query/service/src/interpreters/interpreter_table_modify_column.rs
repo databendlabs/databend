@@ -44,6 +44,7 @@ use common_sql::BloomIndexColumns;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_table_info;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
@@ -442,10 +443,11 @@ impl Interpreter for ModifyTableColumnInterpreter {
         };
 
         let table_info = table.get_table_info();
-        if table_info.engine() == VIEW_ENGINE {
+        let engine = table.engine();
+        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is VIEW that doesn't support alter",
-                &self.plan.database, &self.plan.table
+                "{}.{} engine is {} that doesn't support alter",
+                &self.plan.database, &self.plan.table, engine
             )));
         }
         if table_info.db_type != DatabaseType::NormalDB {
