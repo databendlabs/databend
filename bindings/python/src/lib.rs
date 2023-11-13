@@ -109,20 +109,14 @@ impl AsyncDatabendConnection {
         sql: String,
         data: Vec<Vec<String>>,
     ) -> PyResult<&'p PyAny> {
-        let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
-        for row in data {
-            wtr.write_record(row)
-                .map_err(|e| PyException::new_err(format!("{}", e)))?;
-        }
-        let bytes = wtr
-            .into_inner()
-            .map_err(|e| PyException::new_err(format!("{}", e)))?;
-        let size = bytes.len() as u64;
-        let reader = Box::new(std::io::Cursor::new(bytes));
         let this = self.0.clone();
         future_into_py(py, async move {
+            let data = data
+                .iter()
+                .map(|v| v.iter().map(|s| s.as_ref()).collect())
+                .collect();
             let ss = this
-                .stream_load(&sql, reader, size, None, None)
+                .stream_load(&sql, data)
                 .await
                 .map_err(|e| PyException::new_err(format!("{}", e)))?;
             Ok(ServerStats(ss))

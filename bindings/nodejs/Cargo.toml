@@ -16,7 +16,6 @@ doc = false
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
 chrono = { version = "0.4", default-features = false }
-csv = "1.2"
 napi = { version = "2.13", default-features = false, features = [
     "napi6",
     "async",

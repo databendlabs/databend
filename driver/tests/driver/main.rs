@@ -15,7 +15,7 @@
 mod common;
 
 mod connection;
+mod load;
 mod select_iter;
 mod select_simple;
 mod session;
-mod stream_load;

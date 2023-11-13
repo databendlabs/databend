@@ -101,18 +101,22 @@ pub trait Connection: DynClone + Send + Sync {
 
     async fn upload_to_stage(&self, stage: &str, data: Reader, size: u64) -> Result<()>;
 
-    async fn stream_load(
+    async fn load_data(
         &self,
-        _sql: &str,
-        _data: Reader,
-        _size: u64,
-        _file_format_options: Option<BTreeMap<&str, &str>>,
-        _copy_options: Option<BTreeMap<&str, &str>>,
-    ) -> Result<ServerStats> {
-        Err(Error::Protocol(
-            "STREAM LOAD only available in HTTP API".to_owned(),
-        ))
-    }
+        sql: &str,
+        data: Reader,
+        size: u64,
+        file_format_options: Option<BTreeMap<&str, &str>>,
+        copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<ServerStats>;
+    async fn load_file(
+        &self,
+        sql: &str,
+        fp: &Path,
+        format_options: BTreeMap<&str, &str>,
+        copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<ServerStats>;
+    async fn stream_load(&self, sql: &str, data: Vec<Vec<&str>>) -> Result<ServerStats>;
 
     // PUT file://<path_to_file>/<filename> internalStage|externalStage
     async fn put_files(&self, local_file: &str, stage: &str) -> Result<(Schema, RowStatsIterator)> {

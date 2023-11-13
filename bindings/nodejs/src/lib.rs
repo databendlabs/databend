@@ -345,20 +345,10 @@ impl Connection {
     /// Load data with stage attachment.
     /// The SQL can be `INSERT INTO tbl VALUES` or `REPLACE INTO tbl VALUES`.
     #[napi]
-    pub async fn stream_load(&self, sql: String, data: Vec<Vec<String>>) -> Result<ServerStats> {
-        let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
-        for row in data {
-            wtr.write_record(row)
-                .map_err(|e| Error::from_reason(format!("{}", e)))?;
-        }
-        let bytes = wtr
-            .into_inner()
-            .map_err(|e| Error::from_reason(format!("{}", e)))?;
-        let size = bytes.len() as u64;
-        let reader = Box::new(std::io::Cursor::new(bytes));
+    pub async fn stream_load(&self, sql: String, data: Vec<Vec<&str>>) -> Result<ServerStats> {
         let ss = self
             .0
-            .stream_load(&sql, reader, size, None, None)
+            .stream_load(&sql, data)
             .await
             .map_err(format_napi_error)?;
         Ok(ServerStats(ss))

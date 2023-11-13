@@ -14,11 +14,13 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::future::Future;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
+use tokio::fs::File;
 use tokio_stream::{Stream, StreamExt};
 
 use databend_client::presign::PresignedResponse;
@@ -112,7 +114,7 @@ impl Connection for RestAPIConnection {
         Ok(())
     }
 
-    async fn stream_load(
+    async fn load_data(
         &self,
         sql: &str,
         data: Reader,
@@ -133,6 +135,42 @@ impl Connection for RestAPIConnection {
             .insert_with_stage(sql, &stage, file_format_options, copy_options)
             .await?;
         Ok(ServerStats::from(resp.stats))
+    }
+
+    async fn load_file(
+        &self,
+        sql: &str,
+        fp: &Path,
+        mut format_options: BTreeMap<&str, &str>,
+        copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<ServerStats> {
+        let file = File::open(fp).await?;
+        let metadata = file.metadata().await?;
+        let data = Box::new(file);
+        let size = metadata.len();
+        if !format_options.contains_key("type") {
+            let file_type = fp
+                .extension()
+                .ok_or(Error::BadArgument("file type not specified".to_string()))?
+                .to_str()
+                .ok_or(Error::BadArgument("file type empty".to_string()))?;
+            format_options.insert("type", file_type);
+        }
+        self.load_data(sql, data, size, Some(format_options), copy_options)
+            .await
+    }
+
+    async fn stream_load(&self, sql: &str, data: Vec<Vec<&str>>) -> Result<ServerStats> {
+        let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
+        for row in data {
+            wtr.write_record(row)
+                .map_err(|e| Error::BadArgument(e.to_string()))?;
+        }
+        let bytes = wtr.into_inner().map_err(|e| Error::IO(e.to_string()))?;
+        let size = bytes.len() as u64;
+        let reader = Box::new(std::io::Cursor::new(bytes));
+        let stats = self.load_data(sql, reader, size, None, None).await?;
+        Ok(stats)
     }
 }
 

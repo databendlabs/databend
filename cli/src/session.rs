@@ -424,7 +424,7 @@ impl Session {
 
         let ss = self
             .conn
-            .stream_load(query, Box::new(file), metadata.len(), Some(options), None)
+            .load_data(query, Box::new(file), metadata.len(), Some(options), None)
             .await?;
 
         // TODO:(everpcpc) show progress

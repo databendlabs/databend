@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -114,6 +115,37 @@ impl Connection for FlightSQLConnection {
         let presign = self.get_presigned_url("UPLOAD", stage).await?;
         presign_upload_to_stage(presign, data, size).await?;
         Ok(())
+    }
+
+    async fn load_data(
+        &self,
+        _sql: &str,
+        _data: Reader,
+        _size: u64,
+        _file_format_options: Option<BTreeMap<&str, &str>>,
+        _copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<ServerStats> {
+        return Err(Error::Protocol(
+            "LOAD DATA unavailable for FlightSQL".to_string(),
+        ));
+    }
+
+    async fn load_file(
+        &self,
+        _sql: &str,
+        _fp: &Path,
+        _format_options: BTreeMap<&str, &str>,
+        _copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<ServerStats> {
+        return Err(Error::Protocol(
+            "LOAD FILE unavailable for FlightSQL".to_string(),
+        ));
+    }
+
+    async fn stream_load(&self, _sql: &str, _data: Vec<Vec<&str>>) -> Result<ServerStats> {
+        return Err(Error::Protocol(
+            "STREAM LOAD unavailable for FlightSQL".to_string(),
+        ));
     }
 }
 
