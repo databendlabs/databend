@@ -630,6 +630,8 @@ pub enum TokenKind {
     KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LATERAL", ignore(ascii_case))]
+    LATERAL,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
     #[token("ROLES", ignore(ascii_case))]
@@ -815,6 +817,8 @@ pub enum TokenKind {
     RLIKE,
     #[token("RAW", ignore(ascii_case))]
     RAW,
+    #[token("OPTIMIZED", ignore(ascii_case))]
+    OPTIMIZED,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]
@@ -1192,7 +1196,7 @@ impl TokenKind {
             | TokenKind::INT
             | TokenKind::INTEGER
             | TokenKind::INTERVAL
-            // | TokenKind::LATERAL
+            | TokenKind::LATERAL
             | TokenKind::LEADING
             // | TokenKind::LEAST
             // | TokenKind::LOCALTIME
@@ -1334,7 +1338,7 @@ impl TokenKind {
             | TokenKind::INNER
             | TokenKind::IS
             | TokenKind::JOIN
-            // | TokenKind::LATERAL
+            | TokenKind::LATERAL
             | TokenKind::LEADING
             | TokenKind::LEFT
             | TokenKind::LIKE
