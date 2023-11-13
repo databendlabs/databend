@@ -236,6 +236,43 @@ impl RowIterator {
         });
         Ok(Some(future?.into()))
     }
+    fn schema<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let streamer = self.0.clone();
+        future_into_py(py, async move {
+            let schema = streamer.lock().await.schema();
+            Ok(Schema(schema))
+        })
+    }
+}
+
+#[pyclass(module = "databend_driver")]
+pub struct Schema(databend_driver::SchemaRef);
+
+#[pymethods]
+impl Schema {
+    pub fn fields<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let fields = self
+            .0
+            .fields()
+            .into_iter()
+            .map(|f| Field(f.clone()).into_py(py));
+        Ok(PyList::new(py, fields))
+    }
+}
+
+#[pyclass(module = "databend_driver")]
+pub struct Field(databend_driver::Field);
+
+#[pymethods]
+impl Field {
+    #[getter]
+    pub fn name(&self) -> String {
+        self.0.name.to_string()
+    }
+    #[getter]
+    pub fn data_type(&self) -> String {
+        self.0.data_type.to_string()
+    }
 }
 
 #[pyclass(module = "databend_driver")]
