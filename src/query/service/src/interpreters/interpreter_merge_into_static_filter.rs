@@ -55,6 +55,8 @@ use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
+const MAX_GROUP_LIMIT: usize = 1000;
+
 struct MergeStyleJoin<'a> {
     source_conditions: &'a [ScalarExpr],
     target_conditions: &'a [ScalarExpr],
@@ -160,6 +162,11 @@ impl MergeIntoInterpreter {
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
+        // The filter_expr'num is (blocks.num * condition);
+        // so if blocks num is too much, let's avoid pruning.
+        if blocks.len() > MAX_GROUP_LIMIT {
+            return Ok(Box::new(join.clone()));
+        }
 
         // 2. build filter and push down to target side
         ctx.set_status_info("building pushdown filters");
