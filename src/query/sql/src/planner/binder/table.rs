@@ -252,6 +252,8 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
+                // TODO(leiysky): this check is error-prone,
+                // we should find a better way to do this.
                 Self::check_view_dep(bind_context, &database, &table_name)?;
                 let query = table_meta
                     .options()
@@ -284,6 +286,7 @@ impl Binder {
                                 Some(normalize_identifier(table, &self.name_resolution_ctx).name);
                         }
                     }
+                    new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {
                     Err(
