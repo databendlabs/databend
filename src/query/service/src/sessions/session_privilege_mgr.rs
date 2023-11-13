@@ -180,7 +180,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         // if secondary_roles is set to be empty, only return the current role
         self.ensure_current_role().await?;
         let secondary_roles = secondary_roles.unwrap();
-        if secondary_roles.len() == 0 {
+        if secondary_roles.is_empty() {
             return Ok(self.get_current_role().map(|r| vec![r]).unwrap_or_default());
         }
 

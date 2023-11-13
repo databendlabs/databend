@@ -213,6 +213,14 @@ impl Session {
             .await
     }
 
+    #[async_backtrace::framed]
+    pub async fn set_secondary_roles_checked(
+        self: &Arc<Self>,
+        role_names: Option<Vec<String>>,
+    ) -> Result<()> {
+        self.privilege_mgr.set_secondary_roles(role_names).await
+    }
+
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
         self.privilege_mgr.get_current_role()
     }
