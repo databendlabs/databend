@@ -146,12 +146,20 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         Ok(())
     }
 
+    /// If secondary_roles is set, it must be ALL or NONE:
+    /// 1. ALL: all the roles granted to the current user will have effects on validate_privilege,
+    ///    `secondary_roles` will be set to None, which is default.
+    /// 2. NONE: only the current_role has effects on validate_privilge, `secondary_roles`
+    ///    will be set to Some([]).
+    /// We can release this restriction in the future if any user needed. If an user want to set
+    /// secondary_roles to be a subset of the roles granted to the current user, he can pass
+    /// `secondary_roles` as Some([role1, role2, .. etc.]).
     #[async_backtrace::framed]
     async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
-        if let Some(secondary_roles) = &secondary_roles {
-            for role_name in secondary_roles {
-                self.validate_available_role(role_name).await?;
-            }
+        if secondary_roles.is_some() && !secondary_roles.as_ref().unwrap().is_empty() {
+            return Err(ErrorCode::InvalidArgument(
+                "only ALL or NONE is allowed on setting secondary roles",
+            ));
         }
         self.session_ctx.set_secondary_roles(secondary_roles);
         Ok(())
@@ -177,22 +185,20 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             return Ok(available_roles);
         }
 
-        // if secondary_roles is set to be empty, only return the current role
+        // the current role is always included in the effective roles.
         self.ensure_current_role().await?;
-        let secondary_roles = secondary_roles.unwrap();
-        if secondary_roles.is_empty() {
-            return Ok(self.get_current_role().map(|r| vec![r]).unwrap_or_default());
-        }
-
-        // if secondary_roles is non-empty, take the current_role and the secondary_roles
-        // as the effective roles
         let mut role_names = self
             .get_current_role()
             .map(|r| vec![r.name])
             .unwrap_or_default();
+
+        // if secondary_roles is set to be empty, return the current role and its related roles.
+        // if the secondary_roles is set to be non-empty, return both current_role and the secondary_roles
+        // and their related roles.
+        let secondary_roles = secondary_roles.unwrap_or_default();
         role_names.extend(secondary_roles);
 
-        // find the effective roles and their related roles
+        // find their related roles as the final effective roles
         let role_cache = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
         let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
