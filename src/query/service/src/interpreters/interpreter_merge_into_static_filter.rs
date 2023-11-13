@@ -539,4 +539,7 @@ impl MergeIntoInterpreter {
             ignore_result: false,
         })
     }
+
+    // for ci testing only, will be removed later
+    pub fn meaningless() {}
 }
