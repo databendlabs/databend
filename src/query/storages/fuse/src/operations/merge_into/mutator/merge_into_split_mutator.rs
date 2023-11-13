@@ -26,6 +26,7 @@ pub struct MergeIntoSplitMutator {
 }
 
 impl MergeIntoSplitMutator {
+    #[allow(dead_code)]
     pub fn try_create(row_id_idx: u32) -> Self {
         Self { row_id_idx }
     }

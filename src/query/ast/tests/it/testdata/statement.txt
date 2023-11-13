@@ -8515,7 +8515,7 @@ VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
-        option: VacuumTableOption {
+        option: VacuumDropTableOption {
             retain_hours: Some(
                 Literal {
                     span: Some(
@@ -8527,6 +8527,7 @@ VacuumDropTable(
                 },
             ),
             dry_run: None,
+            limit: None,
         },
     },
 )
@@ -8541,7 +8542,7 @@ VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
-        option: VacuumTableOption {
+        option: VacuumDropTableOption {
             retain_hours: Some(
                 Literal {
                     span: Some(
@@ -8555,6 +8556,7 @@ VacuumDropTable(
             dry_run: Some(
                 (),
             ),
+            limit: None,
         },
     },
 )
@@ -8577,7 +8579,7 @@ VacuumDropTable(
                 ),
             },
         ),
-        option: VacuumTableOption {
+        option: VacuumDropTableOption {
             retain_hours: Some(
                 Literal {
                     span: Some(
@@ -8589,6 +8591,44 @@ VacuumDropTable(
                 },
             ),
             dry_run: None,
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;
+---------- Output ---------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    23..25,
+                ),
+            },
+        ),
+        option: VacuumDropTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        33..35,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
+            limit: Some(
+                10,
+            ),
         },
     },
 )

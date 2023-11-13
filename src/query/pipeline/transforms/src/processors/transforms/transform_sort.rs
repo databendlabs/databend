@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_profile::SharedProcessorProfiles;
 

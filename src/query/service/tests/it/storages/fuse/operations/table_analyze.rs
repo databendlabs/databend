@@ -31,7 +31,6 @@ use databend_query::test_kits::table_test_fixture::analyze_table;
 use databend_query::test_kits::table_test_fixture::do_deletion;
 use databend_query::test_kits::table_test_fixture::do_update;
 use databend_query::test_kits::table_test_fixture::execute_command;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use databend_query::test_kits::utils::query_count;
 use storages_common_cache::LoadParams;
@@ -40,13 +39,12 @@ use storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
     // setup
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let create_tbl_command = "create table t(c int)";
-    execute_command(ctx.clone(), create_tbl_command).await?;
+    fixture.execute_command(create_tbl_command).await?;
 
     let catalog = ctx.get_catalog("default").await?;
 
@@ -54,7 +52,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     append_rows(ctx.clone(), num_inserts).await?;
     ctx.evict_table_from_cache("default", "default", "t")?;
     let statistics_sql = "analyze table default.t";
-    execute_command(ctx.clone(), statistics_sql).await?;
+    fixture.execute_command(statistics_sql).await?;
 
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
@@ -63,7 +61,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     // check count
     ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
-    let stream = execute_query(fixture.ctx(), count_qry).await?;
+    let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts, query_count(stream).await? as usize);
 
     let expected = HashMap::from([(0, num_inserts as u64)]);
@@ -72,12 +70,12 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     // append the same values again, and ndv does changed.
     append_rows(ctx.clone(), num_inserts).await?;
     ctx.evict_table_from_cache("default", "default", "t")?;
-    execute_command(ctx.clone(), statistics_sql).await?;
+    fixture.execute_command(statistics_sql).await?;
 
     // check count
     ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
-    let stream = execute_query(fixture.ctx(), count_qry).await?;
+    let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts * 2, query_count(stream).await? as usize);
 
     check_column_ndv_statistics(table.clone(), expected.clone()).await?;
@@ -91,7 +89,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
         do_deletion(ctx.clone(), *delete).await?;
     }
     ctx.evict_table_from_cache("default", "default", "t")?;
-    execute_command(ctx.clone(), statistics_sql).await?;
+    fixture.execute_command(statistics_sql).await?;
 
     // check count: delete not affect counts
     check_column_ndv_statistics(table.clone(), expected).await?;
@@ -101,8 +99,8 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_update_analyze_statistics() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
     // create table
     fixture.create_default_table().await?;
@@ -112,7 +110,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     // insert
     for i in 0..3 {
         let qry = format!("insert into {}.{}(id) values({})", db_name, tb_name, i);
-        execute_command(ctx.clone(), &qry).await?;
+        fixture.execute_command(&qry).await?;
     }
 
     // update

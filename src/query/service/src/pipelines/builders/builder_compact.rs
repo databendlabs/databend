@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_pipeline_sources::EmptySource;
-use common_sql::executor::CompactSource;
+use common_sql::executor::physical_plans::CompactSource;
 use common_storages_fuse::FuseTable;
 
 use crate::pipelines::PipelineBuilder;

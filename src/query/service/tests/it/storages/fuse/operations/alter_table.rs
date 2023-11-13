@@ -52,7 +52,11 @@ async fn check_segment_column_ids(
     expected_column_ids: Option<Vec<ColumnId>>,
     expected_column_min_max: Option<Vec<(ColumnId, (Scalar, Scalar))>>,
 ) -> Result<()> {
-    let catalog = fixture.ctx().get_catalog("default").await?;
+    let catalog = fixture
+        .new_query_ctx()
+        .await?
+        .get_catalog("default")
+        .await?;
     // get the latest tbl
     let table = catalog
         .get_table(
@@ -127,8 +131,7 @@ async fn check_segment_column_ids(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize_alter_table() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
     let catalog_name = fixture.default_catalog_name();
@@ -157,6 +160,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         table: fixture.default_table_name(),
         column: "t".to_string(),
     };
+    let ctx = fixture.new_query_ctx().await?;
     let interpreter = DropTableColumnInterpreter::try_create(ctx.clone(), drop_table_column_plan)?;
     interpreter.execute(ctx.clone()).await?;
 
@@ -194,7 +198,8 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
 
     // get the latest tbl
     let table = fixture
-        .ctx()
+        .new_query_ctx()
+        .await?
         .get_catalog(&catalog_name)
         .await?
         .get_table(
@@ -237,6 +242,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
 
     // do compact
     let query = format!("optimize table {db_name}.{tbl_name} compact");
+    let ctx = fixture.new_query_ctx().await?;
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
