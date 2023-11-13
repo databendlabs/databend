@@ -2459,7 +2459,6 @@ CreateStream(
                 34..36,
             ),
         },
-        table_catalog: None,
         table_database: Some(
             Identifier {
                 name: "test",
@@ -2478,7 +2477,6 @@ CreateStream(
         },
         stream_point: Some(
             AtStream {
-                catalog: None,
                 database: Some(
                     Identifier {
                         name: "test1",

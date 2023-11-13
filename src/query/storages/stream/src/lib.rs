@@ -13,4 +13,4 @@
 // limitations under the License.
 
 #[allow(dead_code)]
-mod stream_table;
+pub mod stream_table;

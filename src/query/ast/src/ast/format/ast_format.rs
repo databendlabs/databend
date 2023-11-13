@@ -1675,7 +1675,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.stream);
         children.push(self.children.pop().unwrap());
-        self.visit_table_ref(&stmt.table_catalog, &stmt.table_database, &stmt.table);
+        self.visit_table_ref(&None, &stmt.table_database, &stmt.table);
         children.push(self.children.pop().unwrap());
         if let Some(point) = &stmt.stream_point {
             self.visit_stream_point(point);
@@ -2961,11 +2961,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_stream_point(&mut self, point: &'ast StreamPoint) {
         match point {
-            StreamPoint::AtStream {
-                catalog,
-                database,
-                name,
-            } => self.visit_table_ref(catalog, database, name),
+            StreamPoint::AtStream { database, name } => self.visit_table_ref(&None, database, name),
         }
     }
 

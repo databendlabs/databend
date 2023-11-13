@@ -78,6 +78,7 @@ common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
+common-storages-stream = { path = "../storages/stream" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }

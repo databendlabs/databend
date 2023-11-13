@@ -888,7 +888,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
-            ~ ON ~ TABLE ~ #dot_separated_idents_1_to_3
+            ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
             ~ (^#stream_point)?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
         },
@@ -899,7 +899,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             (catalog, database, stream),
             _,
             _,
-            (table_catalog, table_database, table),
+            (table_database, table),
             stream_point,
             opt_comment,
         )| {
@@ -908,7 +908,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 catalog,
                 database,
                 stream,
-                table_catalog,
                 table_database,
                 table,
                 stream_point,
@@ -3106,12 +3105,8 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
 
 pub fn stream_point(i: Input) -> IResult<StreamPoint> {
     let mut at_stream = map(
-        rule! { AT ~ "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_3 ~ ")" },
-        |(_, _, _, _, (catalog, database, name), _)| StreamPoint::AtStream {
-            catalog,
-            database,
-            name,
-        },
+        rule! { AT ~ "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_2 ~ ")" },
+        |(_, _, _, _, (database, name), _)| StreamPoint::AtStream { database, name },
     );
     rule!(
         #at_stream

@@ -21,7 +21,6 @@ use crate::ast::Identifier;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamPoint {
     AtStream {
-        catalog: Option<Identifier>,
         database: Option<Identifier>,
         name: Identifier,
     },
@@ -30,13 +29,9 @@ pub enum StreamPoint {
 impl Display for StreamPoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            StreamPoint::AtStream {
-                catalog,
-                database,
-                name,
-            } => {
+            StreamPoint::AtStream { database, name } => {
                 write!(f, " AT (STREAM => ")?;
-                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(name)))?;
+                write_dot_separated_list(f, database.iter().chain(Some(name)))?;
                 write!(f, ")")
             }
         }
@@ -49,7 +44,6 @@ pub struct CreateStreamStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub stream: Identifier,
-    pub table_catalog: Option<Identifier>,
     pub table_database: Option<Identifier>,
     pub table: Identifier,
     pub stream_point: Option<StreamPoint>,
@@ -70,13 +64,7 @@ impl Display for CreateStreamStmt {
                 .chain(Some(&self.stream)),
         )?;
         write!(f, " ON TABLE ")?;
-        write_dot_separated_list(
-            f,
-            self.table_catalog
-                .iter()
-                .chain(self.table_database.iter())
-                .chain(Some(&self.table)),
-        )?;
+        write_dot_separated_list(f, self.table_database.iter().chain(Some(&self.table)))?;
         if let Some(stream_point) = &self.stream_point {
             write!(f, "{}", stream_point)?;
         }

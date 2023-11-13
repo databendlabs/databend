@@ -309,11 +309,6 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
         .append(
             RcDoc::space().append(RcDoc::text("ON TABLE")).append(
                 RcDoc::space()
-                    .append(if let Some(catalog) = stmt.table_catalog {
-                        RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
-                    } else {
-                        RcDoc::nil()
-                    })
                     .append(if let Some(database) = stmt.table_database {
                         RcDoc::text(database.to_string()).append(RcDoc::text("."))
                     } else {
@@ -323,21 +318,11 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
             ),
         )
         .append(
-            if let Some(StreamPoint::AtStream {
-                catalog,
-                database,
-                name,
-            }) = stmt.stream_point
-            {
+            if let Some(StreamPoint::AtStream { database, name }) = stmt.stream_point {
                 RcDoc::space()
                     .append(RcDoc::text("AT (STREAM => "))
                     .append(
                         RcDoc::space()
-                            .append(if let Some(catalog) = catalog {
-                                RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
-                            } else {
-                                RcDoc::nil()
-                            })
                             .append(if let Some(database) = database {
                                 RcDoc::text(database.to_string()).append(RcDoc::text("."))
                             } else {

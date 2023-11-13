@@ -14,11 +14,7 @@
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum StreamNavigation {
-    AtStream {
-        catalog: String,
-        database: String,
-        name: String,
-    },
+    AtStream { database: String, name: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,7 +24,6 @@ pub struct CreateStreamPlan {
     pub catalog: String,
     pub database: String,
     pub stream_name: String,
-    pub table_catalog: String,
     pub table_database: String,
     pub table_name: String,
     pub navigation: Option<StreamNavigation>,

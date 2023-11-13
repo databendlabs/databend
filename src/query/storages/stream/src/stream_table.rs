@@ -17,17 +17,20 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 
+pub const STREAM_ENGINE: &str = "STREAM";
+pub const OPT_KEY_TABLE_ID: &str = "table_id";
+pub const OPT_KEY_TABLE_VER: &str = "table_version";
+pub const OPT_KEY_MODE: &str = "mode";
+
+pub const MODE_APPEND_ONLY: &str = "append_only";
+
 pub struct StreamTable {
     table_info: TableInfo,
-    pub query: String,
 }
-
-pub const STREAM_ENGINE: &str = "VIEW";
-pub const QUERY: &str = "query";
-pub const APPEND_ONLY: &str = "append_only";
 
 impl StreamTable {
     pub fn try_create(_table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -40,10 +43,19 @@ impl StreamTable {
 
     pub fn description() -> StorageDescription {
         StorageDescription {
-            engine_name: "VIEW".to_string(),
+            engine_name: STREAM_ENGINE.to_string(),
             comment: "STREAM STORAGE Engine".to_string(),
             ..Default::default()
         }
+    }
+
+    pub fn try_from_table(tbl: &dyn Table) -> Result<&StreamTable> {
+        tbl.as_any().downcast_ref::<StreamTable>().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "expects table of engine STREAM, but got {}",
+                tbl.engine()
+            ))
+        })
     }
 }
 

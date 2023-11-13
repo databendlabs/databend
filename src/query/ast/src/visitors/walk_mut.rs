@@ -293,15 +293,7 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
 
 pub fn walk_stream_point_mut<V: VisitorMut>(visitor: &mut V, stream: &mut StreamPoint) {
     match stream {
-        StreamPoint::AtStream {
-            catalog,
-            database,
-            name,
-        } => {
-            if let Some(catalog) = catalog {
-                visitor.visit_identifier(catalog);
-            }
-
+        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }

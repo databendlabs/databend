@@ -18,6 +18,7 @@ use common_ast::ast::StreamPoint;
 use common_exception::Result;
 
 use crate::binder::Binder;
+use crate::normalize_identifier;
 use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::Plan;
@@ -34,7 +35,6 @@ impl Binder {
             catalog,
             database,
             stream,
-            table_catalog,
             table_database,
             table,
             stream_point,
@@ -44,21 +44,21 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let (catalog, database, stream_name) =
             self.normalize_object_identifier_triple(catalog, database, stream);
-        let (table_catalog, table_database, table_name) =
-            self.normalize_object_identifier_triple(table_catalog, table_database, table);
+
+        let table_database = table_database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+
         let navigation = stream_point.as_ref().map(|point| match point {
-            StreamPoint::AtStream {
-                catalog,
-                database,
-                name,
-            } => {
-                let (catalog, database, name) =
-                    self.normalize_object_identifier_triple(catalog, database, name);
-                StreamNavigation::AtStream {
-                    catalog,
-                    database,
-                    name,
-                }
+            StreamPoint::AtStream { database, name } => {
+                let database = database
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+                    .unwrap_or_else(|| self.ctx.get_current_database());
+                let name = normalize_identifier(name, &self.name_resolution_ctx).name;
+                StreamNavigation::AtStream { database, name }
             }
         });
 
@@ -68,7 +68,6 @@ impl Binder {
             catalog,
             database,
             stream_name,
-            table_catalog,
             table_database,
             table_name,
             navigation,
