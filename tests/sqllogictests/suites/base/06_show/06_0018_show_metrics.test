@@ -1,2 +1,3 @@
-# statement ok
-# show metrics
+onlyif mysql
+statement ok
+show metrics
