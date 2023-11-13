@@ -72,14 +72,14 @@ impl ConnectionApi for ConnectionMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert_info.await?.added_or_else(|v| {
+        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
             ErrorCode::ConnectionAlreadyExists(format!(
                 "connection already exists, seq [{}]",
                 v.seq
             ))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]
