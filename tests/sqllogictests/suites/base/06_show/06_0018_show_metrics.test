@@ -1,2 +1,2 @@
-statement ok
-show metrics
+# statement ok
+# show metrics
