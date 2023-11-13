@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
+
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_license::license_manager::LicenseManager;
@@ -29,9 +31,11 @@ unsafe impl Send for TestGlobalServices {}
 unsafe impl Sync for TestGlobalServices {}
 
 impl TestGlobalServices {
-    pub async fn setup(config: InnerConfig) -> Result<TestGuard> {
+    pub async fn setup(config: impl Borrow<InnerConfig>) -> Result<TestGuard> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
+
+        let config = config.borrow();
 
         let thread_name = match std::thread::current().name() {
             None => panic!("thread name is none"),
@@ -47,7 +51,7 @@ impl TestGlobalServices {
         // Cluster register.
         {
             ClusterDiscovery::instance()
-                .register_to_metastore(&config)
+                .register_to_metastore(config)
                 .await?;
             info!(
                 "Databend query has been registered:{:?} to metasrv:{:?}.",

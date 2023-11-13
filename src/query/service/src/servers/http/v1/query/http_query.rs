@@ -166,6 +166,7 @@ pub struct HttpQueryResponseInternal {
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
     pub state: ResponseState,
+    pub node_id: String,
 }
 
 pub enum ExpireState {
@@ -183,6 +184,7 @@ pub enum ExpireResult {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
+    pub(crate) node_id: String,
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
@@ -290,8 +292,9 @@ impl HttpQuery {
         ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
+        let node_id = ctx.get_cluster().local_id.clone();
         let sql = &request.sql;
-        info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
+        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
@@ -369,9 +372,11 @@ impl HttpQuery {
             schema,
             format_settings,
         )));
+
         let query = HttpQuery {
             id: query_id,
             session_id,
+            node_id,
             request,
             state,
             page_manager: data,
@@ -393,6 +398,7 @@ impl HttpQuery {
             data,
             state,
             session: Some(session),
+            node_id: self.node_id.clone(),
             session_id: self.session_id.clone(),
         })
     }
@@ -405,6 +411,7 @@ impl HttpQuery {
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
+            node_id: self.node_id.clone(),
             state,
             session: Some(session),
         }
@@ -439,10 +446,18 @@ impl HttpQuery {
             .map(|v| v.keep_server_session_secs)
             .unwrap_or(None);
 
-        // TODO: add current role here
+        // TODO(liyz): known issue here, this will make SET ROLE statement not work in bendsql, refactor using the secondary role in the short time.
+        // https://github.com/datafuselabs/databend/issues/13544
+        let role = self
+            .request
+            .session
+            .as_ref()
+            .map(|s| s.role.clone())
+            .unwrap_or_default();
+
         HttpSessionConf {
             database: Some(session_state.current_database),
-            role: session_state.current_role,
+            role,
             keep_server_session_secs,
             settings: Some(settings),
         }
@@ -463,6 +478,9 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn kill(&self) {
+        // the query will be removed from the query manager before the session is dropped.
+        self.detach().await;
+
         Executor::stop(
             &self.state,
             Err(ErrorCode::AbortedQuery("killed by http")),
@@ -472,7 +490,9 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&self) {
+    async fn detach(&self) {
+        info!("{}: http query detached", &self.id);
+
         let data = self.page_manager.lock().await;
         data.detach().await
     }

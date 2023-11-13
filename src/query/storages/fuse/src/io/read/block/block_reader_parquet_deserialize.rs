@@ -31,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_metrics::storage::*;
 use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
@@ -44,7 +45,6 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::decompressor::BuffedBasicDecompressor;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
-use crate::metrics::*;
 
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.

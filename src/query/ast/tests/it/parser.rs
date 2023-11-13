@@ -68,6 +68,9 @@ fn test_statement() {
         r#"show databases"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
+        r#"show drop tables"#,
+        r#"show drop tables like 't%'"#,
+        r#"show drop tables where name='t'"#,
         r#"show tables format TabSeparatedWithNamesAndTypes;"#,
         r#"describe "name""with""quote";"#,
         r#"describe "name""""with""""quote";"#,
@@ -212,6 +215,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE RETAIN 20 HOURS;"#,
         r#"VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;"#,
         r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS;"#,
+        r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
@@ -494,6 +498,11 @@ fn test_statement() {
         r#"SHOW TASKS"#,
         r#"EXECUTE TASK MyTask"#,
         r#"DESC TASK MyTask"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
+        r#"DROP CONNECTION IF EXISTS my_conn;"#,
+        r#"DESC CONNECTION my_conn;"#,
+        r#"SHOW CONNECTIONS;"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
@@ -585,6 +594,7 @@ fn test_statement_error() {
                     type = CSV,
                     error_on_column_count_mismatch = 1
                 )"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
     ];
 
     for case in cases {
@@ -650,6 +660,7 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
     ];
 
     for case in cases {

@@ -1,5 +1,5 @@
 # IntelliJ project files
-.idea/*
+**/.idea/*
 
 # visual studio code files
 .vscode

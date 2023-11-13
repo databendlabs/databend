@@ -349,9 +349,16 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         }),
         TableReference::Subquery {
             span: _,
+            lateral,
             subquery,
             alias,
-        } => parenthesized(pretty_query(*subquery)).append(if let Some(alias) = alias {
+        } => (if lateral {
+            RcDoc::text("LATERAL")
+        } else {
+            RcDoc::nil()
+        })
+        .append(parenthesized(pretty_query(*subquery)))
+        .append(if let Some(alias) = alias {
             RcDoc::text(format!(" AS {alias}"))
         } else {
             RcDoc::nil()

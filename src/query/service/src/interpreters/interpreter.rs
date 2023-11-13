@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::SendableDataBlockStream;
+use common_pipeline_core::SourcePipeBuilder;
 use log::error;
 
 use crate::interpreters::InterpreterMetrics;
@@ -27,7 +28,6 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;

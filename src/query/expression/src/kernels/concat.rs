@@ -359,7 +359,7 @@ impl Column {
             *offsets.get_unchecked_mut(offsets_len) = 0;
             offsets_len += 1;
             for col in cols.clone() {
-                let mut start = 0;
+                let mut start = col.offsets()[0];
                 for end in col.offsets()[1..].iter() {
                     data_size += end - start;
                     start = *end;
@@ -376,7 +376,9 @@ impl Column {
 
         unsafe {
             for col in cols {
-                let col_data = col.data().as_slice();
+                let offsets = col.offsets();
+                let col_data = &(col.data().as_slice())
+                    [offsets[0] as usize..offsets[offsets.len() - 1] as usize];
                 copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
             }
             set_vec_len_by_ptr(&mut data, data_ptr);

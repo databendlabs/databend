@@ -4,7 +4,7 @@ DROP STAGE ~
 statement error 2506
 CREATE STAGE ~
 
-statement error 1005
+statement error 4000
 create stage tpch100_data url='s3://wubx/tb101' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 
 statement ok

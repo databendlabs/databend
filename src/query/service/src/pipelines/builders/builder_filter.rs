@@ -16,12 +16,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::profile_wrapper::TransformProfileWrapper;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::TransformProfileWrapper;
+use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::Filter;
+use common_sql::executor::physical_plans::Filter;
 
 use crate::pipelines::PipelineBuilder;
 

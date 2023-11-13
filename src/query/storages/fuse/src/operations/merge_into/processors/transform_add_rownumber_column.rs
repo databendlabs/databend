@@ -24,11 +24,12 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::Value;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 
 const PREFIX_OFFSET: usize = 48;
 
@@ -74,11 +75,13 @@ impl Transform for TransformAddRowNumberColumnProcessor {
         for number in row_number..row_number + num_rows {
             row_numbers.push(number);
         }
+        merge_into_distributed_generate_row_numbers(row_numbers.len() as u32);
         let mut data_block = data;
         let row_number_entry = BlockEntry::new(
             DataType::Number(NumberDataType::UInt64),
             Value::Column(UInt64Type::from_data(row_numbers)),
         );
+
         data_block.add_column(row_number_entry);
         Ok(data_block)
     }

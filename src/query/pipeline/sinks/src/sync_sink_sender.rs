@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
 
 use crate::Sink;

@@ -100,6 +100,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
@@ -705,11 +706,15 @@ impl TableContext for CtxDelegation {
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        todo!()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",
         fixture.default_db_name().as_str(),
@@ -720,7 +725,7 @@ async fn test_get_same_table_once() -> Result<()> {
         fixture.default_table_name().as_str()
     );
     fixture.create_default_table().await?;
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
     let faked_catalog = FakedCatalog {
         cat: catalog,

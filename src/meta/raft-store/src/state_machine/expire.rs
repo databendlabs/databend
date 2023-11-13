@@ -34,7 +34,16 @@ use common_meta_sled_store::SledSerde;
 
 /// The identifier of the index for kv with expiration.
 #[derive(
-    Default, Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord,
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
 )]
 pub struct ExpireKey {
     /// The time in millisecond when a key will be expired.

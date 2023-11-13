@@ -29,13 +29,13 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::ScalarRef;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::RangeJoin;
-use common_sql::executor::RangeJoinCondition;
-use common_sql::executor::RangeJoinType;
+use common_sql::executor::physical_plans::RangeJoin;
+use common_sql::executor::physical_plans::RangeJoinCondition;
+use common_sql::executor::physical_plans::RangeJoinType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
+use crate::pipelines::processors::transforms::range_join::IEJoinState;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {

@@ -138,9 +138,9 @@ SELECT 1<<2, 3<<1, 4<<3
 4 6 32
 
 query III
-SELECT 4>>1, 8>>2, 16>>3
+SELECT 4>>1, 8>>2, 16>>3, '333' + 4
 ----
-2 2 2
+2 2 2 337
 
 query I
 select * from numbers(4) where -number > -1;

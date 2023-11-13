@@ -33,7 +33,7 @@ use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::physical_plans::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::field_default_value;

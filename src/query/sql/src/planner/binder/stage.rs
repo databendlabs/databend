@@ -27,7 +27,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_pipeline_transforms::processors::transforms::Transform;
+use common_pipeline_transforms::processors::Transform;
 use indexmap::IndexMap;
 
 use crate::binder::wrap_cast_scalar;

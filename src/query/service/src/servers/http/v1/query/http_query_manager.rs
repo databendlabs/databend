@@ -91,7 +91,6 @@ impl HttpQueryManager {
                             warn!("{msg}, but fail to remove");
                         } else {
                             warn!("{msg}");
-                            query.detach().await;
                             query.kill().await;
                         };
                         break;

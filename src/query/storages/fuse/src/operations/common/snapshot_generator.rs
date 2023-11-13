@@ -24,6 +24,7 @@ use common_expression::ColumnId;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_metrics::storage::*;
 use common_sql::field_default_value;
 use log::info;
 use storages_common_table_meta::meta::ClusterKey;
@@ -33,8 +34,6 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
-use crate::metrics::metrics_inc_commit_mutation_modified_segment_exists_in_latest;
-use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;

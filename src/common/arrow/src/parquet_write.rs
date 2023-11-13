@@ -14,17 +14,18 @@
 
 use std::io::Write;
 
-use arrow::array::Array;
-use arrow::chunk::Chunk;
-use arrow::datatypes::DataType;
-use arrow::datatypes::Schema;
-use arrow::error::Result;
-use arrow::io::parquet::write::to_parquet_schema;
-use arrow::io::parquet::write::RowGroupIterator;
 use parquet2::metadata::KeyValue;
 use parquet2::metadata::ThriftFileMetaData;
 use parquet2::write::FileWriter;
 use parquet2::write::WriteOptions;
+
+use crate::arrow::array::Array;
+use crate::arrow::chunk::Chunk;
+use crate::arrow::datatypes::DataType;
+use crate::arrow::datatypes::Schema;
+use crate::arrow::error::Result;
+use crate::arrow::io::parquet::write::to_parquet_schema;
+use crate::arrow::io::parquet::write::RowGroupIterator;
 
 // a simple wrapper for code reuse
 pub fn write_parquet_file<W: Write, A, I>(

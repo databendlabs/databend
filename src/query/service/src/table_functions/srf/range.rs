@@ -41,14 +41,15 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::TableContext;
+use itertools::Itertools;
 
 pub struct RangeTable {
     table_info: TableInfo,
@@ -297,16 +298,24 @@ impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
             ((self.end - current_start + (self.step + offset)) / self.step).min(MAX_BLOCK_SIZE);
 
         let column = match self.data_type {
-            DataType::Number(_) => {
-                Int64Type::from_data((0..size).map(|idx| current_start + self.step * idx))
-            }
-            DataType::Timestamp => {
-                TimestampType::from_data((0..size).map(|idx| current_start + self.step * idx))
-            }
+            DataType::Number(_) => Int64Type::from_data(
+                (0..size)
+                    .map(|idx| current_start + self.step * idx)
+                    .collect_vec(),
+            ),
+            DataType::Timestamp => TimestampType::from_data(
+                (0..size)
+                    .map(|idx| current_start + self.step * idx)
+                    .collect_vec(),
+            ),
             DataType::Date => {
                 let current_start = current_start as i32;
                 let step = self.step as i32;
-                DateType::from_data((0..size as i32).map(|idx| current_start + step * idx))
+                DateType::from_data(
+                    (0..size as i32)
+                        .map(|idx| current_start + step * idx)
+                        .collect_vec(),
+                )
             }
             _ => unreachable!(),
         };

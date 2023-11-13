@@ -123,10 +123,10 @@ impl Request {
         match self {
             Request::Get(_) => "Get",
             Request::MGet(_) => "MGet",
-            Request::List(_) => "PrefixList",
+            Request::List(_) => "List",
             Request::StreamGet(_) => "StreamGet",
             Request::StreamMGet(_) => "StreamMGet",
-            Request::StreamList(_) => "StreamPrefixList",
+            Request::StreamList(_) => "StreamList",
             Request::Upsert(_) => "Upsert",
             Request::Txn(_) => "Txn",
             Request::Watch(_) => "Watch",

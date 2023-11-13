@@ -198,7 +198,7 @@ impl SubqueryRewriter {
         for pred in filter.predicates.iter() {
             let join_condition = JoinPredicate::new(pred, &input_prop, &filter_prop);
             match join_condition {
-                JoinPredicate::Left(filter) => {
+                JoinPredicate::Left(filter) | JoinPredicate::ALL(filter) => {
                     left_filters.push(filter.clone());
                 }
                 JoinPredicate::Right(filter) => {
@@ -426,7 +426,7 @@ impl SubqueryRewriter {
         }
     }
 
-    fn flatten(
+    pub fn flatten(
         &mut self,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
@@ -862,7 +862,7 @@ impl SubqueryRewriter {
         }
     }
 
-    fn add_equi_conditions(
+    pub fn add_equi_conditions(
         &self,
         span: Span,
         correlated_columns: &HashSet<IndexType>,

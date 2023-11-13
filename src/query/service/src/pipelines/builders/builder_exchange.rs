@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_sql::executor::ExchangeSink;
-use common_sql::executor::ExchangeSource;
+use common_sql::executor::physical_plans::ExchangeSink;
+use common_sql::executor::physical_plans::ExchangeSource;
 
 use crate::pipelines::PipelineBuilder;
 

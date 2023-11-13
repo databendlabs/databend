@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_meta_app::principal::StageFileFormatType;
 use common_pipeline_sources::AsyncSourcer;
-use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::physical_plans::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::Insert;

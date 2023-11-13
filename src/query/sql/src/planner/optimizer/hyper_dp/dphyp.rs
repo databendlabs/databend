@@ -284,11 +284,11 @@ impl DPhpy {
             // Find the corresponding join relations in `join_conditions`
             let mut left_relation_set = HashSet::new();
             let mut right_relation_set = HashSet::new();
-            let left_used_tables = left_condition.used_tables(self.metadata.clone())?;
+            let left_used_tables = left_condition.used_tables()?;
             for table in left_used_tables.iter() {
                 left_relation_set.insert(self.table_index_map[table]);
             }
-            let right_used_tables = right_condition.used_tables(self.metadata.clone())?;
+            let right_used_tables = right_condition.used_tables()?;
             for table in right_used_tables.iter() {
                 right_relation_set.insert(self.table_index_map[table]);
             }

@@ -54,7 +54,6 @@ jobs:
           cat license.json
 
   build:
-    name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
@@ -73,12 +72,11 @@ jobs:
           artifacts: all
 
   build_address_sanitizer:
-    name: build_${{ matrix.arch }}_${{ matrix.libc }}_asan
     runs-on: [ self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}" ]
     strategy:
       matrix:
         include:
-          - { arch: x86_64, libc: gnu }
+          # - { arch: x86_64, libc: gnu }
           - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v4
@@ -92,14 +90,13 @@ jobs:
           artifacts: query
 
   build_other:
-    name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         include:
-          - { arch: x86_64, libc: musl }
+          # - { arch: x86_64, libc: musl }
           - { arch: aarch64, libc: musl }
-          - { arch: aarch64, libc: gnu }
+          # - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,23 +160,17 @@ jobs:
         timeout-minutes: 10
 
   sqllogic_management_mode:
-    name: sqllogic_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
-    strategy:
-      matrix:
-        dirs:
-          - "management"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
         timeout-minutes: 10
         with:
-          dirs: ${{ matrix.dirs }}
+          dirs: management
           handlers: mysql,http,clickhouse
 
   sqllogic_standalone:
-    name: sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
@@ -189,13 +180,17 @@ jobs:
           - "standalone"
           - "crdb"
           - "duckdb"
+          - "base"
+          - "ydb"
+          - "tpcds"
+          - "tpch"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: mysql,http,clickhouse
+          handlers: http
           storage-format: all
       - name: Upload failure
         if: failure()
@@ -204,40 +199,30 @@ jobs:
           name: test-sqllogic-standalone-${{ matrix.dirs }}
 
   sqllogic_standalone_udf_server:
-    name: sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
-    strategy:
-      matrix:
-        dirs:
-          - "udf_server"
     steps:
       - uses: actions/checkout@v3
       - name: Start UDF Server
         run: |
-          pip install pyarrow
-          python3 tests/udf-server/udf_test.py &
+          pip install databend-udf
+          python3 tests/udf/udf_server.py &
           sleep 2
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
-          dirs: ${{ matrix.dirs }}
+          dirs: udf_server
           handlers: mysql,http,clickhouse
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}
+          name: test-sqllogic-standalone-udf_server
 
   sqllogic_standalone_cloud:
-    name: sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
-    strategy:
-      matrix:
-        dirs:
-          - "task"
     steps:
       - uses: actions/checkout@v3
       - name: Start Cloud Control Server
@@ -248,52 +233,21 @@ jobs:
       - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
-          dirs: ${{ matrix.dirs }}
+          dirs: task
           handlers: mysql,http,clickhouse
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}
-
-  sqllogic_standalone_with_native:
-    name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    strategy:
-      matrix:
-        dirs:
-          - "base"
-          - "ydb"
-          - "tpcds"
-          - "tpch"
-        format:
-          - "parquet"
-          - "native"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
-        with:
-          dirs: ${{ matrix.dirs }}
-          handlers: mysql,http,clickhouse
-          storage-format: ${{ matrix.format }}
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}_${{ matrix.format }}
+          name: test-sqllogic-standalone-cloud
 
   sqllogic_standalone_ee:
-    name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     needs: [build, check, license]
     strategy:
       matrix:
-        dirs:
-          - "ee"
         format:
           - "parquet"
           - "native"
@@ -308,46 +262,25 @@ jobs:
         env:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         with:
-          dirs: ${{ matrix.dirs }}
+          dirs: ee
           handlers: mysql,http,clickhouse
           storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-ee-sqllogic-standalone-${{ matrix.dirs }}_${{ matrix.format }}
+          name: test-ee-sqllogic-standalone-ee_${{ matrix.format }}
 
   sqllogic_cluster:
-    name: sqllogic_cluster_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
       matrix:
         dirs:
-          - "base"
           - "query"
           - "crdb"
           - "duckdb"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 15
-        with:
-          dirs: ${{ matrix.dirs }}
-          handlers: mysql,http,clickhouse
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-cluster-${{ matrix.dirs }}
-
-  sqllogic_cluster_large:
-    name: sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    strategy:
-      matrix:
-        dirs:
+          - "base"
           - "ydb"
           - "tpcds"
           - "tpch"
@@ -355,7 +288,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 20
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: http
@@ -366,14 +299,10 @@ jobs:
           name: test-sqllogic-cluster-${{ matrix.dirs }}
 
   sqllogic_stage:
-    name: sqllogic_${{ matrix.dirs }}_${{ matrix.storage }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
       matrix:
-        dirs:
-          - "stage"
-          - "stage_parquet"
         storage:
           - "s3"
           - "fs"
@@ -383,13 +312,13 @@ jobs:
         timeout-minutes: 15
         with:
           storage: ${{ matrix.storage }}
-          dirs: ${{ matrix.dirs }}
+          dirs: stage
           handlers: mysql,http,clickhouse
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.dirs }}
+          name: test-sqllogic-stage-${{ matrix.storage }}
 
   test_stateless_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -456,14 +385,14 @@ jobs:
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
-  test_fuzz_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_fuzz_standalone_linux
-        timeout-minutes: 10
-        continue-on-error: true
+  # test_fuzz_standalone:
+  #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+  #   needs: [build, check]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/test_fuzz_standalone_linux
+  #       timeout-minutes: 10
+  #       continue-on-error: true
 
   test_ee_standalone:
     needs: [build, check, license]

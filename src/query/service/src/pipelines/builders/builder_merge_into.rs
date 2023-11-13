@@ -23,27 +23,28 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::ROW_NUMBER_COL_NAME;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::create_dummy_item;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
+use common_pipeline_transforms::processors::create_dummy_item;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoAddRowNumber;
-use common_sql::executor::MergeIntoAppendNotMatched;
-use common_sql::executor::MergeIntoSource;
+use common_sql::executor::physical_plans::MergeInto;
+use common_sql::executor::physical_plans::MergeIntoAddRowNumber;
+use common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
+use common_sql::executor::physical_plans::MergeIntoSource;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
-use common_storages_fuse::operations::merge_into::MatchedSplitProcessor;
-use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
-use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
-use common_storages_fuse::operations::merge_into::RowNumberAndLogSplitProcessor;
-use common_storages_fuse::operations::merge_into::TransformAddRowNumberColumnProcessor;
+use common_storages_fuse::operations::MatchedSplitProcessor;
+use common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
+use common_storages_fuse::operations::MergeIntoSplitProcessor;
+use common_storages_fuse::operations::RowNumberAndLogSplitProcessor;
+use common_storages_fuse::operations::TransformAddRowNumberColumnProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 
+use crate::pipelines::processors::transforms::AccumulateRowNumber;
 use crate::pipelines::processors::transforms::ExtractHashTableByRowNumber;
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::DeduplicateRowNumber;
@@ -637,6 +638,20 @@ impl PipelineBuilder {
             get_output_len(&pipe_items),
             pipe_items,
         ));
+
+        // accumulate row_number
+        if *distributed {
+            let pipe_items = vec![
+                create_dummy_item(),
+                create_dummy_item(),
+                AccumulateRowNumber::create()?.into_pipe_item(),
+            ];
+            self.main_pipeline.add_pipe(Pipe::create(
+                self.main_pipeline.output_len(),
+                get_output_len(&pipe_items),
+                pipe_items,
+            ));
+        }
 
         Ok(())
     }
