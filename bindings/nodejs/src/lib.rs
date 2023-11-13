@@ -122,7 +122,7 @@ pub struct Schema(databend_driver::SchemaRef);
 
 #[napi]
 impl Schema {
-    #[napi(getter)]
+    #[napi]
     pub fn fields(&self) -> Vec<Field> {
         self.0.fields().iter().map(|f| Field(f.clone())).collect()
     }
@@ -157,6 +157,11 @@ impl RowIterator {
             .next()
             .await
             .map(|row| row.map(Row).map_err(format_napi_error))
+    }
+    /// Get Schema for rows.
+    #[napi]
+    pub fn schema(&self) -> Schema {
+        Schema(self.0.schema().clone())
     }
 }
 

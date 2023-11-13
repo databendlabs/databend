@@ -53,7 +53,7 @@ export class ConnectionInfo {
   get warehouse(): string | null
 }
 export class Schema {
-  get fields(): Array<Field>
+  fields(): Array<Field>
 }
 export class Field {
   get name(): string
@@ -65,6 +65,8 @@ export class RowIterator {
    * Returns `None` if there are no more rows.
    */
   next(): Promise<Error | Row | null>
+  /** Get Schema for rows. */
+  schema(): Schema
 }
 export class RowIteratorExt {
   /**
