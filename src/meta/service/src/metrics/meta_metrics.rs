@@ -344,7 +344,7 @@ pub mod raft_metrics {
                 .inc_by(cnt);
         }
 
-        pub fn incr_fail_connections_to_peer(id: &NodeId, addr: &str) {
+        pub fn incr_connect_failure(id: &NodeId, addr: &str) {
             let id = id.to_string();
             RAFT_METRICS
                 .fail_connect_to_peer
@@ -355,7 +355,7 @@ pub mod raft_metrics {
                 .inc();
         }
 
-        pub fn incr_sent_bytes_to_peer(id: &NodeId, bytes: u64) {
+        pub fn incr_sendto_bytes(id: &NodeId, bytes: u64) {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_bytes
@@ -363,14 +363,22 @@ pub mod raft_metrics {
                 .inc_by(bytes);
         }
 
-        pub fn incr_recv_bytes_from_peer(addr: String, bytes: u64) {
+        pub fn incr_recvfrom_bytes(addr: String, bytes: u64) {
             RAFT_METRICS
                 .recv_bytes
                 .get_or_create(&FromLabels { from: addr })
                 .inc_by(bytes);
         }
 
-        pub fn incr_sent_failure_to_peer(id: &NodeId) {
+        pub fn incr_sendto_result(id: &NodeId, success: bool) {
+            if success {
+                // success is not collected.
+            } else {
+                incr_sendto_failure(id);
+            }
+        }
+
+        pub fn incr_sendto_failure(id: &NodeId) {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_failures
@@ -378,23 +386,18 @@ pub mod raft_metrics {
                 .inc();
         }
 
-        pub fn incr_snapshot_send_success_to_peer(id: &NodeId) {
+        pub fn incr_snapshot_sendto_result(id: &NodeId, success: bool) {
             let to = id.to_string();
-            RAFT_METRICS
-                .snapshot_send_success
-                .get_or_create(&ToLabels { to })
-                .inc();
+            if success {
+                &RAFT_METRICS.snapshot_send_success
+            } else {
+                &RAFT_METRICS.snapshot_send_failure
+            }
+            .get_or_create(&ToLabels { to })
+            .inc();
         }
 
-        pub fn incr_snapshot_send_failures_to_peer(id: &NodeId) {
-            let to = id.to_string();
-            RAFT_METRICS
-                .snapshot_send_failure
-                .get_or_create(&ToLabels { to })
-                .inc();
-        }
-
-        pub fn incr_snapshot_send_inflights_to_peer(id: &NodeId, cnt: i64) {
+        pub fn incr_snapshot_sendto_inflight(id: &NodeId, cnt: i64) {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_inflights
@@ -402,14 +405,14 @@ pub mod raft_metrics {
                 .inc_by(cnt);
         }
 
-        pub fn incr_snapshot_recv_inflights_from_peer(addr: String, cnt: i64) {
+        pub fn incr_snapshot_recvfrom_inflight(addr: String, cnt: i64) {
             RAFT_METRICS
                 .snapshot_recv_inflights
                 .get_or_create(&FromLabels { from: addr })
                 .inc_by(cnt);
         }
 
-        pub fn sample_snapshot_sent(id: &NodeId, v: f64) {
+        pub fn observe_snapshot_sendto_spent(id: &NodeId, v: f64) {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_sent_seconds
@@ -417,33 +420,21 @@ pub mod raft_metrics {
                 .observe(v);
         }
 
-        pub fn sample_snapshot_recv(addr: String, v: f64) {
+        pub fn observe_snapshot_recvfrom_spent(addr: String, v: f64) {
             RAFT_METRICS
                 .snapshot_recv_seconds
                 .get_or_create(&FromLabels { from: addr })
                 .observe(v);
         }
 
-        pub fn incr_snapshot_recv_status_from_peer(addr: String, success: bool) {
+        pub fn incr_snapshot_recvfrom_result(addr: String, success: bool) {
             if success {
-                incr_snapshot_recv_failure_from_peer(addr);
+                &RAFT_METRICS.snapshot_recv_success
             } else {
-                incr_snapshot_recv_success_from_peer(addr);
+                &RAFT_METRICS.snapshot_recv_failures
             }
-        }
-
-        pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
-            RAFT_METRICS
-                .snapshot_recv_failures
-                .get_or_create(&FromLabels { from: addr })
-                .inc();
-        }
-
-        pub fn incr_snapshot_recv_success_from_peer(addr: String) {
-            RAFT_METRICS
-                .snapshot_recv_success
-                .get_or_create(&FromLabels { from: addr })
-                .inc();
+            .get_or_create(&FromLabels { from: addr })
+            .inc();
         }
     }
 

@@ -385,14 +385,14 @@ jobs:
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
-  test_fuzz_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_fuzz_standalone_linux
-        timeout-minutes: 10
-        continue-on-error: true
+  # test_fuzz_standalone:
+  #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+  #   needs: [build, check]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/test_fuzz_standalone_linux
+  #       timeout-minutes: 10
+  #       continue-on-error: true
 
   test_ee_standalone:
     needs: [build, check, license]

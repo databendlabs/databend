@@ -56,6 +56,7 @@ pub type RaftMetrics = openraft::RaftMetrics<NodeId, MembershipNode>;
 pub type ErrorSubject = openraft::ErrorSubject<NodeId>;
 
 pub type RPCError<E> = openraft::error::RPCError<NodeId, MembershipNode, E>;
+pub type RemoteError<E> = openraft::error::RemoteError<NodeId, MembershipNode, E>;
 pub type RaftError<E = openraft::error::Infallible> = openraft::error::RaftError<NodeId, E>;
 pub type NetworkError = openraft::error::NetworkError;
 
