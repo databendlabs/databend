@@ -215,6 +215,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE RETAIN 20 HOURS;"#,
         r#"VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;"#,
         r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS;"#,
+        r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
