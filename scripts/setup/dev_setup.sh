@@ -404,7 +404,6 @@ Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, black, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
-  * fuzz test dependencies (fuzzingbook)
 EOF
 	fi
 
@@ -599,14 +598,15 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		# for killall & timeout
 		install_pkg psmisc "$PACKAGE_MANAGER"
 		install_pkg coreutils "$PACKAGE_MANAGER"
+		# for graphviz, that fuzzingbook depends on
+		install_pkg graphviz "$PACKAGE_MANAGER"
+		install_pkg graphviz-dev "$PACKAGE_MANAGER"
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector-python==8.0.30
-	# fuzz dependencies
-	python3 -m pip install --quiet fuzzingbook
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then

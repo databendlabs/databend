@@ -792,7 +792,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
         },
         |(_, _, _, database_option, option)| {
             let (catalog, database) = database_option.map_or_else(
@@ -2586,6 +2586,29 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
             }
         }),
     ))(i)
+}
+
+pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
+    alt((map(
+        rule! {
+            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+        },
+        |(retain_hours_opt, dry_run_opt, opt_limit)| {
+            let retain_hours = match retain_hours_opt {
+                Some(retain_hours) => Some(retain_hours.1),
+                None => None,
+            };
+            let dry_run = match dry_run_opt {
+                Some(_) => Some(()),
+                None => None,
+            };
+            VacuumDropTableOption {
+                retain_hours,
+                dry_run,
+                limit: opt_limit.map(|(_, limit)| limit as usize),
+            }
+        },
+    ),))(i)
 }
 
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
