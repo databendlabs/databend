@@ -55,8 +55,6 @@ use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
-const MAX_GROUP_LIMIT: usize = 1000;
-
 struct MergeStyleJoin<'a> {
     source_conditions: &'a [ScalarExpr],
     target_conditions: &'a [ScalarExpr],
@@ -162,10 +160,20 @@ impl MergeIntoInterpreter {
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
-        // The filter_expr'num is (blocks.num * condition);
-        // so if blocks num is too much, let's avoid pruning.
-        if blocks.len() > MAX_GROUP_LIMIT {
-            return Ok(Box::new(join.clone()));
+        // check if number of partitions is too much
+        {
+            let max_number_partitions =
+                ctx.get_settings()
+                    .get_merge_into_static_filter_partition_threshold()? as usize;
+
+            let number_partitions: usize = blocks.iter().map(|b| b.num_rows()).sum();
+            if number_partitions > max_number_partitions {
+                warn!(
+                    "number of partitions {} exceeds threshold {}",
+                    number_partitions, max_number_partitions
+                );
+                return Ok(Box::new(join.clone()));
+            }
         }
 
         // 2. build filter and push down to target side
