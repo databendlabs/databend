@@ -53,7 +53,7 @@ pub struct SessionContext {
     // To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
     // SET SEONCDARY ROLES NONE will disable all the roles except the current role.
     // By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
-    // ROLES is prefered to be NONE, which is Some([]) here:
+    // ROLES is preferred to be empty, which is Some([]) here:
     // 1. The user comes from an external authenticator, which maps to a single role.
     // 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
     secondary_roles: RwLock<Option<Vec<String>>>,
