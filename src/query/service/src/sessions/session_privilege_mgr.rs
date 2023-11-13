@@ -45,6 +45,8 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
+    fn get_secondary_roles(&self) -> Option<Vec<String>>;
+
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
 
     async fn set_current_role(&self, role: Option<String>) -> Result<()>;
@@ -163,6 +165,10 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         }
         self.session_ctx.set_secondary_roles(secondary_roles);
         Ok(())
+    }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.session_ctx.get_secondary_roles()
     }
 
     fn get_current_user(&self) -> Result<UserInfo> {

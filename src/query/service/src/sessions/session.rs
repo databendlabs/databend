@@ -225,6 +225,10 @@ impl Session {
         self.privilege_mgr.get_current_role()
     }
 
+    pub fn get_secondary_roles(self: &Arc<Self>) -> Option<Vec<RoleInfo>> {
+        self.privilege_mgr.get_secondary_roles()
+    }
+
     #[async_backtrace::framed]
     pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
         self.privilege_mgr.set_current_role(None).await
