@@ -130,6 +130,7 @@ pub use crate::raft_types::NodeId;
 pub use crate::raft_types::RPCError;
 pub use crate::raft_types::RaftError;
 pub use crate::raft_types::RaftMetrics;
+pub use crate::raft_types::RemoteError;
 pub use crate::raft_types::Snapshot;
 pub use crate::raft_types::SnapshotMeta;
 pub use crate::raft_types::StorageError;
