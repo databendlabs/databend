@@ -60,7 +60,7 @@ pub enum CreateDatabaseOption {
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | MEMO )? ~ #statement
+            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
         },
         |(_, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -80,6 +80,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
+                    Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     None => ExplainKind::Plan,
                     _ => unreachable!(),

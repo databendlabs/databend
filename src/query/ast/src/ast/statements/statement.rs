@@ -300,6 +300,7 @@ impl Display for Statement {
                     ExplainKind::Pipeline => write!(f, " PIPELINE")?,
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
+                    ExplainKind::Optimized => write!(f, " Optimized")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::JOIN => write!(f, " JOIN")?,

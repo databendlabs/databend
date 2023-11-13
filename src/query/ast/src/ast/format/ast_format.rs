@@ -709,6 +709,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             ExplainKind::Pipeline => "Pipeline",
             ExplainKind::Fragments => "Fragments",
             ExplainKind::Raw => "Raw",
+            ExplainKind::Optimized => "Optimized",
             ExplainKind::Plan => "Plan",
             ExplainKind::Memo(_) => "Memo",
             ExplainKind::JOIN => "JOIN",
