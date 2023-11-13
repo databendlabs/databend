@@ -345,7 +345,7 @@ impl Session {
                     replace_newline_in_box_display(query)
                 };
 
-                let (schema, data) = match other.0 {
+                let data = match other.0 {
                     QueryKind::Put => {
                         let args: Vec<String> = get_put_get_args(query);
                         if args.len() != 3 {
@@ -365,14 +365,8 @@ impl Session {
                     _ => self.conn.query_iter_ext(query).await?,
                 };
 
-                let mut displayer = FormatDisplay::new(
-                    &self.settings,
-                    query,
-                    replace_newline,
-                    start,
-                    Arc::new(schema),
-                    data,
-                );
+                let mut displayer =
+                    FormatDisplay::new(&self.settings, query, replace_newline, start, data);
                 let stats = displayer.display().await?;
                 Ok(Some(stats))
             }

@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use dyn_clone::DynClone;
@@ -93,7 +94,7 @@ pub trait Connection: DynClone + Send + Sync {
     async fn exec(&self, sql: &str) -> Result<i64>;
     async fn query_row(&self, sql: &str) -> Result<Option<Row>>;
     async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
-    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowStatsIterator)>;
+    async fn query_iter_ext(&self, sql: &str) -> Result<RowStatsIterator>;
 
     /// Get presigned url for a given operation and stage location.
     /// The operation can be "UPLOAD" or "DOWNLOAD".
@@ -119,7 +120,7 @@ pub trait Connection: DynClone + Send + Sync {
     async fn stream_load(&self, sql: &str, data: Vec<Vec<&str>>) -> Result<ServerStats>;
 
     // PUT file://<path_to_file>/<filename> internalStage|externalStage
-    async fn put_files(&self, local_file: &str, stage: &str) -> Result<(Schema, RowStatsIterator)> {
+    async fn put_files(&self, local_file: &str, stage: &str) -> Result<RowStatsIterator> {
         let mut total_count: usize = 0;
         let mut total_size: usize = 0;
         let local_dsn = url::Url::parse(local_file)?;
@@ -169,13 +170,14 @@ pub trait Connection: DynClone + Send + Sync {
                 Value::Number(NumberValue::UInt64(size)),
             ]))));
         }
-        Ok((
-            put_get_schema(),
-            RowStatsIterator::new(Box::pin(tokio_stream::iter(results))),
+        let schema = put_get_schema();
+        Ok(RowStatsIterator::new(
+            Arc::new(schema),
+            Box::pin(tokio_stream::iter(results)),
         ))
     }
 
-    async fn get_files(&self, stage: &str, local_file: &str) -> Result<(Schema, RowStatsIterator)> {
+    async fn get_files(&self, stage: &str, local_file: &str) -> Result<RowStatsIterator> {
         let mut total_count: usize = 0;
         let mut total_size: usize = 0;
         let local_dsn = url::Url::parse(local_file)?;
@@ -221,9 +223,10 @@ pub trait Connection: DynClone + Send + Sync {
                 Value::Number(NumberValue::UInt64(size)),
             ]))));
         }
-        Ok((
-            put_get_schema(),
-            RowStatsIterator::new(Box::pin(tokio_stream::iter(results))),
+        let schema = put_get_schema();
+        Ok(RowStatsIterator::new(
+            Arc::new(schema),
+            Box::pin(tokio_stream::iter(results)),
         ))
     }
 }

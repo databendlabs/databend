@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
@@ -125,8 +126,11 @@ impl IntoIterator for Row {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Rows(Vec<Row>);
+#[derive(Clone, Debug)]
+pub struct Rows {
+    schema: SchemaRef,
+    rows: Vec<Row>,
+}
 
 #[cfg(feature = "flight-sql")]
 impl TryFrom<RecordBatch> for Rows {
@@ -144,7 +148,10 @@ impl TryFrom<RecordBatch> for Rows {
             }
             rows.push(Row(values));
         }
-        Ok(Self(rows))
+        Ok(Self {
+            schema: Arc::new(schema.try_into()?),
+            rows,
+        })
     }
 }
 
@@ -153,15 +160,40 @@ impl IntoIterator for Rows {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.rows.into_iter()
     }
 }
 
-pub struct RowIterator(Pin<Box<dyn Stream<Item = Result<Row>> + Send>>);
+impl Rows {
+    pub fn schema(&self) -> SchemaRef {
+        self.schema.clone()
+    }
+
+    pub fn rows(&self) -> &[Row] {
+        &self.rows
+    }
+
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+}
+
+pub struct RowIterator {
+    schema: SchemaRef,
+    it: Pin<Box<dyn Stream<Item = Result<Row>> + Send>>,
+}
 
 impl RowIterator {
-    pub fn new(it: Pin<Box<dyn Stream<Item = Result<Row>> + Send>>) -> Self {
-        Self(it)
+    pub fn new(schema: SchemaRef, it: Pin<Box<dyn Stream<Item = Result<Row>> + Send>>) -> Self {
+        Self { schema, it }
+    }
+
+    pub fn schema(&self) -> SchemaRef {
+        self.schema.clone()
     }
 
     pub async fn try_collect<T>(mut self) -> Result<Vec<T>>
@@ -170,7 +202,7 @@ impl RowIterator {
         T::Error: std::fmt::Display,
     {
         let mut ret = Vec::new();
-        while let Some(row) = self.0.next().await {
+        while let Some(row) = self.it.next().await {
             let v = T::try_from(row?).map_err(|e| Error::Parsing(e.to_string()))?;
             ret.push(v)
         }
@@ -182,24 +214,34 @@ impl Stream for RowIterator {
     type Item = Result<Row>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.0).poll_next(cx)
+        Pin::new(&mut self.it).poll_next(cx)
     }
 }
 
-pub struct RowStatsIterator(Pin<Box<dyn Stream<Item = Result<RowWithStats>> + Send>>);
+pub struct RowStatsIterator {
+    schema: SchemaRef,
+    it: Pin<Box<dyn Stream<Item = Result<RowWithStats>> + Send>>,
+}
 
 impl RowStatsIterator {
-    pub fn new(it: Pin<Box<dyn Stream<Item = Result<RowWithStats>> + Send>>) -> Self {
-        Self(it)
+    pub fn new(
+        schema: SchemaRef,
+        it: Pin<Box<dyn Stream<Item = Result<RowWithStats>> + Send>>,
+    ) -> Self {
+        Self { schema, it }
+    }
+
+    pub fn schema(&self) -> SchemaRef {
+        self.schema.clone()
     }
 
     pub async fn filter_rows(self) -> RowIterator {
-        let rows = self.0.filter_map(|r| match r {
+        let it = self.it.filter_map(|r| match r {
             Ok(RowWithStats::Row(r)) => Some(Ok(r)),
             Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
-        RowIterator(Box::pin(rows))
+        RowIterator::new(self.schema, Box::pin(it))
     }
 }
 
@@ -207,6 +249,6 @@ impl Stream for RowStatsIterator {
     type Item = Result<RowWithStats>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.0).poll_next(cx)
+        Pin::new(&mut self.it).poll_next(cx)
     }
 }

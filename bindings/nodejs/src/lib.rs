@@ -118,7 +118,7 @@ impl ToNapiValue for NumberValue {
 }
 
 #[napi]
-pub struct Schema(databend_driver::Schema);
+pub struct Schema(databend_driver::SchemaRef);
 
 #[napi]
 impl Schema {
@@ -161,10 +161,7 @@ impl RowIterator {
 }
 
 #[napi]
-pub struct RowIteratorExt {
-    schema: databend_driver::Schema,
-    iterator: databend_driver::RowStatsIterator,
-}
+pub struct RowIteratorExt(databend_driver::RowStatsIterator);
 
 #[napi]
 impl RowIteratorExt {
@@ -172,7 +169,7 @@ impl RowIteratorExt {
     /// Returns `None` if there are no more rows.
     #[napi]
     pub async unsafe fn next(&mut self) -> Option<Result<RowOrStats>> {
-        match self.iterator.next().await {
+        match self.0.next().await {
             None => None,
             Some(r0) => match r0 {
                 Ok(r1) => match r1 {
@@ -192,7 +189,7 @@ impl RowIteratorExt {
 
     #[napi]
     pub fn schema(&self) -> Schema {
-        Schema(self.schema.clone())
+        Schema(self.0.schema().clone())
     }
 }
 
@@ -334,12 +331,12 @@ impl Connection {
     /// Execute a SQL query, and return all rows with schema and stats.
     #[napi]
     pub async fn query_iter_ext(&self, sql: String) -> Result<RowIteratorExt> {
-        let (schema, iterator) = self
+        let iterator = self
             .0
             .query_iter_ext(&sql)
             .await
             .map_err(format_napi_error)?;
-        Ok(RowIteratorExt { schema, iterator })
+        Ok(RowIteratorExt(iterator))
     }
 
     /// Load data with stage attachment.

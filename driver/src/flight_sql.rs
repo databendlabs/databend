@@ -72,16 +72,12 @@ impl Connection for FlightSQLConnection {
     }
 
     async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
-        let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
-        let rows = rows_with_progress.filter_map(|r| match r {
-            Ok(RowWithStats::Row(r)) => Some(Ok(r)),
-            Ok(_) => None,
-            Err(err) => Some(Err(err)),
-        });
-        Ok(RowIterator::new(Box::pin(rows)))
+        let rows_with_progress = self.query_iter_ext(sql).await?;
+        let rows = rows_with_progress.filter_rows().await;
+        Ok(rows)
     }
 
-    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowStatsIterator)> {
+    async fn query_iter_ext(&self, sql: &str) -> Result<RowStatsIterator> {
         self.handshake().await?;
         let mut client = self.client.lock().await;
         let mut stmt = client.prepare(sql.to_string(), None).await?;
@@ -92,7 +88,7 @@ impl Connection for FlightSQLConnection {
             .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
         let flight_data = client.do_get(ticket.clone()).await?;
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
-        Ok((schema, RowStatsIterator::new(Box::pin(rows))))
+        Ok(RowStatsIterator::new(Arc::new(schema), Box::pin(rows)))
     }
 
     async fn get_presigned_url(&self, operation: &str, stage: &str) -> Result<PresignedResponse> {

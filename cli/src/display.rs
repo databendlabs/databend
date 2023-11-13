@@ -48,7 +48,6 @@ pub struct FormatDisplay<'a> {
     // whether replace '\n' with '\\n',
     // disable in explain/show create stmts or user config setting false
     replace_newline: bool,
-    schema: SchemaRef,
     data: RowStatsIterator,
 
     rows: usize,
@@ -63,7 +62,6 @@ impl<'a> FormatDisplay<'a> {
         query: &'a str,
         replace_newline: bool,
         start: Instant,
-        schema: SchemaRef,
         data: RowStatsIterator,
     ) -> Self {
         Self {
@@ -71,7 +69,6 @@ impl<'a> FormatDisplay<'a> {
             query,
             kind: QueryKind::from(query),
             replace_newline,
-            schema,
             data,
             rows: 0,
             progress: None,
@@ -136,15 +133,16 @@ impl<'a> FormatDisplay<'a> {
             return Ok(());
         }
 
+        let schema = self.data.schema();
         match self.settings.expand {
             ExpandMode::On => {
-                print_expanded(self.schema.clone(), &rows)?;
+                print_expanded(schema, &rows)?;
             }
             ExpandMode::Off => {
                 println!(
                     "{}",
                     create_table(
-                        self.schema.clone(),
+                        schema,
                         &rows,
                         self.replace_newline,
                         self.settings.max_display_rows,
@@ -158,7 +156,7 @@ impl<'a> FormatDisplay<'a> {
                     println!(
                         "{}",
                         create_table(
-                            self.schema.clone(),
+                            schema,
                             &rows,
                             self.replace_newline,
                             self.settings.max_display_rows,
@@ -167,7 +165,7 @@ impl<'a> FormatDisplay<'a> {
                         )?
                     );
                 } else {
-                    print_expanded(self.schema.clone(), &rows)?;
+                    print_expanded(schema, &rows)?;
                 }
             }
         }

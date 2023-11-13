@@ -21,7 +21,7 @@ use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use tokio::fs::File;
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::Stream;
 
 use databend_client::presign::PresignedResponse;
 use databend_client::response::QueryResponse;
@@ -59,19 +59,15 @@ impl Connection for RestAPIConnection {
     }
 
     async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
-        let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
-        let rows = rows_with_progress.filter_map(|r| match r {
-            Ok(RowWithStats::Row(r)) => Some(Ok(r)),
-            Ok(_) => None,
-            Err(err) => Some(Err(err)),
-        });
-        Ok(RowIterator::new(Box::pin(rows)))
+        let rows_with_progress = self.query_iter_ext(sql).await?;
+        let rows = rows_with_progress.filter_rows().await;
+        Ok(rows)
     }
 
-    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowStatsIterator)> {
+    async fn query_iter_ext(&self, sql: &str) -> Result<RowStatsIterator> {
         let resp = self.client.start_query(sql).await?;
         let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
-        Ok((schema, RowStatsIterator::new(Box::pin(rows))))
+        Ok(RowStatsIterator::new(Arc::new(schema), Box::pin(rows)))
     }
 
     async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
