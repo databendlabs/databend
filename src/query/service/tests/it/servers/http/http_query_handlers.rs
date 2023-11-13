@@ -1262,7 +1262,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
                 secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
@@ -1281,7 +1281,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
                 secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
@@ -1295,7 +1295,7 @@ async fn test_affect() -> Result<()> {
             None,
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
                 secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
@@ -1311,7 +1311,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
                 secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
