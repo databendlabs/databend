@@ -219,7 +219,7 @@ impl TransformHashJoinProbe {
 
     async fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
-        // self.probe_state.reset();
+        self.probe_state.reset();
         if (self.join_probe_state.hash_join_state.need_outer_scan()
             || self.join_probe_state.hash_join_state.need_mark_scan())
             && self.join_probe_state.probe_workers.load(Ordering::Relaxed) == 0
