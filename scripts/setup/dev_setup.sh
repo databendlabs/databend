@@ -404,7 +404,6 @@ Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, black, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
-  * fuzz test dependencies (fuzzingbook)
 EOF
 	fi
 
@@ -605,8 +604,6 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector-python==8.0.30
-	# fuzz dependencies
-	python3 -m pip install --quiet fuzzingbook
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
