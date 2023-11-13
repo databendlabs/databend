@@ -51,7 +51,7 @@ impl RaftServiceImpl {
         if let Some(addr) = request.remote_addr() {
             let message: &RaftRequest = request.get_ref();
             let bytes = message.data.len() as u64;
-            raft_metrics::network::incr_recv_bytes_from_peer(addr.to_string(), bytes);
+            raft_metrics::network::incr_recvfrom_bytes(addr.to_string(), bytes);
         }
     }
 }
@@ -140,11 +140,11 @@ impl RaftService for RaftServiceImpl {
 
             let resp = raft
                 .install_snapshot(is_req)
-                .timed(sample_snapshot_recv(&addr))
+                .timed(observe_snapshot_recv_spent(&addr))
                 .await
                 .map_err(GrpcHelper::internal_err);
 
-            raft_metrics::network::incr_snapshot_recv_status_from_peer(addr.clone(), resp.is_ok());
+            raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), resp.is_ok());
 
             match resp {
                 Ok(resp) => GrpcHelper::ok_response(resp),
@@ -186,13 +186,16 @@ fn remote_addr<T>(request: &Request<T>) -> String {
 }
 
 /// Create a function record the time cost of snapshot receiving.
-fn sample_snapshot_recv(addr: &str) -> impl Fn(Duration, Duration) + '_ {
+fn observe_snapshot_recv_spent(addr: &str) -> impl Fn(Duration, Duration) + '_ {
     |t, _b| {
-        raft_metrics::network::sample_snapshot_recv(addr.to_string(), t.as_secs() as f64);
+        raft_metrics::network::observe_snapshot_recvfrom_spent(
+            addr.to_string(),
+            t.as_secs() as f64,
+        );
     }
 }
 
 /// Create a function that increases metric value of inflight snapshot receiving.
 fn snapshot_recv_inflight(addr: impl ToString) -> impl FnMut(i64) {
-    move |i: i64| raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.to_string(), i)
+    move |i: i64| raft_metrics::network::incr_snapshot_recvfrom_inflight(addr.to_string(), i)
 }

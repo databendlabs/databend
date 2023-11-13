@@ -153,7 +153,7 @@ impl Network {
 
     fn incr_meta_metrics_sent_bytes_to_peer(target: &NodeId, message: &RaftRequest) {
         let bytes = message.data.len() as u64;
-        raft_metrics::network::incr_sent_bytes_to_peer(target, bytes);
+        raft_metrics::network::incr_sendto_bytes(target, bytes);
     }
 }
 
@@ -194,18 +194,15 @@ impl NetworkConnection {
                 Ok(client)
             }
             Err(err) => {
-                raft_metrics::network::incr_fail_connections_to_peer(
-                    &target,
-                    &endpoint.to_string(),
-                );
+                raft_metrics::network::incr_connect_failure(&target, &endpoint.to_string());
                 Err(err.into())
             }
         }
     }
 
     pub(crate) fn report_metrics_snapshot(&self, success: bool) {
-        raft_metrics::network::incr_sent_result_to_peer(&self.target, success);
-        raft_metrics::network::incr_snapshot_send_result_to_peer(&self.target, success);
+        raft_metrics::network::incr_sendto_result(&self.target, success);
+        raft_metrics::network::incr_snapshot_sendto_result(&self.target, success);
     }
 
     /// Wrap a RaftError with RPCError
@@ -277,7 +274,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                     }
                 }
                 Err(status) => {
-                    raft_metrics::network::incr_sent_failure_to_peer(&self.target);
+                    raft_metrics::network::incr_sendto_failure(&self.target);
                     last_err = Some(NetworkError::new(
                         &AnyError::new(&status).add_context(|| "send_append_entries"),
                     ));
@@ -324,7 +321,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
             let res = client
                 .install_snapshot(req)
-                .timed(sample_snapshot_sent(self.target))
+                .timed(observe_snapshot_send_spent(self.target))
                 .await;
 
             info!("install_snapshot resp target={}: {:?}", self.target, res);
@@ -392,7 +389,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                     }
                 }
                 Err(e) => {
-                    raft_metrics::network::incr_sent_failure_to_peer(&self.target);
+                    raft_metrics::network::incr_sendto_failure(&self.target);
                     last_err = Some(NetworkError::new(
                         &AnyError::new(&e).add_context(|| "send_vote"),
                     ));
@@ -444,14 +441,14 @@ fn new_net_err<D: Display>(
     NetworkError::new(&AnyError::new(e).add_context(msg))
 }
 
-/// Create a function record the time cost of snapshot receiving.
-fn sample_snapshot_sent(target: NodeId) -> impl Fn(Duration, Duration) {
+/// Create a function record the time cost of snapshot sending.
+fn observe_snapshot_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
     move |t, _b| {
-        raft_metrics::network::sample_snapshot_sent(&target, t.as_secs() as f64);
+        raft_metrics::network::observe_snapshot_sendto_spent(&target, t.as_secs() as f64);
     }
 }
 
 /// Create a function that increases metric value of inflight snapshot sending.
 fn snapshot_send_inflight(target: NodeId) -> impl FnMut(i64) {
-    move |i: i64| raft_metrics::network::incr_snapshot_send_inflights_to_peer(&target, i)
+    move |i: i64| raft_metrics::network::incr_snapshot_sendto_inflight(&target, i)
 }
