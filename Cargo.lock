@@ -2731,7 +2731,6 @@ dependencies = [
  "simsearch",
  "storages-common-table-meta",
  "time",
- "url",
 ]
 
 [[package]]
