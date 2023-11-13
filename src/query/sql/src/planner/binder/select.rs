@@ -800,6 +800,7 @@ impl Binder {
             || stmt.distinct
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.windows.window_functions.is_empty()
         {
             return Ok(());
         }
