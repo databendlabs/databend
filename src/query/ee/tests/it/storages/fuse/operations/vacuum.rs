@@ -145,6 +145,7 @@ async fn check_query_data(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn check_vacuum(
     fixture: &TestFixture,
     table_ctx: Arc<dyn TableContext>,

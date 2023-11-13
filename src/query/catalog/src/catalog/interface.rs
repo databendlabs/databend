@@ -304,10 +304,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn set_table_lvt(&self, _table_id: u64, _time: u64) -> Result<SetLVTReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented("'set_table_lvt' not implemented"))
     }
 
     async fn get_table_lvt(&self, _table_id: u64) -> Result<GetLVTReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented("'get_table_lvt' not implemented"))
     }
 }
