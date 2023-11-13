@@ -56,6 +56,7 @@ jobs:
   build:
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - { arch: x86_64, libc: gnu }
@@ -74,6 +75,7 @@ jobs:
   build_address_sanitizer:
     runs-on: [ self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}" ]
     strategy:
+      fail-fast: false
       matrix:
         include:
           # - { arch: x86_64, libc: gnu }
@@ -92,6 +94,7 @@ jobs:
   build_other:
     runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           # - { arch: x86_64, libc: musl }
@@ -174,6 +177,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
+      fail-fast: false
       matrix:
         dirs:
           - "query"
@@ -251,6 +255,7 @@ jobs:
     if: needs.license.outputs.license
     needs: [build, check, license]
     strategy:
+      fail-fast: false
       matrix:
         format:
           - "parquet"
@@ -279,6 +284,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
+      fail-fast: false
       matrix:
         dirs:
           - "query"
@@ -310,6 +316,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
+      fail-fast: false
       matrix:
         storage:
           - "s3"
