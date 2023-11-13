@@ -56,6 +56,7 @@ jobs:
     strategy:
       matrix:
         include:
+          - { os: linux, arch: arm64, target: aarch64-unknown-linux-gnu, runner: ubuntu-20.04 }
           - { os: linux, arch: x64, target: x86_64-unknown-linux-gnu, runner: ubuntu-20.04 }
           - { os: windows, arch: x64, target: x86_64-pc-windows-msvc, runner: windows-2019 }
           - { os: macos, arch: x64, target: x86_64-apple-darwin, runner: macos-11 }
@@ -68,11 +69,15 @@ jobs:
           cache-key: bindings-nodejs
           target: ${{ matrix.target }}
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: yarn
           cache-dependency-path: "bindings/nodejs/yarn.lock"
+      - name: Install ziglang
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
       - name: Corepack
         working-directory: bindings/nodejs
         run: corepack enable

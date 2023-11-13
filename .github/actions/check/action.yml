@@ -1,9 +1,5 @@
 name: 'Check'
 description: 'Check will do all essential checks'
-inputs:
-  github_token:
-    description: "Github Token"
-    required: true
 runs:
   using: "composite"
   steps:
@@ -27,6 +23,8 @@ runs:
         cargo install cargo-quickinstall
         cargo quickinstall cargo-machete
         cargo quickinstall cargo-deny
+        cargo quickinstall cargo-xwin
+        cargo quickinstall sccache
 
     - name: Machete
       shell: bash

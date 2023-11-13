@@ -19,8 +19,6 @@ jobs:
         with:
           cache-key: check
       - uses: ./.github/actions/check
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     needs: check
