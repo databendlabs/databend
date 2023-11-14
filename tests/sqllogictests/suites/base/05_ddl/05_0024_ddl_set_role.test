@@ -1,27 +1,22 @@
 statement ok
 CREATE ROLE IF NOT EXISTS `test-s`
 
-onlyif mysql
 statement ok
 SET ROLE `test-s`
 
-onlyif mysql
 query T
 SELECT current_role()
 ----
 test-s
 
-onlyif mysql
 statement error 2206
 SET ROLE `test-role-not-exists`
 
 statement ok
 DROP ROLE IF EXISTS `test-s`
 
-onlyif mysql
 statement ok
 SET ROLE public
 
-onlyif mysql
 statement ok
 SELECT 1
