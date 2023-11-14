@@ -15,8 +15,10 @@ test = false
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
+common-storages-fuse = { path = "../fuse" }
 
 storages-common-table-meta = { path = "../common/table_meta" }
+
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

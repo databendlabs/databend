@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
@@ -23,7 +24,13 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
+use common_storages_fuse::io::SegmentsIO;
+use common_storages_fuse::io::SnapshotsIO;
+use common_storages_fuse::FuseTable;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 pub const STREAM_ENGINE: &str = "STREAM";
@@ -91,14 +98,81 @@ impl StreamTable {
             ))
         })
     }
-    
+
     #[async_backtrace::framed]
-    fn do_read_partitions(
+    async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        
+        let catalog = ctx.get_catalog(self.stream_info.catalog()).await?;
+        let (ident, meta) = catalog.get_table_meta_by_id(self.table_id).await?;
+        if ident.seq <= self.table_version {
+            return Ok((PartStatistics::default(), Partitions::default()));
+        }
+        let table_info = TableInfo {
+            ident,
+            desc: "".to_owned(),
+            name: self.table_name.clone(),
+            meta: meta.as_ref().clone(),
+            tenant: "".to_owned(),
+            db_type: DatabaseType::NormalDB,
+        };
+        let table = catalog.get_table_by_info(&table_info)?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let latest_snapshot = fuse_table.read_table_snapshot().await?;
+        if latest_snapshot.is_none() {
+            return Ok((PartStatistics::default(), Partitions::default()));
+        }
+
+        let latest_snapshot = latest_snapshot.unwrap();
+        let latest_segments: HashSet<Location> =
+            HashSet::from_iter(latest_snapshot.segments.clone());
+        drop(latest_snapshot);
+        let operator = fuse_table.get_operator();
+        let base_segments: HashSet<Location> =
+            if let Some(snapshot_location) = &self.snapshot_location {
+                let (base_snapshot, _) =
+                    SnapshotsIO::read_snapshot(snapshot_location.clone(), operator.clone()).await?;
+                HashSet::from_iter(base_snapshot.segments.clone())
+            } else {
+                HashSet::new()
+            };
+
+        let fuse_segment_io = SegmentsIO::create(ctx, operator, fuse_table.schema());
+
+        let diff_in_base = base_segments
+            .difference(&latest_segments)
+            .cloned()
+            .collect::<Vec<_>>();
+        let diff_in_base = fuse_segment_io
+            .read_segments::<SegmentInfo>(&diff_in_base, true)
+            .await?;
+        let mut base_blocks = HashSet::new();
+        for segment in diff_in_base {
+            let segment = segment?;
+            segment.blocks.into_iter().for_each(|block| {
+                base_blocks.insert(block.location.clone());
+            })
+        }
+
+        let diff_in_latest = latest_segments
+            .difference(&base_segments)
+            .cloned()
+            .collect::<Vec<_>>();
+        let diff_in_latest = fuse_segment_io
+            .read_segments::<SegmentInfo>(&diff_in_latest, true)
+            .await?;
+        let mut latest_blocks = Vec::new();
+        for segment in diff_in_latest {
+            let segment = segment?;
+            segment.blocks.into_iter().for_each(|block| {
+                if !base_blocks.contains(&block.location) {
+                    latest_blocks.push(block);
+                }
+            });
+        }
+
         todo!()
     }
 }

@@ -98,7 +98,7 @@ impl Binder {
                     .get_enable_aggregating_index_scan()?
                 && !bind_context.planning_agg_index
                 && table.support_index()
-                && !matches!(table.engine(),"VIEW"|"STREAM") 
+                && !matches!(table.engine(), "VIEW" | "STREAM")
             {
                 let license_manager = get_license_manager();
                 if license_manager
