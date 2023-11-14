@@ -23,7 +23,9 @@ pub struct Profile {
     /// The name of processor
     pub p_name: String,
 
+    pub plan_id: Option<u32>,
     pub plan_name: Option<String>,
+    pub plan_parent_id: Option<u32>,
 
     /// The time spent to process in nanoseconds
     pub cpu_time: AtomicU64,
@@ -39,7 +41,9 @@ impl Profile {
             p_name,
             cpu_time: AtomicU64::new(0),
             wait_time: AtomicU64::new(0),
-            plan_name: scope.map(|x| x.name.clone()),
+            plan_name: scope.as_ref().map(|x| x.name.clone()),
+            plan_id: scope.as_ref().map(|x| x.id.clone()),
+            plan_parent_id: scope.as_ref().map(|x| x.parent_id.clone()),
         }
     }
 }

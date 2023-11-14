@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -59,6 +60,7 @@ pub struct Pipeline {
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
 
+    scope_id: Arc<AtomicU32>,
     plans_scope: Vec<PlanScope>,
     scope_size: Arc<AtomicUsize>,
 }
@@ -82,8 +84,9 @@ impl Pipeline {
             on_init: None,
             on_finished: None,
             lock_guards: vec![],
-            plans_scope: vec![PlanScope::create(String::from("Result"))],
             scope_size: Arc::new(AtomicUsize::new(1)),
+            plans_scope: vec![PlanScope::create(String::from("Result"))],
+            scope_id: Arc::new(AtomicU32::new(1)),
         }
     }
 
@@ -122,7 +125,23 @@ impl Pipeline {
 
     pub fn add_pipe(&mut self, mut pipe: Pipe) {
         let scope_idx = self.scope_size.load(Ordering::SeqCst) - 1;
-        pipe.scope = self.plans_scope.get(scope_idx).cloned();
+
+        if let Some(scope) = self.plans_scope.get_mut(scope_idx) {
+            if scope.id == 0 {
+                scope.id = self.scope_id.fetch_add(1, Ordering::SeqCst);
+                for pipe in &mut self.pipes {
+                    if let Some(children) = &mut pipe.scope {
+                        if children.parent_id == 0 && children.id != scope.id {
+                            children.parent_id = scope.id;
+                        }
+                    }
+                }
+            }
+
+            pipe.scope = Some(scope.clone());
+        }
+
+        // pipe.scope = self.plans_scope.get(scope_idx).cloned();
         self.pipes.push(pipe);
     }
 
@@ -400,7 +419,6 @@ impl Pipeline {
     }
 
     pub fn add_plan_scope(&mut self, scope: PlanScope) -> PlanScopeGuard {
-        println!("add plan scope {:?}", scope.name);
         let scope_idx = self.scope_size.fetch_add(1, Ordering::SeqCst);
 
         if self.plans_scope.len() > scope_idx {
@@ -451,9 +469,9 @@ impl Drop for PlanScopeGuard {
 
 #[derive(Clone)]
 pub struct PlanScope {
-    id: usize,
-    parent_id: usize,
+    pub id: u32,
     pub name: String,
+    pub parent_id: u32,
 }
 
 impl PlanScope {

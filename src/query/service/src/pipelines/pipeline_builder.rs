@@ -105,9 +105,8 @@ impl PipelineBuilder {
     }
 
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
-        let _guard = self
-            .main_pipeline
-            .add_plan_scope(PlanScope::create(plan.name()));
+        let scope = PlanScope::create(plan.name());
+        let _guard = self.main_pipeline.add_plan_scope(scope);
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
