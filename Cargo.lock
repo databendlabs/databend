@@ -3085,6 +3085,7 @@ dependencies = [
 name = "common-storages-stream"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-catalog",
  "common-exception",

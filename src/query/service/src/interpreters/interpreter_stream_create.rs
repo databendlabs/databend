@@ -68,6 +68,7 @@ impl Interpreter for CreateStreamInterpreter {
         let table_info = fuse_table.get_table_info();
         let table_id = table_info.ident.table_id.to_string();
         let table_version = table_info.ident.seq;
+        let schema = table_info.schema().clone();
 
         let mut options = BTreeMap::new();
         match &plan.navigation {
@@ -108,6 +109,7 @@ impl Interpreter for CreateStreamInterpreter {
                 engine: STREAM_ENGINE.to_string(),
                 options,
                 comment: plan.comment.clone().unwrap_or("".to_string()),
+                schema,
                 ..Default::default()
             },
         };

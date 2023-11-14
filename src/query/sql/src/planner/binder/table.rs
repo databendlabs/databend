@@ -127,7 +127,7 @@ impl Binder {
         let catalog = CATALOG_DEFAULT;
         let database = "system";
         let tenant = self.ctx.get_tenant();
-        let table_meta: Arc<dyn Table> = self
+        let table_meta = self
             .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
             .await?;
         let table_index = self.metadata.write().add_table(

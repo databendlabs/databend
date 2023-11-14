@@ -13,9 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -86,6 +91,16 @@ impl StreamTable {
             ))
         })
     }
+    
+    #[async_backtrace::framed]
+    fn do_read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        
+        todo!()
+    }
 }
 
 #[async_trait::async_trait]
@@ -96,5 +111,15 @@ impl Table for StreamTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.stream_info
+    }
+
+    #[async_backtrace::framed]
+    async fn read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
+    ) -> Result<(PartStatistics, Partitions)> {
+        todo!()
     }
 }

@@ -18,6 +18,7 @@ common-meta-app = { path = "../../../meta/app" }
 
 storages-common-table-meta = { path = "../common/table_meta" }
 
+async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 
 [build-dependencies]
