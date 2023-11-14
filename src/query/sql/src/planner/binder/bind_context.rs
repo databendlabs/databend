@@ -38,7 +38,6 @@ use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
 use crate::binder::lambda::LambdaInfo;
-use crate::binder::udf::UdfInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;

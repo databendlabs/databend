@@ -19,6 +19,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::UDFServerCall;
 use crate::BindContext;
 use crate::ScalarExpr;
 use crate::Visibility;
