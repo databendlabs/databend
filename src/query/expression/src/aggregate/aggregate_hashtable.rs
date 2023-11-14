@@ -14,11 +14,11 @@
 
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
-use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use common_exception::Result;
 
-use super::payload::Payload;
+use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
@@ -27,25 +27,20 @@ use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::HashTableConfig;
+use crate::Payload;
 use crate::StateAddr;
+use crate::FLUSH_BATCH_SIZE;
 
 const LOAD_FACTOR: f64 = 1.5;
-// hashes layout:
-// [SALT][PAGE_NR][PAGE_OFFSET]
-// [SALT] are the high bits of the hash value, e.g. 16 for 64 bit hashes
-// [PAGE_NR] is the buffer managed payload page index
-// [PAGE_OFFSET] is the logical entry offset into said payload page
+const MAX_ROWS_IN_HT: usize = 256 * 1024;
 
-#[repr(packed)]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Entry {
-    pub salt: u16,
-    pub page_offset: u16,
-    pub page_nr: u32,
-}
+pub type Entry = u64;
 
 pub struct AggregateHashTable {
-    payload: Payload,
+    pub payload: PartitionedPayload,
+    config: HashTableConfig,
+    current_radix_bits: u64,
     entries: Vec<Entry>,
     capacity: usize,
 }
@@ -55,25 +50,27 @@ unsafe impl Sync for AggregateHashTable {}
 
 impl AggregateHashTable {
     pub fn new(
-        arena: Arc<bumpalo::Bump>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
     ) -> Self {
         let capacity = Self::initial_capacity();
-        Self {
-            entries: Self::new_entries(capacity),
-            payload: Payload::new(arena, group_types, aggrs),
-            capacity,
-        }
+        Self::new_with_capacity(group_types, aggrs, config, capacity)
     }
 
-    // Faster way to create entries
-    // We don't need to extend N zero elements using u64 after we allocate zero spaces
-    // due to IsZero Trait(https://stdrs.dev/nightly/x86_64-unknown-linux-gnu/src/alloc/vec/spec_from_elem.rs.html#24)
-    fn new_entries(capacity: usize) -> Vec<Entry> {
-        let entries = vec![0u64; capacity];
-        let (ptr, len, cap) = entries.into_raw_parts();
-        unsafe { Vec::from_raw_parts(ptr as *mut Entry, len, cap) }
+    pub fn new_with_capacity(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+        capacity: usize,
+    ) -> Self {
+        Self {
+            entries: vec![0u64; capacity],
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits),
+            capacity,
+            config,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -163,6 +160,18 @@ impl AggregateHashTable {
         group_columns: &[Column],
         row_count: usize,
     ) -> usize {
+        self.maybe_repartition();
+
+        if self.config.partial_agg
+            && self.current_radix_bits == self.config.max_radix_bits
+            && self.capacity >= MAX_ROWS_IN_HT
+        {
+            // directly append rows
+            state.set_incr_empty_vector(row_count);
+            self.payload.append_rows(state, row_count, group_columns);
+            return row_count;
+        }
+
         if row_count + self.len() > self.capacity
             || row_count + self.len() > self.resize_threshold()
         {
@@ -171,21 +180,20 @@ impl AggregateHashTable {
             while new_capacity - self.len() <= row_count {
                 new_capacity *= 2;
             }
-            println!(
-                "resize from {} {}  by {}",
-                self.capacity, new_capacity, row_count
-            );
             self.resize(new_capacity);
         }
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
 
-        let mut payload_page_offset = self.len() % self.payload.row_per_page;
-        let mut payload_page_nr = (self.len() / self.payload.row_per_page) + 1;
-
         let mut iter_times = 0;
+
+        if self.len() == 0 {
+            debug_assert_eq!(self.entries.iter().sum::<u64>(), 0);
+        }
+
         let entries = &mut self.entries;
+
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
@@ -201,37 +209,22 @@ impl AggregateHashTable {
 
                 let ht_offset =
                     (state.group_hashes[index] as usize + iter_times) & (self.capacity - 1);
-                let salt = (state.group_hashes[index] >> (64 - 16)) as u16;
 
+                let salt = state.group_hashes[index].get_salt();
                 let entry = &mut entries[ht_offset];
 
-                // cell is empty, could be occupied
-                if entry.page_nr == 0 {
-                    entry.salt = salt;
-                    entry.page_nr = payload_page_nr as u32;
-                    entry.page_offset = payload_page_offset as u16;
-
-                    payload_page_offset += 1;
-
-                    if payload_page_offset == self.payload.row_per_page {
-                        payload_page_offset = 0;
-                        payload_page_nr += 1;
-
-                        self.payload.try_extend_page(payload_page_nr - 1);
+                if entry.is_occupied() {
+                    if entry.get_salt() == salt {
+                        state.group_compare_vector[need_compare_count] = index;
+                        need_compare_count += 1;
+                    } else {
+                        state.no_match_vector[no_match_count] = index;
+                        no_match_count += 1;
                     }
-
+                } else {
+                    entry.set_salt(salt);
                     state.empty_vector[new_entry_count] = index;
                     new_entry_count += 1;
-                } else if entry.salt == salt {
-                    let page_ptr = self.payload.get_page_ptr((entry.page_nr - 1) as usize);
-                    let page_offset = entry.page_offset as usize * self.payload.tuple_size;
-                    state.addresses[index] = unsafe { page_ptr.add(page_offset) };
-
-                    state.group_compare_vector[need_compare_count] = index;
-                    need_compare_count += 1;
-                } else {
-                    state.no_match_vector[no_match_count] = index;
-                    no_match_count += 1;
                 }
             }
 
@@ -240,24 +233,48 @@ impl AggregateHashTable {
                 new_group_count += new_entry_count;
                 self.payload
                     .append_rows(state, new_entry_count, group_columns);
+
+                for i in 0..new_entry_count {
+                    let index = state.empty_vector[i];
+                    let ht_offset =
+                        (state.group_hashes[index] as usize + iter_times) & (self.capacity - 1);
+                    let entry = &mut entries[ht_offset];
+
+                    entry.set_pointer(state.addresses[index]);
+
+                    debug_assert_eq!(entry.get_pointer(), state.addresses[index]);
+                }
             }
 
-            // 3. handle need_compare_count
-            // already inject addresses to state.addresses
+            // set address of compare vector
 
-            // 4. compare
-            unsafe {
-                row_match_columns(
-                    group_columns,
-                    &state.addresses,
-                    &mut state.group_compare_vector,
-                    &mut state.temp_vector,
-                    need_compare_count,
-                    &self.payload.validity_offsets,
-                    &self.payload.group_offsets,
-                    &mut state.no_match_vector,
-                    &mut no_match_count,
-                );
+            if need_compare_count > 0 {
+                for i in 0..need_compare_count {
+                    let index = state.group_compare_vector[i];
+                    let ht_offset =
+                        (state.group_hashes[index] as usize + iter_times) & (self.capacity - 1);
+                    let entry = &mut entries[ht_offset];
+
+                    debug_assert!(entry.is_occupied());
+                    debug_assert_eq!(entry.get_salt(), state.group_hashes[index].get_salt());
+
+                    state.addresses[index] = entry.get_pointer();
+                }
+
+                // 4. compare
+                unsafe {
+                    row_match_columns(
+                        group_columns,
+                        &state.addresses,
+                        &mut state.group_compare_vector,
+                        &mut state.temp_vector,
+                        need_compare_count,
+                        &self.payload.validity_offsets,
+                        &self.payload.group_offsets,
+                        &mut state.no_match_vector,
+                        &mut no_match_count,
+                    );
+                }
             }
 
             // 5. Linear probing, just increase iter_times
@@ -265,24 +282,32 @@ impl AggregateHashTable {
             remaining_entries = no_match_count;
         }
 
-        // set state places
-        if !self.payload.aggrs.is_empty() {
-            for i in 0..row_count {
-                state.state_places[i] = unsafe {
-                    StateAddr::new(core::ptr::read::<u64>(
-                        state.addresses[i].add(self.payload.state_offset) as _,
-                    ) as usize)
-                };
-            }
-        }
-
         new_group_count
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
-        flush_state.reset();
+        self.combine_payloads(&other.payload, flush_state)
+    }
 
-        while other.payload.flush(flush_state) {
+    pub fn combine_payloads(
+        &mut self,
+        payloads: &PartitionedPayload,
+        flush_state: &mut PayloadFlushState,
+    ) -> Result<()> {
+        for payload in payloads.payloads.iter() {
+            self.combine_payload(payload, flush_state)?;
+        }
+        Ok(())
+    }
+
+    pub fn combine_payload(
+        &mut self,
+        payload: &Payload,
+        flush_state: &mut PayloadFlushState,
+    ) -> Result<()> {
+        flush_state.clear();
+
+        while payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 
             let _ = self.probe_and_create(
@@ -290,6 +315,18 @@ impl AggregateHashTable {
                 &flush_state.group_columns,
                 row_count,
             );
+
+            // set state places
+            if !self.payload.aggrs.is_empty() {
+                for i in 0..row_count {
+                    flush_state.probe_state.state_places[i] = unsafe {
+                        StateAddr::new(core::ptr::read::<u64>(
+                            flush_state.probe_state.addresses[i].add(self.payload.state_offset)
+                                as _,
+                        ) as usize)
+                    };
+                }
+            }
 
             let state = &mut flush_state.probe_state;
             for (aggr, addr_offset) in self
@@ -305,6 +342,7 @@ impl AggregateHashTable {
                 )?;
             }
         }
+
         Ok(())
     }
 
@@ -334,6 +372,57 @@ impl AggregateHashTable {
         Ok(false)
     }
 
+    fn maybe_repartition(&mut self) {
+        // already final stage or the max radix bits
+        if !self.config.partial_agg || (self.current_radix_bits == self.config.max_radix_bits) {
+            return;
+        }
+
+        let bytes_per_partition = self.payload.memory_size() / self.payload.partition_count();
+
+        let mut new_radix_bits = self.current_radix_bits;
+        // 256k
+        if bytes_per_partition > 256 * 1024 {
+            new_radix_bits += self.config.repartition_radix_bits_incr;
+        }
+
+        loop {
+            let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
+            if current_max_radix_bits < new_radix_bits {
+                if self
+                    .config
+                    .current_max_radix_bits
+                    .compare_exchange(
+                        current_max_radix_bits,
+                        new_radix_bits,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    )
+                    .is_err()
+                {
+                    continue;
+                }
+            }
+            break;
+        }
+
+        let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
+
+        if current_max_radix_bits > self.current_radix_bits {
+            let temp_payload = PartitionedPayload::new(
+                self.payload.group_types.clone(),
+                self.payload.aggrs.clone(),
+                1,
+            );
+            let payload = std::mem::replace(&mut self.payload, temp_payload);
+            let mut state = PayloadFlushState::with_capacity(FLUSH_BATCH_SIZE);
+
+            self.current_radix_bits = current_max_radix_bits;
+            self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
+        }
+    }
+
+    #[inline]
     fn resize_threshold(&self) -> usize {
         (self.capacity as f64 / LOAD_FACTOR) as usize
     }
@@ -345,24 +434,29 @@ impl AggregateHashTable {
 
         let mask = (new_capacity - 1) as u64;
 
-        let mut entries = Self::new_entries(new_capacity);
+        let mut entries = vec![0; new_capacity];
+
         // iterate over payloads and copy to new entries
-        for row in 0..self.len() {
-            let row_ptr = self.payload.get_row_ptr(row);
-            let hash: u64 = unsafe { core::ptr::read(row_ptr.add(self.payload.hash_offset) as _) };
-            let mut hash_slot = hash & mask;
+        for payload in self.payload.payloads.iter() {
+            for row in 0..payload.len() {
+                let row_ptr = payload.get_read_ptr(row);
+                let hash: u64 = unsafe { core::ptr::read(row_ptr.add(payload.hash_offset) as _) };
+                let mut hash_slot = hash & mask;
 
-            while entries[hash_slot as usize].page_nr != 0 {
-                hash_slot += 1;
-                if hash_slot >= self.capacity as u64 {
-                    hash_slot = 0;
+                while entries[hash_slot as usize].is_occupied() {
+                    hash_slot += 1;
+                    if hash_slot >= new_capacity as u64 {
+                        hash_slot = 0;
+                    }
                 }
+                debug_assert!(!entries[hash_slot as usize].is_occupied());
+                // set value
+                entries[hash_slot as usize].set_salt(hash.get_salt());
+                entries[hash_slot as usize].set_pointer(row_ptr);
+                debug_assert!(entries[hash_slot as usize].is_occupied());
+                debug_assert_eq!(entries[hash_slot as usize].get_pointer(), row_ptr);
+                debug_assert_eq!(entries[hash_slot as usize].get_salt(), hash.get_salt());
             }
-            let entry = &mut entries[hash_slot as usize];
-
-            entry.page_nr = (row / self.payload.row_per_page) as u32 + 1;
-            entry.page_offset = (row % self.payload.row_per_page) as u16;
-            entry.salt = (hash >> (64 - 16)) as u16;
         }
 
         self.entries = entries;
@@ -375,5 +469,53 @@ impl AggregateHashTable {
 
     pub fn get_capacity_for_count(count: usize) -> usize {
         ((count.max(Self::initial_capacity()) as f64 * LOAD_FACTOR) as usize).next_power_of_two()
+    }
+}
+
+/// Upper 16 bits are salt
+const SALT_MASK: u64 = 0xFFFF000000000000;
+/// Lower 48 bits are the pointer
+const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
+
+pub const INITIAL_RADIX_BITS: u64 = 4;
+
+pub(crate) trait EntryLike {
+    fn get_salt(&self) -> u64;
+    fn set_salt(&mut self, _salt: u64);
+    fn is_occupied(&self) -> bool;
+
+    fn get_pointer(&self) -> *const u8;
+    fn set_pointer(&mut self, ptr: *const u8);
+}
+
+impl EntryLike for u64 {
+    #[inline]
+    fn get_salt(&self) -> u64 {
+        *self | POINTER_MASK
+    }
+
+    #[inline]
+    fn set_salt(&mut self, salt: u64) {
+        *self = salt;
+    }
+
+    #[inline]
+    fn is_occupied(&self) -> bool {
+        *self != 0
+    }
+
+    #[inline]
+    fn get_pointer(&self) -> *const u8 {
+        (*self & POINTER_MASK) as *const u8
+    }
+
+    #[inline]
+    fn set_pointer(&mut self, ptr: *const u8) {
+        // Pointer shouldn't use upper bits
+        debug_assert!(ptr as u64 & SALT_MASK == 0);
+        // Value should have all 1's in the pointer area
+        debug_assert!(*self as u64 & POINTER_MASK == POINTER_MASK);
+
+        *self &= (ptr as u64) | SALT_MASK;
     }
 }

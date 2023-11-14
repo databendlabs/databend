@@ -15,15 +15,17 @@
 use std::any::Any;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::AggregateHashTable;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
+use common_expression::PartitionedPayload;
+use common_expression::PayloadFlushState;
 use common_hashtable::hash2bucket;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::pipe::Pipe;
@@ -69,7 +71,10 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     pushing_bucket: isize,
     initialized_all_inputs: bool,
     buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
+    flush_state: PayloadFlushState,
+    partition_payloads: Vec<PartitionedPayload>,
     unsplitted_blocks: Vec<DataBlock>,
+    max_partition_count: usize,
     _phantom: PhantomData<V>,
 }
 
@@ -95,7 +100,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             output: OutputPort::create(),
             buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
+            flush_state: PayloadFlushState::with_capacity(8192),
+            partition_payloads: vec![],
             initialized_all_inputs: false,
+            max_partition_count: 0,
             _phantom: Default::default(),
         })
     }
@@ -186,7 +194,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
                         unreachable!()
                     }
-                    AggregateMeta::AggregateHashTable((v, _)) => (*v, *v),
+                    AggregateMeta::AggregateHashTable(p) => {
+                        self.max_partition_count =
+                            self.max_partition_count.max(p.partition_count());
+
+                        (SINGLE_LEVEL_BUCKET_NUM, SINGLE_LEVEL_BUCKET_NUM)
+                    }
                 };
 
                 if bucket > SINGLE_LEVEL_BUCKET_NUM {
@@ -202,6 +215,16 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     return res;
                 }
             }
+        }
+
+        if self.max_partition_count > 0 {
+            let meta = data_block.take_meta().unwrap();
+            if let Some(AggregateMeta::AggregateHashTable(p)) =
+                AggregateMeta::<Method, V>::downcast_from(meta)
+            {
+                self.partition_payloads.push(p);
+            }
+            return SINGLE_LEVEL_BUCKET_NUM;
         }
 
         self.unsplitted_blocks.push(data_block);
@@ -301,12 +324,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
         Ok(data_blocks)
     }
-
-    fn partition_agg_hashtable(&self, ht: AggregateHashTable) -> Result<Vec<Option<DataBlock>>> {
-        let block =
-            DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_agg_hashtable(0, ht));
-        Ok(vec![Some(block)])
-    }
 }
 
 #[async_trait::async_trait]
@@ -336,7 +353,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedData);
         }
 
-        if !self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty() {
+        if self.partition_payloads.len() == self.inputs.len()
+            || (!self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty())
+        {
             // Split data blocks if it's unsplitted.
             return Ok(Event::Sync);
         }
@@ -408,6 +427,44 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 
     fn process(&mut self) -> Result<()> {
+        if !self.partition_payloads.is_empty() {
+            let mut payloads = Vec::with_capacity(self.partition_payloads.len());
+
+            for p in self.partition_payloads.drain(0..) {
+                if p.partition_count() != self.max_partition_count {
+                    let p = p.repartition(self.max_partition_count, &mut self.flush_state);
+                    payloads.push(p);
+                } else {
+                    payloads.push(p);
+                };
+            }
+
+            let group_types = payloads[0].group_types.clone();
+            let aggrs = payloads[0].aggrs.clone();
+
+            let mut payload_map = HashMap::with_capacity(self.max_partition_count);
+            for payload in payloads.into_iter() {
+                for (bucket, p) in payload.payloads.into_iter().enumerate() {
+                    payload_map
+                        .entry(bucket as isize)
+                        .or_insert_with(|| vec![])
+                        .push(p);
+                }
+            }
+            for bucket in 0..self.max_partition_count as isize {
+                let mut payloads = payload_map.remove(&bucket).unwrap_or(vec![]);
+                let mut partition_payload =
+                    PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1);
+
+                partition_payload.payloads.append(payloads.as_mut());
+                self.buckets_blocks
+                    .insert(bucket as isize, vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),
+                    )]);
+            }
+            return Ok(());
+        }
+
         let block_meta = self
             .unsplitted_blocks
             .pop()
@@ -426,9 +483,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                     AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
-                    AggregateMeta::AggregateHashTable((_, payload)) => {
-                        self.partition_agg_hashtable(payload)?
-                    }
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 };
 
                 for (bucket, block) in data_blocks.into_iter().enumerate() {

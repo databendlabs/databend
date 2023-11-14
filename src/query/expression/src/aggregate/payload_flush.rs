@@ -14,6 +14,7 @@
 
 use ethnum::i256;
 
+use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
 use crate::types::decimal::DecimalType;
@@ -31,13 +32,15 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::StateAddr;
 
-const FLUSH_BATCH_SIZE: usize = 8192;
+pub(crate) const FLUSH_BATCH_SIZE: usize = 8192;
 
 pub struct PayloadFlushState {
     pub probe_state: ProbeState,
     pub group_columns: Vec<Column>,
     pub aggregate_results: Vec<Column>,
     pub row_count: usize,
+
+    pub flush_partition: usize,
     pub flush_offset: usize,
 
     pub addresses: Vec<*const u8>,
@@ -54,14 +57,16 @@ impl PayloadFlushState {
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,
+            flush_partition: 0,
             flush_offset: 0,
             addresses: vec![std::ptr::null::<u8>(); len],
             state_places: vec![StateAddr::new(0); len],
         }
     }
 
-    pub fn reset(&mut self) {
+    pub fn clear(&mut self) {
         self.row_count = 0;
+        self.flush_partition = 0;
         self.flush_offset = 0;
     }
 
@@ -73,14 +78,31 @@ impl PayloadFlushState {
     }
 }
 
+impl PartitionedPayload {
+    pub fn flush(&mut self, state: &mut PayloadFlushState) -> bool {
+        if state.flush_partition >= self.payloads.len() {
+            return false;
+        }
+
+        let p = &self.payloads[state.flush_partition];
+        if p.flush(state) {
+            true
+        } else {
+            state.flush_partition += 1;
+            state.flush_offset = 0;
+            self.flush(state)
+        }
+    }
+}
+
 impl Payload {
     pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
         let flush_end = (state.flush_offset + FLUSH_BATCH_SIZE).min(self.len());
-
-        let rows = flush_end - state.flush_offset;
-        if rows == 0 {
+        if flush_end <= state.flush_offset {
             return false;
         }
+
+        let rows = flush_end - state.flush_offset;
 
         if state.addresses.len() < rows {
             state.addresses.resize(rows, std::ptr::null::<u8>());
@@ -92,7 +114,7 @@ impl Payload {
         state.probe_state.adjust_vector(rows);
 
         for row in state.flush_offset..flush_end {
-            state.addresses[row - state.flush_offset] = self.get_row_ptr(row);
+            state.addresses[row - state.flush_offset] = self.get_read_ptr(row);
         }
 
         self.flush_hashes(state);

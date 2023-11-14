@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::AggregateHashTable;
 use common_expression::DataBlock;
+use common_expression::HashTableConfig;
 use common_expression::PayloadFlushState;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
@@ -109,20 +110,29 @@ where Method: HashMethodBounds
                             }
                         }
                     },
-                    AggregateMeta::AggregateHashTable((_, hashtable)) => {
-                        match agg_hashtable.as_mut() {
-                            Some(ht) => {
-                                ht.combine(hashtable, &mut self.flush_state)?;
-                            }
-                            None => agg_hashtable = Some(hashtable),
+                    AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            ht.combine_payloads(&payload, &mut self.flush_state)?;
                         }
-                    }
+                        None => {
+                            let capacity =
+                                AggregateHashTable::get_capacity_for_count(payload.len());
+                            let mut hashtable = AggregateHashTable::new_with_capacity(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                HashTableConfig::default().with_initial_radix_bits(0),
+                                capacity,
+                            );
+                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            agg_hashtable = Some(hashtable);
+                        }
+                    },
                 }
             }
 
             if let Some(mut ht) = agg_hashtable {
                 let mut blocks = vec![];
-                self.flush_state.reset();
+                self.flush_state.clear();
                 loop {
                     if ht.merge_result(&mut self.flush_state)? {
                         blocks.push(DataBlock::new_from_columns(
@@ -131,6 +141,10 @@ where Method: HashMethodBounds
                     } else {
                         break;
                     }
+                }
+
+                if blocks.is_empty() {
+                    return Ok(DataBlock::empty());
                 }
 
                 return DataBlock::concat(&blocks);

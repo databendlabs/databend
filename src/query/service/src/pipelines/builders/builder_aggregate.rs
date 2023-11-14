@@ -22,6 +22,7 @@ use common_expression::AggregateFunctionRef;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::HashMethodKind;
+use common_expression::HashTableConfig;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::query_spill_prefix;
@@ -137,6 +138,9 @@ impl PipelineBuilder {
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
+        // Need a global atomic to read the max current radix bits hint
+        let partial_agg_config = HashTableConfig::default().with_partial(true);
+
         self.main_pipeline.add_transform(|input, output| {
             let transform = match params.aggregate_functions.is_empty() {
                 true => with_mappedhash_method!(|T| match method.clone() {
@@ -146,7 +150,8 @@ impl PipelineBuilder {
                         input,
                         output,
                         params.clone(),
-                        enable_experimental_aggregate_hashtable
+                        partial_agg_config.clone(),
+                        enable_experimental_aggregate_hashtable,
                     ),
                 }),
                 false => with_mappedhash_method!(|T| match method.clone() {
@@ -156,7 +161,8 @@ impl PipelineBuilder {
                         input,
                         output,
                         params.clone(),
-                        enable_experimental_aggregate_hashtable
+                        partial_agg_config.clone(),
+                        enable_experimental_aggregate_hashtable,
                     ),
                 }),
             }?;

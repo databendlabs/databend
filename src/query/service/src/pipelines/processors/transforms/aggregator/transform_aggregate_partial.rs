@@ -27,6 +27,7 @@ use common_expression::AggregateHashTable;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::HashTableConfig;
 use common_expression::ProbeState;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
@@ -120,11 +121,11 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
+        config: HashTableConfig,
         enable_experimental_aggregate_hashtable: bool,
     ) -> Result<Box<dyn Processor>> {
-        let arena = Arc::new(Bump::new());
-
         let hash_table = if !enable_experimental_aggregate_hashtable {
+            let arena = Arc::new(Bump::new());
             let hashtable = method.create_hash_table(arena.clone())?;
             let _dropper = AggregateHashTableDropper::create(params.clone());
             let hashtable = HashTableCell::create(hashtable, _dropper);
@@ -137,9 +138,9 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             }
         } else {
             HashTable::AggregateHashTable(AggregateHashTable::new(
-                arena,
                 params.group_data_types.clone(),
                 params.aggregate_functions.clone(),
+                config,
             ))
         };
 
@@ -396,11 +397,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
                 blocks
             }
-            HashTable::AggregateHashTable(hashtable) => {
-                vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, usize>::create_agg_hashtable(-1, hashtable),
-                )]
-            }
+            HashTable::AggregateHashTable(hashtable) => vec![DataBlock::empty_with_meta(
+                AggregateMeta::<Method, usize>::create_agg_hashtable(hashtable.payload),
+            )],
         })
     }
 }

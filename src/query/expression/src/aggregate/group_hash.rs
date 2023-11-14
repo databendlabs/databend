@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_hashtable::FastHash;
 use ethnum::i256;
+use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
 use crate::types::ArgType;
@@ -107,16 +107,16 @@ fn combine_group_hash_type_column<const IS_FIRST: bool, T: ArgType>(
     col: &Column,
     values: &mut [u64],
 ) where
-    for<'a> T::ScalarRef<'a>: FastHash,
+    for<'a> T::ScalarRef<'a>: AggHash,
 {
     let c = T::try_downcast_column(col).unwrap();
     if IS_FIRST {
         for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = x.fast_hash();
+            *val = x.agg_hash();
         }
     } else {
         for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.fast_hash();
+            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.agg_hash();
         }
     }
 }
@@ -130,11 +130,119 @@ fn combine_group_hash_string_column<const IS_FIRST: bool, T: ArgType>(
     let c = T::try_downcast_column(col).unwrap();
     if IS_FIRST {
         for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = x.as_ref().fast_hash();
+            *val = x.as_ref().agg_hash();
         }
     } else {
         for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().fast_hash();
+            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
+        }
+    }
+}
+
+trait AggHash {
+    fn agg_hash(&self) -> u64;
+}
+
+// MIT License
+// Copyright (c) 2018-2021 Martin Ankerl
+// https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
+// Rewrite using chatgpt
+
+impl AggHash for [u8] {
+    fn agg_hash(&self) -> u64 {
+        const M: u64 = 0xc6a4a7935bd1e995;
+        const SEED: u64 = 0xe17a1465;
+        const R: u64 = 47;
+
+        let mut h = SEED ^ (self.len() as u64).wrapping_mul(M);
+        let n_blocks = self.len() / 8;
+
+        for i in 0..n_blocks {
+            let mut k = unsafe { (&self[i * 8] as *const u8 as *const u64).read_unaligned() };
+
+            k = k.wrapping_mul(M);
+            k ^= k >> R;
+            k = k.wrapping_mul(M);
+
+            h ^= k;
+            h = h.wrapping_mul(M);
+        }
+
+        let data8 = &self[n_blocks * 8..];
+        for (i, &value) in data8.iter().enumerate() {
+            h ^= (value as u64) << (8 * (data8.len() - i - 1));
+        }
+
+        h ^= h >> R;
+        h = h.wrapping_mul(M);
+        h ^= h >> R;
+
+        h
+    }
+}
+
+macro_rules! impl_agg_hash_for_primitive_types {
+    ($t: ty) => {
+        impl AggHash for $t {
+            #[inline(always)]
+            fn agg_hash(&self) -> u64 {
+                let mut x = *self as u64;
+                x ^= x >> 32;
+                x *= 0xd6e8feb86659fd93;
+                x ^= x >> 32;
+                x *= 0xd6e8feb86659fd93;
+                x ^= x >> 32;
+                x
+            }
+        }
+    };
+}
+
+impl_agg_hash_for_primitive_types!(u8);
+impl_agg_hash_for_primitive_types!(i8);
+impl_agg_hash_for_primitive_types!(u16);
+impl_agg_hash_for_primitive_types!(i16);
+impl_agg_hash_for_primitive_types!(u32);
+impl_agg_hash_for_primitive_types!(i32);
+impl_agg_hash_for_primitive_types!(u64);
+impl_agg_hash_for_primitive_types!(i64);
+
+impl AggHash for bool {
+    fn agg_hash(&self) -> u64 {
+        *self as u64
+    }
+}
+
+impl AggHash for i128 {
+    fn agg_hash(&self) -> u64 {
+        self.to_le_bytes().agg_hash()
+    }
+}
+
+impl AggHash for i256 {
+    fn agg_hash(&self) -> u64 {
+        self.to_le_bytes().agg_hash()
+    }
+}
+
+impl AggHash for OrderedFloat<f32> {
+    #[inline(always)]
+    fn agg_hash(&self) -> u64 {
+        if self.is_nan() {
+            f32::NAN.to_bits().agg_hash()
+        } else {
+            self.to_bits().agg_hash()
+        }
+    }
+}
+
+impl AggHash for OrderedFloat<f64> {
+    #[inline(always)]
+    fn agg_hash(&self) -> u64 {
+        if self.is_nan() {
+            f64::NAN.to_bits().agg_hash()
+        } else {
+            self.to_bits().agg_hash()
         }
     }
 }

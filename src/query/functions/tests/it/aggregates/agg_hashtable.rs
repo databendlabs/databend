@@ -26,9 +26,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use bumpalo::Bump;
 use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::Float32Type;
@@ -45,6 +42,7 @@ use common_expression::AggregateHashTable;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::FromData;
+use common_expression::HashTableConfig;
 use common_expression::PayloadFlushState;
 use common_expression::ProbeState;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -91,17 +89,19 @@ fn test_agg_hashtable() {
         ];
 
         let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
+        let radix_bits = 3;
 
-        let arena1 = Arc::new(Bump::new());
-        let mut hashtable = AggregateHashTable::new(arena1, group_types.clone(), aggrs.clone());
+        let config = HashTableConfig::default();
+        let mut hashtable =
+            AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
         let mut state = ProbeState::with_capacity(BATCH_SIZE);
         let _ = hashtable
             .add_groups(&mut state, &group_columns, &params, n)
             .unwrap();
 
-        let arena2 = Arc::new(Bump::new());
-        let mut hashtable2 = AggregateHashTable::new(arena2, group_types.clone(), aggrs.clone());
+        let mut hashtable2 =
+            AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
         let mut state2 = ProbeState::with_capacity(BATCH_SIZE);
         let _ = hashtable2

@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::AggregateHashTable;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
+use common_expression::HashTableConfig;
 use common_expression::PayloadFlushState;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -186,26 +187,30 @@ where Method: HashMethodBounds
                             }
                         }
                     },
-                    AggregateMeta::AggregateHashTable((_, mut hashtable)) => {
-                        match agg_hashtable.as_mut() {
-                            Some(ht) => {
-                                ht.combine(hashtable, &mut self.flush_state)?;
-                            }
-                            None => {
-                                let new_capacity =
-                                    AggregateHashTable::get_capacity_for_count(hashtable.len());
-                                hashtable.resize(new_capacity);
-
-                                agg_hashtable = Some(hashtable);
-                            }
+                    AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            ht.combine_payloads(&payload, &mut self.flush_state)?;
                         }
-                    }
+                        None => {
+                            let capacity =
+                                AggregateHashTable::get_capacity_for_count(payload.len());
+
+                            let mut hashtable = AggregateHashTable::new_with_capacity(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                HashTableConfig::default().with_initial_radix_bits(0),
+                                capacity,
+                            );
+                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            agg_hashtable = Some(hashtable);
+                        }
+                    },
                 }
             }
 
             if let Some(mut ht) = agg_hashtable {
                 let mut blocks = vec![];
-                self.flush_state.reset();
+                self.flush_state.clear();
                 loop {
                     if ht.merge_result(&mut self.flush_state)? {
                         let mut cols = self.flush_state.take_aggregate_results();
@@ -217,7 +222,9 @@ where Method: HashMethodBounds
                     }
                 }
 
-                // todo pipeline
+                if blocks.is_empty() {
+                    return Ok(DataBlock::empty());
+                }
                 return DataBlock::concat(&blocks);
             }
 

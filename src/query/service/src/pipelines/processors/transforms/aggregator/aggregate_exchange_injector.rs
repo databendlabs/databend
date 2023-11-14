@@ -76,7 +76,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
-                        AggregateMeta::AggregateHashTable((bucket, _)) => Ok(*bucket),
+                        AggregateMeta::AggregateHashTable(_) => unreachable!(),
                         AggregateMeta::Spilled(_)
                         | AggregateMeta::Spilling(_)
                         | AggregateMeta::BucketSpilled(_) => Ok(-1),

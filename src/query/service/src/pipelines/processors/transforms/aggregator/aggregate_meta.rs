@@ -16,11 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Range;
 
-use common_expression::AggregateHashTable;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::PartitionedPayload;
 
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
@@ -53,7 +53,7 @@ pub struct BucketSpilledPayload {
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
-    AggregateHashTable((isize, AggregateHashTable)),
+    AggregateHashTable(PartitionedPayload),
     BucketSpilled(BucketSpilledPayload),
     Spilled(Vec<BucketSpilledPayload>),
     Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
@@ -69,8 +69,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
-    pub fn create_agg_hashtable(bucket: isize, ht: AggregateHashTable) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::AggregateHashTable((bucket, ht)))
+    pub fn create_agg_hashtable(payload: PartitionedPayload) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::AggregateHashTable(payload))
     }
 
     pub fn create_serialized(bucket: isize, block: DataBlock) -> BlockMetaInfoPtr {
