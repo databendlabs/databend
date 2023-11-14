@@ -118,7 +118,7 @@ impl<'a> FuseEncoding<'a> {
                             let page_metas = column_meta.as_native().unwrap().pages.clone();
                             let reader = NativeReader::new(pages, page_metas, vec![]);
                             let this_column_info = stat_simple(reader, arrow_field.clone())?;
-                            columns_info.push(this_column_info);
+                            columns_info.push((field.data_type.sql_name(), this_column_info));
                         }
                     }
                 }
@@ -129,7 +129,7 @@ impl<'a> FuseEncoding<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn to_block(&self, info: &Vec<(&str, Vec<ColumnInfo>)>) -> Result<DataBlock> {
+    async fn to_block(&self, info: &Vec<(&str, Vec<(String, ColumnInfo)>)>) -> Result<DataBlock> {
         let mut validity_size = Vec::new();
         let mut compressed_size = Vec::new();
         let mut uncompressed_size = Vec::new();
@@ -137,9 +137,10 @@ impl<'a> FuseEncoding<'a> {
         let mut l2 = NullableColumnBuilder::<StringType>::with_capacity(0, &[]);
         let mut table_name = StringColumnBuilder::with_capacity(0, 0);
         let mut column_name = StringColumnBuilder::with_capacity(0, 0);
+        let mut column_type = StringColumnBuilder::with_capacity(0, 0);
         let mut all_num_rows = 0;
         for (table, columns_info) in info {
-            for column_info in columns_info {
+            for (type_str, column_info) in columns_info {
                 let pages_info = &column_info.pages;
                 let num_row = pages_info.len();
                 all_num_rows += num_row;
@@ -149,6 +150,7 @@ impl<'a> FuseEncoding<'a> {
                 let tmp_table_name = StringColumnBuilder::repeat(table.as_bytes(), num_row);
                 let tmp_column_name =
                     StringColumnBuilder::repeat(column_info.field.name.as_bytes(), num_row);
+                let tmp_column_type = StringColumnBuilder::repeat(type_str.as_bytes(), num_row);
                 for p in pages_info {
                     validity_size.push(p.validity_size);
                     compressed_size.push(p.compressed_size);
@@ -172,6 +174,7 @@ impl<'a> FuseEncoding<'a> {
 
                 table_name.append_column(&tmp_table_name.build());
                 column_name.append_column(&tmp_column_name.build());
+                column_type.append_column(&tmp_column_type.build());
             }
         }
 
@@ -184,6 +187,10 @@ impl<'a> FuseEncoding<'a> {
                 BlockEntry::new(
                     DataType::String,
                     Value::Column(Column::String(column_name.build())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Column(Column::String(column_type.build())),
                 ),
                 BlockEntry::new(
                     DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
@@ -211,6 +218,7 @@ impl<'a> FuseEncoding<'a> {
         TableSchemaRefExt::create(vec![
             TableField::new("table_name", TableDataType::String),
             TableField::new("column_name", TableDataType::String),
+            TableField::new("column_type", TableDataType::String),
             TableField::new(
                 "validity_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt32))),
