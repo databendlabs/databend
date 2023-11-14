@@ -674,6 +674,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         TableReference::Subquery {
             span: None,
+            lateral: false,
             subquery: Box::new(subquery),
             alias: Some(alias),
         }

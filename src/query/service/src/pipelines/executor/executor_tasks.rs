@@ -23,11 +23,11 @@ use common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_condvar::WorkersWaitingStatus;
-use crate::pipelines::executor::executor_worker_context::ExecutorTask;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::executor::ExecutorTask;
+use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::WorkersWaitingStatus;
+use crate::pipelines::processors::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
     finished: Arc<AtomicBool>,

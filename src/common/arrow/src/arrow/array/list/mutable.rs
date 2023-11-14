@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -227,7 +228,7 @@ impl<O: Offset, M: MutableArray> MutableListArray<O, M> {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.offsets.len_proxy() == 0
+        self.len() == 0
     }
 
     /// The values

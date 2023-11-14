@@ -29,7 +29,6 @@ use log::info;
 use crate::binder::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
@@ -349,11 +348,12 @@ fn rewrite_scalar_index(
     }
 
     impl<'a> VisitorMut<'a> for RewriteVisitor<'a> {
-        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) {
+        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) -> Result<()> {
             if let Some(index) = self.columns.get(&col.column.column_name) {
                 col.column.table_index = Some(self.table_index);
                 col.column.index = *index;
             }
+            Ok(())
         }
     }
 
@@ -361,7 +361,7 @@ fn rewrite_scalar_index(
         table_index,
         columns,
     };
-    walk_expr_mut(&mut visitor, scalar)
+    visitor.visit(scalar).unwrap();
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.

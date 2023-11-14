@@ -30,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::LockGuard;
+use common_pipeline_core::Pipeline;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -40,13 +41,12 @@ use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_graph::RunningGraph;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::pipeline::Pipeline;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
@@ -242,19 +242,19 @@ impl PipelineExecutor {
             {
                 let finished_error_guard = self.finished_error.lock();
                 if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = Some(error.clone());
+                    let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    self.on_finished(&may_error)?;
-                    return Err(may_error.unwrap());
+                    self.on_finished(&Some(may_error.clone()))?;
+                    return Err(may_error);
                 }
             }
 
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = Some(thread_res.unwrap_err());
-                self.on_finished(&may_error)?;
-                return Err(may_error.unwrap());
+                let may_error = thread_res.unwrap_err();
+                self.on_finished(&Some(may_error.clone()))?;
+                return Err(may_error);
             }
         }
 

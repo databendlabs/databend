@@ -561,6 +561,8 @@ pub enum TableReferenceElement {
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
+        /// If the subquery is a lateral subquery
+        lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
@@ -651,9 +653,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            "(" ~ #query ~ ")" ~ #table_alias?
+            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias?
         },
-        |(_, subquery, _, alias)| TableReferenceElement::Subquery {
+        |(lateral, _, subquery, _, alias)| TableReferenceElement::Subquery {
+            lateral: lateral.is_some(),
             subquery: Box::new(subquery),
             alias,
         },
@@ -760,8 +763,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     alias,
                 }
             }
-            TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
+            TableReferenceElement::Subquery {
+                lateral,
+                subquery,
+                alias,
+            } => TableReference::Subquery {
                 span: transform_span(input.span.0),
+                lateral,
                 subquery,
                 alias,
             },

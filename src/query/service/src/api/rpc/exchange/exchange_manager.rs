@@ -520,7 +520,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
+                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
                 .map(|(_, v)| v.convert_to_sender())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
@@ -552,7 +552,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
+                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
                 .map(|(_, v)| v.convert_to_receiver())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {

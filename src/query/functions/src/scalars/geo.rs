@@ -223,7 +223,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
 
         let (arg1, arg2) = {
-            let arg1 = match args_type.get(0)? {
+            let arg1 = match args_type.first()? {
                 DataType::Tuple(tys) => {
                     if tys.len() == 2 {
                         vec![DataType::Number(NumberDataType::Float64); tys.len()]
@@ -270,7 +270,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
 
         let (arg1, arg2) = {
-            let arg1 = match args_type.get(0)? {
+            let arg1 = match args_type.first()? {
                 DataType::Tuple(tys) => {
                     if tys.len() == 2 {
                         vec![DataType::Number(NumberDataType::Float64); tys.len()]
@@ -318,7 +318,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let mut args = vec![];
 
-        let arg1 = match args_type.get(0)? {
+        let arg1 = match args_type.first()? {
             DataType::Tuple(tys) => {
                 if tys.len() == 2 {
                     vec![DataType::Number(NumberDataType::Float64); tys.len()]

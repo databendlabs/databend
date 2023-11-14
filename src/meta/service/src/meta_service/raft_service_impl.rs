@@ -16,13 +16,15 @@
 //! It also serves RPC for user-data access.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::Duration;
 
+use common_base::future::TimingFutureExt;
 use common_meta_client::MetaGrpcReadReq;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::StreamItem;
+use common_metrics::count::Count;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
@@ -49,7 +51,7 @@ impl RaftServiceImpl {
         if let Some(addr) = request.remote_addr() {
             let message: &RaftRequest = request.get_ref();
             let bytes = message.data.len() as u64;
-            raft_metrics::network::incr_recv_bytes_from_peer(addr.to_string(), bytes);
+            raft_metrics::network::incr_recvfrom_bytes(addr.to_string(), bytes);
         }
     }
 }
@@ -128,30 +130,21 @@ impl RaftService for RaftServiceImpl {
         let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
-            let start = Instant::now();
-            let addr = if let Some(addr) = request.remote_addr() {
-                addr.to_string()
-            } else {
-                "unknown address".to_string()
-            };
+            let addr = remote_addr(&request);
 
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
-            raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.clone(), 1);
+            let _g = snapshot_recv_inflight(&addr).counter_guard();
 
             let is_req = GrpcHelper::parse_req(request)?;
             let raft = &self.meta_node.raft;
 
             let resp = raft
                 .install_snapshot(is_req)
+                .timed(observe_snapshot_recv_spent(&addr))
                 .await
                 .map_err(GrpcHelper::internal_err);
 
-            raft_metrics::network::sample_snapshot_recv(
-                addr.clone(),
-                start.elapsed().as_secs() as f64,
-            );
-            raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.clone(), -1);
-            raft_metrics::network::incr_snapshot_recv_status_from_peer(addr.clone(), resp.is_ok());
+            raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), resp.is_ok());
 
             match resp {
                 Ok(resp) => GrpcHelper::ok_response(resp),
@@ -181,4 +174,28 @@ impl RaftService for RaftServiceImpl {
         .in_span(root)
         .await
     }
+}
+
+/// Get remote address from tonic request.
+fn remote_addr<T>(request: &Request<T>) -> String {
+    if let Some(addr) = request.remote_addr() {
+        addr.to_string()
+    } else {
+        "unknown address".to_string()
+    }
+}
+
+/// Create a function record the time cost of snapshot receiving.
+fn observe_snapshot_recv_spent(addr: &str) -> impl Fn(Duration, Duration) + '_ {
+    |t, _b| {
+        raft_metrics::network::observe_snapshot_recvfrom_spent(
+            addr.to_string(),
+            t.as_secs() as f64,
+        );
+    }
+}
+
+/// Create a function that increases metric value of inflight snapshot receiving.
+fn snapshot_recv_inflight(addr: impl ToString) -> impl FnMut(i64) {
+    move |i: i64| raft_metrics::network::incr_snapshot_recvfrom_inflight(addr.to_string(), i)
 }

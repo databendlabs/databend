@@ -36,8 +36,8 @@ use crate::storages::fuse::operations::mutation::compact_segment;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_case() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     fixture.create_default_table().await?;
 
     // ingests some test data
@@ -71,8 +71,8 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     fixture.create_default_table().await?;
 
     // ingests some test data
@@ -173,8 +173,8 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     //  - 3 segments left: seg_c, seg_2, seg_1
     //  - 3 blocks left: block_c, block_2, block_1
 
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     fixture.create_default_table().await?;
 
     // 1. prepare `S_1`
@@ -246,10 +246,10 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_older_version() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     fixture.create_normal_table().await?;
     generate_snapshots(&fixture).await?;
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let now = Utc::now();
 

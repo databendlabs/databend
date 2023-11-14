@@ -26,7 +26,7 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_metrics::storage::*;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use itertools::Itertools;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;

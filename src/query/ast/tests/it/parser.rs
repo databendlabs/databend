@@ -215,6 +215,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE RETAIN 20 HOURS;"#,
         r#"VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;"#,
         r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS;"#,
+        r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
@@ -659,6 +660,7 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
     ];
 
     for case in cases {

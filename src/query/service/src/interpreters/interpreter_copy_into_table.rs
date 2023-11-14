@@ -27,11 +27,12 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::Pipeline;
+use common_sql::executor::physical_plans::CopyIntoTable;
+use common_sql::executor::physical_plans::CopyIntoTableSource;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::FragmentKind;
+use common_sql::executor::physical_plans::QuerySource;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::CopyIntoTable;
-use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::Exchange;
-use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
 use common_storage::StageFileInfo;
 use common_storages_stage::StageTable;
@@ -128,7 +129,7 @@ impl CopyIntoTableInterpreter {
             let (select_interpreter, query_source_schema) = self.build_query(query).await?;
             let plan_query = select_interpreter.build_physical_plan().await?;
             let result_columns = select_interpreter.get_result_columns();
-            CopyIntoTableSource::Query(Box::new(common_sql::executor::QuerySource {
+            CopyIntoTableSource::Query(Box::new(QuerySource {
                 plan: plan_query,
                 ignore_result: select_interpreter.get_ignore_result(),
                 result_columns,

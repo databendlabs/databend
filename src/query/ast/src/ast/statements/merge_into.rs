@@ -242,6 +242,7 @@ impl MergeSource {
                 source_alias,
             } => TableReference::Subquery {
                 span: None,
+                lateral: false,
                 subquery: query.clone(),
                 alias: Some(source_alias.clone()),
             },

@@ -84,7 +84,10 @@ pub struct DictionaryEntry<V> {
 
 impl<V> DictionaryEntry<V> {
     pub fn is_zero(&self) -> bool {
-        unsafe { self.key.assume_init_ref().as_ptr().is_null() }
+        #[allow(useless_ptr_null_checks)]
+        unsafe {
+            self.key.assume_init_ref().as_ptr().is_null()
+        }
     }
 }
 
@@ -444,10 +447,7 @@ impl<'a, V> Clone for DictionaryEntryRef<'a, V>
 where Self: 'a
 {
     fn clone(&self) -> Self {
-        DictionaryEntryRef {
-            key: self.key,
-            entry: self.entry,
-        }
+        *self
     }
 }
 
