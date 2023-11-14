@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta;
-mod mutator;
-mod processors;
-
-pub use processors::BroadcastProcessor;
-pub use processors::MergeIntoOperationAggregator;
-pub use processors::ReplaceIntoProcessor;
-pub use processors::UnbranchedReplaceIntoProcessor;
+pub mod meta;
+pub mod mutator;
+pub mod processors;

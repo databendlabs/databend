@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::PipeItem;
 use storages_common_table_meta::meta::Location;
 
 use super::merge_into::MatchedAggregator;

@@ -21,6 +21,7 @@ use common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::Expr;
@@ -195,6 +196,11 @@ pub enum Statement {
         location: String,
         pattern: Option<String>,
     },
+    // Connection
+    CreateConnection(CreateConnectionStmt),
+    DropConnection(DropConnectionStmt),
+    DescribeConnection(DescribeConnectionStmt),
+    ShowConnections(ShowConnectionsStmt),
 
     // UserDefinedFileFormat
     CreateFileFormat {
@@ -301,6 +307,7 @@ impl Display for Statement {
                     ExplainKind::Pipeline => write!(f, " PIPELINE")?,
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
+                    ExplainKind::Optimized => write!(f, " Optimized")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::JOIN => write!(f, " JOIN")?,
@@ -563,6 +570,10 @@ impl Display for Statement {
             Statement::DescribePipe(stmt) => write!(f, "{stmt}")?,
             Statement::DropPipe(stmt) => write!(f, "{stmt}")?,
             Statement::AlterPipe(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowConnections(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

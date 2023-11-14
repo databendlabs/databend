@@ -24,22 +24,22 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
+use common_pipeline_transforms::processors::AccumulatingTransform;
+use common_pipeline_transforms::processors::AccumulatingTransformer;
 use common_sql::IndexType;
 use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupByHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
-use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::diverging_sub_expression)]
 
 mod converters;
 mod hive_block_filter;

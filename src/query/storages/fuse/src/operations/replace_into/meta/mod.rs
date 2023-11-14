@@ -12,4 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod merge_into_operation_meta;
+mod merge_into_operation_meta;
+
+pub use merge_into_operation_meta::*;

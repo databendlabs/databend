@@ -58,16 +58,22 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_union_output_type() -> Result<()> {
     {
-        let fixture = TestFixture::new().await;
-        let (_, schema) =
-            get_interpreter(fixture.ctx(), "select 1 union all select 2.0::FLOAT64").await?;
+        let fixture = TestFixture::new().await?;
+        let (_, schema) = get_interpreter(
+            fixture.new_query_ctx().await?,
+            "select 1 union all select 2.0::FLOAT64",
+        )
+        .await?;
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
         ));
 
-        let (_, schema) =
-            get_interpreter(fixture.ctx(), "select 1.0::FLOAT64 union all select 2").await?;
+        let (_, schema) = get_interpreter(
+            fixture.new_query_ctx().await?,
+            "select 1.0::FLOAT64 union all select 2",
+        )
+        .await?;
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
@@ -75,18 +81,24 @@ async fn test_simple_union_output_type() -> Result<()> {
     }
 
     {
-        let fixture = TestFixture::new().await;
-        execute_sql(fixture.ctx(), "create table a (a int)").await?;
-        execute_sql(fixture.ctx(), "create table b (b double)").await?;
-        let (_, schema) =
-            get_interpreter(fixture.ctx(), "select * from a union all select * from b").await?;
+        let fixture = TestFixture::new().await?;
+        execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
+        execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
+        let (_, schema) = get_interpreter(
+            fixture.new_query_ctx().await?,
+            "select * from a union all select * from b",
+        )
+        .await?;
         assert!(matches!(
             schema.field(0).data_type().remove_nullable(),
             DataType::Number(NumberDataType::Float64),
         ));
 
-        let (_, schema) =
-            get_interpreter(fixture.ctx(), "select * from b union all select * from a").await?;
+        let (_, schema) = get_interpreter(
+            fixture.new_query_ctx().await?,
+            "select * from b union all select * from a",
+        )
+        .await?;
         assert!(matches!(
             schema.field(0).data_type().remove_nullable(),
             DataType::Number(NumberDataType::Float64),
@@ -147,15 +159,15 @@ fn create_all_types_table_sql(table_name: &str) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_union_output_type() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
 
     // Prepare tables
     let sql1 = create_all_types_table_sql("t1");
-    let plan1 = plan_sql(fixture.ctx(), &sql1).await?;
-    execute_plan(fixture.ctx(), &plan1).await?;
+    let plan1 = plan_sql(fixture.new_query_ctx().await?, &sql1).await?;
+    execute_plan(fixture.new_query_ctx().await?, &plan1).await?;
     let sql2 = create_all_types_table_sql("t2");
-    let plan2 = plan_sql(fixture.ctx(), &sql2).await?;
-    execute_plan(fixture.ctx(), &plan2).await?;
+    let plan2 = plan_sql(fixture.new_query_ctx().await?, &sql2).await?;
+    execute_plan(fixture.new_query_ctx().await?, &plan2).await?;
 
     let table_schema = table_schema(&plan1);
     let table_fields = table_schema.fields();
@@ -174,7 +186,7 @@ async fn test_union_output_type() -> Result<()> {
                 &BUILTIN_FUNCTIONS.default_cast_rules,
             ) {
                 let (_, schema) = get_interpreter(
-                    fixture.ctx(),
+                    fixture.new_query_ctx().await?,
                     &format!("select {name1} from t1 union all select {name2} from t2",),
                 )
                 .await?;

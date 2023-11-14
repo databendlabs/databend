@@ -118,6 +118,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
@@ -311,7 +312,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowDropTablesStmt,
     ) -> Result<Plan> {
-        let ShowDropTablesStmt { database } = stmt;
+        let ShowDropTablesStmt { database, limit } = stmt;
 
         let database = self.check_database_exist(&None, database).await?;
 
@@ -338,9 +339,20 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-        select_builder.with_filter("dropped_on != 'NULL'".to_string());
+        select_builder.with_filter("dropped_on IS NOT NULL".to_string());
 
-        let query = select_builder.build();
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+
         debug!("show drop tables rewrite to: {:?}", query);
         self.bind_rewrite_to_query(
             bind_context,
@@ -1109,9 +1121,10 @@ impl Binder {
                 _ => None,
             };
 
-            VacuumTableOption {
+            VacuumDropTableOption {
                 retain_hours,
                 dry_run: option.dry_run,
+                limit: option.limit,
             }
         };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {

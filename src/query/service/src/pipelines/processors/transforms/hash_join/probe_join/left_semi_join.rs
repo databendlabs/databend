@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
+use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -111,6 +111,15 @@ impl HashJoinProbeState {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let string_items_buf = &mut probe_state.string_items_buf;
+        let mut unmatched_idx = 0;
+        // We will refactor the following code in https://github.com/datafuselabs/databend/pull/13393.
+        let mut _unmatched_indexes = vec![];
+        let probe_unmatched_indexes =
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftAnti {
+                probe_state.probe_unmatched_indexes.as_mut().unwrap()
+            } else {
+                &mut _unmatched_indexes
+            };
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -129,10 +138,6 @@ impl HashJoinProbeState {
             .unwrap();
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
-        let dummy_probed_row = RowPtr {
-            chunk_index: 0,
-            row_index: 0,
-        };
 
         for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
@@ -150,11 +155,9 @@ impl HashJoinProbeState {
                     continue;
                 }
                 false => {
-                    // dummy_probed_row
-                    unsafe {
-                        std::ptr::write(build_indexes_ptr.add(matched_num), dummy_probed_row)
-                    };
-                    match_count = 1;
+                    probe_unmatched_indexes[unmatched_idx] = i as u32;
+                    unmatched_idx += 1;
+                    continue;
                 }
                 true => (),
             };
@@ -247,6 +250,14 @@ impl HashJoinProbeState {
                     }
                 }
             }
+        }
+
+        if unmatched_idx > 0 {
+            result_blocks.push(DataBlock::take(
+                input,
+                &probe_unmatched_indexes[0..unmatched_idx],
+                string_items_buf,
+            )?);
         }
 
         if matched_num == 0 {

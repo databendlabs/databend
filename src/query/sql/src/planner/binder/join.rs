@@ -32,8 +32,10 @@ use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::FlattenInfo;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::optimizer::SubqueryRewriter;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
@@ -176,13 +178,13 @@ impl Binder {
 
     pub fn bind_join_with_type(
         &mut self,
-        join_type: JoinType,
+        mut join_type: JoinType,
         join_conditions: JoinConditions,
         mut left_child: SExpr,
         mut right_child: SExpr,
     ) -> Result<SExpr> {
-        let left_conditions = join_conditions.left_conditions;
-        let right_conditions = join_conditions.right_conditions;
+        let mut left_conditions = join_conditions.left_conditions;
+        let mut right_conditions = join_conditions.right_conditions;
         let mut non_equi_conditions = join_conditions.non_equi_conditions;
         let other_conditions = join_conditions.other_conditions;
         if join_type == JoinType::Cross
@@ -193,6 +195,7 @@ impl Binder {
             ));
         }
         self.push_down_other_conditions(
+            &join_type,
             &mut left_child,
             &mut right_child,
             other_conditions,
@@ -201,6 +204,29 @@ impl Binder {
 
         for (left, right) in left_conditions.iter().zip(right_conditions.iter()) {
             self.eq_scalars.push((left.clone(), right.clone()));
+        }
+
+        let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
+        if !right_prop.outer_columns.is_empty() {
+            // If there are outer columns in right child, then the join is a correlated lateral join
+            let mut decorrelator = SubqueryRewriter::new(self.metadata.clone());
+            right_child = decorrelator.flatten(
+                &right_child,
+                &right_prop.outer_columns,
+                &mut FlattenInfo {
+                    from_count_func: false,
+                },
+                false,
+            )?;
+            decorrelator.add_equi_conditions(
+                None,
+                &right_prop.outer_columns,
+                &mut right_conditions,
+                &mut left_conditions,
+            )?;
+            if join_type == JoinType::Cross {
+                join_type = JoinType::Inner;
+            }
         }
 
         let logical_join = Join {
@@ -222,6 +248,7 @@ impl Binder {
 
     fn push_down_other_conditions(
         &self,
+        join_type: &JoinType,
         left_child: &mut SExpr,
         right_child: &mut SExpr,
         other_conditions: Vec<ScalarExpr>,
@@ -240,6 +267,27 @@ impl Binder {
         for predicate in other_conditions.iter() {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
+                JoinPredicate::ALL(_) => match join_type {
+                    JoinType::Cross
+                    | JoinType::Inner
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
+                        need_push_down = true;
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                    }
+                    JoinType::Full => non_equi_conditions.push(predicate.clone()),
+                },
                 JoinPredicate::Left(_) => {
                     need_push_down = true;
                     left_push_down.push(predicate.clone());

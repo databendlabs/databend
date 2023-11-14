@@ -28,6 +28,7 @@ use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::UserIdentity;
+use common_metrics::mysql::*;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
@@ -47,7 +48,6 @@ use rand::RngCore;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::servers::mysql::mysql_metrics;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
@@ -220,7 +220,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                 let suffix = format!("(while in query {})", query);
                 write_result = Err(cause.add_message_back(suffix));
             }
-            mysql_metrics::observe_mysql_process_request_duration(instant.elapsed());
+            observe_mysql_process_request_duration(instant.elapsed());
 
             write_result
         }
@@ -394,7 +394,7 @@ impl InteractiveWorkerBase {
             let ctx = context.clone();
             async move {
                 let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                mysql_metrics::observe_mysql_interpreter_used_time(instant.elapsed());
+                observe_mysql_interpreter_used_time(instant.elapsed());
 
                 // Wrap the data stream, log finish event at the end of stream
                 let intercepted_stream = async_stream::stream! {

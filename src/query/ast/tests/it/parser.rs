@@ -68,6 +68,9 @@ fn test_statement() {
         r#"show databases"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
+        r#"show drop tables"#,
+        r#"show drop tables like 't%'"#,
+        r#"show drop tables where name='t'"#,
         r#"show tables format TabSeparatedWithNamesAndTypes;"#,
         r#"describe "name""with""quote";"#,
         r#"describe "name""""with""""quote";"#,
@@ -212,6 +215,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE RETAIN 20 HOURS;"#,
         r#"VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;"#,
         r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS;"#,
+        r#"VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
@@ -494,6 +498,11 @@ fn test_statement() {
         r#"SHOW TASKS"#,
         r#"EXECUTE TASK MyTask"#,
         r#"DESC TASK MyTask"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
+        r#"DROP CONNECTION IF EXISTS my_conn;"#,
+        r#"DESC CONNECTION my_conn;"#,
+        r#"SHOW CONNECTIONS;"#,
         // pipes
         r#"CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')"#,
         r#"CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv"#,
@@ -565,6 +574,8 @@ fn test_statement_error() {
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
+        r#"SELECT c a as FROM t"#,
+        r#"SELECT c a as b FROM t"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
         r#"select * from aa.bb limit 10 order by bb;"#,
@@ -576,6 +587,7 @@ fn test_statement_error() {
         r#"select * from aa.bb limit 10,2 offset 2;"#,
         r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
+        r#"with as t2(tt) as (select a from t) select t2.tt from t2"#,
         r#"copy into t1 from "" FILE"#,
         r#"select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')"#,
         r#"copy into t1 from "" FILE_FORMAT"#,
@@ -591,6 +603,7 @@ fn test_statement_error() {
                     type = CSV,
                     error_on_column_count_mismatch = 1
                 )"#,
+        r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
     ];
 
     for case in cases {
@@ -656,6 +669,7 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
     ];
 
     for case in cases {

@@ -21,6 +21,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
+use log::debug;
 
 use crate::kvapi;
 use crate::kvapi::GetKVReply;
@@ -75,7 +76,10 @@ pub trait KVApi: Send + Sync {
     ///
     /// This method has a default implementation by collecting result from `stream_list_kv()`
     async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
+        let now = std::time::Instant::now();
         let strm = self.list_kv(prefix).await?;
+
+        debug!("list_kv() took {:?}", now.elapsed());
 
         let v = strm
             .map_ok(|x| {

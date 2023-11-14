@@ -33,7 +33,6 @@ use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::HiveCatalogOption;
 use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::storage::StorageParams;
-use url::Url;
 
 use crate::binder::parse_uri_location;
 use crate::normalize_identifier;
@@ -192,51 +191,7 @@ async fn parse_catalog_url(options: BTreeMap<String, String>) -> Result<Option<S
         return Ok(None);
     };
 
-    let mut location = if let Some(path) = uri.strip_prefix("fs://") {
-        UriLocation::new(
-            "fs".to_string(),
-            "".to_string(),
-            path.to_string(),
-            "".to_string(),
-            options,
-        )
-    } else if let Some(path) = uri.strip_prefix("hdfs://") {
-        UriLocation::new(
-            "hdfs".to_string(),
-            "".to_string(),
-            path.to_string(),
-            "".to_string(),
-            options,
-        )
-    } else {
-        let parsed = Url::parse(&uri)
-            .map_err(|err| ErrorCode::InvalidArgument(format!("expected valid URL: {:?}", err)))?;
-        let name = parsed
-            .host_str()
-            .map(|hostname| {
-                if let Some(port) = parsed.port() {
-                    format!("{}:{}", hostname, port)
-                } else {
-                    hostname.to_string()
-                }
-            })
-            .ok_or_else(|| ErrorCode::InvalidArgument("expected valid URI: no hostname section"))?;
-
-        let path = if parsed.path().is_empty() {
-            "/".to_string()
-        } else {
-            parsed.path().to_string()
-        };
-
-        UriLocation::new(
-            parsed.scheme().to_string(),
-            name,
-            path,
-            "".to_string(),
-            options,
-        )
-    };
-
+    let mut location = UriLocation::from_uri(uri, "".to_string(), options)?;
     let (sp, _) = parse_uri_location(&mut location).await?;
 
     Ok(Some(sp))

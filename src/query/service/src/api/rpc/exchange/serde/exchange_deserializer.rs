@@ -29,12 +29,12 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use common_pipeline_transforms::processors::transforms::UnknownMode;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::BlockMetaTransform;
+use common_pipeline_transforms::processors::BlockMetaTransformer;
+use common_pipeline_transforms::processors::UnknownMode;
 use serde::Deserializer;
 use serde::Serializer;
 

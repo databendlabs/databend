@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
-#![feature(io_error_other)]
 #![feature(iter_order_by)]
 #![feature(let_chains)]
 #![feature(impl_trait_in_assoc_type)]
@@ -27,7 +26,6 @@ mod fuse_column;
 mod fuse_part;
 mod fuse_table;
 mod fuse_type;
-mod metrics;
 
 pub mod io;
 pub mod operations;
@@ -52,14 +50,4 @@ pub use pruning::SegmentLocation;
 mod sessions {
     pub use common_catalog::table_context::TableContext;
 }
-
-mod pipelines {
-    pub use common_pipeline_core::Pipeline;
-    pub mod processors {
-        pub use common_pipeline_core::processors::*;
-        pub use common_pipeline_sources::*;
-        pub use common_pipeline_transforms::processors::transforms;
-    }
-}
-
 pub use storages_common_index as index;

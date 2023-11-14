@@ -67,6 +67,7 @@ use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
+use crate::plans::Visitor as _;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
@@ -430,8 +431,8 @@ impl Binder {
             )
         };
 
-        let finder = Finder::new(&f);
-        let finder = scalar.accept(finder)?;
+        let mut finder = Finder::new(&f);
+        finder.visit(&scalar)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Where clause can't contain aggregate or window functions".to_string(),
@@ -799,6 +800,7 @@ impl Binder {
             || stmt.distinct
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.windows.window_functions.is_empty()
         {
             return Ok(());
         }

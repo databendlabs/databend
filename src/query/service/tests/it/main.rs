@@ -14,8 +14,8 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(thread_local)]
-#![feature(io_error_other)]
 #![feature(int_roundings)]
+#![allow(clippy::diverging_sub_expression)]
 
 extern crate core;
 

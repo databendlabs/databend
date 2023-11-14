@@ -18,14 +18,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 
-use crate::binder::scalar_visitor::Recursion;
-use crate::binder::scalar_visitor::ScalarVisitor;
 use crate::optimizer::RelationalProperty;
+use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::Visitor;
 use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
@@ -51,25 +51,25 @@ where F: Fn(&ScalarExpr) -> bool
     }
 }
 
-impl<'a, F> ScalarVisitor for Finder<'a, F>
+impl<'a, F> Visitor<'a> for Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
-    fn pre_visit(mut self, scalar: &ScalarExpr) -> Result<Recursion<Self>> {
-        if (self.find_fn)(scalar) {
-            if !(self.scalars.contains(scalar)) {
-                self.scalars.push((*scalar).clone())
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if (self.find_fn)(expr) {
+            if !(self.scalars.contains(expr)) {
+                self.scalars.push((*expr).clone())
             }
             // stop recursing down this expr once we find a match
-            return Ok(Recursion::Stop(self));
+        } else {
+            walk_expr(self, expr)?;
         }
-
-        Ok(Recursion::Continue(self))
+        Ok(())
     }
 }
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
     match scalar {
-        ScalarExpr::FunctionCall(func) if func.func_name == "and" => vec![
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => [
             split_conjunctions(&func.arguments[0]),
             split_conjunctions(&func.arguments[1]),
         ]
@@ -96,12 +96,14 @@ pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
 /// Helper to determine join condition type from a scalar expression.
 /// Given a query: `SELECT * FROM t(a), t1(b) WHERE a = 1 AND b = 1 AND a = b AND a+b = 1`,
 /// the predicate types are:
+/// - ALL: `true`, `false`: SELECT * FROM t(a), t1(b) ON a = b AND true
 /// - Left: `a = 1`
 /// - Right: `b = 1`
 /// - Both: `a = b`
 /// - Other: `a+b = 1`
 #[derive(Clone, Debug)]
 pub enum JoinPredicate<'a> {
+    ALL(&'a ScalarExpr),
     Left(&'a ScalarExpr),
     Right(&'a ScalarExpr),
     Both {
@@ -121,6 +123,11 @@ impl<'a> JoinPredicate<'a> {
         if contain_subquery(scalar) {
             return Self::Other(scalar);
         }
+
+        if scalar.used_columns().is_empty() {
+            return Self::ALL(scalar);
+        }
+
         if satisfied_by(scalar, left_prop) {
             return Self::Left(scalar);
         }

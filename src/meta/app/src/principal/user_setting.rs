@@ -61,10 +61,10 @@ impl UserSettingValue {
         }
     }
 
-    pub fn as_string(&self) -> Result<String> {
+    pub fn as_string(&self) -> String {
         match self {
-            UserSettingValue::String(v) => Ok(v.to_owned()),
-            UserSettingValue::UInt64(v) => Ok(format!("{}", v)),
+            UserSettingValue::String(v) => v.to_owned(),
+            UserSettingValue::UInt64(v) => format!("{}", v),
         }
     }
 }

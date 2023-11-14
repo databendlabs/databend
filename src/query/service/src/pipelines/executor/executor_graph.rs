@@ -23,7 +23,9 @@ use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::EventCause;
+use common_pipeline_core::processors::profile::Profile;
+use common_pipeline_core::processors::EventCause;
+use common_pipeline_core::Pipeline;
 use log::debug;
 use log::trace;
 use minitrace::prelude::*;
@@ -34,19 +36,18 @@ use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorTask;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
+use crate::pipelines::executor::ExecutorTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::pipeline::Pipeline;
+use crate::pipelines::executor::ProcessorAsyncTask;
+use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::processors::connect;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::DirectedEdge;
+use crate::pipelines::processors::Event;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::processors::UpdateList;
 use crate::pipelines::processors::UpdateTrigger;
 
@@ -62,10 +63,11 @@ struct EdgeInfo {
     output_index: usize,
 }
 
-struct Node {
+pub(crate) struct Node {
     state: std::sync::Mutex<State>,
-    processor: ProcessorPtr,
+    pub(crate) processor: ProcessorPtr,
 
+    pub(crate) profile: Arc<Profile>,
     updated_list: Arc<UpdateList>,
     inputs_port: Vec<Arc<InputPort>>,
     outputs_port: Vec<Arc<OutputPort>>,
@@ -73,16 +75,19 @@ struct Node {
 
 impl Node {
     pub fn create(
+        pid: usize,
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
     ) -> Arc<Node> {
+        let p_name = unsafe { processor.name() };
         Arc::new(Node {
             state: std::sync::Mutex::new(State::Idle),
             processor: processor.clone(),
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
+            profile: Arc::new(Profile::create(pid, p_name)),
         })
     }
 
@@ -145,7 +150,9 @@ impl ExecutingGraph {
             let mut pipe_edges = Vec::with_capacity(pipe.output_length);
 
             for item in &pipe.items {
-                let node = Node::create(&item.processor, &item.inputs_port, &item.outputs_port);
+                let pid = graph.node_count();
+                let node =
+                    Node::create(pid, &item.processor, &item.inputs_port, &item.outputs_port);
 
                 let graph_node_index = graph.add_node(node.clone());
                 unsafe {
@@ -229,6 +236,7 @@ impl ExecutingGraph {
         let mut need_schedule_edges = VecDeque::new();
 
         need_schedule_nodes.push_back(index);
+
         while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
             // To avoid lock too many times, we will try to cache lock.
             let mut state_guard_cache = None;
@@ -424,6 +432,18 @@ impl RunningGraph {
         let mut schedule_queue = ScheduleQueue::with_capacity(0);
         ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue)?;
         Ok(schedule_queue)
+    }
+
+    pub(crate) fn get_node(&self, pid: NodeIndex) -> &Node {
+        &self.0.graph[pid]
+    }
+
+    pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
+        self.0
+            .graph
+            .node_weights()
+            .map(|x| x.profile.clone())
+            .collect::<Vec<_>>()
     }
 
     pub fn interrupt_running_nodes(&self) {

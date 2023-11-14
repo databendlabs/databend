@@ -252,6 +252,8 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
+                // TODO(leiysky): this check is error-prone,
+                // we should find a better way to do this.
                 Self::check_view_dep(bind_context, &database, &table_name)?;
                 let query = table_meta
                     .options()
@@ -284,6 +286,7 @@ impl Binder {
                                 Some(normalize_identifier(table, &self.name_resolution_ctx).name);
                         }
                     }
+                    new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {
                     Err(
@@ -466,25 +469,36 @@ impl Binder {
     async fn bind_subquery(
         &mut self,
         bind_context: &mut BindContext,
+        lateral: bool,
         subquery: &Query,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        // For subquery, we need to use a new context to bind it.
-        let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-        let (s_expr, mut res_bind_context) =
-            self.bind_query(&mut new_bind_context, subquery).await?;
+        // If the subquery is a lateral subquery, we need to let it see the columns
+        // from the previous queries.
+        let (result, mut result_bind_context) = if lateral {
+            let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            self.bind_query(&mut new_bind_context, subquery).await?
+        } else {
+            let mut new_bind_context = BindContext::with_parent(
+                bind_context
+                    .parent
+                    .clone()
+                    .unwrap_or_else(|| Box::new(BindContext::new())),
+            );
+            self.bind_query(&mut new_bind_context, subquery).await?
+        };
 
         if let Some(alias) = alias {
-            res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            result_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             // Reset column name as alias column name
             for i in 0..alias.columns.len() {
-                let column = &res_bind_context.columns[i];
+                let column = &result_bind_context.columns[i];
                 self.metadata
                     .write()
                     .change_derived_column_alias(column.index, column.column_name.clone());
             }
         }
-        Ok((s_expr, res_bind_context))
+        Ok((result, result_bind_context))
     }
 
     /// Bind a location.
@@ -561,9 +575,13 @@ impl Binder {
             }
             TableReference::Subquery {
                 span: _,
+                lateral,
                 subquery,
                 alias,
-            } => self.bind_subquery(bind_context, subquery, alias).await,
+            } => {
+                self.bind_subquery(bind_context, *lateral, subquery, alias)
+                    .await
+            }
             TableReference::Location {
                 span: _,
                 location,
@@ -756,7 +774,7 @@ impl Binder {
             match &*join.right {
                 TableReference::Join { .. } => {
                     let (left_expr, left_ctx) =
-                        self.bind_single_table(current_ctx, &join.left).await?;
+                        self.bind_single_table(&mut result_ctx, &join.left).await?;
                     let (join_expr, ctx) = self
                         .bind_join(
                             current_ctx,
@@ -772,7 +790,7 @@ impl Binder {
                 }
                 _ => {
                     let (right_expr, right_ctx) =
-                        self.bind_single_table(current_ctx, &join.right).await?;
+                        self.bind_single_table(&mut result_ctx, &join.right).await?;
                     let (join_expr, ctx) = self
                         .bind_join(
                             current_ctx,
@@ -1010,17 +1028,22 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn resolve_data_source(
+    pub async fn resolve_data_source(
         &self,
-        tenant: &str,
+        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         travel_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
-        // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
-        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        // Resolve table with ctx
+        // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
+        // we will invoke here twice for t1, so in the past, we use catalog every time to get the
+        // newest snapshot, we can't get consistent snapshot
+        let mut table_meta = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
 
         if let Some(tp) = travel_point {
             table_meta = table_meta.navigate_to(tp).await?;
@@ -1057,8 +1080,10 @@ impl Binder {
 
                 match new_expr {
                     common_expression::Expr::Constant {
-                        scalar, data_type, ..
-                    } if data_type == DataType::Timestamp => {
+                        scalar,
+                        data_type: DataType::Timestamp,
+                        ..
+                    } => {
                         let value = scalar.as_timestamp().unwrap();
                         Ok(NavigationPoint::TimePoint(
                             Utc.timestamp_nanos(*value * 1000),

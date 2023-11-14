@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use common_exception::Result;
 use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::DeleteLockRevReq;
@@ -65,7 +64,7 @@ pub trait LockExt: Lock {
             user,
             node,
             query_id,
-            expire_at: Utc::now().timestamp() as u64 + expire_secs,
+            expire_secs,
         }
     }
 
@@ -92,7 +91,7 @@ pub trait LockExt: Lock {
             lock_key: self.gen_lock_key(),
             revision,
             acquire_lock,
-            expire_at: Utc::now().timestamp() as u64 + expire_secs,
+            expire_secs,
         }
     }
 }

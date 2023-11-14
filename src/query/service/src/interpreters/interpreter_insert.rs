@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_meta_app::principal::StageFileFormatType;
 use common_pipeline_sources::AsyncSourcer;
-use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::physical_plans::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::Insert;
@@ -35,9 +35,9 @@ use crate::interpreters::common::hook_refresh_agg_index;
 use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -264,7 +264,7 @@ impl Interpreter for InsertInterpreter {
             _ => AppendMode::Normal,
         };
 
-        build_append2table_with_commit_pipeline(
+        PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),

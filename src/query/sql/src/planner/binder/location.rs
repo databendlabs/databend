@@ -299,24 +299,47 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
     Ok(sp)
 }
 
+/// Generally, the URI is in the pattern hdfs://<namenode>/<path>.
+/// If <namenode> is empty (i.e. `hdfs:///<path>`),  use <namenode> configured somewhere else, e.g. in XML config file.
+/// For databend user can specify <namenode> in connection options.
+/// refer to https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/HadoopIntegrationGuide/libhdfs/HdfsURL.htm
 #[cfg(feature = "storage-hdfs")]
 fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
-    let sp = StorageParams::Hdfs(common_meta_app::storage::StorageHdfsConfig {
-        name_node: l
-            .connection
-            .get("name_node")
-            .ok_or_else(|| {
-                Error::new(
+    let name_node_from_uri = if l.name.is_empty() {
+        None
+    } else {
+        Some(format!("hdfs://{}", l.name))
+    };
+    let name_node_option = l.connection.get("name_node");
+
+    let name_node = match (name_node_option, name_node_from_uri) {
+        (Some(n1), Some(n2)) => {
+            if n1 != &n2 {
+                return Err(Error::new(
                     ErrorKind::InvalidInput,
-                    anyhow!("name_node is required for storage hdfs"),
-                )
-            })?
-            .to_string(),
+                    format!(
+                        "name_node in uri({n2}) and from connection option 'name_node'({n1}) not match."
+                    ),
+                ));
+            } else {
+                n2
+            }
+        }
+        (Some(n1), None) => n1.to_string(),
+        (None, Some(n2)) => n2,
+        (None, None) => {
+            // we prefer user to specify name_node in options
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "name_node is required for storage hdfs",
+            ));
+        }
+    };
+    let sp = StorageParams::Hdfs(common_meta_app::storage::StorageHdfsConfig {
+        name_node,
         root: l.path.clone(),
     });
-
     l.connection.check()?;
-
     Ok(sp)
 }
 
@@ -408,12 +431,17 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                anyhow!("{v} is not allowed to be used as uri location"),
+                anyhow!("URI protocol {v} is not supported yet."),
             ));
         }
     };
 
-    let sp = sp.auto_detect().await;
+    let sp = sp.auto_detect().await.map_err(|err| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("storage params is invalid for it's auto detect failed for {err:?}"),
+        )
+    })?;
 
     Ok((sp, path))
 }

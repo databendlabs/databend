@@ -43,7 +43,7 @@ macro_rules! rule {
 }
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.get(0).filter(|token| token.text() == text) {
+    move |i| match i.0.first().filter(|token| token.text() == text) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -53,7 +53,7 @@ pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.get(0).filter(|token| token.kind == kind) {
+    move |i| match i.0.first().filter(|token| token.kind == kind) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -63,7 +63,7 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn any_token(i: Input) -> IResult<&Token> {
-    match i.0.get(0).filter(|token| token.kind != EOI) {
+    match i.0.first().filter(|token| token.kind != EOI) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -84,27 +84,17 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_function_name())(i)
 }
 
-/// Parse input into stage name.
-///
-/// Possible value:
-///
-/// - a valid Identifier
-/// - `~`
 pub fn stage_name(i: Input) -> IResult<Identifier> {
-    alt((
-        map(
-            alt((
-                rule! { (Ident | BitWiseNot) },
-                non_reserved_keyword(|token| token.is_reserved_ident(false)),
-            )),
-            |token| Identifier {
-                span: transform_span(&[token.clone()]),
-                name: token.text().to_string(),
-                quote: None,
-            },
-        ),
-        quoted_identifier,
-    ))(i)
+    let anonymous_stage = map(rule! { "~" }, |token| Identifier {
+        span: transform_span(&[token.clone()]),
+        name: token.text().to_string(),
+        quote: None,
+    });
+
+    rule!(
+        #ident
+        | #anonymous_stage
+    )(i)
 }
 
 fn quoted_identifier(i: Input) -> IResult<Identifier> {
@@ -137,7 +127,10 @@ fn non_reserved_identifier(
     move |i| {
         alt((
             map(
-                alt((rule! { Ident }, non_reserved_keyword(is_reserved_keyword))),
+                rule! {
+                    Ident
+                    | #non_reserved_keyword(is_reserved_keyword)
+                },
                 |token| Identifier {
                     span: transform_span(&[token.clone()]),
                     name: token.text().to_string(),
@@ -154,7 +147,7 @@ fn non_reserved_keyword(
 ) -> impl FnMut(Input) -> IResult<&Token> {
     move |i: Input| match i
         .0
-        .get(0)
+        .first()
         .filter(|token| token.kind.is_keyword() && !is_reserved_keyword(&token.kind))
     {
         Some(token) => Ok((i.slice(1..), token)),
@@ -338,6 +331,23 @@ where
             Ok(o2) => Ok((input, o2)),
             Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
         }
+    }
+}
+
+/// Try to find an error pattern that user may have made, and hint them with suggestion.
+pub fn error_hint<'a, O, F>(
+    mut match_error: F,
+    message: &'static str,
+) -> impl FnMut(Input<'a>) -> IResult<'a, ()>
+where
+    F: nom::Parser<Input<'a>, O, Error<'a>>,
+{
+    move |input: Input| match match_error.parse(input) {
+        Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
+            input,
+            ErrorKind::Other(message),
+        ))),
+        Err(_) => Ok((input, ())),
     }
 }
 

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_profile::SharedProcessorProfiles;
 
@@ -42,7 +41,7 @@ pub async fn build_query_pipeline(
         build_query_pipeline_without_render_result_set(ctx, plan, enable_profile).await?;
 
     let input_schema = plan.output_schema()?;
-    PipelineBuilder::render_result_set(
+    PipelineBuilder::build_result_projection(
         &ctx.get_function_context()?,
         input_schema,
         result_columns,
@@ -61,12 +60,7 @@ pub async fn build_query_pipeline_without_render_result_set(
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan, enable_profiling).await
     } else {
-        if enable_profiling {
-            return Err(ErrorCode::Unimplemented(
-                "Query profiling is not supported in distributed mode",
-            ));
-        }
-        build_distributed_pipeline(ctx, plan, enable_profiling).await
+        build_distributed_pipeline(ctx, plan, false).await
     }?;
     Ok(build_res)
 }

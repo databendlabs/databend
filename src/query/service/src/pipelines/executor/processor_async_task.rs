@@ -24,23 +24,23 @@ use common_base::base::tokio::time::sleep;
 use common_base::runtime::catch_unwind;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    inner: BoxFuture<'static, Result<()>>,
+    inner: BoxFuture<'static, (Duration, Result<()>)>,
 }
 
 impl ProcessorAsyncTask {
@@ -88,7 +88,7 @@ impl ProcessorAsyncTask {
                         );
                     }
                     Either::Right((res, _)) => {
-                        return res;
+                        return (start.elapsed(), res);
                     }
                 }
             }
@@ -116,17 +116,22 @@ impl Future for ProcessorAsyncTask {
 
         match catch_unwind(move || inner.poll(cx)) {
             Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready(res)) => {
+            Ok(Poll::Ready((elapsed, res))) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        res,
+                        Some(elapsed),
+                    ),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), None),
                 );
 
                 Poll::Ready(())

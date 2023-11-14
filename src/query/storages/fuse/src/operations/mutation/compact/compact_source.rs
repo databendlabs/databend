@@ -22,20 +22,20 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::metrics::*;
 use crate::operations::mutation::compact::compact_part::CompactPartInfo;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::mutation_meta::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::operations::BlockMetaIndex;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::Processor;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 

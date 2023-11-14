@@ -203,7 +203,7 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
             ExpireKey::new(5_000, 2),
             Marked::new_with_meta(2, s("b"), None)
         ),
-        (ExpireKey::new(10_000, 1), Marked::new_tomb_stone(4)),
+        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
         (
             ExpireKey::new(15_000, 4),
             Marked::new_with_meta(4, s("a"), None)
@@ -284,8 +284,8 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
             ExpireKey::new(5_000, 2),
             Marked::new_with_meta(2, s("b"), None)
         ),
-        (ExpireKey::new(10_000, 1), Marked::new_tomb_stone(4)),
-        (ExpireKey::new(15_000, 4), Marked::new_tomb_stone(5),),
+        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
+        (ExpireKey::new(15_000, 4), Marked::new_tombstone(5),),
         (
             ExpireKey::new(20_000, 3),
             Marked::new_with_meta(3, s("c"), None)

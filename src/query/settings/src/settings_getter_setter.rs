@@ -34,7 +34,7 @@ impl Settings {
 
     fn try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => DefaultSettings::try_get_string(key),
         }
     }
@@ -66,6 +66,11 @@ impl Settings {
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
+    }
+
+    // Max block size for parquet reader
+    pub fn get_parquet_max_block_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_max_block_size")
     }
 
     // Get max_threads.
@@ -247,6 +252,10 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
     }
 
+    pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("http_handler_result_timeout_secs")
+    }
+
     pub fn get_query_result_cache_ttl_secs(&self) -> Result<u64> {
         self.try_get_u64("query_result_cache_ttl_secs")
     }
@@ -326,6 +335,10 @@ impl Settings {
 
     pub fn get_enable_distributed_merge_into(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_merge_into")? != 0)
+    }
+
+    pub fn get_merge_into_static_filter_partition_threshold(&self) -> Result<u64> {
+        self.try_get_u64("merge_into_static_filter_partition_threshold")
     }
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
@@ -418,5 +431,13 @@ impl Settings {
 
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
+    }
+
+    pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_connect_timeout_secs")
+    }
+
+    pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_timeout_secs")
     }
 }

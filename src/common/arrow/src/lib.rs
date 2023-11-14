@@ -12,16 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(iter_advance_by)]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+#![allow(clippy::redundant_closure_call)]
+#![allow(clippy::non_canonical_partial_ord_impl)]
+
+//#[macro_use]
+// mod errors;
+
+pub mod arrow;
+pub mod native;
 mod parquet_read;
 mod parquet_write;
 pub mod schema_projection;
 
-pub use arrow;
 pub use arrow_format;
-pub use native;
 pub use parquet2 as parquet;
 pub use parquet_read::read_columns_async;
 pub use parquet_read::read_columns_many_async;
 pub use parquet_write::write_parquet_file;
 
-pub type ArrayRef = Box<dyn ::arrow::array::Array>;
+pub type ArrayRef = Box<dyn crate::arrow::array::Array>;

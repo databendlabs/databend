@@ -22,13 +22,13 @@ use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
 use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CopyIntoTablePhysicalPlan {
+pub struct CopyIntoTable {
     pub catalog_info: CatalogInfo,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
@@ -57,7 +57,7 @@ pub enum CopyIntoTableSource {
     Stage(Box<DataSourcePlan>),
 }
 
-impl CopyIntoTablePhysicalPlan {
+impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         match &self.source {
             CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),

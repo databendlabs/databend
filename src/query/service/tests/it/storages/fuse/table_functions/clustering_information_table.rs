@@ -32,10 +32,10 @@ use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_clustering_information_table_read() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
 
     // test db & table
     fixture.create_default_table().await?;

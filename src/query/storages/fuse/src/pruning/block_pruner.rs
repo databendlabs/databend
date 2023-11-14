@@ -23,13 +23,13 @@ use common_catalog::plan::block_id_in_segment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_metrics::storage::*;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use super::SegmentLocation;
-use crate::metrics::*;
 use crate::pruning::BloomPruner;
 use crate::pruning::PruningContext;
 
@@ -250,7 +250,7 @@ impl BlockPruner {
         for (block_idx, block_meta) in blocks {
             // Perf.
             {
-                metrics_inc_blocks_range_pruning_after(1);
+                metrics_inc_blocks_range_pruning_before(1);
                 metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
 
                 pruning_stats.set_blocks_range_pruning_before(1);

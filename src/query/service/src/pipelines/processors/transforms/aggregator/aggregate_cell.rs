@@ -20,12 +20,12 @@ use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::AggregatorParams;
 
 // Manage unsafe memory usage, free memory when the cell is destroyed.
 pub struct HashTableCell<T: HashMethodBounds, V: Send + Sync + 'static> {

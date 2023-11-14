@@ -22,6 +22,7 @@ use common_base::runtime::UnlimitedFuture;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
+use common_metrics::storage::*;
 use futures::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
@@ -32,7 +33,6 @@ use storages_common_table_meta::meta::ColumnMeta;
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
-use crate::metrics::*;
 use crate::MergeIOReadResult;
 
 impl BlockReader {

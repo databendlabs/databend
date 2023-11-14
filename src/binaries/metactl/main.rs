@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
         },
         stderr: StderrConfig::default(),
         query: QueryLogConfig::default(),
-        tracing: TracingConfig::from_env(),
+        tracing: TracingConfig::default(),
     };
 
     let _guards = init_logging("metactl", &log_config);
