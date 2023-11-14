@@ -18,7 +18,12 @@ use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::types::UInt64Type;
+use common_expression::types::VariantType;
 use common_expression::Column;
+use common_expression::FromData;
 use common_expression::Function;
 use common_expression::FunctionEval;
 use common_expression::FunctionKind;
@@ -28,11 +33,17 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
+use common_expression::ValueRef;
+use jsonb::array_length;
 use jsonb::array_values;
+use jsonb::as_str;
+use jsonb::get_by_index;
+use jsonb::get_by_name;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::jsonpath::Selector;
 use jsonb::object_each;
+use jsonb::object_keys;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -151,6 +162,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                                     &String::from_utf8_lossy(path),
                                                 ),
                                             );
+                                            break;
                                         }
                                     }
                                 }
@@ -237,6 +249,197 @@ pub fn register(registry: &mut FunctionRegistry) {
                             _ => unreachable!(),
                         })
                         .collect()
+                }),
+            },
+        }))
+    });
+
+    registry.properties.insert(
+        "flatten".to_string(),
+        FunctionProperty::default().kind(FunctionKind::SRF),
+    );
+    registry.register_function_factory("flatten", |_, args_type| {
+        if args_type.is_empty() || args_type.len() > 5 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
+        if args_type.len() >= 2
+            && args_type[1] != DataType::String
+            && args_type[1] != DataType::Null
+        {
+            return None;
+        }
+        if args_type.len() >= 3
+            && args_type[2] != DataType::Boolean
+            && args_type[2] != DataType::Null
+        {
+            return None;
+        }
+        if args_type.len() >= 4
+            && args_type[3] != DataType::Boolean
+            && args_type[3] != DataType::Null
+        {
+            return None;
+        }
+        if args_type.len() >= 5
+            && args_type[4] != DataType::String
+            && args_type[4] != DataType::Null
+        {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "flatten".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Tuple(
+                    vec![
+                        DataType::Number(NumberDataType::UInt64),
+                        DataType::Nullable(Box::new(DataType::String)),
+                        DataType::Nullable(Box::new(DataType::String)),
+                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                        DataType::Nullable(Box::new(DataType::Variant)),
+                        DataType::Nullable(Box::new(DataType::Variant)),
+                    ],
+                )))]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
+                    let arg = args[0].clone().to_owned();
+
+                    let mut json_path = None;
+                    let mut outer = false;
+                    let mut recursive = false;
+                    let mut mode = FlattenMode::Both;
+                    let mut results = Vec::with_capacity(ctx.num_rows);
+
+                    if args.len() >= 2 {
+                        match &args[1] {
+                            ValueRef::Scalar(ScalarRef::String(v)) => match parse_json_path(v) {
+                                Ok(jsonpath) => {
+                                    let path = unsafe { std::str::from_utf8_unchecked(v) };
+                                    let selector = Selector::new(jsonpath, SelectorMode::All);
+                                    json_path = Some((path, selector));
+                                }
+                                Err(_) => {
+                                    ctx.set_error(
+                                        0,
+                                        format!(
+                                            "Invalid JSON Path {:?}",
+                                            String::from_utf8_lossy(v)
+                                        ),
+                                    );
+                                    return results;
+                                }
+                            },
+                            ValueRef::Column(_) => {
+                                ctx.set_error(
+                                    0,
+                                    "argument `path` to function FLATTEN needs to be constant"
+                                        .to_string(),
+                                );
+                                return results;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if args.len() >= 3 {
+                        match &args[2] {
+                            ValueRef::Scalar(ScalarRef::Boolean(v)) => {
+                                outer = *v;
+                            }
+                            ValueRef::Column(_) => {
+                                ctx.set_error(
+                                    0,
+                                    "argument `outer` to function FLATTEN needs to be constant"
+                                        .to_string(),
+                                );
+                                return results;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if args.len() >= 4 {
+                        match &args[3] {
+                            ValueRef::Scalar(ScalarRef::Boolean(v)) => {
+                                recursive = *v;
+                            }
+                            ValueRef::Column(_) => {
+                                ctx.set_error(
+                                    0,
+                                    "argument `recursive` to function FLATTEN needs to be constant"
+                                        .to_string(),
+                                );
+                                return results;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if args.len() >= 5 {
+                        match args[4] {
+                            ValueRef::Scalar(ScalarRef::String(v)) => {
+                                match String::from_utf8(v.to_vec()) {
+                                    Ok(val) => match val.to_lowercase().as_str() {
+                                        "object" => {
+                                            mode = FlattenMode::Object;
+                                        }
+                                        "array" => {
+                                            mode = FlattenMode::Array;
+                                        }
+                                        "both" => {
+                                            mode = FlattenMode::Both;
+                                        }
+                                        _ => {
+                                            ctx.set_error(0, format!("Invalid mode {:?}", val));
+                                            return results;
+                                        }
+                                    },
+                                    Err(_) => {
+                                        ctx.set_error(
+                                            0,
+                                            format!(
+                                                "Invalid mode string {:?}",
+                                                String::from_utf8_lossy(v)
+                                            ),
+                                        );
+                                        return results;
+                                    }
+                                }
+                            }
+                            ValueRef::Column(_) => {
+                                ctx.set_error(
+                                    0,
+                                    "argument `mode` to function FLATTEN needs to be constant"
+                                        .to_string(),
+                                );
+                                return results;
+                            }
+                            _ => {}
+                        }
+                    }
+                    let mut flatten = FlattenSource::create(json_path, outer, recursive, mode);
+
+                    for (row, max_nums_per_row) in
+                        max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                    {
+                        match arg.index(row).unwrap() {
+                            ScalarRef::Null => {
+                                results.push((Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0));
+                            }
+                            ScalarRef::Variant(val) => {
+                                let columns = flatten.generate((row + 1) as u64, val);
+                                let len = columns[0].len();
+                                *max_nums_per_row = std::cmp::max(*max_nums_per_row, len);
+
+                                let inner_col = Column::Tuple(columns).wrap_nullable(None);
+                                results.push((Value::Column(Column::Tuple(vec![inner_col])), len));
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    results
                 }),
             },
         }))
@@ -340,6 +543,179 @@ fn build_unnest(
                 }),
             },
         }),
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum FlattenMode {
+    Both,
+    Object,
+    Array,
+}
+
+struct FlattenSource<'a> {
+    json_path: Option<(&'a str, Selector<'a>)>,
+    outer: bool,
+    recursive: bool,
+    mode: FlattenMode,
+}
+
+impl<'a> FlattenSource<'a> {
+    pub fn create(
+        json_path: Option<(&'a str, Selector<'a>)>,
+        outer: bool,
+        recursive: bool,
+        mode: FlattenMode,
+    ) -> FlattenSource<'a> {
+        Self {
+            json_path,
+            outer,
+            recursive,
+            mode,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn flatten(
+        &mut self,
+        input: &[u8],
+        path: &str,
+        keys: &mut Vec<Option<Vec<u8>>>,
+        paths: &mut Vec<Option<Vec<u8>>>,
+        indices: &mut Vec<Option<u64>>,
+        values: &mut Vec<Option<Vec<u8>>>,
+        thises: &mut Vec<Option<Vec<u8>>>,
+    ) {
+        match self.mode {
+            FlattenMode::Object => {
+                self.flatten_object(input, path, keys, paths, indices, values, thises);
+            }
+            FlattenMode::Array => {
+                self.flatten_array(input, path, keys, paths, indices, values, thises);
+            }
+            FlattenMode::Both => {
+                self.flatten_array(input, path, keys, paths, indices, values, thises);
+                self.flatten_object(input, path, keys, paths, indices, values, thises);
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn flatten_array(
+        &mut self,
+        input: &[u8],
+        path: &str,
+        keys: &mut Vec<Option<Vec<u8>>>,
+        paths: &mut Vec<Option<Vec<u8>>>,
+        indices: &mut Vec<Option<u64>>,
+        values: &mut Vec<Option<Vec<u8>>>,
+        thises: &mut Vec<Option<Vec<u8>>>,
+    ) {
+        if let Some(len) = array_length(input) {
+            for i in 0..len {
+                let val = get_by_index(input, i).unwrap();
+                keys.push(None);
+                let inner_path = format!("{}[{}]", path, i);
+                paths.push(Some(inner_path.as_bytes().to_vec()));
+                indices.push(Some(i.try_into().unwrap()));
+                values.push(Some(val.clone()));
+                thises.push(Some(input.to_vec().clone()));
+
+                if self.recursive {
+                    self.flatten(&val, &inner_path, keys, paths, indices, values, thises);
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn flatten_object(
+        &mut self,
+        input: &[u8],
+        path: &str,
+        keys: &mut Vec<Option<Vec<u8>>>,
+        paths: &mut Vec<Option<Vec<u8>>>,
+        indices: &mut Vec<Option<u64>>,
+        values: &mut Vec<Option<Vec<u8>>>,
+        thises: &mut Vec<Option<Vec<u8>>>,
+    ) {
+        if let Some(obj_keys) = object_keys(input) {
+            if let Some(len) = array_length(&obj_keys) {
+                for i in 0..len {
+                    let key = get_by_index(&obj_keys, i).unwrap();
+                    let name = as_str(&key).unwrap();
+                    let val = get_by_name(input, &name, false).unwrap();
+
+                    keys.push(Some(name.as_bytes().to_vec()));
+                    let inner_path = if !path.is_empty() {
+                        format!("{}.{}", path, name)
+                    } else {
+                        name.to_string()
+                    };
+                    paths.push(Some(inner_path.as_bytes().to_vec()));
+                    indices.push(None);
+                    values.push(Some(val.clone()));
+                    thises.push(Some(input.to_vec().clone()));
+
+                    if self.recursive {
+                        self.flatten(&val, &inner_path, keys, paths, indices, values, thises);
+                    }
+                }
+            }
+        }
+    }
+
+    fn generate(&mut self, seq: u64, input: &[u8]) -> Vec<Column> {
+        // get inner input values by path
+        let mut builder = StringColumnBuilder::with_capacity(0, 0);
+        let path = if let Some((path, selector)) = &self.json_path {
+            selector.select(input, &mut builder.data, &mut builder.offsets);
+            path.to_string()
+        } else {
+            builder.put_slice(input);
+            builder.commit_row();
+            "".to_string()
+        };
+        let inputs = builder.build();
+
+        let mut keys: Vec<Option<Vec<u8>>> = vec![];
+        let mut paths: Vec<Option<Vec<u8>>> = vec![];
+        let mut indices: Vec<Option<u64>> = vec![];
+        let mut values: Vec<Option<Vec<u8>>> = vec![];
+        let mut thises: Vec<Option<Vec<u8>>> = vec![];
+
+        for input in inputs.iter() {
+            self.flatten(
+                input,
+                &path,
+                &mut keys,
+                &mut paths,
+                &mut indices,
+                &mut values,
+                &mut thises,
+            );
+        }
+
+        if self.outer && values.is_empty() {
+            // add an empty row
+            keys.push(None);
+            paths.push(None);
+            indices.push(None);
+            values.push(None);
+            thises.push(None);
+        }
+
+        let seqs: Vec<u64> = [seq].repeat(values.len());
+
+        let columns = vec![
+            UInt64Type::from_data(seqs),
+            StringType::from_opt_data(keys),
+            StringType::from_opt_data(paths),
+            UInt64Type::from_opt_data(indices),
+            VariantType::from_opt_data(values),
+            VariantType::from_opt_data(thises),
+        ];
+        columns
     }
 }
 
