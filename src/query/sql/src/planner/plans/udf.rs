@@ -27,7 +27,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 
-/// `Lambda` is a plan that evaluate a series of lambda functions.
+/// `Udf` is a plan that evaluate a series of udf functions.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Udf {
     pub items: Vec<ScalarItem>,

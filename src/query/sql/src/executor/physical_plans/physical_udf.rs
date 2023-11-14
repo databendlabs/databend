@@ -74,7 +74,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let mut used = vec![];
-        // Keep all columns, as some lambda functions may be arguments to other lambda functions.
+        // Keep all columns, as some udf functions may be arguments to other udf functions.
         for s in udf.items.iter() {
             used.push(s.clone());
             s.scalar.used_columns().iter().for_each(|c| {
@@ -108,7 +108,7 @@ impl PhysicalPlanBuilder {
                                     Ok(index)
                                 }
                                 ScalarExpr::UDFServerCall(inner_udf) => {
-                                    // nested lambda function as an argument of parent lambda function
+                                    // nested udf function as an argument of parent udf function
                                     let index = udf_index_map.get(&inner_udf.display_name).unwrap();
                                     Ok(*index)
                                 }
