@@ -13594,6 +13594,211 @@ DescribeTask(
 
 
 ---------- Input ----------
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
+---------- Output ---------
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM @~/MyStage1 FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+CreatePipe(
+    CreatePipeStmt {
+        if_not_exists: true,
+        name: "MyPipe1",
+        auto_ingest: true,
+        comments: "This is test pipe 1",
+        copy_stmt: CopyIntoTableStmt {
+            src: Location(
+                Stage(
+                    "~/MyStage1",
+                ),
+            ),
+            dst: TableIdentifier {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    name: "MyTable1",
+                    quote: None,
+                    span: Some(
+                        98..106,
+                    ),
+                },
+            },
+            dst_columns: None,
+            hints: None,
+            file_format: {
+                "type": "CSV",
+            },
+            files: None,
+            pattern: None,
+            force: false,
+            validation_mode: "",
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            on_error: "abort",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
+---------- Output ---------
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+CreatePipe(
+    CreatePipeStmt {
+        if_not_exists: false,
+        name: "pipe1",
+        auto_ingest: false,
+        comments: "",
+        copy_stmt: CopyIntoTableStmt {
+            src: Location(
+                Stage(
+                    "~/mybucket/data.csv",
+                ),
+            ),
+            dst: TableIdentifier {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        name: "db1",
+                        quote: None,
+                        span: Some(
+                            31..34,
+                        ),
+                    },
+                ),
+                table: Identifier {
+                    name: "MyTable1",
+                    quote: None,
+                    span: Some(
+                        35..43,
+                    ),
+                },
+            },
+            dst_columns: None,
+            hints: None,
+            file_format: {},
+            files: None,
+            pattern: None,
+            force: false,
+            validation_mode: "",
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            on_error: "abort",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe REFRESH
+---------- Output ---------
+ALTER PIPE mypipe REFRESH
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Refresh {
+            prefix: None,
+            modified_after: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe REFRESH PREFIX='d1/'
+---------- Output ---------
+ALTER PIPE mypipe REFRESH PREFIX = 'd1/'
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Refresh {
+            prefix: Some(
+                "d1/",
+            ),
+            modified_after: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe REFRESH PREFIX='d1/' MODIFIED_AFTER='2018-07-30T13:56:46-07:00'
+---------- Output ---------
+ALTER PIPE mypipe REFRESH PREFIX = 'd1/' MODIFIED_AFTER = '2018-07-30T13:56:46-07:00'
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Refresh {
+            prefix: Some(
+                "d1/",
+            ),
+            modified_after: Some(
+                "2018-07-30T13:56:46-07:00",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
+---------- Output ---------
+ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Set {
+            execution_paused: Some(
+                true,
+            ),
+            comments: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP PIPE mypipe
+---------- Output ---------
+DROP PIPE mypipe
+---------- AST ------------
+DropPipe(
+    DropPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+    },
+)
+
+
+---------- Input ----------
+DESC PIPE mypipe
+---------- Output ---------
+DESCRIBE PIPE mypipe
+---------- AST ------------
+DescribePipe(
+    DescribePipeStmt {
+        name: "mypipe",
+    },
+)
+
+
+---------- Input ----------
 --各环节转各环节转各环节转各环节转各
   select 34343
 ---------- Output ---------

@@ -484,5 +484,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterTask(stmt) => visitor.visit_alter_task(stmt),
         Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
         Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
+        Statement::CreatePipe(_) => todo!(),
+        Statement::AlterPipe(_) => todo!(),
+        Statement::DropPipe(_) => todo!(),
+        Statement::DescribePipe(_) => todo!(),
     }
 }

@@ -1057,6 +1057,16 @@ pub enum TokenKind {
     SUSPEND,
     #[token("RESUME", ignore(ascii_case))]
     RESUME,
+    #[token("PIPE", ignore(ascii_case))]
+    PIPE,
+    #[token("AUTO_INGEST", ignore(ascii_case))]
+    AUTO_INGEST,
+    #[token("PIPE_EXECUTION_PAUSED", ignore(ascii_case))]
+    PIPE_EXECUTION_PAUSED,
+    #[token("PREFIX", ignore(ascii_case))]
+    PREFIX,
+    #[token("MODIFIED_AFTER", ignore(ascii_case))]
+    MODIFIED_AFTER,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1404,6 +1414,7 @@ impl TokenKind {
             | TokenKind::MASKING
             | TokenKind::POLICY
             | TokenKind::TASK
+            | TokenKind::PIPE
             if !after_as => true,
             _ => false
         }
