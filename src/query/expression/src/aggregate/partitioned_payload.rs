@@ -24,7 +24,7 @@ use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::PayloadFlushState;
-use crate::FLUSH_BATCH_SIZE;
+use crate::BATCH_SIZE;
 
 pub struct PartitionedPayload {
     pub payloads: Vec<Payload>,
@@ -65,8 +65,8 @@ impl PartitionedPayload {
         let validity_offsets = payloads[0].validity_offsets.clone();
         let hash_offset = payloads[0].hash_offset;
         let state_offset = payloads[0].state_offset;
-        let state_addr_offsets = payloads[0].state_addr_offsets.clone();
-        let state_layout = payloads[0].state_layout.clone();
+        let state_addr_offsets = payloads[0].state_addr_offsets;
+        let state_layout = payloads[0].state_layout;
 
         PartitionedPayload {
             payloads,
@@ -113,7 +113,7 @@ impl PartitionedPayload {
                         *count += 1;
                     }
                     None => {
-                        let mut v = vec![0; state.group_hashes.len()];
+                        let mut v = [0; BATCH_SIZE];
                         v[0] = idx;
                         state.partition_entries.insert(partition_idx, (v, 1));
                     }
@@ -176,6 +176,9 @@ impl PartitionedPayload {
             state.clear();
 
             while self.gather_flush(&other, state) {
+                if state.row_count == 0 {
+                    continue;
+                }
                 // copy rows
                 for partition in 0..self.partition_count as usize {
                     let payload = &mut self.payloads[partition];
@@ -194,36 +197,41 @@ impl PartitionedPayload {
     }
 
     pub fn gather_flush(&self, other: &Payload, state: &mut PayloadFlushState) -> bool {
-        let flush_end = (state.flush_offset + FLUSH_BATCH_SIZE).min(other.len());
-
-        if flush_end <= state.flush_offset {
+        if state.flush_page >= other.pages.len() {
             return false;
         }
 
-        let rows = flush_end - state.flush_offset;
-        if state.addresses.len() < rows {
-            state.addresses.resize(rows, std::ptr::null::<u8>());
+        let page = &other.pages[state.flush_page];
+
+        // ToNext
+        if state.flush_page_row >= page.rows {
+            state.flush_page += 1;
+            state.flush_page_row = 0;
+            state.row_count = 0;
+            return self.gather_flush(other, state);
         }
 
+        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - state.flush_page_row;
         state.row_count = rows;
-        for row in state.flush_offset..flush_end {
-            state.addresses[row - state.flush_offset] = other.get_read_ptr(row);
-        }
 
         state.probe_state.reset_partitions();
-        for i in 0..rows {
+
+        for idx in 0..rows {
+            state.addresses[idx] = other.data_ptr(page, idx + state.flush_page_row);
+
             let hash =
-                unsafe { core::ptr::read::<u64>(state.addresses[i].add(self.hash_offset) as _) };
+                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
             match state.probe_state.partition_entries.get_mut(&partition_idx) {
                 Some((v, count)) => {
-                    v[*count] = i;
+                    v[*count] = idx;
                     *count += 1;
                 }
                 None => {
-                    let mut v = vec![0; FLUSH_BATCH_SIZE];
-                    v[0] = i;
+                    let mut v = [0; BATCH_SIZE];
+                    v[0] = idx;
                     state
                         .probe_state
                         .partition_entries
@@ -231,8 +239,7 @@ impl PartitionedPayload {
                 }
             }
         }
-
-        state.flush_offset = flush_end;
+        state.flush_page_row = end;
         true
     }
 

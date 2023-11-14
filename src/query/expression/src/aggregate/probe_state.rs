@@ -14,17 +14,19 @@
 
 use std::collections::HashMap;
 
+use crate::new_sel;
 use crate::PerfectHashBuilder;
 use crate::SelectVector;
 use crate::StateAddr;
+use crate::BATCH_SIZE;
 
 /// ProbeState is the state to probe HT
 /// It could be reuse during multiple probe process
 #[derive(Debug)]
 pub struct ProbeState {
-    pub group_hashes: Vec<u64>,
-    pub addresses: Vec<*const u8>,
-    pub state_places: Vec<StateAddr>,
+    pub group_hashes: [u64; BATCH_SIZE],
+    pub addresses: [*const u8; BATCH_SIZE],
+    pub state_places: [StateAddr; BATCH_SIZE],
     pub group_compare_vector: SelectVector,
     pub no_match_vector: SelectVector,
     pub empty_vector: SelectVector,
@@ -38,34 +40,19 @@ unsafe impl Send for ProbeState {}
 unsafe impl Sync for ProbeState {}
 
 impl ProbeState {
-    pub fn with_capacity(len: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            group_hashes: vec![0; len],
-            addresses: vec![std::ptr::null::<u8>(); len],
-            state_places: vec![StateAddr::new(0); len],
-            group_compare_vector: vec![0; len],
-            no_match_vector: vec![0; len],
-            empty_vector: vec![0; len],
-            temp_vector: vec![0; len],
+            group_hashes: [0_u64; BATCH_SIZE],
+            addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
+            state_places: [StateAddr::new(0); BATCH_SIZE],
+            group_compare_vector: new_sel(),
+            no_match_vector: new_sel(),
+            empty_vector: new_sel(),
+            temp_vector: new_sel(),
             partition_entries: HashMap::with_hasher(PerfectHashBuilder),
             row_count: 0,
         }
     }
-
-    pub fn adjust_vector(&mut self, row_count: usize) {
-        if self.group_hashes.len() < row_count {
-            self.group_hashes.resize(row_count, 0);
-            self.addresses.resize(row_count, std::ptr::null::<u8>());
-            self.state_places.resize(row_count, StateAddr::new(0));
-
-            self.group_compare_vector.resize(row_count, 0);
-            self.no_match_vector.resize(row_count, 0);
-            self.empty_vector.resize(row_count, 0);
-            self.temp_vector.resize(row_count, 0);
-        }
-        self.row_count = row_count;
-    }
-
     pub fn set_incr_empty_vector(&mut self, row_count: usize) {
         for i in 0..row_count {
             self.empty_vector[i] = i;

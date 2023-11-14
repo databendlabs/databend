@@ -55,14 +55,13 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let max_block_size = params.max_block_size;
         Ok(Box::new(BlockMetaTransformer::create(
             input,
             output,
             TransformFinalAggregate::<Method> {
                 method,
                 params,
-                flush_state: PayloadFlushState::with_capacity(max_block_size),
+                flush_state: PayloadFlushState::new(),
             },
         )))
     }

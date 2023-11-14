@@ -38,7 +38,7 @@ pub fn group_hash_columns(cols: &[Column], values: &mut [u64]) {
     combine_group_hash_column::<true>(&cols[0], values);
     if cols.len() > 1 {
         for col in &cols[1..] {
-            combine_group_hash_column::<false>(&col, values);
+            combine_group_hash_column::<false>(col, values);
         }
     }
 }

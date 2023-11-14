@@ -48,7 +48,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         },
         DataType::Timestamp => 8,
         DataType::Date => 4,
-        DataType::Nullable(x) => rowformat_size(&x),
+        DataType::Nullable(x) => rowformat_size(x),
         DataType::Array(_) => todo!(),
         DataType::Map(_) => todo!(),
         DataType::Tuple(_) => todo!(),

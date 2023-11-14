@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
@@ -41,6 +40,7 @@ use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
 use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_storage::DataOperator;
+use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -100,7 +100,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             output: OutputPort::create(),
             buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
-            flush_state: PayloadFlushState::with_capacity(8192),
+            flush_state: PayloadFlushState::new(),
             partition_payloads: vec![],
             initialized_all_inputs: false,
             max_partition_count: 0,
@@ -442,17 +442,14 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             let group_types = payloads[0].group_types.clone();
             let aggrs = payloads[0].aggrs.clone();
 
-            let mut payload_map = HashMap::with_capacity(self.max_partition_count);
+            let mut payload_map = (0..self.max_partition_count).map(|_| vec![]).collect_vec();
             for payload in payloads.into_iter() {
                 for (bucket, p) in payload.payloads.into_iter().enumerate() {
-                    payload_map
-                        .entry(bucket as isize)
-                        .or_insert_with(|| vec![])
-                        .push(p);
+                    payload_map[bucket].push(p);
                 }
             }
-            for bucket in 0..self.max_partition_count as isize {
-                let mut payloads = payload_map.remove(&bucket).unwrap_or(vec![]);
+
+            for (bucket, mut payloads) in payload_map.into_iter().enumerate() {
                 let mut partition_payload =
                     PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1);
 

@@ -137,6 +137,8 @@ pub mod sse {
             ))
     }
 
+    /// # Safety
+    /// This is safe that we compare bytes via addr
     #[inline(always)]
     pub unsafe fn memcmp_sse(a: &[u8], b: &[u8]) -> bool {
         let mut size = a.len();

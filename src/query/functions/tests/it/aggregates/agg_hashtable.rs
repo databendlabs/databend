@@ -95,7 +95,7 @@ fn test_agg_hashtable() {
         let mut hashtable =
             AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
-        let mut state = ProbeState::with_capacity(BATCH_SIZE);
+        let mut state = ProbeState::new();
         let _ = hashtable
             .add_groups(&mut state, &group_columns, &params, n)
             .unwrap();
@@ -103,15 +103,15 @@ fn test_agg_hashtable() {
         let mut hashtable2 =
             AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
-        let mut state2 = ProbeState::with_capacity(BATCH_SIZE);
+        let mut state2 = ProbeState::new();
         let _ = hashtable2
             .add_groups(&mut state2, &group_columns, &params, n)
             .unwrap();
 
-        let mut flush_state = PayloadFlushState::with_capacity(BATCH_SIZE);
+        let mut flush_state = PayloadFlushState::new();
         let _ = hashtable.combine(hashtable2, &mut flush_state);
 
-        let mut merge_state = PayloadFlushState::with_capacity(BATCH_SIZE);
+        let mut merge_state = PayloadFlushState::new();
 
         let mut blocks = Vec::new();
         loop {

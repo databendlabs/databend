@@ -31,8 +31,7 @@ use crate::types::TimestampType;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::StateAddr;
-
-pub(crate) const FLUSH_BATCH_SIZE: usize = 8192;
+use crate::BATCH_SIZE;
 
 pub struct PayloadFlushState {
     pub probe_state: ProbeState,
@@ -41,33 +40,36 @@ pub struct PayloadFlushState {
     pub row_count: usize,
 
     pub flush_partition: usize,
-    pub flush_offset: usize,
+    pub flush_page: usize,
+    pub flush_page_row: usize,
 
-    pub addresses: Vec<*const u8>,
-    pub state_places: Vec<StateAddr>,
+    pub addresses: [*const u8; BATCH_SIZE],
+    pub state_places: [StateAddr; BATCH_SIZE],
 }
 
 unsafe impl Send for PayloadFlushState {}
 unsafe impl Sync for PayloadFlushState {}
 
 impl PayloadFlushState {
-    pub fn with_capacity(len: usize) -> PayloadFlushState {
+    pub fn new() -> PayloadFlushState {
         PayloadFlushState {
-            probe_state: ProbeState::with_capacity(len),
+            probe_state: ProbeState::new(),
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,
             flush_partition: 0,
-            flush_offset: 0,
-            addresses: vec![std::ptr::null::<u8>(); len],
-            state_places: vec![StateAddr::new(0); len],
+            flush_page: 0,
+            flush_page_row: 0,
+            addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
+            state_places: [StateAddr::new(0); BATCH_SIZE],
         }
     }
 
     pub fn clear(&mut self) {
         self.row_count = 0;
         self.flush_partition = 0;
-        self.flush_offset = 0;
+        self.flush_page = 0;
+        self.flush_page_row = 0;
     }
 
     pub fn take_group_columns(&mut self) -> Vec<Column> {
@@ -88,8 +90,9 @@ impl PartitionedPayload {
         if p.flush(state) {
             true
         } else {
-            state.flush_partition += 1;
-            state.flush_offset = 0;
+            let p = state.flush_partition + 1;
+            state.clear();
+            state.flush_partition = p;
             self.flush(state)
         }
     }
@@ -97,53 +100,47 @@ impl PartitionedPayload {
 
 impl Payload {
     pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
-        let flush_end = (state.flush_offset + FLUSH_BATCH_SIZE).min(self.len());
-        if flush_end <= state.flush_offset {
+        if state.flush_page >= self.pages.len() {
             return false;
         }
 
-        let rows = flush_end - state.flush_offset;
+        let page = &self.pages[state.flush_page];
 
-        if state.addresses.len() < rows {
-            state.addresses.resize(rows, std::ptr::null::<u8>());
-            state.state_places.resize(rows, StateAddr::new(0));
+        if state.flush_page_row >= page.rows {
+            state.flush_page += 1;
+            state.flush_page_row = 0;
+            state.row_count = 0;
+
+            return self.flush(state);
         }
 
+        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - state.flush_page_row;
         state.group_columns.clear();
         state.row_count = rows;
-        state.probe_state.adjust_vector(rows);
+        state.probe_state.row_count = rows;
 
-        for row in state.flush_offset..flush_end {
-            state.addresses[row - state.flush_offset] = self.get_read_ptr(row);
-        }
+        for idx in 0..rows {
+            state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
+            state.probe_state.group_hashes[idx] =
+                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
-        self.flush_hashes(state);
-        for col_index in 0..self.group_types.len() {
-            let col = self.flush_column(col_index, state);
-            state.group_columns.push(col);
-        }
-
-        if !self.aggrs.is_empty() {
-            for i in 0..rows {
-                state.state_places[i] = unsafe {
+            if !self.aggrs.is_empty() {
+                state.state_places[idx] = unsafe {
                     StateAddr::new(core::ptr::read::<u64>(
-                        state.addresses[i].add(self.state_offset) as _
+                        state.addresses[idx].add(self.state_offset) as _,
                     ) as usize)
                 };
             }
         }
 
-        state.flush_offset = flush_end;
-        true
-    }
-
-    fn flush_hashes(&self, state: &mut PayloadFlushState) {
-        let len = state.probe_state.row_count;
-
-        for i in 0..len {
-            state.probe_state.group_hashes[i] =
-                unsafe { core::ptr::read::<u64>(state.addresses[i].add(self.hash_offset) as _) };
+        for col_index in 0..self.group_types.len() {
+            let col = self.flush_column(col_index, state);
+            state.group_columns.push(col);
         }
+
+        state.flush_page_row = end;
+        true
     }
 
     fn flush_column(&self, col_index: usize, state: &mut PayloadFlushState) -> Column {

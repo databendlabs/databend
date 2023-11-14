@@ -27,8 +27,8 @@ use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::SelectVector;
 use crate::StateAddr;
+use crate::MAX_PAGE_SIZE;
 
-const MAX_PAGE_SIZE: usize = 256 * 1024;
 // payload layout
 // [VALIDITY][GROUPS][HASH][STATE_ADDRS]
 // [VALIDITY] is the validity bits of the data columns (including the HASH)
@@ -65,9 +65,9 @@ unsafe impl Send for Payload {}
 unsafe impl Sync for Payload {}
 
 pub struct Page {
-    data: Vec<MaybeUninit<u8>>,
-    rows: usize,
-    capacity: usize,
+    pub(crate) data: Vec<MaybeUninit<u8>>,
+    pub(crate) rows: usize,
+    pub(crate) capacity: usize,
 }
 
 pub type Pages = Vec<Page>;
@@ -169,16 +169,8 @@ impl Payload {
         &mut self.pages[self.current_write_page - 1]
     }
 
-    pub fn get_read_ptr(&self, row: usize) -> *const u8 {
-        let mut c = row;
-        for page in self.pages.iter() {
-            if page.rows > c {
-                return unsafe { page.data.as_ptr().add(c * self.tuple_size) as *const u8 };
-            } else {
-                c -= page.rows;
-            }
-        }
-        unreachable!()
+    pub fn data_ptr(&self, page: &Page, row: usize) -> *const u8 {
+        unsafe { page.data.as_ptr().add(row * self.tuple_size) as _ }
     }
 
     pub fn reserve_append_rows(
@@ -339,14 +331,13 @@ impl Drop for Payload {
         if !self.state_move_out {
             for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
                 if aggr.need_manual_drop_state() {
-                    for row in 0..self.len() {
-                        let row_ptr = self.get_read_ptr(row);
-
-                        unsafe {
-                            let state_addr: u64 =
-                                core::ptr::read(row_ptr.add(self.state_offset) as _);
-                            aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
-                        };
+                    for page in self.pages.iter() {
+                        for row in 0..page.rows {
+                            unsafe {
+                                let state_addr = self.data_ptr(page, row).add(self.state_offset);
+                                aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
+                            };
+                        }
                     }
                 }
             }

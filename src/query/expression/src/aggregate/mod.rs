@@ -38,7 +38,17 @@ pub use payload::*;
 pub use payload_flush::*;
 pub use probe_state::*;
 
-pub type SelectVector = Vec<usize>;
+pub type SelectVector = [usize; BATCH_SIZE];
+
+pub fn new_sel() -> SelectVector {
+    [0; BATCH_SIZE]
+}
+
+// A batch size to probe, flush, repartition, etc.
+pub(crate) const BATCH_SIZE: usize = 2048;
+pub(crate) const LOAD_FACTOR: f64 = 1.5;
+pub(crate) const MAX_ROWS_IN_HT: usize = 256 * 1024;
+pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
@@ -54,8 +64,8 @@ pub struct HashTableConfig {
 impl Default for HashTableConfig {
     fn default() -> Self {
         Self {
-            current_max_radix_bits: Arc::new(AtomicU64::new(INITIAL_RADIX_BITS)),
-            initial_radix_bits: INITIAL_RADIX_BITS,
+            current_max_radix_bits: Arc::new(AtomicU64::new(4)),
+            initial_radix_bits: 4,
             max_radix_bits: 8,
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
@@ -114,7 +124,7 @@ impl Hasher for PerfectHash {
     }
 
     fn write_u64(&mut self, i: u64) {
-        self.val = i as u64;
+        self.val = i;
     }
 
     fn write_usize(&mut self, i: usize) {
