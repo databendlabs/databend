@@ -89,7 +89,8 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
-
+        dbg!(&probe_side.name());
+        dbg!(&build_side.name());
         // Unify the data types of the left and right exchange keys.
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -178,12 +179,14 @@ impl PhysicalPlanBuilder {
             .iter()
             .zip(join.right_conditions.iter())
         {
-            let left_expr = left_condition
-                .type_check(probe_schema.as_ref())?
-                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+            dbg!(&build_schema, &probe_schema);
             let right_expr = right_condition
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
+            let left_expr = left_condition
+                .type_check(probe_schema.as_ref())?
+                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
                     (left_condition, right_condition)

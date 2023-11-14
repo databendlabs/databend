@@ -430,7 +430,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     Ok(())
 }
 
-async fn plan_sql(
+pub async fn plan_sql(
     ctx: Arc<dyn TableContext>,
     sql: &str,
     optimize: bool,

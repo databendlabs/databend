@@ -60,6 +60,16 @@ impl ScalarExpr {
                 self.columns.insert(col.column.index);
                 Ok(())
             }
+
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                for idx in subquery.outer_columns.iter() {
+                    self.columns.insert(*idx);
+                }
+                if let Some(child_expr) = subquery.child_expr.as_ref() {
+                    self.visit(child_expr)?;
+                }
+                Ok(())
+            }
         }
 
         let mut visitor = UsedColumnsVisitor {

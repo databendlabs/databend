@@ -74,6 +74,7 @@ impl Metadata {
     }
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
+        dbg!(column_indexes);
         self.columns.iter().find_map(|v| match v {
             ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,

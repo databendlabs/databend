@@ -484,6 +484,7 @@ impl SubqueryRewriter {
                     index: column_index,
                 });
             }
+            /*
             let duplicate_delete_get = SExpr::create_unary(
                 Arc::new(
                     Aggregate {
@@ -498,6 +499,8 @@ impl SubqueryRewriter {
                 ),
                 Arc::new(logical_get),
             );
+
+             */
             let cross_join = Join {
                 left_conditions: vec![],
                 right_conditions: vec![],
@@ -511,7 +514,7 @@ impl SubqueryRewriter {
             .into();
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(duplicate_delete_get),
+                Arc::new(logical_get),
                 Arc::new(plan.clone()),
             ));
         }

@@ -2156,6 +2156,7 @@ impl<'a> TypeChecker<'a> {
         let mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
+        dbg!("go");
         let rel_prop = rel_expr.derive_relational_prop()?;
 
         let mut child_scalar = None;
@@ -2168,7 +2169,7 @@ impl<'a> TypeChecker<'a> {
         if typ.eq(&SubqueryType::Scalar) {
             data_type = Box::new(data_type.wrap_nullable());
         }
-
+        dbg!(&rel_prop.outer_columns);
         let subquery_expr = SubqueryExpr {
             span: subquery.span,
             subquery: Box::new(s_expr),
