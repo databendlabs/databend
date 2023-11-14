@@ -117,7 +117,8 @@ impl Operator for Window {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
-        let output_columns = ColumnSet::from([self.index]);
+        let mut output_columns = input_prop.output_columns.clone();
+        output_columns.insert(self.index);
 
         // Derive outer columns
         let outer_columns = input_prop
