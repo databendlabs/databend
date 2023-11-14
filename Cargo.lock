@@ -2005,7 +2005,6 @@ dependencies = [
  "comfy-table 6.1.4",
  "common-arrow",
  "common-ast",
- "common-base",
  "common-datavalues",
  "common-exception",
  "common-hashtable",
@@ -2731,7 +2730,6 @@ dependencies = [
  "simsearch",
  "storages-common-table-meta",
  "time",
- "url",
 ]
 
 [[package]]
