@@ -127,6 +127,8 @@ impl Pipeline {
         let scope_idx = self.scope_size.load(Ordering::SeqCst) - 1;
 
         if let Some(scope) = self.plans_scope.get_mut(scope_idx) {
+            /// stack, new plan is always the parent node of previous node.
+            /// set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
             if scope.id == 0 {
                 scope.id = self.scope_id.fetch_add(1, Ordering::SeqCst);
                 for pipe in &mut self.pipes {
@@ -141,7 +143,6 @@ impl Pipeline {
             pipe.scope = Some(scope.clone());
         }
 
-        // pipe.scope = self.plans_scope.get(scope_idx).cloned();
         self.pipes.push(pipe);
     }
 
