@@ -116,8 +116,19 @@ impl Processor for TransformUdf {
                 let block_entries = func
                     .arg_indices
                     .iter()
-                    .map(|i| data_block.get_by_offset(*i).clone())
-                    .collect::<Vec<_>>();
+                    .map(|i| {
+                        let arg = data_block.get_by_offset(*i).clone();
+                        if contains_variant(&arg.data_type) {
+                            let new_arg = BlockEntry::new(
+                                arg.data_type.clone(),
+                                transform_variant(&arg.value, true)?,
+                            );
+                            Ok(new_arg)
+                        } else {
+                            Ok(arg)
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
                 let fields = block_entries
                     .iter()
