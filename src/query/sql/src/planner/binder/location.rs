@@ -15,9 +15,12 @@
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::Arc;
 
 use anyhow::anyhow;
+use common_ast::ast::Connection;
 use common_ast::ast::UriLocation;
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageFsConfig;
@@ -379,7 +382,10 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
 }
 
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
-pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
+pub async fn parse_uri_location(
+    l: &mut UriLocation,
+    ctx: Option<&Arc<dyn TableContext>>,
+) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
@@ -390,6 +396,51 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
     };
 
     let protocol = l.protocol.parse::<Scheme>()?;
+    if let Scheme::Custom(_) = protocol {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("protocol {protocol} is not supported yet."),
+        ));
+    }
+
+    match (ctx, l.connection.get("connection_name")) {
+        (None, Some(_)) => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("can not use connection_name when create connection"),
+            ));
+        }
+        (_, None) => {}
+        (Some(ctx), Some(name)) => {
+            let conn = ctx.get_connection(name).await.map_err(|err| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("fail to get connection_name {name}: {err:?}"),
+                )
+            })?;
+            let proto = conn.storage_type.parse::<Scheme>().map_err(|err| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("input connection is not a valid protocol: {err:?}"),
+                )
+            })?;
+            if proto != protocol {
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!(
+                        "protocol from connection_name={name} ({proto}) not match with uri protocol ({protocol})."
+                    ),
+                ));
+            }
+            l.connection.check().map_err(|_| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("connection_name can not be used with other connection options"),
+                )
+            })?;
+            l.connection = Connection::new(conn.storage_params);
+        }
+    }
 
     let sp = match protocol {
         Scheme::Azblob => parse_azure_params(l, root)?,

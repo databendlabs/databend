@@ -418,7 +418,7 @@ async fn test_parse_uri_location() -> Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input).await?;
+        let actual = parse_uri_location(&mut input, None).await?;
         assert_eq!(expected, actual, "{}", name);
     }
 
