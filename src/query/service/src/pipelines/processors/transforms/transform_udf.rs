@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -25,9 +24,10 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::FunctionContext;
+use common_pipeline_transforms::processors::AsyncTransform;
+use common_pipeline_transforms::processors::AsyncTransformer;
 use common_sql::executor::physical_plans::UdfFunctionDesc;
 
-use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
@@ -35,12 +35,6 @@ use crate::pipelines::processors::Processor;
 pub struct TransformUdf {
     func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
-
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-
-    input_data_block: Option<DataBlock>,
-    output_data_block: Option<DataBlock>,
 }
 
 impl TransformUdf {
@@ -50,148 +44,98 @@ impl TransformUdf {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(Box::new(Self {
+        Ok(AsyncTransformer::create(input, output, Self {
             func_ctx,
             funcs,
-            input,
-            output,
-            input_data_block: None,
-            output_data_block: None,
         }))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformUdf {
-    fn name(&self) -> String {
-        "UdfTransform".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if let Some(data_block) = self.output_data_block.take() {
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input_data_block.is_some() {
-            return Ok(Event::Async);
-        }
-
-        if self.input.has_data() {
-            self.input_data_block = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Async);
-        }
-
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
-    }
+impl AsyncTransform for TransformUdf {
+    const NAME: &'static str = "UdfTransform";
 
     #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        if let Some(mut data_block) = self.input_data_block.take() {
-            let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
-            let request_timeout = self.func_ctx.external_server_request_timeout_secs;
-            for func in &self.funcs {
-                // construct input record_batch
-                let num_rows = data_block.num_rows();
-                let block_entries = func
-                    .arg_indices
-                    .iter()
-                    .map(|i| {
-                        let arg = data_block.get_by_offset(*i).clone();
-                        if contains_variant(&arg.data_type) {
-                            let new_arg = BlockEntry::new(
-                                arg.data_type.clone(),
-                                transform_variant(&arg.value, true)?,
-                            );
-                            Ok(new_arg)
-                        } else {
-                            Ok(arg)
-                        }
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let fields = block_entries
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, arg)| {
-                        DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone())
-                    })
-                    .collect::<Vec<_>>();
-                let data_schema = DataSchema::new(fields);
-
-                let input_batch = DataBlock::new(block_entries, num_rows)
-                    .to_record_batch(&data_schema)
-                    .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
-
-                let mut client =
-                    UDFFlightClient::connect(&func.server_addr, connect_timeout, request_timeout)
-                        .await?;
-                let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
-
-                let (result_block, result_schema) = DataBlock::from_record_batch(&result_batch)
-                    .map_err(|err| {
-                        ErrorCode::UDFDataError(format!(
-                            "Cannot convert arrow record batch to data block: {err}"
-                        ))
-                    })?;
-
-                let result_fields = result_schema.fields();
-                if result_fields.is_empty() || result_block.is_empty() {
-                    return Err(ErrorCode::EmptyDataFromServer(
-                        "Get empty data from UDF Server",
-                    ));
-                }
-
-                if result_fields[0].data_type() != &*func.data_type {
-                    return Err(ErrorCode::UDFSchemaMismatch(format!(
-                        "UDF server return incorrect type, expected: {}, but got: {}",
-                        func.data_type,
-                        result_fields[0].data_type()
-                    )));
-                }
-                if result_block.num_rows() != num_rows {
-                    return Err(ErrorCode::UDFDataError(format!(
-                        "UDF server should return {} rows, but it returned {} rows",
-                        num_rows,
-                        result_block.num_rows()
-                    )));
-                }
-
-                let col = if contains_variant(&func.data_type) {
-                    let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
-                    BlockEntry {
-                        data_type: result_fields[0].data_type().clone(),
-                        value,
+    async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
+        let request_timeout = self.func_ctx.external_server_request_timeout_secs;
+        for func in &self.funcs {
+            // construct input record_batch
+            let num_rows = data_block.num_rows();
+            let block_entries = func
+                .arg_indices
+                .iter()
+                .map(|i| {
+                    let arg = data_block.get_by_offset(*i).clone();
+                    if contains_variant(&arg.data_type) {
+                        let new_arg = BlockEntry::new(
+                            arg.data_type.clone(),
+                            transform_variant(&arg.value, true)?,
+                        );
+                        Ok(new_arg)
+                    } else {
+                        Ok(arg)
                     }
-                } else {
-                    result_block.get_by_offset(0).clone()
-                };
+                })
+                .collect::<Result<Vec<_>>>()?;
 
-                data_block.add_column(col);
+            let fields = block_entries
+                .iter()
+                .enumerate()
+                .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone()))
+                .collect::<Vec<_>>();
+            let data_schema = DataSchema::new(fields);
+
+            let input_batch = DataBlock::new(block_entries, num_rows)
+                .to_record_batch(&data_schema)
+                .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+
+            let mut client =
+                UDFFlightClient::connect(&func.server_addr, connect_timeout, request_timeout)
+                    .await?;
+            let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
+
+            let (result_block, result_schema) = DataBlock::from_record_batch(&result_batch)
+                .map_err(|err| {
+                    ErrorCode::UDFDataError(format!(
+                        "Cannot convert arrow record batch to data block: {err}"
+                    ))
+                })?;
+
+            let result_fields = result_schema.fields();
+            if result_fields.is_empty() || result_block.is_empty() {
+                return Err(ErrorCode::EmptyDataFromServer(
+                    "Get empty data from UDF Server",
+                ));
             }
-            self.output_data_block = Some(data_block.clone())
-        }
 
-        Ok(())
+            if result_fields[0].data_type() != &*func.data_type {
+                return Err(ErrorCode::UDFSchemaMismatch(format!(
+                    "UDF server return incorrect type, expected: {}, but got: {}",
+                    func.data_type,
+                    result_fields[0].data_type()
+                )));
+            }
+            if result_block.num_rows() != num_rows {
+                return Err(ErrorCode::UDFDataError(format!(
+                    "UDF server should return {} rows, but it returned {} rows",
+                    num_rows,
+                    result_block.num_rows()
+                )));
+            }
+
+            let col = if contains_variant(&func.data_type) {
+                let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
+                BlockEntry {
+                    data_type: result_fields[0].data_type().clone(),
+                    value,
+                }
+            } else {
+                result_block.get_by_offset(0).clone()
+            };
+
+            data_block.add_column(col);
+        }
+        Ok(data_block)
     }
 }
