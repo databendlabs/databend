@@ -68,3 +68,27 @@ pub struct QueryResponse {
     pub next_uri: Option<String>,
     pub kill_uri: Option<String>,
 }
+
+#[cfg(test)]
+mod test {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    #[test]
+    fn deserialize_session_config() {
+        let session_json = r#"{"database":"default","settings":{}}"#;
+        let session_config: SessionConfig = serde_json::from_str(session_json).unwrap();
+        assert_eq!(session_config.database, Some("default".to_string()));
+        assert_eq!(session_config.settings, Some(BTreeMap::default()));
+        assert_eq!(session_config.role, None);
+        assert_eq!(session_config.secondary_roles, None);
+
+        let session_json = r#"{"database":"default","settings":{},"role": "role1", "secondary_roles": [], "unknown_field": 1}"#;
+        let session_config: SessionConfig = serde_json::from_str(session_json).unwrap();
+        assert_eq!(session_config.database, Some("default".to_string()));
+        assert_eq!(session_config.settings, Some(BTreeMap::default()));
+        assert_eq!(session_config.role, Some("role1".to_string()));
+        assert_eq!(session_config.secondary_roles, Some(vec![]));
+    }
+}

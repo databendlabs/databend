@@ -334,10 +334,7 @@ impl APIClient {
         if database.is_none() && session_settings.is_empty() {
             return None;
         }
-        let mut session = SessionConfig {
-            database: None,
-            settings: None,
-        };
+        let mut session = SessionConfig::default();
         if database.is_some() {
             session.database = database.clone();
         }
