@@ -29,28 +29,24 @@ use common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use common_meta_app::principal::UDFServer;
 use common_meta_app::principal::UserDefinedFunction;
 
-use super::select::SelectList;
 use crate::optimizer::SExpr;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
-use crate::plans::AggregateFunction;
+use crate::plans::walk_expr_mut;
 use crate::plans::AlterUDFPlan;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::CreateUDFPlan;
 use crate::plans::EvalScalar;
-use crate::plans::FunctionCall;
-use crate::plans::LambdaFunc;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UDFServerCall;
 use crate::plans::Udf;
-use crate::plans::WindowFunc;
-use crate::plans::WindowOrderBy;
-use crate::BindContext;
+use crate::plans::VisitorMut;
 use crate::Binder;
 use crate::ColumnBindingBuilder;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
 
@@ -61,194 +57,105 @@ pub struct UdfInfo {
     /// Udf functions
     pub udf_functions: Vec<ScalarItem>,
     /// Mapping: (udf function display name) -> (derived column ref)
-    /// This is used to generate column in projection.
+    /// This is used to replace udf with a derived column.
     pub udf_functions_map: HashMap<String, BoundColumnRef>,
+    /// Mapping: (udf function display name) -> (derived index)
+    /// This is used to reuse already generated derived columns
+    pub udf_functions_index_map: HashMap<String, IndexType>,
 }
 
-pub(super) struct UdfRewriter<'a> {
-    pub bind_context: &'a mut BindContext,
+pub(super) struct UdfRewriter {
+    pub udf_info: UdfInfo,
     pub metadata: MetadataRef,
 }
 
-impl<'a> UdfRewriter<'a> {
-    pub fn new(bind_context: &'a mut BindContext, metadata: MetadataRef) -> Self {
-        Self {
-            bind_context,
-            metadata,
+impl UdfRewriter {
+    pub fn new(udf_info: UdfInfo, metadata: MetadataRef) -> Self {
+        Self { udf_info, metadata }
+    }
+}
+
+impl<'a> VisitorMut<'a> for UdfRewriter {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        walk_expr_mut(self, expr)?;
+        // replace udf with derived column
+        if let ScalarExpr::UDFServerCall(udf) = expr {
+            if let Some(column_ref) = self.udf_info.udf_functions_map.get(&udf.display_name) {
+                *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
+            } else {
+                return Err(ErrorCode::Internal("Rewrite udf function failed"));
+            }
         }
+        Ok(())
     }
 
-    pub fn visit(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
-        match scalar {
-            ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
-            ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::FunctionCall(func) => {
-                let new_args = func
-                    .arguments
-                    .iter()
-                    .map(|arg| self.visit(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(FunctionCall {
-                    span: func.span,
-                    func_name: func.func_name.clone(),
-                    params: func.params.clone(),
-                    arguments: new_args,
-                }
-                .into())
-            }
-            ScalarExpr::CastExpr(cast) => Ok(CastExpr {
-                span: cast.span,
-                is_try: cast.is_try,
-                argument: Box::new(self.visit(&cast.argument)?),
-                target_type: cast.target_type.clone(),
-            }
-            .into()),
+    fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) -> Result<()> {
+        for (i, arg) in udf.arguments.iter_mut().enumerate() {
+            self.visit(arg)?;
 
-            ScalarExpr::UDFServerCall(udf) => {
-                let mut replaced_args = Vec::with_capacity(udf.arguments.len());
-                for (i, arg) in udf.arguments.iter().enumerate() {
-                    let new_arg = self.visit(arg)?;
-                    if let ScalarExpr::UDFServerCall(_) = new_arg {
-                        replaced_args.push(new_arg);
-                        continue;
-                    }
-
-                    let replaced_arg = if let ScalarExpr::BoundColumnRef(ref column_ref) = new_arg {
-                        column_ref.clone()
-                    } else {
-                        let name = format!("{}_arg_{}", &udf.display_name, i);
-                        let index = self
-                            .metadata
-                            .write()
-                            .add_derived_column(name.clone(), new_arg.data_type()?);
-
-                        // Generate a ColumnBinding for each argument of udf function
-                        let column = ColumnBindingBuilder::new(
-                            name,
-                            index,
-                            Box::new(new_arg.data_type()?),
-                            Visibility::Visible,
-                        )
-                        .build();
-
-                        BoundColumnRef {
-                            span: new_arg.span(),
-                            column,
-                        }
-                    };
-
-                    self.bind_context.udf_info.udf_arguments.push(ScalarItem {
-                        index: replaced_arg.column.index,
-                        scalar: new_arg,
-                    });
-                    replaced_args.push(replaced_arg.into());
-                }
-
+            let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
+                column_ref.clone()
+            } else {
+                let name = format!("{}_arg_{}", &udf.display_name, i);
                 let index = self
                     .metadata
                     .write()
-                    .add_derived_column(udf.display_name.clone(), scalar.data_type()?);
+                    .add_derived_column(name.clone(), arg.data_type()?);
 
+                // Generate a ColumnBinding for each argument of udf function
                 let column = ColumnBindingBuilder::new(
-                    udf.display_name.clone(),
+                    name,
                     index,
-                    Box::new(scalar.data_type()?),
+                    Box::new(arg.data_type()?),
                     Visibility::Visible,
                 )
                 .build();
 
-                let replaced_column = BoundColumnRef {
-                    span: scalar.span(),
+                BoundColumnRef {
+                    span: arg.span(),
                     column,
-                };
-
-                let replaced_udf = UDFServerCall {
-                    span: udf.span,
-                    func_name: udf.func_name.clone(),
-                    display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments: replaced_args,
-                };
-
-                self.bind_context
-                    .udf_info
-                    .udf_functions_map
-                    .insert(udf.display_name.clone(), replaced_column);
-                self.bind_context.udf_info.udf_functions.push(ScalarItem {
-                    index,
-                    scalar: replaced_udf.clone().into(),
-                });
-
-                Ok(replaced_udf.into())
-            }
-
-            // TODO(leiysky): should we recursively process subquery here?
-            ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
-
-            ScalarExpr::AggregateFunction(agg_func) => {
-                let new_args = agg_func
-                    .args
-                    .iter()
-                    .map(|arg| self.visit(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(AggregateFunction {
-                    func_name: agg_func.func_name.clone(),
-                    distinct: agg_func.distinct,
-                    params: agg_func.params.clone(),
-                    args: new_args,
-                    return_type: agg_func.return_type.clone(),
-                    display_name: agg_func.display_name.clone(),
                 }
-                .into())
-            }
+            };
 
-            ScalarExpr::WindowFunction(window) => {
-                let new_partition_by = window
-                    .partition_by
-                    .iter()
-                    .map(|partition_by| self.visit(partition_by))
-                    .collect::<Result<Vec<_>>>()?;
+            self.udf_info.udf_arguments.push(ScalarItem {
+                index: new_column_ref.column.index,
+                scalar: arg.clone(),
+            });
 
-                let mut new_order_by = Vec::with_capacity(window.order_by.len());
-                for order_by in window.order_by.iter() {
-                    new_order_by.push(WindowOrderBy {
-                        expr: self.visit(&order_by.expr)?,
-                        asc: order_by.asc,
-                        nulls_first: order_by.nulls_first,
-                    });
-                }
-
-                Ok(WindowFunc {
-                    span: window.span,
-                    display_name: window.display_name.clone(),
-                    partition_by: new_partition_by,
-                    func: window.func.clone(),
-                    order_by: new_order_by,
-                    frame: window.frame.clone(),
-                }
-                .into())
-            }
-
-            ScalarExpr::LambdaFunction(lambda_func) => {
-                let new_args = lambda_func
-                    .args
-                    .iter()
-                    .map(|arg| self.visit(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(LambdaFunc {
-                    span: lambda_func.span,
-                    func_name: lambda_func.func_name.clone(),
-                    display_name: lambda_func.display_name.clone(),
-                    args: new_args,
-                    params: lambda_func.params.clone(),
-                    lambda_expr: lambda_func.lambda_expr.clone(),
-                    return_type: lambda_func.return_type.clone(),
-                }
-                .into())
-            }
+            *arg = new_column_ref.into();
         }
+
+        let index = match self.udf_info.udf_functions_index_map.get(&udf.display_name) {
+            Some(index) => *index,
+            None => self
+                .metadata
+                .write()
+                .add_derived_column(udf.display_name.clone(), (*udf.return_type).clone()),
+        };
+
+        // Generate a ColumnBinding for the udf function
+        let column = ColumnBindingBuilder::new(
+            udf.display_name.clone(),
+            index,
+            udf.return_type.clone(),
+            Visibility::Visible,
+        )
+        .build();
+
+        let replaced_column = BoundColumnRef {
+            span: udf.span,
+            column,
+        };
+
+        self.udf_info
+            .udf_functions_map
+            .insert(udf.display_name.clone(), replaced_column);
+        self.udf_info.udf_functions.push(ScalarItem {
+            index,
+            scalar: udf.clone().into(),
+        });
+
+        Ok(())
     }
 }
 
@@ -360,48 +267,58 @@ impl Binder {
         Ok(Plan::AlterUDF(Box::new(AlterUDFPlan { udf })))
     }
 
-    /// Analyze udf functions in select clause, this will rewrite udf functions.
-    /// See [`UdfRewriter`] for more details.
-    pub(crate) fn analyze_udf(
-        &mut self,
-        bind_context: &mut BindContext,
-        select_list: &mut SelectList,
-    ) -> Result<()> {
-        for item in select_list.items.iter_mut() {
-            let mut rewriter = UdfRewriter::new(bind_context, self.metadata.clone());
-            let new_scalar = rewriter.visit(&item.scalar)?;
-            item.scalar = new_scalar;
+    pub(crate) fn rewrite_udf(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut s_expr = s_expr.clone();
+        if !s_expr.children.is_empty() {
+            let mut children = Vec::with_capacity(s_expr.children.len());
+            for child in s_expr.children.iter() {
+                children.push(Arc::new(self.rewrite_udf(child)?));
+            }
+            s_expr.children = children;
         }
 
-        Ok(())
-    }
+        if let RelOperator::EvalScalar(mut plan) = (*s_expr.plan).clone() {
+            let mut udf_info = UdfInfo::default();
+            for item in &plan.items {
+                // The index of Udf item can be reused.
+                if let ScalarExpr::UDFServerCall(udf) = &item.scalar {
+                    udf_info
+                        .udf_functions_index_map
+                        .insert(udf.display_name.clone(), item.index);
+                }
+            }
 
-    #[async_backtrace::framed]
-    pub async fn bind_udf(
-        &mut self,
-        bind_context: &mut BindContext,
-        child: SExpr,
-    ) -> Result<SExpr> {
-        let udf_info = &bind_context.udf_info;
-        if udf_info.udf_functions.is_empty() {
-            return Ok(child);
+            // Rewrite Udf and its arguments as derived column.
+            let mut rewriter = UdfRewriter::new(udf_info, self.metadata.clone());
+            for item in &mut plan.items {
+                rewriter.visit(&mut item.scalar)?;
+            }
+
+            let udf_info = &rewriter.udf_info;
+            if !udf_info.udf_functions.is_empty() {
+                let mut child_expr = s_expr.children[0].clone();
+                if !udf_info.udf_arguments.is_empty() {
+                    // Add an EvalScalar for the arguments of Udf.
+                    let mut scalar_items = udf_info.udf_arguments.clone();
+                    scalar_items.sort_by_key(|item| item.index);
+                    let eval_scalar = EvalScalar {
+                        items: scalar_items,
+                    };
+                    child_expr = Arc::new(SExpr::create_unary(
+                        Arc::new(eval_scalar.into()),
+                        child_expr,
+                    ));
+                }
+
+                let udf_plan = Udf {
+                    items: udf_info.udf_functions.clone(),
+                };
+                let udf_expr = SExpr::create_unary(Arc::new(udf_plan.into()), child_expr);
+
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), Arc::new(udf_expr));
+                return Ok(new_expr);
+            }
         }
-
-        let mut new_expr = child;
-        if !udf_info.udf_arguments.is_empty() {
-            let mut scalar_items = udf_info.udf_arguments.clone();
-            scalar_items.sort_by_key(|item| item.index);
-            let eval_scalar = EvalScalar {
-                items: scalar_items,
-            };
-            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
-        }
-
-        let udf_plan = Udf {
-            items: udf_info.udf_functions.clone(),
-        };
-        new_expr = SExpr::create_unary(Arc::new(udf_plan.into()), Arc::new(new_expr));
-
-        Ok(new_expr)
+        Ok(s_expr)
     }
 }

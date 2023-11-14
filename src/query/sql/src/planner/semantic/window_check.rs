@@ -98,15 +98,21 @@ impl<'a> WindowChecker<'a> {
 
             ScalarExpr::AggregateFunction(_) => unreachable!(),
             ScalarExpr::UDFServerCall(udf) => {
-                if let Some(column_ref) = self
-                    .bind_context
-                    .udf_info
-                    .udf_functions_map
-                    .get(&udf.display_name)
-                {
-                    return Ok(column_ref.clone().into());
+                let new_args = udf
+                    .arguments
+                    .iter()
+                    .map(|arg| self.resolve(arg))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+                Ok(UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
+                    arguments: new_args,
                 }
-                Err(ErrorCode::Internal("Window Check: Invalid udf function"))
+                .into())
             }
         }
     }
