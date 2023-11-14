@@ -23,15 +23,20 @@ export MYSQL_CLIENT_SHARE_3_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_H
 
 
 query() {
-	echo "++++"
-	echo "$1"
-	echo "----"
+	echo ">>>> $1"
 	echo "$1" | $BENDSQL_CLIENT_CONNECT
-	echo "++++"
+	echo "<<<<"
 }
 
 stmt() {
-	echo "**** $1"
+	echo ">>>> $1"
 	echo "$1" | $BENDSQL_CLIENT_CONNECT
+	if [ $? -ne 0 ]; then
+		echo "<<<<"
+	fi
 	return 0
+}
+
+comment() {
+	echo "#### $1"
 }
