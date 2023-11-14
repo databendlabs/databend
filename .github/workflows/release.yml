@@ -105,6 +105,7 @@ jobs:
           echo "---" > $df
           gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} >> $df
           sed -i -E 's/^--$/---/g' $df
+          sed -i -E '/^asset:/d' $df
           git add docs/release-notes/
           git status
       - uses: peter-evans/create-pull-request@v4
