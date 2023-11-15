@@ -94,7 +94,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
     );
 }
 
-fn get_lines(formatted: &String) -> Vec<&str> {
+fn get_lines(formatted: &str) -> Vec<&str> {
     let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     // sort except for header + footer

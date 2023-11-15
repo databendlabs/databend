@@ -138,6 +138,7 @@ impl AggregateHashTable {
                         state.addresses[i].add(self.payload.state_offset) as _,
                     ) as usize)
                 };
+                debug_assert_ne!(usize::from(state.state_places[i]) % 8, 0);
             }
 
             for ((aggr, params), addr_offset) in self
@@ -430,6 +431,7 @@ impl AggregateHashTable {
 
             self.current_radix_bits = current_max_radix_bits;
             self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
+            self.resize(self.capacity);
         }
     }
 
@@ -439,10 +441,6 @@ impl AggregateHashTable {
     }
 
     pub fn resize(&mut self, new_capacity: usize) {
-        if new_capacity == self.capacity {
-            return;
-        }
-
         let mask = (new_capacity - 1) as u64;
 
         let mut entries = vec![0; new_capacity];

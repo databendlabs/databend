@@ -291,11 +291,10 @@ impl Payload {
     }
 
     pub fn combine(&mut self, mut other: Payload) {
-        other.state_move_out = true;
-
         self.total_rows += other.pages.iter().map(|x| x.rows).sum::<usize>();
-        self.external_arena.push(other.arena.clone());
         self.pages.append(other.pages.as_mut());
+
+        self.fetch_arenas(&mut other);
     }
 
     pub fn copy_rows(
@@ -330,8 +329,10 @@ impl Payload {
         );
     }
 
-    pub fn forget(mut self) {
-        self.state_move_out = true;
+    pub fn fetch_arenas(&mut self, other: &mut Self) {
+        self.external_arena.push(other.arena.clone());
+        self.external_arena.extend_from_slice(&other.external_arena);
+        other.state_move_out = true;
     }
 }
 

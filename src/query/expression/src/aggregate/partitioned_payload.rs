@@ -165,7 +165,7 @@ impl PartitionedPayload {
         }
     }
 
-    pub fn combine_single(&mut self, other: Payload, state: &mut PayloadFlushState) {
+    pub fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
         if other.len() == 0 {
             return;
         }
@@ -181,15 +181,10 @@ impl PartitionedPayload {
                     let payload = &mut self.payloads[partition];
                     if let Some(sel) = &state.probe_state.partition_entries.get_mut(&partition) {
                         payload.copy_rows(&sel.0, sel.1, &state.addresses);
-
-                        payload.external_arena.push(other.arena.clone());
-                        payload
-                            .external_arena
-                            .extend_from_slice(&other.external_arena);
+                        payload.fetch_arenas(&mut other);
                     }
                 }
             }
-            other.forget();
         }
     }
 
