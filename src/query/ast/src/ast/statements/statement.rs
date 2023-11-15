@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -282,6 +283,11 @@ impl Statement {
                     location.connection = location.connection.mask()
                 }
                 format!("{}", Statement::CreateStage(stage_clone))
+            }
+            Statement::AttachTable(attach) => {
+                let mut attach_clone = attach.clone();
+                attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
+                format!("{}", Statement::AttachTable(attach_clone))
             }
             _ => format!("{}", self),
         }
