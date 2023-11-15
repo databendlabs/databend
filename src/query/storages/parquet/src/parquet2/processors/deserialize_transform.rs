@@ -181,14 +181,14 @@ impl Parquet2DeserializeTransform {
             .partition_pruner
             .prune_one_file(path, &op, data_size as u64)?;
 
-        let setings = ReadSettings {
+        let settings = ReadSettings {
             max_gap_size: self.merge_read_max_gap_size,
             max_range_size: self.merge_read_max_range_size,
         };
 
         for part in parts {
             let readers = self.source_reader.row_group_readers_from_blocking_io(
-                &setings,
+                &settings,
                 &part,
                 &blocking_op,
             )?;
