@@ -292,6 +292,12 @@ pub enum TokenKind {
     /// Used as JSON operator.
     #[token("?&")]
     QuestionAnd,
+    /// Used as JSON operator.
+    #[token("<@")]
+    ArrowAt,
+    /// Used as JSON operator.
+    #[token("@>")]
+    AtArrow,
 
     // Keywords
     //
