@@ -345,7 +345,7 @@ pub async fn main() -> Result<()> {
     );
 
     let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
-    info!("bendsql version: {:?}", VERSION);
+    info!("-> bendsql version: {}", VERSION.as_str());
 
     if is_repl {
         session.handle_repl().await;

@@ -152,8 +152,9 @@ impl APIClient {
             },
         };
 
-        let mut cli_builder =
-            HttpClient::builder().user_agent(format!("databend-client-rust/{}", VERSION.as_str()));
+        let mut cli_builder = HttpClient::builder()
+            .user_agent(format!("databend-client-rust/{}", VERSION.as_str()))
+            .pool_idle_timeout(Duration::from_secs(1));
         #[cfg(any(feature = "rustls", feature = "native-tls"))]
         if scheme == "https" {
             if let Some(ref ca_file) = client.tls_ca_file {
