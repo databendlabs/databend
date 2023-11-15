@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
+use log::info;
 use tokio::fs::File;
 use tokio_stream::Stream;
 
@@ -51,6 +52,7 @@ impl Connection for RestAPIConnection {
     }
 
     async fn exec(&self, sql: &str) -> Result<i64> {
+        info!("exec: {}", sql);
         let mut resp = self.client.start_query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
             resp = self.client.query_page(&resp.id, &next_uri).await?;
@@ -59,18 +61,21 @@ impl Connection for RestAPIConnection {
     }
 
     async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
+        info!("query iter: {}", sql);
         let rows_with_progress = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_rows().await;
         Ok(rows)
     }
 
     async fn query_iter_ext(&self, sql: &str) -> Result<RowStatsIterator> {
+        info!("query iter ext: {}", sql);
         let resp = self.client.start_query(sql).await?;
         let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
         Ok(RowStatsIterator::new(Arc::new(schema), Box::pin(rows)))
     }
 
     async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
+        info!("query row: {}", sql);
         let resp = self.client.start_query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
         match resp.kill_uri {
@@ -91,6 +96,7 @@ impl Connection for RestAPIConnection {
     }
 
     async fn get_presigned_url(&self, operation: &str, stage: &str) -> Result<PresignedResponse> {
+        info!("get presigned url: {} {}", operation, stage);
         let sql = format!("PRESIGN {} {}", operation, stage);
         let row = self.query_row(&sql).await?.ok_or(Error::InvalidResponse(
             "Empty response from server for presigned request".to_string(),
@@ -118,6 +124,10 @@ impl Connection for RestAPIConnection {
         file_format_options: Option<BTreeMap<&str, &str>>,
         copy_options: Option<BTreeMap<&str, &str>>,
     ) -> Result<ServerStats> {
+        info!(
+            "load data: {}, size: {}, format: {:?}, copy: {:?}",
+            sql, size, file_format_options, copy_options
+        );
         let now = chrono::Utc::now()
             .timestamp_nanos_opt()
             .ok_or_else(|| Error::IO("Failed to get current timestamp".to_string()))?;
@@ -140,6 +150,10 @@ impl Connection for RestAPIConnection {
         mut format_options: BTreeMap<&str, &str>,
         copy_options: Option<BTreeMap<&str, &str>>,
     ) -> Result<ServerStats> {
+        info!(
+            "load file: {}, file: {:?}, format: {:?}, copy: {:?}",
+            sql, fp, format_options, copy_options
+        );
         let file = File::open(fp).await?;
         let metadata = file.metadata().await?;
         let data = Box::new(file);
@@ -157,6 +171,7 @@ impl Connection for RestAPIConnection {
     }
 
     async fn stream_load(&self, sql: &str, data: Vec<Vec<&str>>) -> Result<ServerStats> {
+        info!("stream load: {}, length: {:?}", sql, data.len());
         let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
         for row in data {
             wtr.write_record(row)

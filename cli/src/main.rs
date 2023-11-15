@@ -19,6 +19,7 @@ mod config;
 mod display;
 mod helper;
 mod session;
+mod trace;
 
 use std::{
     collections::BTreeMap,
@@ -29,6 +30,7 @@ use crate::config::OutputQuoteStyle;
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use config::{Config, OutputFormat, Settings, TimeOption};
+use log::info;
 use once_cell::sync::Lazy;
 
 static VERSION: Lazy<String> = Lazy::new(|| {
@@ -172,6 +174,9 @@ struct Args {
         help = "Only show execution time without results, will implicitly set output format to `null`."
     )]
     time: Option<TimeOption>,
+
+    #[clap(short = 'l', default_value = "info", long)]
+    log_level: String,
 }
 
 /// Parse a single key-value pair
@@ -333,6 +338,14 @@ pub async fn main() -> Result<()> {
     settings.time = args.time;
 
     let mut session = session::Session::try_new(dsn, settings, is_repl).await?;
+
+    let log_dir = format!(
+        "{}/.bendsql",
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+    );
+
+    let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
+    info!("bendsql version: {:?}", VERSION);
 
     if is_repl {
         session.handle_repl().await;

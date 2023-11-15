@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use http::StatusCode;
+use log::info;
 use once_cell::sync::Lazy;
 use percent_encoding::percent_decode_str;
 use reqwest::header::HeaderMap;
@@ -206,6 +207,7 @@ impl APIClient {
     }
 
     pub async fn start_query(&self, sql: &str) -> Result<QueryResponse> {
+        info!("start query: {}", sql);
         let session_settings = self.make_session().await;
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
@@ -253,6 +255,7 @@ impl APIClient {
     }
 
     pub async fn query_page(&self, query_id: &str, next_uri: &str) -> Result<QueryResponse> {
+        info!("query page: {}", next_uri);
         let endpoint = self.endpoint.join(next_uri)?;
         let headers = self.make_headers(query_id).await?;
         let retry_strategy = ExponentialBackoff::from_millis(10).map(jitter).take(3);
@@ -286,6 +289,7 @@ impl APIClient {
     }
 
     pub async fn kill_query(&self, query_id: &str, kill_uri: &str) -> Result<()> {
+        info!("kill query: {}", kill_uri);
         let endpoint = self.endpoint.join(kill_uri)?;
         let headers = self.make_headers(query_id).await?;
         let resp = self
@@ -307,6 +311,7 @@ impl APIClient {
     }
 
     pub async fn wait_for_query(&self, resp: QueryResponse) -> Result<QueryResponse> {
+        info!("wait for query: {}", resp.id);
         if let Some(next_uri) = &resp.next_uri {
             let schema = resp.schema;
             let mut data = resp.data;
@@ -324,6 +329,7 @@ impl APIClient {
     }
 
     pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
+        info!("query: {}", sql);
         let resp = self.start_query(sql).await?;
         self.wait_for_query(resp).await
     }
@@ -388,6 +394,10 @@ impl APIClient {
         file_format_options: BTreeMap<&str, &str>,
         copy_options: BTreeMap<&str, &str>,
     ) -> Result<QueryResponse> {
+        info!(
+            "insert with stage: {}, format: {:?}, copy: {:?}",
+            sql, file_format_options, copy_options
+        );
         let session_settings = self.make_session().await;
         let stage_attachment = Some(StageAttachmentConfig {
             location: stage,
@@ -440,6 +450,7 @@ impl APIClient {
     }
 
     async fn get_presigned_upload_url(&self, stage: &str) -> Result<PresignedResponse> {
+        info!("get presigned upload url: {}", stage);
         let sql = format!("PRESIGN UPLOAD {}", stage);
         let resp = self.query(&sql).await?;
         if resp.data.len() != 1 {
@@ -486,6 +497,7 @@ impl APIClient {
         data: Reader,
         size: u64,
     ) -> Result<()> {
+        info!("upload to stage with stream: {}, size: {}", stage, size);
         let endpoint = self.endpoint.join("v1/upload_to_stage")?;
         let location = StageLocation::try_from(stage)?;
         let query_id = self.gen_query_id();
