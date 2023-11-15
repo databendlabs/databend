@@ -17,7 +17,7 @@ use common_expression::Scalar;
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
-        Expr::Constant { .. } | Expr::ColumnRef { .. } | Expr::UDFServerCall { .. } => {}
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
         Expr::Cast { expr, .. } => find_eq_filter(expr, visitor),
         Expr::FunctionCall { function, args, .. } => {
             // Like: select * from (select * from system.tables where database='default') where name='t'

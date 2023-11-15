@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_base::base::mask_string;
+
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,7 +51,7 @@ impl Display for CreateConnectionStmt {
         write!(f, "{} ", self.name)?;
         write!(f, "STORAGE_TYPE = {} ", self.storage_type)?;
         for (k, v) in &self.storage_params {
-            write!(f, "{} = {} ", k, v)?;
+            write!(f, "{} = {}", k, mask_string(v, 3))?;
         }
         Ok(())
     }

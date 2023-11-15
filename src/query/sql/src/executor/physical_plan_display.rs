@@ -54,6 +54,7 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
+use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
@@ -115,6 +116,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
         }
 
         for node in self.node.children() {
@@ -531,8 +533,22 @@ impl Display for ReclusterSink {
     }
 }
 
+<<<<<<< HEAD
 impl Display for UpdateSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "UpdateSource")
+=======
+impl Display for Udf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let scalars = self
+            .udf_funcs
+            .iter()
+            .map(|func| {
+                let arg_exprs = func.arg_exprs.join(", ");
+                format!("{}({})", func.func_name, arg_exprs)
+            })
+            .collect::<Vec<String>>();
+        write!(f, "Udf functions: {}", scalars.join(", "))
+>>>>>>> upstream/main
     }
 }

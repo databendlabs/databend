@@ -569,6 +569,18 @@ impl<'a> Binder {
             // Streams
             Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
             Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?
+            Statement::CreatePipe(_) => {
+                todo!()
+            }
+            Statement::DescribePipe(_) => {
+                todo!()
+            }
+            Statement::AlterPipe(_) => {
+                todo!()
+            }
+            Statement::DropPipe(_) => {
+                todo!()
+            }
         };
         Ok(plan)
     }

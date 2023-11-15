@@ -52,6 +52,7 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
+use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
@@ -99,6 +100,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
             PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
+            PhysicalPlan::Udf(plan) => self.replace_udf(plan),
         }
     }
 
@@ -506,6 +508,16 @@ pub trait PhysicalPlanReplacer {
             right_runtime_filters: plan.right_runtime_filters.clone(),
         }))
     }
+
+    fn replace_udf(&mut self, plan: &Udf) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Udf(Udf {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            udf_funcs: plan.udf_funcs.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
 }
 
 impl PhysicalPlan {
@@ -621,6 +633,9 @@ impl PhysicalPlan {
                 PhysicalPlan::MaterializedCte(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Udf(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

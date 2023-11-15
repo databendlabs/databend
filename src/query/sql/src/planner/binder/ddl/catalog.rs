@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::sync::Arc;
 
 use chrono::Utc;
 use common_ast::ast::CreateCatalogStmt;
@@ -22,6 +23,7 @@ use common_ast::ast::ShowCatalogsStmt;
 use common_ast::ast::ShowCreateCatalogStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::UriLocation;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -102,7 +104,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let meta = self
-            .try_create_meta_from_options(*catalog_type, options)
+            .try_create_meta_from_options(&self.ctx, *catalog_type, options)
             .await?;
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
@@ -130,6 +132,7 @@ impl Binder {
 
     async fn try_create_meta_from_options(
         &self,
+        ctx: &Arc<dyn TableContext>,
         catalog_type: CatalogType,
         options: &BTreeMap<String, String>,
     ) -> Result<CatalogMeta> {
@@ -149,7 +152,7 @@ impl Binder {
                     ErrorCode::InvalidArgument("expected field: METASTORE_ADDRESS")
                 })?;
 
-                let sp = parse_catalog_url(options).await?;
+                let sp = parse_catalog_url(ctx, options).await?;
 
                 CatalogOption::Hive(HiveCatalogOption {
                     address,
@@ -157,7 +160,7 @@ impl Binder {
                 })
             }
             CatalogType::Iceberg => {
-                let sp = parse_catalog_url(options.clone()).await?.ok_or_else(|| {
+                let sp = parse_catalog_url(ctx,options.clone()).await?.ok_or_else(|| {
                     ErrorCode::InvalidArgument(
                         "expect storage connection but failed to find, seems the url is missing",
                     )
@@ -177,7 +180,10 @@ impl Binder {
     }
 }
 
-async fn parse_catalog_url(options: BTreeMap<String, String>) -> Result<Option<StorageParams>> {
+async fn parse_catalog_url(
+    ctx: &Arc<dyn TableContext>,
+    options: BTreeMap<String, String>,
+) -> Result<Option<StorageParams>> {
     // Make sure options has been lower cases.
     let mut options = options
         .into_iter()
@@ -192,7 +198,7 @@ async fn parse_catalog_url(options: BTreeMap<String, String>) -> Result<Option<S
     };
 
     let mut location = UriLocation::from_uri(uri, "".to_string(), options)?;
-    let (sp, _) = parse_uri_location(&mut location).await?;
+    let (sp, _) = parse_uri_location(&mut location, Some(ctx)).await?;
 
     Ok(Some(sp))
 }

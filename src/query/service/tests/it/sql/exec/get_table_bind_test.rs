@@ -41,6 +41,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -612,6 +613,10 @@ impl TableContext for CtxDelegation {
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
+        todo!()
+    }
+
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
 

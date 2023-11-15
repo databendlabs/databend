@@ -320,6 +320,7 @@ impl MergeIntoInterpreter {
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
             RelOperator::AddRowNumber(_) => {}
+            RelOperator::Udf(_) => {}
         }
         Ok(())
     }

@@ -54,6 +54,8 @@ fn test_variant() {
     test_exists_key_op(file);
     test_exists_any_keys_op(file);
     test_exists_all_keys_op(file);
+    test_contains_in_left_op(file);
+    test_contains_in_right_op(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1175,4 +1177,120 @@ fn test_exists_all_keys_op(file: &mut impl Write) {
             vec![true, true, false, true],
         ),
     )]);
+}
+
+fn test_contains_in_left_op(file: &mut impl Write) {
+    run_ast(file, "NULL @> NULL", &[]);
+    run_ast(file, "parse_json('[1,2,3]') @> NULL", &[]);
+    run_ast(file, "NULL @> parse_json('1')", &[]);
+    run_ast(file, "parse_json('true') @> parse_json('true')", &[]);
+    run_ast(file, "parse_json('true') @> parse_json('false')", &[]);
+    run_ast(file, r#"parse_json('"asd"') @> parse_json('"asd"')"#, &[]);
+    run_ast(file, r#"parse_json('"asd"') @> parse_json('"asdd"')"#, &[]);
+    run_ast(file, "parse_json('[1,2,3]') @> parse_json('1')", &[]);
+    run_ast(file, "parse_json('[1,2,3]') @> parse_json('4')", &[]);
+    run_ast(file, "parse_json('[1,2,3,4]') @> parse_json('[2,1,3]')", &[
+    ]);
+    run_ast(file, "parse_json('[1,2,3,4]') @> parse_json('[2,1,1]')", &[
+    ]);
+    run_ast(file, "parse_json('[1,2,[1,3]]') @> parse_json('[1,3]')", &[
+    ]);
+    run_ast(
+        file,
+        "parse_json('[1,2,[1,3]]') @> parse_json('[[1,3]]')",
+        &[],
+    );
+    run_ast(
+        file,
+        "parse_json('[1,2,[1,3]]') @> parse_json('[[[1,3]]]')",
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[{"a":1}]') @> parse_json('{"a":1}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[{"a":1},{"b":2}]') @> parse_json('[{"a":1}]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') @> parse_json('{"a":1}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') @> parse_json('{"a":2}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"z":2,"b":{"a":1}}') @> parse_json('{"a":1}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":{"c":100,"d":200},"b":2}') @> parse_json('{"a":{}}')"#,
+        &[],
+    );
+}
+
+fn test_contains_in_right_op(file: &mut impl Write) {
+    run_ast(file, "NULL <@ NULL", &[]);
+    run_ast(file, "parse_json('[1,2,3]') <@ NULL", &[]);
+    run_ast(file, "NULL <@ parse_json('1')", &[]);
+    run_ast(file, "parse_json('true') <@ parse_json('true')", &[]);
+    run_ast(file, "parse_json('true') <@ parse_json('false')", &[]);
+    run_ast(file, r#"parse_json('"asd"') <@ parse_json('"asd"')"#, &[]);
+    run_ast(file, r#"parse_json('"asd"') <@ parse_json('"asdd"')"#, &[]);
+    run_ast(file, "parse_json('1') <@ parse_json('[1,2,3]')", &[]);
+    run_ast(file, "parse_json('4') <@ parse_json('[1,2,3]')", &[]);
+    run_ast(file, "parse_json('[2,1,3]') <@ parse_json('[1,2,3,4]')", &[
+    ]);
+    run_ast(file, "parse_json('[2,1,1]') <@ parse_json('[1,2,3,4]')", &[
+    ]);
+    run_ast(file, "parse_json('[1,3]') <@ parse_json('[1,2,[1,3]]')", &[
+    ]);
+    run_ast(
+        file,
+        "parse_json('[[1,3]]') <@ parse_json('[1,2,[1,3]]')",
+        &[],
+    );
+    run_ast(
+        file,
+        "parse_json('[[[1,3]]]') <@ parse_json('[1,2,[1,3]]')",
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1}') <@ parse_json('[{"a":1}]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[{"a":1}]') <@ parse_json('[{"a":1},{"b":2}]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1}') <@ parse_json('{"a":1,"b":2}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":2}') <@ parse_json('{"a":1,"b":2}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1}') <@ parse_json('{"z":2,"b":{"a":1}}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}')"#,
+        &[],
+    );
 }

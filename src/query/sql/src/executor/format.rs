@@ -49,6 +49,7 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
+use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowFunction;
@@ -203,6 +204,7 @@ fn to_format_tree(
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, profs)
         }
@@ -1166,6 +1168,40 @@ fn lambda_to_format_tree(
         "Lambda".to_string(),
         children,
     ))
+}
+
+fn udf_to_format_tree(
+    plan: &Udf,
+    metadata: &Metadata,
+    prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+
+    children.extend(vec![FormatTreeNode::new(format!(
+        "udf functions: {}",
+        plan.udf_funcs
+            .iter()
+            .map(|func| {
+                let arg_exprs = func.arg_exprs.join(", ");
+                format!("{}({})", func.func_name, arg_exprs)
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))]);
+
+    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
+
+    Ok(FormatTreeNode::with_children("Udf".to_string(), children))
 }
 
 fn runtime_filter_source_to_format_tree(
