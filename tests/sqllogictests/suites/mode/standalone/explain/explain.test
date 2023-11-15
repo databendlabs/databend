@@ -1450,3 +1450,90 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+CREATE TABLE customers AS SELECT
+  number % 100 AS customer_id,
+  concat('Customer ', to_string(number % 100)) AS customer_name,
+  CASE WHEN (rand() * 10000)::int % 3 = 0 THEN 'Small'
+       WHEN (rand() * 10000 % 3)::int = 1 THEN 'Medium'
+       ELSE 'Large'
+  END AS segment,
+  date_add('year', floor(rand() * 100 % 5)::int, '2021-01-01') AS create_timestamp,
+  (rand() * 100)::int % 2 = 0 AS active
+FROM numbers(100);
+
+
+statement ok
+CREATE TABLE products AS SELECT
+  number % 10 AS product_id,
+  concat('Product ', to_string(number % 10)) AS product_name,
+  (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS price,
+  CASE WHEN (rand() * 100)::int % 4 = 0 THEN 'Electronics'
+       WHEN (rand() * 100 % 4)::int = 1 THEN 'Clothing'
+       WHEN (rand() * 1000 % 4)::int = 2 THEN 'Grocery'
+       ELSE 'Furniture'
+  END AS category
+FROM numbers(10);
+
+statement ok
+CREATE TABLE sales AS SELECT
+  number % 500 AS sale_id,
+  number % 100 AS product_id,
+  number % 100 AS customer_id,
+  date_add('day', floor(rand() * 10000 % 365)::int, '2021-01-01') AS sale_date,
+  (rand() * 10000 % 20 + 1)::int AS quantity,
+  (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS net_paid
+FROM numbers(500);
+
+query T
+explain join SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
+----
+HashJoin: LEFT SINGLE
+├── Build
+│   └── HashJoin: RIGHT SEMI
+│       ├── Build
+│       │   └── HashJoin: CROSS
+│       │       ├── Build
+│       │       │   └── Scan: default.default.customers (read rows: 100)
+│       │       └── Probe
+│       │           └── Scan: default.default.sales (read rows: 500)
+│       └── Probe
+│           └── Scan: default.default.customers (read rows: 100)
+└── Probe
+    └── HashJoin: LEFT SEMI
+        ├── Build
+        │   └── Scan: default.default.sales (read rows: 0)
+        └── Probe
+            └── Scan: default.default.customers (read rows: 100)
+
+
+query T
+explain join SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT category FROM products WHERE category NOT IN ( SELECT p.category FROM sales s JOIN products p ON s.product_id = p.product_id WHERE s.customer_id = c.customer_id ) ) ORDER BY c.customer_name;
+----
+HashJoin: RIGHT MARK
+├── Build
+│   └── HashJoin: RIGHT MARK
+│       ├── Build
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── Scan: default.default.products (read rows: 10)
+│       │       └── Probe
+│       │           └── Scan: default.default.sales (read rows: 500)
+│       └── Probe
+│           └── HashJoin: CROSS
+│               ├── Build
+│               │   └── Scan: default.default.customers (read rows: 100)
+│               └── Probe
+│                   └── Scan: default.default.products (read rows: 10)
+└── Probe
+    └── Scan: default.default.customers (read rows: 100)
+
+statement ok
+drop table customers;
+
+statement ok
+drop table products;
+
+statement ok
+drop table sales;
