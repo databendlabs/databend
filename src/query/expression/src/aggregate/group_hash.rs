@@ -188,9 +188,9 @@ macro_rules! impl_agg_hash_for_primitive_types {
             fn agg_hash(&self) -> u64 {
                 let mut x = *self as u64;
                 x ^= x >> 32;
-                x *= 0xd6e8feb86659fd93;
+                x = x.wrapping_mul(0xd6e8feb86659fd93);
                 x ^= x >> 32;
-                x *= 0xd6e8feb86659fd93;
+                x = x.wrapping_mul(0xd6e8feb86659fd93);
                 x ^= x >> 32;
                 x
             }

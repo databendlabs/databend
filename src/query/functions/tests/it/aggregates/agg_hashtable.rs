@@ -26,6 +26,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::block_debug::assert_block_value_sort_eq;
 use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::Float32Type;
@@ -148,9 +149,8 @@ fn test_agg_hashtable() {
             UInt64Type::from_data(vec![urows / 2, urows / 2, urows / 2, urows / 2]),
         ]);
 
-        for (column, expected) in block.columns().iter().zip(expected_results.iter()) {
-            let column = column.value.as_column().unwrap();
-            assert_eq!(column, expected)
-        }
+        let block_expected = DataBlock::new_from_columns(expected_results.clone());
+
+        assert_block_value_sort_eq(&block, &block_expected);
     }
 }
