@@ -283,7 +283,6 @@ impl Table for StreamTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        eprintln!("plan: {:?}", plan);
         let table = block_in_place(|| {
             Handle::current().block_on(ctx.get_table(
                 self.stream_info.catalog(),

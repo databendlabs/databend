@@ -533,11 +533,12 @@ impl Display for ReclusterSink {
     }
 }
 
-<<<<<<< HEAD
 impl Display for UpdateSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "UpdateSource")
-=======
+    }
+}
+
 impl Display for Udf {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let scalars = self
@@ -549,6 +550,5 @@ impl Display for Udf {
             })
             .collect::<Vec<String>>();
         write!(f, "Udf functions: {}", scalars.join(", "))
->>>>>>> upstream/main
     }
 }
