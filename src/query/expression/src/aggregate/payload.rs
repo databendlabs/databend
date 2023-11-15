@@ -74,11 +74,7 @@ pub type Pages = Vec<Page>;
 
 // TODO FIXME
 impl Payload {
-    pub fn new(
-        arena: Arc<Bump>,
-        group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
-    ) -> Self {
+    pub fn new(group_types: Vec<DataType>, aggrs: Vec<AggregateFunctionRef>) -> Self {
         let mut state_addr_offsets = Vec::new();
         let state_layout = if !aggrs.is_empty() {
             Some(get_layout_offsets(&aggrs, &mut state_addr_offsets).unwrap())
@@ -120,7 +116,7 @@ impl Payload {
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
 
         Self {
-            arena,
+            arena: Arc::new(Bump::new()),
             external_arena: vec![],
             state_move_out: false,
             pages: vec![],

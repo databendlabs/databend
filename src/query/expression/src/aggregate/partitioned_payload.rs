@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::sync::Arc;
 
-use bumpalo::Bump;
 use itertools::Itertools;
 
 use super::payload::Payload;
@@ -57,7 +55,7 @@ impl PartitionedPayload {
         debug_assert_eq!(1 << radix_bits, partition_count);
 
         let payloads = (0..partition_count)
-            .map(|_| Payload::new(Arc::new(Bump::new()), group_types.clone(), aggrs.clone()))
+            .map(|_| Payload::new(group_types.clone(), aggrs.clone()))
             .collect_vec();
 
         let group_sizes = payloads[0].group_sizes.clone();
