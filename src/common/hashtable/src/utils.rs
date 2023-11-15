@@ -97,6 +97,16 @@ pub unsafe fn read_le(data: *const u8, len: usize) -> u64 {
     }
 }
 
+#[inline]
+pub fn fast_memcmp(a: &[u8], b: &[u8]) -> bool {
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
+    unsafe {
+        sse::compare_sse2(a, b)
+    }
+    #[cfg(not(all(any(target_arch = "x86_64"), target_feature = "sse4.2")))]
+    a == b
+}
+
 #[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
 pub mod sse {
     use std::arch::x86_64::*;

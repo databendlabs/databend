@@ -14,7 +14,6 @@
 
 use bumpalo::Bump;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_hashtable::memcmp_sse;
 use ethnum::i256;
 
 use crate::store;
@@ -347,7 +346,7 @@ unsafe fn row_match_string_column(
                 } else {
                     let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
                     let scalar = std::slice::from_raw_parts(data_address, len);
-                    equal = memcmp_sse(scalar, value);
+                    equal = common_hashtable::fast_memcmp(scalar, value);
                 }
             } else {
                 equal = is_set == is_set2;
@@ -375,7 +374,8 @@ unsafe fn row_match_string_column(
             } else {
                 let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
                 let scalar = std::slice::from_raw_parts(data_address, len);
-                equal = memcmp_sse(scalar, value);
+
+                equal = common_hashtable::fast_memcmp(scalar, value);
             }
 
             if equal {
