@@ -344,7 +344,7 @@ impl ScheduleQueue {
         mut self,
         global: &Arc<ExecutorTasksQueue>,
         context: &mut ExecutorWorkerContext,
-        executor: &PipelineExecutor,
+        executor: &Arc<PipelineExecutor>,
     ) {
         debug_assert!(!context.has_task());
 
@@ -371,13 +371,14 @@ impl ScheduleQueue {
     pub fn schedule_async_task(
         proc: ProcessorPtr,
         query_id: Arc<String>,
-        executor: &PipelineExecutor,
+        executor: &Arc<PipelineExecutor>,
         wakeup_worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<ExecutorTasksQueue>,
     ) {
         unsafe {
             workers_condvar.inc_active_async_worker();
+            let weak_executor = Arc::downgrade(executor);
             let process_future = proc.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
@@ -387,6 +388,7 @@ impl ScheduleQueue {
                     proc.clone(),
                     global_queue,
                     workers_condvar,
+                    weak_executor,
                     process_future,
                 ))
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<

@@ -54,6 +54,7 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Lambda(_) => "LambdaFunc".to_string(),
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
         RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
+        RelOperator::Udf(_) => "Udf".to_string(),
     }
 }
 

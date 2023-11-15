@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -111,15 +110,6 @@ impl HashJoinProbeState {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let string_items_buf = &mut probe_state.string_items_buf;
-        let mut unmatched_idx = 0;
-        // We will refactor the following code in https://github.com/datafuselabs/databend/pull/13393.
-        let mut _unmatched_indexes = vec![];
-        let probe_unmatched_indexes =
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftAnti {
-                probe_state.probe_unmatched_indexes.as_mut().unwrap()
-            } else {
-                &mut _unmatched_indexes
-            };
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -136,8 +126,8 @@ impl HashJoinProbeState {
             .other_predicate
             .as_ref()
             .unwrap();
-        // For semi join, it defaults to all.
-        let mut row_state = vec![0_u32; input.num_rows()];
+        // The `row_state` is used to mark whether the row is matched.
+        let mut row_state = vec![false; input.num_rows()];
 
         for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
@@ -149,22 +139,15 @@ impl HashJoinProbeState {
                     (0, 0)
                 };
 
-            let true_match_count = match_count;
             match match_count > 0 {
                 false if SEMI => {
                     continue;
                 }
                 false => {
-                    probe_unmatched_indexes[unmatched_idx] = i as u32;
-                    unmatched_idx += 1;
                     continue;
                 }
                 true => (),
             };
-
-            if true_match_count > 0 && !SEMI {
-                row_state[i] += true_match_count as u32;
-            }
 
             for _ in 0..match_count {
                 probe_indexes[matched_num] = i as u32;
@@ -208,18 +191,8 @@ impl HashJoinProbeState {
                         _ => unreachable!(),
                     };
 
-                    if SEMI {
-                        self.fill_null_for_semi_join(&mut bm, probe_indexes, &mut row_state);
-                    } else {
-                        self.fill_null_for_anti_join(&mut bm, probe_indexes, &mut row_state);
-                    }
+                    self.update_row_state(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
 
-                    if let Some(probe_block) = probe_block {
-                        let result_block = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
-                        if !result_block.is_empty() {
-                            result_blocks.push(result_block);
-                        }
-                    }
                     matched_num = 0;
 
                     if incomplete_ptr == 0 {
@@ -236,10 +209,6 @@ impl HashJoinProbeState {
                         break;
                     }
 
-                    if !SEMI {
-                        row_state[i] += match_count as u32;
-                    }
-
                     for _ in 0..match_count {
                         probe_indexes[matched_num] = i as u32;
                         matched_num += 1;
@@ -250,18 +219,6 @@ impl HashJoinProbeState {
                     }
                 }
             }
-        }
-
-        if unmatched_idx > 0 {
-            result_blocks.push(DataBlock::take(
-                input,
-                &probe_unmatched_indexes[0..unmatched_idx],
-                string_items_buf,
-            )?);
-        }
-
-        if matched_num == 0 {
-            return Ok(result_blocks);
         }
 
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -299,66 +256,45 @@ impl HashJoinProbeState {
             _ => unreachable!(),
         };
 
+        self.update_row_state(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
+
+        matched_num = 0;
         if SEMI {
-            self.fill_null_for_semi_join(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
+            for (i, state) in row_state.iter().enumerate() {
+                if *state {
+                    probe_indexes[matched_num] = i as u32;
+                    matched_num += 1;
+                }
+            }
         } else {
-            self.fill_null_for_anti_join(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
+            for (i, state) in row_state.iter().enumerate() {
+                if !*state {
+                    probe_indexes[matched_num] = i as u32;
+                    matched_num += 1;
+                }
+            }
         }
 
-        if let Some(probe_block) = probe_block {
-            let result_block = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
-            if !result_block.is_empty() {
-                result_blocks.push(result_block);
-            }
+        if matched_num > 0 {
+            result_blocks.push(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_num],
+                string_items_buf,
+            )?);
         }
 
         Ok(result_blocks)
     }
 
-    // modify the bm by the value row_state
-    // keep the index of the first positive state
-    // bitmap: [1, 1, 1] with row_state [0, 0], probe_index: [(0, 3)] => [0, 0, 0] (repeat the first element 3 times)
-    // bitmap will be [1, 1, 1] -> [1, 1, 1] -> [1, 0, 1] -> [1, 0, 0]
-    // row_state will be [0, 0] -> [1, 0] -> [1,0] -> [1, 0]
-    fn fill_null_for_semi_join(
+    fn update_row_state(
         &self,
         bm: &mut MutableBitmap,
         probe_indexes: &[u32],
-        row_state: &mut [u32],
+        row_state: &mut [bool],
     ) {
         for (index, row) in probe_indexes.iter().enumerate() {
-            if bm.get(index) {
-                if row_state[*row as usize] == 0 {
-                    row_state[*row as usize] = 1;
-                } else {
-                    bm.set(index, false);
-                }
-            }
-        }
-    }
-
-    // keep the index of the negative state
-    // bitmap: [1, 1, 1] with row_state [3, 0], probe_index: [(0, 3)] => [0, 0, 0] (repeat the first element 3 times)
-    // bitmap will be [1, 1, 1] -> [0, 1, 1] -> [0, 0, 1] -> [0, 0, 0]
-    // row_state will be [3, 0] -> [3, 0] -> [3, 0] -> [3, 0]
-    fn fill_null_for_anti_join(
-        &self,
-        bm: &mut MutableBitmap,
-        probe_indexes: &[u32],
-        row_state: &mut [u32],
-    ) {
-        for (index, row) in probe_indexes.iter().enumerate() {
-            if row_state[*row as usize] == 0 {
-                // if state is not matched, anti result will take one
-                bm.set(index, true);
-            } else if row_state[*row as usize] == 1 {
-                // if state has just one, anti reverse the result
-                row_state[*row as usize] -= 1;
-                bm.set(index, !bm.get(index))
-            } else if !bm.get(index) {
-                row_state[*row as usize] -= 1;
-            } else {
-                bm.set(index, false);
+            if bm.get(index) && !row_state[*row as usize] {
+                row_state[*row as usize] = true;
             }
         }
     }

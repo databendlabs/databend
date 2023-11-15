@@ -160,6 +160,21 @@ impl MergeIntoInterpreter {
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
+        // check if number of partitions is too much
+        {
+            let max_number_partitions =
+                ctx.get_settings()
+                    .get_merge_into_static_filter_partition_threshold()? as usize;
+
+            let number_partitions: usize = blocks.iter().map(|b| b.num_rows()).sum();
+            if number_partitions > max_number_partitions {
+                warn!(
+                    "number of partitions {} exceeds threshold {}",
+                    number_partitions, max_number_partitions
+                );
+                return Ok(Box::new(join.clone()));
+            }
+        }
 
         // 2. build filter and push down to target side
         ctx.set_status_info("building pushdown filters");
@@ -305,6 +320,7 @@ impl MergeIntoInterpreter {
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
             RelOperator::AddRowNumber(_) => {}
+            RelOperator::Udf(_) => {}
         }
         Ok(())
     }

@@ -55,6 +55,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -692,6 +693,11 @@ impl TableContext for QueryContext {
                     .file_format_params)
             }
         }
+    }
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let user_mgr = UserApiProvider::instance();
+        let tenant = self.get_tenant();
+        user_mgr.get_connection(&tenant, name).await
     }
 
     /// Fetch a Table by db and table name.
