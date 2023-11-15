@@ -270,7 +270,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
+    let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
         .map(|(k, v)| {

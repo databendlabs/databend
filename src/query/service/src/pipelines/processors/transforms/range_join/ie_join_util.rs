@@ -27,7 +27,7 @@ use common_expression::ScalarRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-pub(crate) fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<DataBlock> {
+pub fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<DataBlock> {
     let filter = filter.as_expr(&BUILTIN_FUNCTIONS);
     let other_predicate = cast_expr_to_non_null_boolean(filter)?;
     assert_eq!(other_predicate.data_type(), &DataType::Boolean);
@@ -57,7 +57,7 @@ pub(crate) fn order_match(op: &str, v1: &ScalarRef, v2: &ScalarRef) -> bool {
 }
 
 // Exponential search
-pub(crate) fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
+pub fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
     let mut step = 1;
     let n = l1.len() - 1;
     let mut hi = pos;

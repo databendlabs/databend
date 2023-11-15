@@ -26,8 +26,8 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_normal_case() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_table().await?;
 

@@ -34,7 +34,7 @@ impl Binder {
             "".to_string(),
             stmt.storage_params.clone(),
         );
-        parse_uri_location(&mut location).await?;
+        parse_uri_location(&mut location, None).await?;
         Ok(Plan::CreateConnection(Box::new(CreateConnectionPlan {
             if_not_exists: stmt.if_not_exists,
             name: stmt.name.to_string(),

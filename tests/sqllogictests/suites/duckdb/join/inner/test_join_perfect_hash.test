@@ -1,0 +1,240 @@
+statement ok
+drop table if exists test1;
+
+statement ok
+drop table if exists test2;
+
+statement ok
+CREATE TABLE test1 (a INT, b INT);
+
+statement ok
+INSERT INTO test1 VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+CREATE TABLE test2 (b INT, c INT);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
+
+
+# simple inner join
+query III
+SELECT a, test1.b,c FROM test1, test2 WHERE test1.b = test2.b order by a, test1.b,c;
+----
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+
+statement ok
+DROP TABLE test1;
+
+statement ok
+DROP TABLE test2;
+
+statement ok
+drop table if exists test3;
+
+statement ok
+CREATE TABLE test3 (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test3 VALUES (-11, -1), (-12, -2), (13, 3)
+
+statement ok
+drop table if exists test4;
+
+statement ok
+CREATE TABLE test4 (b INT, c INT);
+
+statement ok
+INSERT INTO test4 VALUES (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30), (-1, -10), (-2, -20), (3, 30)
+
+# negative  keys inner join
+query III
+SELECT a, test3.b,c FROM test3, test4 WHERE test3.b = test4.b order by a, test3.b,c ;
+----
+-12	-2	-20
+-12	-2	-20
+-12	-2	-20
+-12	-2	-20
+-12	-2	-20
+-11	-1	-10
+-11	-1	-10
+-11	-1	-10
+-11	-1	-10
+-11	-1	-10
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+
+statement ok
+drop table if exists test5;
+
+statement ok
+CREATE TABLE test5 (a INT, b INT);
+
+statement ok
+INSERT INTO test5 VALUES (11, 1), (12, 2), (13, 3), (14, null), (null, 4)
+
+statement ok
+drop table if exists test6;
+
+statement ok
+CREATE TABLE test6 (b INT, c INT);
+
+statement ok
+INSERT INTO test6 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (4, 40), (null, 30), (1, null)
+
+# inner join with nulls in the build and probe side
+query III
+SELECT a, test5.b,c FROM test5, test6 WHERE test5.b = test6.b order by a, test5.b,c;
+----
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+11	1	NULL
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+NULL	4	40
+
+statement ok
+drop table if exists test7;
+
+statement ok
+CREATE TABLE test7 (a INT, b INT);
+
+statement ok
+INSERT INTO test7 VALUES (11, 1), (12, 2), (13, 3), (15, 5)
+
+statement ok
+drop table if exists test8;
+
+statement ok
+CREATE TABLE test8 (b INT, c INT);
+
+statement ok
+INSERT INTO test8 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (4, 40)
+
+# inner join with non-matching keys in the build and in the probe side
+query III
+SELECT a, test7.b,c FROM test7, test8 WHERE test7.b = test8.b order by a, test7.b,c ;
+----
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+
+statement ok
+drop table if exists test11;
+
+statement ok
+CREATE TABLE test11 (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test11 VALUES (1, 1), (50000, 2), (13, 3), (NULL, NULL), (NULL, 20000), (20000, NULL)
+
+statement ok
+drop table if exists test12;
+
+statement ok
+CREATE TABLE test12 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test12 VALUES (1, 10), (2, 20), (50000, 30), (NULL, NULL), (20000, NULL), (NULL, 20000)
+
+# simple inner join
+query III
+SELECT a, test11.b,c FROM test11, test12 WHERE test11.b = test12.b order by a, test11.b,c;
+----
+1	1	10
+50000	2	20
+NULL	20000	NULL
+
+statement ok
+drop table if exists cohort;
+
+statement ok
+CREATE TABLE cohort (
+	cohort_definition_id INT,
+	subject_id INT,
+	cohort_start_date DATE,
+	cohort_end_date DATE
+);
+
+statement ok
+INSERT INTO cohort VALUES
+	(100, 1, '2002-12-25', '2002-12-25'),
+	(100, 1, '2007-03-01', '2007-03-01'),
+	(100, 2, '2003-03-01', '2003-03-01'),
+	(100, 2, '2005-03-01', '2005-03-01')
+;
+
+statement ok
+drop table if exists observation_period;
+
+statement ok
+CREATE TABLE observation_period (
+	 observation_period_id INTEGER,
+	 person_id INTEGER,
+	 observation_period_start_date DATE,
+	 observation_period_end_date DATE,
+	 period_type_concept_id INTEGER
+);
+
+statement ok
+INSERT INTO observation_period VALUES
+	(1, 1, '1963-12-31', '2010-01-01', 1),
+	(2, 2, '1963-12-31', '2010-01-01', 2)
+;
+
+# Statistics propagation with condition pruning
+query IIIIIIII
+select cohort_definition_id, subject_id, cohort_start_date, cohort_end_date, op1.observation_period_start_date, op1.observation_period_end_date,
+  tc1.cohort_start_date >= op1.observation_period_start_date as gt_test,
+  tc1.cohort_start_date <= op1.observation_period_end_date as lt_test
+from cohort tc1
+inner join observation_period op1
+        on tc1.subject_id = op1.person_id
+       and tc1.cohort_start_date >= op1.observation_period_start_date
+       and tc1.cohort_start_date <= op1.observation_period_end_date
+where cohort_definition_id in (100) order by subject_id, cohort_start_date;
+----
+100 1 2002-12-25 2002-12-25 1963-12-31 2010-01-01 1 1
+100 1 2007-03-01 2007-03-01 1963-12-31 2010-01-01 1 1
+100 2 2003-03-01 2003-03-01 1963-12-31 2010-01-01 1 1
+100 2 2005-03-01 2005-03-01 1963-12-31 2010-01-01 1 1

@@ -19,7 +19,7 @@ use ahash::HashSet;
 
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::replace_into::meta::UniqueKeyDigest;
 
 pub type BlockDeletionKeys = HashMap<BlockIndex, (HashSet<UniqueKeyDigest>, Vec<Vec<u64>>)>;
 #[derive(Default)]

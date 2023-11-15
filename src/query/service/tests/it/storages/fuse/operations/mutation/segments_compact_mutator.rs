@@ -52,8 +52,6 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::execute_command;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
@@ -69,25 +67,23 @@ use storages_common_table_meta::meta::Versioned;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
 
     // setup
     let qry = "create table t(c int)  block_per_segment=10";
-    execute_command(ctx.clone(), qry).await?;
-
-    let catalog = ctx.get_catalog("default").await?;
+    fixture.execute_command(qry).await?;
 
     let num_inserts = 9;
-    append_rows(ctx.clone(), num_inserts).await?;
+    fixture.append_rows(num_inserts).await?;
 
-    // check count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
-    let stream = execute_query(fixture.ctx(), count_qry).await?;
+    let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(9, check_count(stream).await?);
 
     // compact segment
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
@@ -98,42 +94,37 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     mutator.try_commit(table.clone()).await?;
 
     // check segment count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
-    let stream = execute_query(fixture.ctx(), qry).await?;
+    let stream = fixture.execute_query(qry).await?;
     // after compact, in our case, there should be only 1 segment left
     assert_eq!(1, check_count(stream).await?);
 
     // check block count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let qry = "select block_count as count from fuse_snapshot('default', 't') limit 1";
-    let stream = execute_query(fixture.ctx(), qry).await?;
+    let stream = fixture.execute_query(qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_resolvable_conflict() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
-
+    let fixture = TestFixture::new().await?;
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
-    execute_command(ctx.clone(), create_tbl_command).await?;
-
-    let catalog = ctx.get_catalog("default").await?;
+    fixture.execute_command(create_tbl_command).await?;
 
     let num_inserts = 9;
-    append_rows(ctx.clone(), num_inserts).await?;
+    fixture.append_rows(num_inserts).await?;
 
     // check count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
-    let stream = execute_query(fixture.ctx(), count_qry).await?;
+    let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(9, check_count(stream).await?);
 
     // compact segment
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
@@ -144,26 +135,25 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
     // before commit compact segments, gives 9 append commits
     let num_inserts = 9;
-    append_rows(ctx.clone(), num_inserts).await?;
+    fixture.append_rows(num_inserts).await?;
 
     mutator.try_commit(table.clone()).await?;
 
     // check segment count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_seg = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
-    let stream = execute_query(fixture.ctx(), count_seg).await?;
+    let stream = fixture.execute_query(count_seg).await?;
     // after compact, in our case, there should be only 1 + num_inserts segments left
     // during compact retry, newly appended segments will NOT be compacted again
     assert_eq!(1 + num_inserts as u64, check_count(stream).await?);
 
     // check block count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_block = "select block_count as count from fuse_snapshot('default', 't') limit 1";
-    let stream = execute_query(fixture.ctx(), count_block).await?;
+    let stream = fixture.execute_query(count_block).await?;
     assert_eq!(num_inserts as u64 * 2, check_count(stream).await?);
 
     // check table statistics
 
+    let ctx = fixture.new_query_ctx().await?;
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
     let table_statistics = latest_fuse_table.table_statistics().await?.unwrap();
@@ -175,26 +165,23 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
 
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
-    execute_command(ctx.clone(), create_tbl_command).await?;
-
-    let catalog = ctx.get_catalog("default").await?;
+    fixture.execute_command(create_tbl_command).await?;
 
     let num_inserts = 9;
-    append_rows(ctx.clone(), num_inserts).await?;
+    fixture.append_rows(num_inserts).await?;
 
     // check count
-    ctx.evict_table_from_cache("default", "default", "t")?;
     let count_qry = "select count(*) from t";
-    let stream = execute_query(fixture.ctx(), count_qry).await?;
+    let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
 
     // try compact segment
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
@@ -216,12 +203,20 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     Ok(())
 }
 
-async fn append_rows(ctx: Arc<QueryContext>, n: usize) -> Result<()> {
-    let qry = "insert into t values(1)";
-    for _ in 0..n {
-        execute_command(ctx.clone(), qry).await?;
+#[async_trait::async_trait]
+trait AppendRow {
+    async fn append_rows(&self, n: usize) -> Result<()>;
+}
+
+#[async_trait::async_trait]
+impl AppendRow for TestFixture {
+    async fn append_rows(&self, n: usize) -> Result<()> {
+        let qry = "insert into t values(1)";
+        for _ in 0..n {
+            self.execute_command(qry).await?;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
@@ -284,8 +279,8 @@ async fn build_mutator(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_segment_compactor() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
     {
         let case_name = "highly fragmented segments";
@@ -967,8 +962,8 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     let cluster_key_id = 0;
     let chunk_size = 6;
 
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
     let data_accessor = ctx.get_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();

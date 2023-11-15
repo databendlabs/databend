@@ -122,11 +122,11 @@ impl RoleApi for RoleMgr {
             None,
         ));
 
-        let res = upsert_kv.await?.added_or_else(|v| {
+        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
             ErrorCode::UserAlreadyExists(format!("Role already exists, seq [{}]", v.seq))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]

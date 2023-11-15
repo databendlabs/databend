@@ -25,7 +25,7 @@ use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::query_spill_prefix;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
@@ -42,18 +42,18 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTa
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::HashTableCell;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupByDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupBySerializer;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::HashTableCell;
-use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
-use crate::pipelines::processors::transforms::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
-use crate::pipelines::processors::transforms::TransformGroupBySerializer;
-use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {

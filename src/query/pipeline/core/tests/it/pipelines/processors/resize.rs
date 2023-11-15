@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::connect;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::EventCause;
+use common_pipeline_core::processors::EventCause;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ResizeProcessor;
 

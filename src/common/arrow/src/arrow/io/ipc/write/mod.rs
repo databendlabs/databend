@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +25,7 @@ pub use common::Record;
 pub use common::WriteOptions;
 pub use schema::schema_to_bytes;
 pub use serialize::write;
-pub(self) use serialize::write_dictionary;
+use serialize::write_dictionary;
 pub use stream::StreamWriter;
 pub use writer::FileWriter;
 

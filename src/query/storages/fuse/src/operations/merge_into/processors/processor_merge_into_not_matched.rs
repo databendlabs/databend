@@ -25,12 +25,12 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_metrics::storage::*;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::PipeItem;
 use common_sql::evaluator::BlockOperator;
 use itertools::Itertools;
 
@@ -96,6 +96,7 @@ impl MergeIntoNotMatchedProcessor {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port = self.output_port.clone();

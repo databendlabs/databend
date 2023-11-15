@@ -23,8 +23,9 @@ use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::EventCause;
 use common_pipeline_core::processors::profile::Profile;
+use common_pipeline_core::processors::EventCause;
+use common_pipeline_core::Pipeline;
 use log::debug;
 use log::trace;
 use minitrace::prelude::*;
@@ -35,19 +36,18 @@ use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorTask;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
+use crate::pipelines::executor::ExecutorTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::pipeline::Pipeline;
+use crate::pipelines::executor::ProcessorAsyncTask;
+use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::processors::connect;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::DirectedEdge;
+use crate::pipelines::processors::Event;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::processors::UpdateList;
 use crate::pipelines::processors::UpdateTrigger;
 
@@ -344,7 +344,7 @@ impl ScheduleQueue {
         mut self,
         global: &Arc<ExecutorTasksQueue>,
         context: &mut ExecutorWorkerContext,
-        executor: &PipelineExecutor,
+        executor: &Arc<PipelineExecutor>,
     ) {
         debug_assert!(!context.has_task());
 
@@ -371,13 +371,14 @@ impl ScheduleQueue {
     pub fn schedule_async_task(
         proc: ProcessorPtr,
         query_id: Arc<String>,
-        executor: &PipelineExecutor,
+        executor: &Arc<PipelineExecutor>,
         wakeup_worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<ExecutorTasksQueue>,
     ) {
         unsafe {
             workers_condvar.inc_active_async_worker();
+            let weak_executor = Arc::downgrade(executor);
             let process_future = proc.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
@@ -387,6 +388,7 @@ impl ScheduleQueue {
                     proc.clone(),
                     global_queue,
                     workers_condvar,
+                    weak_executor,
                     process_future,
                 ))
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<

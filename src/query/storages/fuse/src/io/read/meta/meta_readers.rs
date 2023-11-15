@@ -38,7 +38,7 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use storages_common_table_meta::readers::VersionedReader;
 
-use crate::io::read::meta::meta_readers::thrift_file_meta_read::read_thrift_file_metadata;
+use self::thrift_file_meta_read::read_thrift_file_metadata;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;

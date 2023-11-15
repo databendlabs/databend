@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -183,7 +184,7 @@ impl<T: NativeType> PrimitiveArray<T> {
     /// Returns `true` if the array has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.len() == 0
     }
 
     /// The values [`Buffer`].

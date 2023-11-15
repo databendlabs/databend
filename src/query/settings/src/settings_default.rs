@@ -338,13 +338,13 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(5),
+                    value: UserSettingValue::UInt64(10),
                     desc: "Sets the seconds that the table lock will expire in.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
+                    value: UserSettingValue::UInt64(15),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -370,6 +370,12 @@ impl DefaultSettings {
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed merge into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("merge_into_static_filter_partition_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1500),
+                    desc: "Max number of partitions allowed for static filtering of merge into statement",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

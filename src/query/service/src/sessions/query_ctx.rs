@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::min;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -54,11 +55,13 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_metrics::storage::*;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
@@ -691,6 +694,11 @@ impl TableContext for QueryContext {
             }
         }
     }
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let user_mgr = UserApiProvider::instance();
+        let tenant = self.get_tenant();
+        user_mgr.get_connection(&tenant, name).await
+    }
 
     /// Fetch a Table by db and table name.
     ///
@@ -809,6 +817,25 @@ impl TableContext for QueryContext {
         self.get_settings()
             .get_enterprise_license()
             .unwrap_or_default()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let mut queries_profile = SessionManager::instance().get_queries_profile();
+
+        let exchange_profiles = DataExchangeManager::instance().get_queries_profile();
+
+        for (query_id, profiles) in exchange_profiles {
+            match queries_profile.entry(query_id) {
+                Entry::Vacant(v) => {
+                    v.insert(profiles);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(profiles);
+                }
+            }
+        }
+
+        queries_profile
     }
 }
 

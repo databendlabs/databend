@@ -2252,7 +2252,7 @@ impl<'a> TypeChecker<'a> {
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
-                            .unwrap_or_else(|| "".to_string()),
+                            .unwrap_or_default(),
                     ),
                 })
                 .await,
@@ -3664,7 +3664,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = vec!["substr", "substring", "length"];
+        let names = ["substr", "substring", "length"];
         let result = !args.is_empty()
             && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
             && self.ctx.get_settings().get_collation().unwrap() != "binary"

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregator;
+pub mod aggregator;
 pub mod group_by;
-pub(crate) mod hash_join;
+mod hash_join;
 mod processor_accumulate_row_number;
 mod processor_deduplicate_row_number;
 mod processor_extract_hash_table_by_row_number;
@@ -33,32 +33,7 @@ mod transform_runtime_cast_schema;
 mod transform_runtime_filter;
 mod window;
 
-pub use aggregator::build_partition_bucket;
-pub use aggregator::AggregateInjector;
-pub use aggregator::AggregatorParams;
-pub use aggregator::FinalSingleStateAggregator;
-pub use aggregator::HashTableCell;
-pub use aggregator::PartialSingleStateAggregator;
-pub use aggregator::PartitionedHashTableDropper;
-pub use aggregator::TransformAggregateDeserializer;
-pub use aggregator::TransformAggregateSerializer;
-pub use aggregator::TransformAggregateSpillReader;
-pub use aggregator::TransformAggregateSpillWriter;
-pub use aggregator::TransformExpandGroupingSets;
-pub use aggregator::TransformFinalAggregate;
-pub use aggregator::TransformGroupByDeserializer;
-pub use aggregator::TransformGroupBySerializer;
-pub use aggregator::TransformGroupBySpillReader;
-pub use aggregator::TransformGroupBySpillWriter;
-pub use aggregator::TransformPartialAggregate;
-pub use aggregator::TransformPartialGroupBy;
-use common_pipeline_transforms::processors::transforms::transform;
-use common_pipeline_transforms::processors::transforms::transform_block_compact;
-use common_pipeline_transforms::processors::transforms::transform_compact;
-use common_pipeline_transforms::processors::transforms::transform_sort_partial;
-pub use hash_join::FixedKeyHashJoinHashTable;
-pub use hash_join::HashJoinDesc;
-pub use hash_join::HashJoinState;
+pub use hash_join::*;
 pub use processor_accumulate_row_number::AccumulateRowNumber;
 pub use processor_deduplicate_row_number::DeduplicateRowNumber;
 pub use processor_extract_hash_table_by_row_number::ExtractHashTableByRowNumber;
@@ -66,11 +41,7 @@ pub use range_join::RangeJoinState;
 pub use runtime_filter::RuntimeFilterState;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
-pub use transform_block_compact::BlockCompactor;
-pub use transform_block_compact::TransformBlockCompact;
 pub use transform_cast_schema::TransformCastSchema;
-pub use transform_compact::Compactor;
-pub use transform_compact::TransformCompact;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
 pub use transform_limit::TransformLimit;
@@ -83,7 +54,6 @@ pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithou
 pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_runtime_filter::SinkRuntimeFilterSource;
 pub use transform_runtime_filter::TransformRuntimeFilter;
-pub use transform_sort_partial::TransformSortPartial;
 pub use window::FrameBound;
 pub use window::TransformWindow;
 pub use window::WindowFunctionInfo;
