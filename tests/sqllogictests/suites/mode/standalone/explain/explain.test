@@ -1450,3 +1450,271 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+CREATE TABLE customers AS SELECT
+  number % 100 AS customer_id,
+  concat('Customer ', to_string(number % 100)) AS customer_name,
+  CASE WHEN (rand() * 10000)::int % 3 = 0 THEN 'Small'
+       WHEN (rand() * 10000 % 3)::int = 1 THEN 'Medium'
+       ELSE 'Large'
+  END AS segment,
+  date_add('year', floor(rand() * 100 % 5)::int, '2021-01-01') AS create_timestamp,
+  (rand() * 100)::int % 2 = 0 AS active
+FROM numbers(100);
+
+
+statement ok
+CREATE TABLE products AS SELECT
+  number % 10 AS product_id,
+  concat('Product ', to_string(number % 10)) AS product_name,
+  (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS price,
+  CASE WHEN (rand() * 100)::int % 4 = 0 THEN 'Electronics'
+       WHEN (rand() * 100 % 4)::int = 1 THEN 'Clothing'
+       WHEN (rand() * 1000 % 4)::int = 2 THEN 'Grocery'
+       ELSE 'Furniture'
+  END AS category
+FROM numbers(10);
+
+statement ok
+CREATE TABLE sales AS SELECT
+  number % 500 AS sale_id,
+  number % 100 AS product_id,
+  number % 100 AS customer_id,
+  date_add('day', floor(rand() * 10000 % 365)::int, '2021-01-01') AS sale_date,
+  (rand() * 10000 % 20 + 1)::int AS quantity,
+  (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS net_paid
+FROM numbers(500);
+
+query T
+explain SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
+----
+EvalScalar
+├── output columns: [c.customer_name (#1), c.segment (#2), (select sum(net_paid) from sales where customer_id in(select customer_id from customers where ((segment = c.segment) and (active = true)))) (#23)]
+├── expressions: [scalar_subquery_11 (#11)]
+├── estimated rows: 10.00
+└── Limit
+    ├── output columns: [c.customer_name (#1), c.segment (#2), SUM(net_paid) (#11)]
+    ├── limit: 10
+    ├── offset: 0
+    ├── estimated rows: 10.00
+    └── HashJoin
+        ├── output columns: [c.customer_name (#1), c.segment (#2), SUM(net_paid) (#11)]
+        ├── join type: LEFT SINGLE
+        ├── build keys: [segment (#26)]
+        ├── probe keys: [CAST(segment (#2) AS String NULL)]
+        ├── filters: []
+        ├── estimated rows: 100.00
+        ├── AggregateFinal(Build)
+        │   ├── output columns: [SUM(net_paid) (#11), segment (#26)]
+        │   ├── group by: [segment]
+        │   ├── aggregate functions: [sum(net_paid)]
+        │   ├── estimated rows: 0.00
+        │   └── AggregatePartial
+        │       ├── output columns: [SUM(net_paid) (#11), #_group_by_key]
+        │       ├── group by: [segment]
+        │       ├── aggregate functions: [sum(net_paid)]
+        │       ├── estimated rows: 0.00
+        │       └── HashJoin
+        │           ├── output columns: [sales.net_paid (#10), segment (#26)]
+        │           ├── join type: RIGHT SEMI
+        │           ├── build keys: [segment (#26)]
+        │           ├── probe keys: [segment (#14)]
+        │           ├── filters: [sales.customer_id (#7) = subquery_12 (#12)]
+        │           ├── estimated rows: 0.00
+        │           ├── HashJoin(Build)
+        │           │   ├── output columns: [sales.customer_id (#7), sales.net_paid (#10), segment (#26)]
+        │           │   ├── join type: CROSS
+        │           │   ├── build keys: []
+        │           │   ├── probe keys: []
+        │           │   ├── filters: []
+        │           │   ├── estimated rows: 0.00
+        │           │   ├── AggregateFinal(Build)
+        │           │   │   ├── output columns: [segment (#26)]
+        │           │   │   ├── group by: [segment]
+        │           │   │   ├── aggregate functions: []
+        │           │   │   ├── estimated rows: 0.00
+        │           │   │   └── AggregatePartial
+        │           │   │       ├── output columns: [#_group_by_key]
+        │           │   │       ├── group by: [segment]
+        │           │   │       ├── aggregate functions: []
+        │           │   │       ├── estimated rows: 0.00
+        │           │   │       └── TableScan
+        │           │   │           ├── table: default.default.customers
+        │           │   │           ├── output columns: [segment (#26)]
+        │           │   │           ├── read rows: 100
+        │           │   │           ├── read bytes: 205
+        │           │   │           ├── partitions total: 1
+        │           │   │           ├── partitions scanned: 1
+        │           │   │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │           │   │           ├── push downs: [filters: [], limit: NONE]
+        │           │   │           └── estimated rows: 0.00
+        │           │   └── TableScan(Probe)
+        │           │       ├── table: default.default.sales
+        │           │       ├── output columns: [customer_id (#7), net_paid (#10)]
+        │           │       ├── read rows: 500
+        │           │       ├── read bytes: 1271
+        │           │       ├── partitions total: 1
+        │           │       ├── partitions scanned: 1
+        │           │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │           │       ├── push downs: [filters: [], limit: NONE]
+        │           │       └── estimated rows: 500.00
+        │           └── Filter(Probe)
+        │               ├── output columns: [customers.customer_id (#12), customers.segment (#14)]
+        │               ├── filters: [customers.active (#16) = true]
+        │               ├── estimated rows: 20.00
+        │               └── TableScan
+        │                   ├── table: default.default.customers
+        │                   ├── output columns: [customer_id (#12), segment (#14), active (#16)]
+        │                   ├── read rows: 100
+        │                   ├── read bytes: 450
+        │                   ├── partitions total: 1
+        │                   ├── partitions scanned: 1
+        │                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │                   ├── push downs: [filters: [customers.active (#16) = true], limit: NONE]
+        │                   └── estimated rows: 100.00
+        └── HashJoin(Probe)
+            ├── output columns: [c.customer_name (#1), c.segment (#2)]
+            ├── join type: LEFT SEMI
+            ├── build keys: [subquery_19 (#19)]
+            ├── probe keys: [c.customer_id (#0)]
+            ├── filters: []
+            ├── estimated rows: 100.00
+            ├── Filter(Build)
+            │   ├── output columns: [sales.customer_id (#19)]
+            │   ├── filters: [sales.net_paid (#22) > 100.00]
+            │   ├── estimated rows: 100.00
+            │   └── TableScan
+            │       ├── table: default.default.sales
+            │       ├── output columns: [customer_id (#19), net_paid (#22)]
+            │       ├── read rows: 0
+            │       ├── read bytes: 0
+            │       ├── partitions total: 1
+            │       ├── partitions scanned: 0
+            │       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+            │       ├── push downs: [filters: [sales.net_paid (#22) > 100.00], limit: NONE]
+            │       └── estimated rows: 500.00
+            └── TableScan(Probe)
+                ├── table: default.default.customers
+                ├── output columns: [customer_id (#0), customer_name (#1), segment (#2)]
+                ├── read rows: 100
+                ├── read bytes: 557
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 100.00
+
+
+query T
+explain SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT category FROM products WHERE category NOT IN ( SELECT p.category FROM sales s JOIN products p ON s.product_id = p.product_id WHERE s.customer_id = c.customer_id ) ) ORDER BY c.customer_name;
+----
+Sort
+├── output columns: [c.customer_name (#1)]
+├── sort keys: [customer_name ASC NULLS LAST]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: [c.customer_name (#1)]
+    ├── filters: [is_true(NOT 21 (#21))]
+    ├── estimated rows: 0.00
+    └── HashJoin
+        ├── output columns: [c.customer_name (#1), marker (#21)]
+        ├── join type: RIGHT MARK
+        ├── build keys: [customer_id (#20)]
+        ├── probe keys: [customer_id (#0)]
+        ├── filters: []
+        ├── estimated rows: 100.00
+        ├── Filter(Build)
+        │   ├── output columns: [customer_id (#20)]
+        │   ├── filters: [is_true(NOT 19 (#19))]
+        │   ├── estimated rows: 0.00
+        │   └── HashJoin
+        │       ├── output columns: [customer_id (#20), marker (#19)]
+        │       ├── join type: RIGHT MARK
+        │       ├── build keys: [customer_id (#11)]
+        │       ├── probe keys: [customer_id (#20)]
+        │       ├── filters: [products.category (#8) = subquery_18 (#18)]
+        │       ├── estimated rows: 0.00
+        │       ├── HashJoin(Build)
+        │       │   ├── output columns: [s.customer_id (#11), p.category (#18)]
+        │       │   ├── join type: INNER
+        │       │   ├── build keys: [p.product_id (#15)]
+        │       │   ├── probe keys: [s.product_id (#10)]
+        │       │   ├── filters: []
+        │       │   ├── estimated rows: 50.00
+        │       │   ├── TableScan(Build)
+        │       │   │   ├── table: default.default.products
+        │       │   │   ├── output columns: [product_id (#15), category (#18)]
+        │       │   │   ├── read rows: 10
+        │       │   │   ├── read bytes: 157
+        │       │   │   ├── partitions total: 1
+        │       │   │   ├── partitions scanned: 1
+        │       │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │       │   │   ├── push downs: [filters: [], limit: NONE]
+        │       │   │   └── estimated rows: 10.00
+        │       │   └── TableScan(Probe)
+        │       │       ├── table: default.default.sales
+        │       │       ├── output columns: [product_id (#10), customer_id (#11)]
+        │       │       ├── read rows: 500
+        │       │       ├── read bytes: 416
+        │       │       ├── partitions total: 1
+        │       │       ├── partitions scanned: 1
+        │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │       │       ├── push downs: [filters: [], limit: NONE]
+        │       │       └── estimated rows: 500.00
+        │       └── HashJoin(Probe)
+        │           ├── output columns: [products.category (#8), customer_id (#20)]
+        │           ├── join type: CROSS
+        │           ├── build keys: []
+        │           ├── probe keys: []
+        │           ├── filters: []
+        │           ├── estimated rows: 0.00
+        │           ├── AggregateFinal(Build)
+        │           │   ├── output columns: [customer_id (#20)]
+        │           │   ├── group by: [customer_id]
+        │           │   ├── aggregate functions: []
+        │           │   ├── estimated rows: 0.00
+        │           │   └── AggregatePartial
+        │           │       ├── output columns: [#_group_by_key]
+        │           │       ├── group by: [customer_id]
+        │           │       ├── aggregate functions: []
+        │           │       ├── estimated rows: 0.00
+        │           │       └── TableScan
+        │           │           ├── table: default.default.customers
+        │           │           ├── output columns: [customer_id (#20)]
+        │           │           ├── read rows: 100
+        │           │           ├── read bytes: 199
+        │           │           ├── partitions total: 1
+        │           │           ├── partitions scanned: 1
+        │           │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │           │           ├── push downs: [filters: [], limit: NONE]
+        │           │           └── estimated rows: 0.00
+        │           └── TableScan(Probe)
+        │               ├── table: default.default.products
+        │               ├── output columns: [category (#8)]
+        │               ├── read rows: 10
+        │               ├── read bytes: 86
+        │               ├── partitions total: 1
+        │               ├── partitions scanned: 1
+        │               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │               ├── push downs: [filters: [], limit: NONE]
+        │               └── estimated rows: 10.00
+        └── TableScan(Probe)
+            ├── table: default.default.customers
+            ├── output columns: [customer_id (#0), customer_name (#1)]
+            ├── read rows: 100
+            ├── read bytes: 352
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 100.00
+
+statement ok
+drop table customers;
+
+statement ok
+drop table products;
+
+statement ok
+drop table sales;
