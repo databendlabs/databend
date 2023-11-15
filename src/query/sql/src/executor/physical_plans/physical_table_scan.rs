@@ -112,7 +112,6 @@ impl PhysicalPlanBuilder {
         required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        dbg!(&scan.columns, &scan.table_index);
         // 1. Prune unused Columns.
         // add virtual columns to scan
         let mut virtual_columns = ColumnSet::new();
@@ -148,7 +147,6 @@ impl PhysicalPlanBuilder {
                 // so we need to add prewhere columns to scan columns.
                 used = used.union(&pw.prewhere_columns).cloned().collect();
             }
-            dbg!(&used);
             scan.prune_columns(used, prewhere)
         };
 

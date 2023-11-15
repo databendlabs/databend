@@ -162,6 +162,26 @@ impl ScalarExpr {
             _ => None,
         }
     }
+
+    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+        struct ReplaceColumnVisitor {
+            old: IndexType,
+            new: IndexType,
+        }
+
+        impl VisitorMut<'_> for ReplaceColumnVisitor {
+            fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
+                if col.column.index == self.old {
+                    col.column.index = self.new;
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = ReplaceColumnVisitor { old, new };
+        visitor.visit(self)?;
+        Ok(())
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

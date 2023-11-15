@@ -13,4 +13,3 @@
 // limitations under the License.
 
 mod agg_index_query_rewrite;
-mod subquery;

@@ -961,8 +961,6 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
-        dbg!(table_index);
-        dbg!(&columns);
         let table = self.metadata.read().table(table_index).clone();
         let statistics_provider = table.table().column_statistics_provider().await?;
         let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
