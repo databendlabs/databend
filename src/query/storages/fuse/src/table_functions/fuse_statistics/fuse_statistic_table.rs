@@ -25,13 +25,13 @@ use common_expression::DataBlock;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 
 use super::fuse_statistic::FuseStatistic;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;

@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataField;
 use common_expression::FunctionContext;
+use common_pipeline_core::Pipeline;
 use common_profile::SharedProcessorProfiles;
 use common_settings::Settings;
 use common_sql::executor::PhysicalPlan;
@@ -27,9 +28,8 @@ use common_sql::IndexType;
 use super::PipelineBuilderData;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -127,6 +127,7 @@ impl PipelineBuilder {
             }
             PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Lambda(lambda) => self.build_lambda(lambda),
+            PhysicalPlan::Udf(udf) => self.build_udf(udf),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),

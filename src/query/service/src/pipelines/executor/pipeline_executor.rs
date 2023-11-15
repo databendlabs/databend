@@ -30,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::LockGuard;
+use common_pipeline_core::Pipeline;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -40,13 +41,12 @@ use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_graph::RunningGraph;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::pipeline::Pipeline;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
@@ -55,7 +55,7 @@ pub type FinishedCallback =
 
 pub struct PipelineExecutor {
     threads_num: usize,
-    graph: RunningGraph,
+    pub(crate) graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
@@ -394,7 +394,7 @@ impl PipelineExecutor {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread<const ENABLE_PROFILING: bool>(
-        &self,
+        self: &Arc<Self>,
         thread_num: usize,
     ) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();

@@ -121,7 +121,7 @@ impl VacuumTablePlan {
 pub struct VacuumDropTablePlan {
     pub catalog: String,
     pub database: String,
-    pub option: VacuumTableOption,
+    pub option: VacuumDropTableOption,
 }
 
 impl VacuumDropTablePlan {
@@ -135,6 +135,13 @@ impl VacuumDropTablePlan {
             Arc::new(DataSchema::empty())
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VacuumDropTableOption {
+    pub retain_hours: Option<usize>,
+    pub dry_run: Option<()>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

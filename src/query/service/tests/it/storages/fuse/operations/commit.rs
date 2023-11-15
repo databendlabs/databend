@@ -40,6 +40,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -112,7 +113,6 @@ use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
@@ -126,10 +126,9 @@ use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -164,7 +163,8 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
     // let's check it out
     let qry = format!("select * from {}.{} order by id ", db, tbl);
-    let blocks = execute_query(ctx.clone(), qry.as_str())
+    let blocks = fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
@@ -183,7 +183,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -229,9 +229,9 @@ async fn test_commit_to_meta_server() -> Result<()> {
 
     impl Case {
         async fn run(&self) -> Result<()> {
-            let fixture = TestFixture::new().await;
+            let fixture = TestFixture::new().await?;
             fixture.create_default_table().await?;
-            let ctx = fixture.ctx();
+            let ctx = fixture.new_query_ctx().await?;
             let catalog = ctx.get_catalog("default").await?;
 
             let table = fixture.latest_default_table().await?;
@@ -597,6 +597,9 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
+        todo!()
+    }
     async fn get_table(
         &self,
         _catalog: &str,

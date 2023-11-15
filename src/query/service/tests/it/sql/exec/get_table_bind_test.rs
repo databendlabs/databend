@@ -41,6 +41,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -615,6 +616,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
+        todo!()
+    }
+
     async fn get_table(
         &self,
         _catalog: &str,
@@ -706,7 +711,7 @@ impl TableContext for CtxDelegation {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",
         fixture.default_db_name().as_str(),
@@ -717,7 +722,7 @@ async fn test_get_same_table_once() -> Result<()> {
         fixture.default_table_name().as_str()
     );
     fixture.create_default_table().await?;
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
     let faked_catalog = FakedCatalog {
         cat: catalog,

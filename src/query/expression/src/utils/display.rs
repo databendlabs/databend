@@ -437,18 +437,6 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
                 }
                 write!(f, ")")
             }
-            RawExpr::UDFServerCall {
-                func_name, args, ..
-            } => {
-                write!(f, "{}(", func_name)?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ")")
-            }
         }
     }
 }
@@ -652,18 +640,6 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 }
                 write!(f, ")")
             }
-            Expr::UDFServerCall {
-                func_name, args, ..
-            } => {
-                write!(f, "{}(", func_name)?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ")")
-            }
         }
     }
 }
@@ -796,21 +772,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s
                     }
                 },
-                Expr::UDFServerCall {
-                    func_name, args, ..
-                } => {
-                    let mut s = String::new();
-                    s += func_name;
-                    s += "(";
-                    for (i, arg) in args.iter().enumerate() {
-                        if i > 0 {
-                            s += ", ";
-                        }
-                        s += &arg.sql_display();
-                    }
-                    s += ")";
-                    s
-                }
             }
         }
 

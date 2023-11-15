@@ -39,15 +39,15 @@ use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_metrics::storage::*;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::OnConflictField;
 use log::info;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::MinMax;
 
-use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
-use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
-use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::replace_into::meta::DeletionByColumn;
+use crate::operations::replace_into::meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::column_hash::RowScalarValue;
 

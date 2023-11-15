@@ -75,6 +75,7 @@ pub enum OperatorType {
     RuntimeFilter,
     Insert,
     ConstantTableScan,
+    Udf,
 }
 
 impl Display for OperatorType {
@@ -99,6 +100,7 @@ impl Display for OperatorType {
             OperatorType::Insert => write!(f, "Insert"),
             OperatorType::CteScan => write!(f, "CteScan"),
             OperatorType::ConstantTableScan => write!(f, "ConstantTableScan"),
+            OperatorType::Udf => write!(f, "Udf"),
         }
     }
 }
@@ -145,6 +147,7 @@ pub enum OperatorAttribute {
     Window(WindowAttribute),
     Exchange(ExchangeAttribute),
     CteScan(CteScanAttribute),
+    Udf(UdfAttribute),
     Empty,
 }
 
@@ -216,4 +219,9 @@ pub struct WindowAttribute {
 #[derive(Debug, Clone)]
 pub struct ExchangeAttribute {
     pub exchange_mode: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UdfAttribute {
+    pub scalars: String,
 }

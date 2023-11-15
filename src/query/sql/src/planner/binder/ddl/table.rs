@@ -118,6 +118,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
@@ -427,7 +428,7 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri).await?;
+                let (sp, _) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -646,7 +647,7 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri).await?;
+        let (sp, _) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
@@ -1120,9 +1121,10 @@ impl Binder {
                 _ => None,
             };
 
-            VacuumTableOption {
+            VacuumDropTableOption {
                 retain_hours,
                 dry_run: option.dry_run,
+                limit: option.limit,
             }
         };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {

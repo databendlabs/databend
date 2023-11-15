@@ -21,15 +21,14 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use databend_query::test_kits::table_test_fixture::analyze_table;
 use databend_query::test_kits::table_test_fixture::check_data_dir;
-use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 
 use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_optimize";
     do_insertions(&fixture).await?;
 
@@ -49,7 +48,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let case_name = "test_fuse_snapshot_analyze_and_truncate";
@@ -61,15 +60,14 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
     {
         let qry = format!("Analyze table {}.{}", db, tbl);
 
-        let ctx = fixture.ctx();
-        execute_command(ctx, &qry).await?;
+        fixture.execute_command(&qry).await?;
 
         check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, None, Some(())).await?;
     }
 
     // truncate table
     {
-        let ctx = fixture.ctx();
+        let ctx = fixture.new_query_ctx().await?;
         let catalog = ctx
             .get_catalog(fixture.default_catalog_name().as_str())
             .await?;
@@ -82,7 +80,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
     // optimize after truncate table, ts file location will become None
     {
-        let ctx = fixture.ctx();
+        let ctx = fixture.new_query_ctx().await?;
         let catalog = ctx
             .get_catalog(fixture.default_catalog_name().as_str())
             .await?;
@@ -100,8 +98,8 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;
 

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::CommitSink;
+use common_sql::executor::physical_plans::CommitSink;
 use common_storages_fuse::FuseTable;
 
 use crate::pipelines::PipelineBuilder;

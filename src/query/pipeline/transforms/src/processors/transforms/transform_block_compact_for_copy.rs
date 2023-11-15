@@ -22,7 +22,6 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 
 use super::Compactor;
-use super::TransformCompact;
 
 pub struct BlockCompactorForCopy {
     thresholds: BlockThresholds,
@@ -127,5 +126,3 @@ impl Compactor for BlockCompactorForCopy {
         Ok(res)
     }
 }
-
-pub type TransformBlockCompact = TransformCompact<BlockCompactorForCopy>;

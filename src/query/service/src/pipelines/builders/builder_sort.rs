@@ -15,11 +15,11 @@
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::build_full_sort_pipeline;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::Sort;
+use common_sql::executor::physical_plans::Sort;
 
 use crate::pipelines::PipelineBuilder;
 

@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_expression::SendableDataBlockStream;
 use common_sql::bind_one_table;
 use common_sql::optimizer::SExpr;
-use common_sql::plans::walk_expr_mut;
 use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
 use common_sql::plans::AggregateMode;
@@ -161,6 +160,21 @@ impl MergeIntoInterpreter {
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
+        // check if number of partitions is too much
+        {
+            let max_number_partitions =
+                ctx.get_settings()
+                    .get_merge_into_static_filter_partition_threshold()? as usize;
+
+            let number_partitions: usize = blocks.iter().map(|b| b.num_rows()).sum();
+            if number_partitions > max_number_partitions {
+                warn!(
+                    "number of partitions {} exceeds threshold {}",
+                    number_partitions, max_number_partitions
+                );
+                return Ok(Box::new(join.clone()));
+            }
+        }
 
         // 2. build filter and push down to target side
         ctx.set_status_info("building pushdown filters");
@@ -306,6 +320,7 @@ impl MergeIntoInterpreter {
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
             RelOperator::AddRowNumber(_) => {}
+            RelOperator::Udf(_) => {}
         }
         Ok(())
     }
@@ -364,29 +379,25 @@ impl MergeIntoInterpreter {
 
         struct ReplaceColumnVisitor<'a> {
             column_map: &'a HashMap<String, ColumnBinding>,
-            failed: bool,
         }
 
         impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
-            fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) {
+            fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
                 if let Some(new_column) = self.column_map.get(&column.column.column_name) {
                     column.column = new_column.clone();
+                    Ok(())
                 } else {
-                    self.failed = true;
+                    Err(ErrorCode::from_string_no_backtrace(String::new()))
                 }
             }
         }
 
-        let mut visitor = ReplaceColumnVisitor {
-            column_map,
-            failed: false,
-        };
-        walk_expr_mut(&mut visitor, &mut left_most_expr);
+        let mut visitor = ReplaceColumnVisitor { column_map };
 
-        if visitor.failed {
-            Ok(None)
-        } else {
+        if visitor.visit(&mut left_most_expr).is_ok() {
             Ok(Some(left_most_expr))
+        } else {
+            Ok(None)
         }
     }
 

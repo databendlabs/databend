@@ -25,6 +25,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::SeqValue;
 
 use crate::setting::SettingApi;
 
@@ -58,12 +59,9 @@ impl SettingApi for SettingMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert.await?.added_or_else(|v| v);
-
-        match res {
-            Ok(added) => Ok(added.seq),
-            Err(existing) => Ok(existing.seq),
-        }
+        let (_prev, curr) = upsert.await?.unpack();
+        let res_seq = curr.seq();
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]

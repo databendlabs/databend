@@ -26,7 +26,6 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_cache::LoadParams;
@@ -139,11 +138,10 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_internal_column() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let catalog = fixture.default_catalog_name();
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
     fixture.create_default_table().await?;
 
     let internal_columns = vec![
@@ -178,7 +176,7 @@ async fn test_internal_column() -> Result<()> {
         "select _row_id,_snapshot_name,_segment_name,_block_name from {}.{} order by _row_id",
         db, tbl
     );
-    let res = execute_query(ctx.clone(), &query).await?;
+    let res = fixture.execute_query(&query).await?;
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -188,20 +186,22 @@ async fn test_internal_column() -> Result<()> {
     check_data_block(expected, blocks)?;
 
     // do compact
-    ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
+    // ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
     let query = format!("optimize table {db}.{tbl} compact");
+    let ctx = fixture.new_query_ctx().await?;
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
     let data_stream = interpreter.execute(ctx.clone()).await?;
     let _ = data_stream.try_collect::<Vec<_>>().await;
 
-    ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
+    let ctx = fixture.new_query_ctx().await?;
+    // ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
     let query = format!(
         "select _row_id,_snapshot_name,_segment_name,_block_name from {}.{} order by _row_id",
         db, tbl
     );
-    let res = execute_query(ctx.clone(), &query).await?;
+    let res = fixture.execute_query(&query).await?;
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
