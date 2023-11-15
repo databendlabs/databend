@@ -231,6 +231,7 @@ impl RulePushDownFilterEvalScalar {
                 Ok(ScalarExpr::UDFServerCall(UDFServerCall {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),

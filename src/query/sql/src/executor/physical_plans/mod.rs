@@ -90,3 +90,6 @@ mod physical_union_all;
 pub use physical_union_all::UnionAll;
 mod physical_window;
 pub use physical_window::*;
+mod physical_udf;
+pub use physical_udf::Udf;
+pub use physical_udf::UdfFunctionDesc;
