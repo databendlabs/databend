@@ -51,6 +51,7 @@ use common_expression::Scalar;
 use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_metrics::storage::*;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -63,7 +64,6 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {

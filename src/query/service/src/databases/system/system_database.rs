@@ -51,6 +51,7 @@ use common_storages_system::StagesTable;
 use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
+use common_storages_system::TaskHistoryTable;
 use common_storages_system::TasksTable;
 use common_storages_system::TempFilesTable;
 use common_storages_system::TracingTable;
@@ -117,6 +118,7 @@ impl SystemDatabase {
             TempFilesTable::create(sys_db_meta.next_table_id()),
             QuerySummaryTable::create(sys_db_meta.next_table_id()),
             TasksTable::create(sys_db_meta.next_table_id()),
+            TaskHistoryTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

@@ -18,7 +18,7 @@ use std::ops::Not;
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::runtime::GlobalQueryRuntime;
+use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -262,12 +262,15 @@ impl<'a> Evaluator<'a> {
 
         let func_name = func_name.to_string();
         let server_addr = server_addr.to_string();
-        let result_batch = GlobalQueryRuntime::instance()
-            .runtime()
-            .block_on(async move {
-                let mut client = UDFFlightClient::connect(&server_addr).await?;
-                client.do_exchange(&func_name, input_batch).await
-            })?;
+
+        let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
+        let request_timeout = self.func_ctx.external_server_request_timeout_secs;
+
+        let result_batch = GlobalIORuntime::instance().block_on(async move {
+            let mut client =
+                UDFFlightClient::connect(&server_addr, connect_timeout, request_timeout).await?;
+            client.do_exchange(&func_name, input_batch).await
+        })?;
 
         let (result_block, result_schema) =
             DataBlock::from_record_batch(&result_batch).map_err(|err| {

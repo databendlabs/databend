@@ -21,6 +21,7 @@ use common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -194,6 +195,11 @@ pub enum Statement {
         location: String,
         pattern: Option<String>,
     },
+    // Connection
+    CreateConnection(CreateConnectionStmt),
+    DropConnection(DropConnectionStmt),
+    DescribeConnection(DescribeConnectionStmt),
+    ShowConnections(ShowConnectionsStmt),
 
     // UserDefinedFileFormat
     CreateFileFormat {
@@ -552,6 +558,10 @@ impl Display for Statement {
             Statement::DropTask(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTasks(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTask(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowConnections(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

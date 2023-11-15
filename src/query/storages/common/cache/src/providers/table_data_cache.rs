@@ -21,15 +21,11 @@ use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metrics::cache::*;
 use crossbeam_channel::TrySendError;
 use log::error;
 use log::info;
 
-use crate::metrics_inc_cache_access_count;
-use crate::metrics_inc_cache_hit_count;
-use crate::metrics_inc_cache_miss_count;
-use crate::metrics_inc_cache_population_overflow_count;
-use crate::metrics_inc_cache_population_pending_count;
 use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;

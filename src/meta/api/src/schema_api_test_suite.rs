@@ -5237,7 +5237,7 @@ impl SchemaApiTestSuite {
             info!("--- create table lock revision 1");
             let req1 = CreateLockRevReq {
                 lock_key: LockKey::Table { table_id },
-                expire_at: (Utc::now().timestamp() + 2) as u64,
+                expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
                 query_id: "query1".to_string(),
@@ -5247,7 +5247,7 @@ impl SchemaApiTestSuite {
             info!("--- create table lock revision 2");
             let req2 = CreateLockRevReq {
                 lock_key: LockKey::Table { table_id },
-                expire_at: (Utc::now().timestamp() + 2) as u64,
+                expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
                 query_id: "query2".to_string(),
@@ -5267,7 +5267,7 @@ impl SchemaApiTestSuite {
             info!("--- extend table lock revision 2 expire");
             let req4 = ExtendLockRevReq {
                 lock_key: LockKey::Table { table_id },
-                expire_at: (Utc::now().timestamp() + 4) as u64,
+                expire_secs: 4,
                 revision: res2.revision,
                 acquire_lock: true,
             };

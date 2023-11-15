@@ -2487,6 +2487,68 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------+
 
 
+ast            : translate('abcdefabcdef', 'dc', 'zy')
+raw expr       : translate('abcdefabcdef', 'dc', 'zy')
+checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "zy")
+optimized expr : "abyzefabyzef"
+output type    : String
+output domain  : {"abyzefabyzef"..="abyzefabyzef"}
+output         : 'abyzefabyzef'
+
+
+ast            : translate('abcdefabcdef', '', 'zy')
+raw expr       : translate('abcdefabcdef', '', 'zy')
+checked expr   : translate<String, String, String>("abcdefabcdef", "", "zy")
+optimized expr : "abcdefabcdef"
+output type    : String
+output domain  : {"abcdefabcdef"..="abcdefabcdef"}
+output         : 'abcdefabcdef'
+
+
+ast            : translate('abcdefabcdef', 'dc', '')
+raw expr       : translate('abcdefabcdef', 'dc', '')
+checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "")
+optimized expr : "abefabef"
+output type    : String
+output domain  : {"abefabef"..="abefabef"}
+output         : 'abefabef'
+
+
+ast            : translate('abcdefabcdef', 'dc', 'dc')
+raw expr       : translate('abcdefabcdef', 'dc', 'dc')
+checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "dc")
+optimized expr : "abcdefabcdef"
+output type    : String
+output domain  : {"abcdefabcdef"..="abcdefabcdef"}
+output         : 'abcdefabcdef'
+
+
+ast            : translate(a, b, c)
+raw expr       : translate(a::String, b::String, c::String)
+checked expr   : translate<String, String, String>(a, b, c)
+optimized expr : translate<String, String, String>("abcdef", b, c)
+evaluation:
++--------+-----------------------+-------------+-------------+----------+
+|        | a                     | b           | c           | Output   |
++--------+-----------------------+-------------+-------------+----------+
+| Type   | String                | String      | String      | String   |
+| Domain | {"abcdef"..="abcdef"} | {""..="dc"} | {""..="zy"} | {""..}   |
+| Row 0  | 'abcdef'              | 'dc'        | 'zy'        | 'abyzef' |
+| Row 1  | 'abcdef'              | ''          | 'zy'        | 'abcdef' |
+| Row 2  | 'abcdef'              | 'dc'        | ''          | 'abef'   |
+| Row 3  | 'abcdef'              | 'dc'        | 'dc'        | 'abcdef' |
++--------+-----------------------+-------------+-------------+----------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616263646566616263646566616263646566616263646566, offsets: [0, 6, 12, 18, 24] } |
+| b      | StringColumn { data: 0x646364636463, offsets: [0, 2, 2, 4, 6] }                                        |
+| c      | StringColumn { data: 0x7a797a796463, offsets: [0, 2, 4, 4, 6] }                                        |
+| Output | StringColumn { data: 0x6162797a656661626364656661626566616263646566, offsets: [0, 6, 12, 16, 22] }     |
++--------+--------------------------------------------------------------------------------------------------------+
+
+
 ast            : strcmp('text', 'text2')
 raw expr       : strcmp('text', 'text2')
 checked expr   : strcmp<String, String>("text", "text2")

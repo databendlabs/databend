@@ -47,6 +47,82 @@ ShowTables(
 
 
 ---------- Input ----------
+show drop tables
+---------- Output ---------
+SHOW DROP TABLE
+---------- AST ------------
+ShowDropTables(
+    ShowDropTablesStmt {
+        database: None,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show drop tables like 't%'
+---------- Output ---------
+SHOW DROP TABLE LIKE 't%'
+---------- AST ------------
+ShowDropTables(
+    ShowDropTablesStmt {
+        database: None,
+        limit: Some(
+            Like {
+                pattern: "t%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+show drop tables where name='t'
+---------- Output ---------
+SHOW DROP TABLE WHERE (name = 't')
+---------- AST ------------
+ShowDropTables(
+    ShowDropTablesStmt {
+        database: None,
+        limit: Some(
+            Where {
+                selection: BinaryOp {
+                    span: Some(
+                        27..28,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            23..27,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "name",
+                                quote: None,
+                                span: Some(
+                                    23..27,
+                                ),
+                            },
+                        ),
+                    },
+                    right: Literal {
+                        span: Some(
+                            28..31,
+                        ),
+                        lit: String(
+                            "t",
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show tables format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
 SHOW TABLES
@@ -13590,6 +13666,97 @@ DescribeTask(
     DescribeTaskStmt {
         name: "MyTask",
     },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = any_value 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP CONNECTION IF EXISTS my_conn;
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn 
+---------- AST ------------
+DropConnection(
+    DropConnectionStmt {
+        if_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                26..33,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+DESC CONNECTION my_conn;
+---------- Output ---------
+CREATE CONNECTION my_conn 
+---------- AST ------------
+DescribeConnection(
+    DescribeConnectionStmt {
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                16..23,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW CONNECTIONS;
+---------- Output ---------
+SHOW CONNECTIONS
+---------- AST ------------
+ShowConnections(
+    ShowConnectionsStmt,
 )
 
 
