@@ -1,0 +1,12 @@
+-- reset user, roles, and tables
+-- prepare user, roles, and tables for tests
+-- grant privilege to roles
+-- test 1: set role as testrole1, then SELECT current_role()
+testrole1
+-- test 2: set role as testrole1, secondary roles as NONE, can access table1, can not access table2
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0015_table2' for user 'testuser1'@'%' with roles [testrole1,public]
+-- test 3: set role as testrole2, secondary roles as NONE, can access table2, can not access table1
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0015_table1' for user 'testuser1'@'%' with roles [testrole2,public]
+-- test 4: set role as testrole1, secondary roles as ALL, can access both table1 and table2
+-- test 5: set role as testrole1, secondary roles defaults as ALL, can both table1 and table2
+-- test 6: not change role, secondary roles defaults as ALL, can both table1 and table2
