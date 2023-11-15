@@ -1848,6 +1848,10 @@ Functions overloads:
 1 is_true(Boolean NULL) :: Boolean
 0 json_array FACTORY
 0 json_array_elements FACTORY
+0 json_contains_in_left(Variant, Variant) :: Boolean
+1 json_contains_in_left(Variant NULL, Variant NULL) :: Boolean NULL
+0 json_contains_in_right(Variant, Variant) :: Boolean
+1 json_contains_in_right(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_each FACTORY
 0 json_exists_all_keys(Variant, Array(String)) :: Boolean
 1 json_exists_all_keys(Variant NULL, Array(String) NULL) :: Boolean NULL

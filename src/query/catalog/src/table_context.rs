@@ -31,6 +31,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
@@ -187,6 +188,8 @@ pub trait TableContext: Send + Sync {
     fn get_data_operator(&self) -> Result<DataOperator>;
 
     async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;

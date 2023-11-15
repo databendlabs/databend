@@ -66,6 +66,7 @@ use jsonb::as_i64;
 use jsonb::as_str;
 use jsonb::build_array;
 use jsonb::build_object;
+use jsonb::contains;
 use jsonb::exists_all_keys;
 use jsonb::exists_any_keys;
 use jsonb::get_by_index;
@@ -1173,6 +1174,40 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.register_passthrough_nullable_2_arg(
+        "json_contains_in_left",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = contains(left, right);
+                output.push(result);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "json_contains_in_right",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = contains(right, left);
+                output.push(result);
+            },
+        ),
+    );
 
     registry.register_passthrough_nullable_2_arg(
         "json_exists_any_keys",
