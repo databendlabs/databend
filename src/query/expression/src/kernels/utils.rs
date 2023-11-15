@@ -66,7 +66,7 @@ pub unsafe fn set_vec_len_by_ptr<T>(vec: &mut Vec<T>, ptr: *const T) {
 }
 
 /// # Safety
-/// # As: copy_nonoverlapping
+/// # As: core::ptr::write
 #[inline]
 pub unsafe fn store<T: Copy>(val: T, ptr: *mut u8) {
     core::ptr::write(ptr as _, val)

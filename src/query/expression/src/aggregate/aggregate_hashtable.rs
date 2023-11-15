@@ -138,7 +138,7 @@ impl AggregateHashTable {
                         state.addresses[i].add(self.payload.state_offset) as _,
                     ) as usize)
                 };
-                debug_assert_ne!(usize::from(state.state_places[i]) % 8, 0);
+                debug_assert_eq!(usize::from(state.state_places[i]) % 8, 0);
             }
 
             for ((aggr, params), addr_offset) in self
