@@ -110,7 +110,7 @@ where
                 + 2.0 * self.sum.powi(3) * temp * temp)
             / div;
         if value.is_infinite() || value.is_nan() {
-            R::push_default(builder);
+            return Err(ErrorCode::SemanticError("Skew is out of range!"));
         } else {
             R::push_item(
                 builder,
