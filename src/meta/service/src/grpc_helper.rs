@@ -52,8 +52,7 @@ impl GrpcHelper {
     pub fn parse_req<T>(request: tonic::Request<RaftRequest>) -> Result<T, tonic::Status>
     where T: serde::de::DeserializeOwned {
         let raft_req = request.into_inner();
-        let req: T = serde_json::from_str(&raft_req.data).map_err(Self::invalid_arg)?;
-        Ok(req)
+        Self::parse(&raft_req.data)
     }
 
     /// Create an Ok response for raft API.
@@ -67,8 +66,15 @@ impl GrpcHelper {
         Ok(tonic::Response::new(reply))
     }
 
+    /// Parse string and decode it into required type.
+    pub fn parse<T>(s: &str) -> Result<T, tonic::Status>
+    where T: serde::de::DeserializeOwned {
+        let req: T = serde_json::from_str(s).map_err(Self::invalid_arg)?;
+        Ok(req)
+    }
+
     /// Create a tonic::Status with invalid argument error.
-    pub fn invalid_arg(e: impl Error) -> tonic::Status {
+    pub fn invalid_arg(e: impl ToString) -> tonic::Status {
         tonic::Status::invalid_argument(e.to_string())
     }
 

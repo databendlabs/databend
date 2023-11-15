@@ -28,6 +28,7 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::openraft::RaftNetworkFactory;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::SnapshotChunkRequest;
 use common_meta_types::AppendEntriesRequest;
 use common_meta_types::AppendEntriesResponse;
 use common_meta_types::InstallSnapshotError;
@@ -314,13 +315,16 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
         let mut last_err = None;
 
-        for back_off in self.back_off() {
-            let req = common_tracing::inject_span_to_tonic_request(&rpc);
+        let v1_req = SnapshotChunkRequest::new_v1(rpc);
+        let bytes = v1_req.data_len();
 
-            Network::incr_meta_metrics_sent_bytes_to_peer(&self.target, req.get_ref());
+        for back_off in self.back_off() {
+            let req = common_tracing::inject_span_to_tonic_request(v1_req.clone());
+
+            raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
             let res = client
-                .install_snapshot(req)
+                .install_snapshot_v1(req)
                 .timed(observe_snapshot_send_spent(self.target))
                 .await;
 
