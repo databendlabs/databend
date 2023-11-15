@@ -79,14 +79,14 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(&key, match_seq, value, None));
 
-        let res = upsert_kv.await?.added_or_else(|v| {
+        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
             ErrorCode::NetworkPolicyAlreadyExists(format!(
                 "NetworkPolicy already exists, seq [{}]",
                 v.seq
             ))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]

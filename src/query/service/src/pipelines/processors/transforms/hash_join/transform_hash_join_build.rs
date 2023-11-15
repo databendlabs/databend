@@ -21,10 +21,10 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use log::info;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+use crate::pipelines::processors::Event;
+use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::Processor;
 
 #[derive(Clone, Debug)]

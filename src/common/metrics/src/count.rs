@@ -44,6 +44,20 @@ pub trait Count {
     where Self: Default + Sized {
         WithCount::new((), Self::default())
     }
+
+    fn counter_guard(self) -> WithCount<Self, ()>
+    where Self: Sized {
+        WithCount::new((), self)
+    }
+}
+
+/// To enable using a function as a counter: `let _guard = (|i| incr_count(i)).counter_guard();`.
+impl<F> Count for F
+where F: FnMut(i64)
+{
+    fn incr_count(&mut self, n: i64) {
+        self(n)
+    }
 }
 
 /// Binds a counter to a `T`.
@@ -121,19 +135,47 @@ mod tests {
 
     #[test]
     fn test_with_count() -> anyhow::Result<()> {
+        use Ordering::Relaxed;
+
         let count = Arc::new(AtomicI64::new(0));
-        assert_eq!(0, count.load(Ordering::Relaxed));
+        assert_eq!(0, count.load(Relaxed));
 
         {
             let _a = WithCount::new(Foo {}, Counter { n: count.clone() });
-            assert_eq!(1, count.load(Ordering::Relaxed));
+            assert_eq!(1, count.load(Relaxed));
             {
                 let _b = WithCount::new(Foo {}, Counter { n: count.clone() });
-                assert_eq!(2, count.load(Ordering::Relaxed));
+                assert_eq!(2, count.load(Relaxed));
             }
-            assert_eq!(1, count.load(Ordering::Relaxed));
+            assert_eq!(1, count.load(Relaxed));
         }
-        assert_eq!(0, count.load(Ordering::Relaxed));
+        assert_eq!(0, count.load(Relaxed));
+        Ok(())
+    }
+
+    #[test]
+    fn test_new_guard() -> anyhow::Result<()> {
+        use Ordering::Relaxed;
+
+        let count = Arc::new(AtomicI64::new(0));
+        assert_eq!(0, count.load(Relaxed));
+
+        {
+            let _a = (|i: i64| {
+                count.fetch_add(i, Relaxed);
+            })
+            .counter_guard();
+            assert_eq!(1, count.load(Relaxed));
+            {
+                let _b = (|i: i64| {
+                    count.fetch_add(i * 2, Relaxed);
+                })
+                .counter_guard();
+                assert_eq!(3, count.load(Relaxed));
+            }
+            assert_eq!(1, count.load(Relaxed));
+        }
+        assert_eq!(0, count.load(Relaxed));
         Ok(())
     }
 }

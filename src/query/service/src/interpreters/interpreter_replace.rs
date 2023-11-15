@@ -23,15 +23,16 @@ use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageInfo;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::executor::CommitSink;
-use common_sql::executor::Exchange;
-use common_sql::executor::MutationKind;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::CommitSink;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::FragmentKind;
+use common_sql::executor::physical_plans::MutationKind;
+use common_sql::executor::physical_plans::OnConflictField;
+use common_sql::executor::physical_plans::ReplaceAsyncSourcer;
+use common_sql::executor::physical_plans::ReplaceDeduplicate;
+use common_sql::executor::physical_plans::ReplaceInto;
+use common_sql::executor::physical_plans::ReplaceSelectCtx;
 use common_sql::executor::PhysicalPlan;
-use common_sql::executor::ReplaceAsyncSourcer;
-use common_sql::executor::ReplaceDeduplicate;
-use common_sql::executor::ReplaceInto;
-use common_sql::executor::SelectCtx;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
@@ -261,7 +262,7 @@ impl ReplaceInterpreter {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
-                kind: common_sql::executor::FragmentKind::Expansive,
+                kind: FragmentKind::Expansive,
                 keys: vec![],
                 ignore_exchange: false,
             }));
@@ -314,7 +315,7 @@ impl ReplaceInterpreter {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
-                kind: common_sql::executor::FragmentKind::Merge,
+                kind: FragmentKind::Merge,
                 keys: vec![],
                 ignore_exchange: false,
             }));
@@ -347,7 +348,11 @@ impl ReplaceInterpreter {
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
-    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>, Option<BindContext>)> {
+    ) -> Result<(
+        Box<PhysicalPlan>,
+        Option<ReplaceSelectCtx>,
+        Option<BindContext>,
+    )> {
         match source {
             InsertInputSource::Values { data, start } => self
                 .connect_value_source(schema.clone(), data, *start)
@@ -393,7 +398,11 @@ impl ReplaceInterpreter {
         &'a self,
         ctx: Arc<QueryContext>,
         query_plan: &Plan,
-    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>, Option<BindContext>)> {
+    ) -> Result<(
+        Box<PhysicalPlan>,
+        Option<ReplaceSelectCtx>,
+        Option<BindContext>,
+    )> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -418,7 +427,7 @@ impl ReplaceInterpreter {
             .build_physical_plan()
             .await
             .map(Box::new)?;
-        let select_ctx = SelectCtx {
+        let select_ctx = ReplaceSelectCtx {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
         };

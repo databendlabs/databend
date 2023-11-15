@@ -30,8 +30,11 @@ impl UserDefinedConnection {
     pub fn new(name: &str, storage_type: String, storage_params: BTreeMap<String, String>) -> Self {
         Self {
             name: name.to_string(),
-            storage_type,
-            storage_params,
+            storage_type: storage_type.to_lowercase(),
+            storage_params: storage_params
+                .into_iter()
+                .map(|(k, v)| (k.to_lowercase(), v))
+                .collect::<BTreeMap<_, _>>(),
         }
     }
 

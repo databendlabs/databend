@@ -29,7 +29,7 @@ unsafe impl Send for TestGlobalServices {}
 unsafe impl Sync for TestGlobalServices {}
 
 impl TestGlobalServices {
-    pub async fn setup(config: InnerConfig, public_key: String) -> Result<TestGuard> {
+    pub async fn setup(config: &InnerConfig, public_key: String) -> Result<TestGuard> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
@@ -47,7 +47,7 @@ impl TestGlobalServices {
         // Cluster register.
         {
             ClusterDiscovery::instance()
-                .register_to_metastore(&config)
+                .register_to_metastore(config)
                 .await?;
             info!(
                 "Databend query has been registered:{:?} to metasrv:{:?}.",

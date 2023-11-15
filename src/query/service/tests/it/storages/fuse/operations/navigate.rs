@@ -23,7 +23,6 @@ use common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 
@@ -34,10 +33,9 @@ async fn test_fuse_navigate() -> Result<()> {
     // - navigate to the snapshot that generated before the first insertion should fail
 
     // 1. Setup
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     // 1.1 first commit
@@ -45,7 +43,8 @@ async fn test_fuse_navigate() -> Result<()> {
         "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
         db, tbl
     );
-    execute_query(ctx.clone(), qry.as_str())
+    fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
@@ -62,7 +61,8 @@ async fn test_fuse_navigate() -> Result<()> {
 
     // 1.2 second commit
     let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
-    execute_query(ctx.clone(), qry.as_str())
+    fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
@@ -126,10 +126,9 @@ async fn test_fuse_navigate() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_navigate_for_purge() -> Result<()> {
     // 1. Setup
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     // 1.1 first commit
@@ -137,7 +136,8 @@ async fn test_navigate_for_purge() -> Result<()> {
         "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
         db, tbl
     );
-    execute_query(ctx.clone(), qry.as_str())
+    fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
@@ -154,7 +154,8 @@ async fn test_navigate_for_purge() -> Result<()> {
 
     // 1.2 second commit
     let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
-    execute_query(ctx.clone(), qry.as_str())
+    fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
@@ -170,7 +171,8 @@ async fn test_navigate_for_purge() -> Result<()> {
 
     // 1.3 third commit
     let qry = format!("insert into {}.{} values (4, (8, 12)) ", db, tbl);
-    execute_query(ctx.clone(), qry.as_str())
+    fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;

@@ -21,8 +21,8 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
-use crate::executor::PhysicalPlanBuilder;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;

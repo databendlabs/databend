@@ -175,13 +175,7 @@ pub fn read_value_custom<T: NativeType>(input: &[u8], mut bytes: u8, trailing_ze
     }
 
     let mut bs = vec![0u8; std::mem::size_of::<T>()];
-    unsafe {
-        std::ptr::copy(
-            input.as_ptr() as *const u8,
-            bs.as_mut_ptr() as *mut u8,
-            bytes as usize,
-        )
-    }
+    unsafe { std::ptr::copy(input.as_ptr(), bs.as_mut_ptr(), bytes as usize) }
 
     let a: T::Bytes = match bs.as_slice().try_into() {
         Ok(a) => a,

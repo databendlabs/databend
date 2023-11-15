@@ -225,7 +225,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         .write_meta(&operator, &new_snapshot_location)
         .await?;
     FuseTable::commit_to_meta_server(
-        fixture.ctx().as_ref(),
+        fixture.new_query_ctx().await?.as_ref(),
         fuse_table.get_table_info(),
         location_gen,
         snapshot_2,

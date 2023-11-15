@@ -26,7 +26,7 @@ use parquet::arrow::arrow_reader::RowSelector;
 
 use crate::parquet_rs::data::make_test_file_page;
 use crate::parquet_rs::data::Scenario;
-use crate::parquet_rs::utils::create_test_fixture;
+use crate::parquet_rs::utils::create_parquet2_test_fixture;
 use crate::parquet_rs::utils::get_data_source_plan;
 
 async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelection) {
@@ -34,8 +34,10 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
     let file_path = file.path().to_string_lossy();
     let sql = format!("select * from 'fs://{file_path}' where {predicate}");
 
-    let fixture = create_test_fixture().await;
-    let plan = get_data_source_plan(fixture.ctx(), &sql).await.unwrap();
+    let fixture = create_parquet2_test_fixture().await;
+    let plan = get_data_source_plan(fixture.new_query_ctx().await.unwrap(), &sql)
+        .await
+        .unwrap();
     let metadata = ArrowReaderMetadata::load(
         file.as_file(),
         ArrowReaderOptions::new()

@@ -105,6 +105,8 @@ pub async fn read_parquet_metas_in_parallel(
         tasks.push(read_parquet_metas_batch(file_infos, op, max_memory_usage));
     }
 
+    let now = std::time::Instant::now();
+    log::info!("begin read {} parquet file metas", num_files);
     let result = execute_futures_in_parallel(
         tasks,
         num_threads,
@@ -117,6 +119,11 @@ pub async fn read_parquet_metas_in_parallel(
     .into_iter()
     .flatten()
     .collect();
-
+    let elapsed = now.elapsed();
+    log::info!(
+        "end read {} parquet file metas, use {} secs",
+        num_files,
+        elapsed.as_secs_f32()
+    );
     Ok(result)
 }

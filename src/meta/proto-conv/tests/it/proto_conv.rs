@@ -71,7 +71,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
-        shared_by: BTreeSet::from_iter(vec![1].into_iter()),
+        shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
         owner: None,
     }
@@ -86,19 +86,19 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
         now,
     );
     let mut entries = BTreeMap::new();
-    for entry in vec![share::ShareGrantEntry::new(
+
+    let entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
         now,
-    )] {
-        entries.insert(entry.to_string().clone(), entry);
-    }
+    );
+    entries.insert(entry.to_string().clone(), entry);
 
     share::ShareMeta {
         database: Some(db_entry),
         entries,
-        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
-        share_from_db_ids: BTreeSet::from_iter(vec![1, 2].into_iter()),
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
+        share_from_db_ids: BTreeSet::from_iter(vec![1, 2]),
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
@@ -114,18 +114,18 @@ fn new_share_meta() -> share::ShareMeta {
         now,
     );
     let mut entries = BTreeMap::new();
-    for entry in vec![share::ShareGrantEntry::new(
+
+    let entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
         now,
-    )] {
-        entries.insert(entry.to_string().clone(), entry);
-    }
+    );
+    entries.insert(entry.to_string().clone(), entry);
 
     share::ShareMeta {
         database: Some(db_entry),
         entries,
-        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
         share_from_db_ids: BTreeSet::new(),
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),

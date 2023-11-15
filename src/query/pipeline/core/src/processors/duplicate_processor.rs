@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::processors::port::InputPort;
-use crate::processors::port::OutputPort;
-use crate::processors::processor::Event;
+use crate::processors::Event;
+use crate::processors::InputPort;
+use crate::processors::OutputPort;
 use crate::processors::Processor;
 
 pub struct DuplicateProcessor {

@@ -1382,7 +1382,7 @@ INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
 statement ok
 INSERT INTO t2 VALUES (1, 10), (2, 20);
 
-query I
+query T
 EXPLAIN SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
 Sort
@@ -1419,3 +1419,34 @@ Sort
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
+
+query T
+EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
+----
+EvalScalar
+├── scalars: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
+└── Sort
+    ├── sort keys: [i (#0) ASC, j (#1) ASC]
+    ├── limit: [NONE]
+    └── HashJoin: LEFT OUTER
+        ├── equi conditions: [eq(t1.i (#0), t2.k (#2))]
+        ├── non-equi conditions: []
+        ├── LogicalGet
+        │   ├── table: default.default.t1
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Filter
+            ├── filters: [false]
+            └── LogicalGet
+                ├── table: default.default.t2
+                ├── filters: [false]
+                ├── order by: []
+                └── limit: NONE
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

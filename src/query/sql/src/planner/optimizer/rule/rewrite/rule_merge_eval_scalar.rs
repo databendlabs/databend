@@ -93,7 +93,7 @@ impl Rule for RuleMergeEvalScalar {
             let items = up_eval_scalar
                 .items
                 .into_iter()
-                .chain(down_eval_scalar.items.into_iter())
+                .chain(down_eval_scalar.items)
                 .collect();
             let merged = EvalScalar { items };
 

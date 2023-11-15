@@ -19,12 +19,12 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::pipe::PipeItem;
-use crate::processors::port::InputPort;
-use crate::processors::port::OutputPort;
-use crate::processors::processor::Event;
-use crate::processors::processor::EventCause;
-use crate::processors::processor::ProcessorPtr;
+use crate::processors::Event;
+use crate::processors::EventCause;
+use crate::processors::InputPort;
+use crate::processors::OutputPort;
 use crate::processors::Processor;
+use crate::processors::ProcessorPtr;
 
 #[derive(PartialEq)]
 enum PortStatus {

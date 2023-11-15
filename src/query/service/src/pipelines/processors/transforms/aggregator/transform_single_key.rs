@@ -31,13 +31,13 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::transform_accumulating::AccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::transform_accumulating::AccumulatingTransformer;
+use common_pipeline_transforms::processors::AccumulatingTransform;
+use common_pipeline_transforms::processors::AccumulatingTransformer;
 
-use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 /// SELECT COUNT | SUM FROM table;
 pub struct PartialSingleStateAggregator {

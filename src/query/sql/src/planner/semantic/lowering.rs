@@ -127,27 +127,6 @@ fn update_column_type<ColumnID: ColumnIndex, TP: TypeProvider<ColumnID>>(
             })
         }
         RawExpr::Constant { .. } => Ok(raw_expr.clone()),
-        RawExpr::UDFServerCall {
-            span,
-            func_name,
-            server_addr,
-            arg_types,
-            return_type,
-            args,
-        } => {
-            let args = args
-                .iter()
-                .map(|arg| update_column_type(arg, type_provider))
-                .collect::<Result<Vec<_>>>()?;
-            Ok(RawExpr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                arg_types: arg_types.clone(),
-                return_type: return_type.clone(),
-                args,
-            })
-        }
     }
 }
 
@@ -248,13 +227,17 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: "DUMMY".to_string(),
             },
-            ScalarExpr::UDFServerCall(udf) => RawExpr::UDFServerCall {
-                span: udf.span,
-                func_name: udf.func_name.clone(),
-                server_addr: udf.server_addr.clone(),
-                arg_types: udf.arg_types.clone(),
-                return_type: (*udf.return_type).clone(),
-                args: udf.arguments.iter().map(ScalarExpr::as_raw_expr).collect(),
+            ScalarExpr::UDFServerCall(udf) => RawExpr::ColumnRef {
+                span: None,
+                id: ColumnBindingBuilder::new(
+                    udf.display_name.clone(),
+                    usize::MAX,
+                    Box::new((*udf.return_type).clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+                data_type: (*udf.return_type).clone(),
+                display_name: udf.display_name.clone(),
             },
         }
     }

@@ -22,7 +22,7 @@ use common_expression::ColumnBuilder;
 use common_expression::HashMethodFixedKeys;
 use common_hashtable::DictionaryKeys;
 
-use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 pub trait GroupColumnsBuilder {
     type T;

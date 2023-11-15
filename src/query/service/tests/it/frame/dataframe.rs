@@ -37,8 +37,8 @@ use tokio_stream::StreamExt;
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_dataframe() -> Result<()> {
-//     let fixture = TestFixture::new().await;
-//     let query_ctx = fixture.ctx();
+//     let fixture = TestFixture::new().await?;
+//     let query_ctx = fixture.new_query_ctx().await?;
 //     fixture.create_default_table().await.unwrap();
 //
 //     let db = fixture.default_db_name();
@@ -54,7 +54,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // select single table
@@ -68,7 +68,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(&sql, df, fixture.ctx()).await?;
+//         test_case(&sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // scan_one
@@ -84,7 +84,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // limit
@@ -97,7 +97,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // sort
@@ -157,8 +157,8 @@ use tokio_stream::StreamExt;
 //             )
 //             .await
 //             .unwrap();
-//         test_case(sql, df, fixture.ctx()).await?;
-//         test_case(sql, df2, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
+//         test_case(sql, df2, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // filter
@@ -184,7 +184,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // aggregate
@@ -227,7 +227,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // distinct
@@ -255,8 +255,8 @@ use tokio_stream::StreamExt;
 //             }])
 //             .await
 //             .unwrap();
-//         test_case(sql, df, fixture.ctx()).await?;
-//         test_case(sql, df2, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
+//         test_case(sql, df2, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // union
@@ -272,7 +272,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(&sql, df, fixture.ctx()).await?;
+//         test_case(&sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // union_distinct
@@ -288,7 +288,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(&sql, df, fixture.ctx()).await?;
+//         test_case(&sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // intersect
@@ -301,7 +301,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // except
@@ -314,7 +314,7 @@ use tokio_stream::StreamExt;
 //             .await
 //             .unwrap();
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     // join
@@ -364,7 +364,7 @@ use tokio_stream::StreamExt;
 //             .select_columns(&["database", "name"])
 //             .await?;
 //
-//         test_case(sql, df, fixture.ctx()).await?;
+//         test_case(sql, df, fixture.new_query_ctx().await?).await?;
 //     }
 //
 //     Ok(())
@@ -402,8 +402,8 @@ async fn test_box_display() {
     let mut mint = Mint::new("tests/it/frame/testdata");
     let mut file = &mint.new_goldenfile("box_display.txt").unwrap();
 
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await.unwrap();
+    let ctx = fixture.new_query_ctx().await.unwrap();
 
     let cases = vec![
         "select number*10000 as n, concat('a',n::String,'b'),concat('testcc', n::String,'vabc') as c1 from numbers(100)",

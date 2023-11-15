@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -364,7 +365,7 @@ where
     let mut values = if options.nulls_first {
         null_indices.into_iter().chain(values).collect::<Vec<I>>()
     } else {
-        values.chain(null_indices.into_iter()).collect::<Vec<I>>()
+        values.chain(null_indices).collect::<Vec<I>>()
     };
 
     values.truncate(limit.unwrap_or(values.len()));

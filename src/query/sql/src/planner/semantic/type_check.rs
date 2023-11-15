@@ -2252,7 +2252,7 @@ impl<'a> TypeChecker<'a> {
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
-                            .unwrap_or_else(|| "".to_string()),
+                            .unwrap_or_default(),
                     ),
                 })
                 .await,
@@ -2828,29 +2828,34 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
-        let mut args = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            let box (arg, _) = self.resolve(argument).await?;
-            args.push(arg);
+        if arguments.len() != udf_definition.arg_types.len() {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Require {} parameters, but got: {}",
+                udf_definition.arg_types.len(),
+                arguments.len()
+            ))
+            .set_span(span));
         }
 
-        let raw_expr_args = args.iter().map(|arg| arg.as_raw_expr()).collect_vec();
-        let raw_expr = RawExpr::UDFServerCall {
-            span,
-            func_name: udf_definition.handler.clone(),
-            server_addr: udf_definition.address.clone(),
-            arg_types: udf_definition.arg_types.clone(),
-            return_type: udf_definition.return_type.clone(),
-            args: raw_expr_args,
-        };
+        let mut args = Vec::with_capacity(arguments.len());
+        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument).await?;
+            if ty != *dest_type {
+                args.push(wrap_cast(&arg, dest_type));
+            } else {
+                args.push(arg);
+            }
+        }
 
-        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
+        let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.ctx.set_cacheable(false);
         Ok(Box::new((
             UDFServerCall {
                 span,
                 func_name: udf_definition.handler,
+                display_name,
                 server_addr: udf_definition.address,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
@@ -3664,7 +3669,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = vec!["substr", "substring", "length"];
+        let names = ["substr", "substring", "length"];
         let result = !args.is_empty()
             && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
             && self.ctx.get_settings().get_collation().unwrap() != "binary"

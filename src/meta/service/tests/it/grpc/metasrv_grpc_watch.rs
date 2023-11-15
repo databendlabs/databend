@@ -69,7 +69,7 @@ async fn test_watch_main(
             if let Some(event) = resp.event {
                 assert!(!watch_events.is_empty());
 
-                assert_eq!(watch_events.get(0), Some(&event));
+                assert_eq!(watch_events.first(), Some(&event));
                 watch_events.remove(0);
 
                 if watch_events.is_empty() {
@@ -103,7 +103,7 @@ async fn test_watch_txn_main(
             if let Some(event) = resp.event {
                 assert!(!watch_events.is_empty());
 
-                assert_eq!(watch_events.get(0), Some(&event));
+                assert_eq!(watch_events.first(), Some(&event));
                 watch_events.remove(0);
 
                 if watch_events.is_empty() {
