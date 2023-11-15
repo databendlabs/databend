@@ -81,6 +81,7 @@ impl Display for FormatContext {
                 RelOperator::Lambda(_) => write!(f, "Lambda"),
                 RelOperator::ConstantTableScan(_) => write!(f, "ConstantTableScan"),
                 RelOperator::AddRowNumber(_) => write!(f, "AddRowNumber"),
+                RelOperator::Udf(_) => write!(f, "Udf"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }

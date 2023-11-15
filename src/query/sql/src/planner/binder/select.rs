@@ -285,6 +285,9 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
+        // rewrite udf
+        s_expr = self.rewrite_udf(&s_expr)?;
+
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
 
