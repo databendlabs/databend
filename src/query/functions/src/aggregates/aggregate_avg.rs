@@ -88,7 +88,7 @@ where
     fn merge_result(
         &mut self,
         builder: &mut R::ColumnBuilder,
-        _function_data: Option<&Box<dyn FunctionData>>,
+        _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value = self.value.as_() / (self.count as f64);
         R::push_item(
@@ -102,7 +102,7 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.value)
+        serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
@@ -184,7 +184,7 @@ where
     fn merge_result(
         &mut self,
         builder: &mut T::ColumnBuilder,
-        function_data: Option<&Box<dyn FunctionData>>,
+        function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         // # Safety
         // `downcast_ref_unchecked` will check type in debug mode using dynamic dispatch,
@@ -212,7 +212,7 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.value)
+        serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
@@ -248,6 +248,7 @@ pub fn try_create_aggregate_avg_function(
                 params,
                 arguments[0].clone(),
                 None,
+                false,
             )
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
@@ -273,6 +274,7 @@ pub fn try_create_aggregate_avg_function(
                     params,
                     arguments[0].clone(),
                     Some(Box::new(DecimalAvgData { scale_add })),
+                    false,
                 )
             } else {
                 AggregateUnaryFunction::<
@@ -285,6 +287,7 @@ pub fn try_create_aggregate_avg_function(
                     params,
                     arguments[0].clone(),
                     Some(Box::new(DecimalAvgData { scale_add })),
+                    false,
                 )
             }
         }
@@ -310,6 +313,7 @@ pub fn try_create_aggregate_avg_function(
                     params,
                     arguments[0].clone(),
                     Some(Box::new(DecimalAvgData { scale_add })),
+                    false,
                 )
             } else {
                 AggregateUnaryFunction::<
@@ -322,6 +326,7 @@ pub fn try_create_aggregate_avg_function(
                     params,
                     arguments[0].clone(),
                     Some(Box::new(DecimalAvgData { scale_add })),
+                    false,
                 )
             }
         }

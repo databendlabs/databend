@@ -41,17 +41,13 @@ where
     fn merge_result(
         &mut self,
         builder: &mut R::ColumnBuilder,
-        function_data: Option<&Box<dyn FunctionData>>,
+        function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized;
-
-    fn need_manual_drop_state() -> bool {
-        false
-    }
 }
 
 pub trait FunctionData: Send + Sync {
@@ -69,6 +65,7 @@ where
     _argument: DataType,
     return_type: DataType,
     function_data: Option<Box<dyn FunctionData>>,
+    need_drop: bool,
     _phantom: PhantomData<(S, T, R)>,
 }
 
@@ -95,6 +92,7 @@ where
         _params: Vec<Scalar>,
         _argument: DataType,
         function_data: Option<Box<dyn FunctionData>>,
+        need_drop: bool,
     ) -> Result<Arc<dyn AggregateFunction>> {
         let func: AggregateUnaryFunction<S, T, R> = AggregateUnaryFunction {
             display_name: display_name.to_string(),
@@ -102,6 +100,7 @@ where
             _params,
             _argument,
             function_data,
+            need_drop,
             _phantom: Default::default(),
         };
 
@@ -205,7 +204,7 @@ where
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state: &mut S = place.get::<S>();
         let builder = R::try_downcast_builder(builder).unwrap();
-        state.merge_result(builder, self.function_data.as_ref())?;
+        state.merge_result(builder, self.function_data.as_deref())?;
         Ok(())
     }
 
@@ -218,13 +217,13 @@ where
         for place in places {
             let state: &mut S = place.next(offset).get::<S>();
             let builder = R::try_downcast_builder(builder).unwrap();
-            state.merge_result(builder, self.function_data.as_ref())?;
+            state.merge_result(builder, self.function_data.as_deref())?;
         }
         Ok(())
     }
 
     fn need_manual_drop_state(&self) -> bool {
-        S::need_manual_drop_state()
+        self.need_drop
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {

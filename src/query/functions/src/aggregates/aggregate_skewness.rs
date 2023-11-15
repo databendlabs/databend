@@ -88,7 +88,7 @@ where
     fn merge_result(
         &mut self,
         builder: &mut R::ColumnBuilder,
-        _function_data: Option<&Box<dyn FunctionData>>,
+        _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.n <= 2 {
             R::push_default(builder);
@@ -146,7 +146,7 @@ pub fn try_create_aggregate_skewness_function(
                 SkewnessStateV2<NumberType<NUM>>,
                 NumberType<NUM>,
                 Float64Type,
-            >::try_create(display_name, return_type, params, arguments[0].clone(), None)
+            >::try_create(display_name, return_type, params, arguments[0].clone(), None, false)
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(

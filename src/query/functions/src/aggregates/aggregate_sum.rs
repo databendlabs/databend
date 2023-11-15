@@ -112,7 +112,7 @@ where
     fn merge_result(
         &mut self,
         builder: &mut R::ColumnBuilder,
-        _function_data: Option<&Box<dyn FunctionData>>,
+        _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         R::push_item(builder, R::to_scalar_ref(&self.value));
         Ok(())
@@ -191,7 +191,7 @@ where
     fn merge_result(
         &mut self,
         builder: &mut T::ColumnBuilder,
-        _function_data: Option<&Box<dyn FunctionData>>,
+        _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         T::push_item(builder, T::to_scalar_ref(&self.value));
         Ok(())
@@ -235,6 +235,7 @@ pub fn try_create_aggregate_sum_function(
                 params,
                 arguments[0].clone(),
                 None,
+                false,
             )
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
@@ -259,6 +260,7 @@ pub fn try_create_aggregate_sum_function(
                     params,
                     arguments[0].clone(),
                     None,
+                    false,
                 )
             } else {
                 AggregateUnaryFunction::<
@@ -271,6 +273,7 @@ pub fn try_create_aggregate_sum_function(
                     params,
                     arguments[0].clone(),
                     None,
+                    false,
                 )
             }
         }
@@ -295,6 +298,7 @@ pub fn try_create_aggregate_sum_function(
                     params,
                     arguments[0].clone(),
                     None,
+                    false,
                 )
             } else {
                 AggregateUnaryFunction::<
@@ -307,6 +311,7 @@ pub fn try_create_aggregate_sum_function(
                     params,
                     arguments[0].clone(),
                     None,
+                    false,
                 )
             }
         }

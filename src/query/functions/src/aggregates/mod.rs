@@ -57,7 +57,7 @@ pub use aggregate_covariance::AggregateCovarianceFunction;
 pub use aggregate_function::*;
 pub use aggregate_function_factory::AggregateFunctionFactory;
 pub use aggregate_kurtosis::*;
-pub use aggregate_min_max_any::AggregateMinMaxAnyFunction;
+pub use aggregate_min_max_any::*;
 pub use aggregate_null_result::AggregateNullResultFunction;
 pub use aggregate_quantile_cont::*;
 pub use aggregate_quantile_disc::*;
