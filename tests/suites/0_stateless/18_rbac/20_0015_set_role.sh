@@ -21,8 +21,8 @@ echo "CREATE TABLE t20_0015_table1(c int not null)" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE TABLE t20_0015_table2(c int not null)" | $BENDSQL_CLIENT_CONNECT
 
 echo '-- grant privilege to roles'
-echo 'GRANT SELECT, INSERT ON testrole1 TO ROLE t20_0015_table1' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT SELECT, INSERT ON testrole2 TO ROLE t20_0015_table2' | $BENDSQL_CLIENT_CONNECT
+echo 'GRANT SELECT, INSERT ON default.t20_0015_table1 TO ROLE testrole1' | $BENDSQL_CLIENT_CONNECT
+echo 'GRANT SELECT, INSERT ON default.t20_0015_table2 TO ROLE testrole2' | $BENDSQL_CLIENT_CONNECT
 
 echo '-- test 1: set role as role1, secondary roles as NONE, can access table1, can not access table2'
 echo "SET ROLE testrole1; SET SECONDARY ROLES NONE; INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT
