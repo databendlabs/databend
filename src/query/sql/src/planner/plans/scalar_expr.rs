@@ -548,6 +548,7 @@ pub struct UDFServerCall {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
     pub func_name: String,
+    pub display_name: String,
     pub server_addr: String,
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,

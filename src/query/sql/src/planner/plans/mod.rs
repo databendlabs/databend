@@ -32,6 +32,7 @@ mod lambda;
 mod limit;
 mod materialized_cte;
 mod merge_into;
+mod udf;
 
 mod copy_into_location;
 pub mod operator;
@@ -92,6 +93,7 @@ pub use scan::*;
 pub use setting::*;
 pub use share::*;
 pub use sort::*;
+pub use udf::*;
 pub use union_all::UnionAll;
 pub use update::*;
 pub use window::*;
