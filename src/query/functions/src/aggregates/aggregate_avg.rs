@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -63,14 +64,12 @@ where
     }
 }
 
-impl<T, TSum, R> UnaryState<T, R> for NumberAvgState<T, TSum>
+impl<T, TSum> UnaryState<T, Float64Type> for NumberAvgState<T, TSum>
 where
     T: ValueType + Sync + Send,
     TSum: ValueType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
-    R: ValueType,
-    R::Scalar: Number + AsPrimitive<f64>,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.count += 1;
@@ -87,17 +86,11 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut R::ColumnBuilder,
+        builder: &mut <Float64Type as ValueType>::ColumnBuilder,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value = self.value.as_() / (self.count as f64);
-        R::push_item(
-            builder,
-            R::try_downcast_scalar(
-                &Scalar::Number(NumberScalar::Float64(F64::from(value))).as_ref(),
-            )
-            .unwrap(),
-        );
+        builder.push(F64::from(value));
         Ok(())
     }
 
@@ -136,14 +129,7 @@ where
 impl<const OVERFLOW: bool, T> Default for DecimalAvgState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal
-        + std::ops::AddAssign
-        + Serialize
-        + DeserializeOwned
-        + Copy
-        + Clone
-        + std::fmt::Debug
-        + std::cmp::PartialOrd,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
 {
     fn default() -> Self {
         Self {
@@ -156,14 +142,7 @@ where
 impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalAvgState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal
-        + std::ops::AddAssign
-        + Serialize
-        + DeserializeOwned
-        + Copy
-        + Clone
-        + std::fmt::Debug
-        + std::cmp::PartialOrd,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.count += 1;
@@ -244,14 +223,7 @@ pub fn try_create_aggregate_avg_function(
                 NumberAvgState<NumberType<NUM>, NumberType<TSum>>,
                 NumberType<NUM>,
                 Float64Type,
-            >::try_create(
-                display_name,
-                return_type,
-                params,
-                arguments[0].clone(),
-                None,
-                false,
-            )
+            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
             let p = MAX_DECIMAL128_PRECISION;
@@ -266,31 +238,25 @@ pub fn try_create_aggregate_avg_function(
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
             if overflow {
-                AggregateUnaryFunction::<
+                let func = AggregateUnaryFunction::<
                     DecimalAvgState<false, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    Some(Box::new(DecimalAvgData { scale_add })),
-                    false,
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             } else {
-                AggregateUnaryFunction::<
+                let func = AggregateUnaryFunction::<
                     DecimalAvgState<true, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    Some(Box::new(DecimalAvgData { scale_add })),
-                    false,
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             }
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
@@ -305,31 +271,25 @@ pub fn try_create_aggregate_avg_function(
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
             if overflow {
-                AggregateUnaryFunction::<
+                let func = AggregateUnaryFunction::<
                     DecimalAvgState<false, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    Some(Box::new(DecimalAvgData { scale_add })),
-                    false,
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             } else {
-                AggregateUnaryFunction::<
+                let func = AggregateUnaryFunction::<
                     DecimalSumState<true, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    Some(Box::new(DecimalAvgData { scale_add })),
-                    false,
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(

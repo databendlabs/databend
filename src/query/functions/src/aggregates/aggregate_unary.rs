@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::ValueType;
 use common_expression::AggregateFunction;
+use common_expression::AggregateFunctionRef;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
@@ -86,25 +87,47 @@ where
     T: Send + Sync + ValueType,
     R: Send + Sync + ValueType,
 {
+    pub(crate) fn try_create_unary(
+        display_name: &str,
+        return_type: DataType,
+        _params: Vec<Scalar>,
+        _argument: DataType,
+    ) -> Result<AggregateFunctionRef> {
+        Ok(Arc::new(Self::try_create(
+            display_name,
+            return_type,
+            _params,
+            _argument,
+        )))
+    }
     pub(crate) fn try_create(
         display_name: &str,
         return_type: DataType,
         _params: Vec<Scalar>,
         _argument: DataType,
-        function_data: Option<Box<dyn FunctionData>>,
-        need_drop: bool,
-    ) -> Result<Arc<dyn AggregateFunction>> {
-        let func: AggregateUnaryFunction<S, T, R> = AggregateUnaryFunction {
+    ) -> AggregateUnaryFunction<S, T, R> {
+        AggregateUnaryFunction {
             display_name: display_name.to_string(),
             return_type,
             _params,
             _argument,
-            function_data,
-            need_drop,
+            function_data: None,
+            need_drop: false,
             _phantom: Default::default(),
-        };
+        }
+    }
 
-        Ok(Arc::new(func))
+    pub(crate) fn with_function_data(
+        mut self,
+        function_data: Box<dyn FunctionData>,
+    ) -> AggregateUnaryFunction<S, T, R> {
+        self.function_data = Some(function_data);
+        self
+    }
+
+    pub(crate) fn with_need_drop(mut self, need_drop: bool) -> AggregateUnaryFunction<S, T, R> {
+        self.need_drop = need_drop;
+        self
     }
 }
 

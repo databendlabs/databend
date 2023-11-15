@@ -142,14 +142,15 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
             with_simple_no_number_mapped_type!(|T| match data_type {
                 DataType::T => {
                     let return_type = data_type.clone();
-                    AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::try_create(
+                    let func = AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::try_create(
                         display_name,
                         return_type,
                         params,
                         data_type,
-                        None,
-                        need_drop,
                     )
+                    .with_need_drop(need_drop);
+
+                    Ok(Arc::new(func))
                 }
                 DataType::Number(num_type) => {
                     with_number_mapped_type!(|NUM| match num_type {
@@ -159,13 +160,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 MinMaxAnyState<NumberType<NUM>, CMP>,
                                 NumberType<NUM>,
                                 NumberType<NUM>,
-                            >::try_create(
-                                display_name,
-                                return_type,
-                                params,
-                                data_type,
-                                None,
-                                need_drop,
+                            >::try_create_unary(
+                                display_name, return_type, params, data_type
                             )
                         }
                     })
@@ -180,13 +176,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         MinMaxAnyState<DecimalType<i128>, CMP>,
                         DecimalType<i128>,
                         DecimalType<i128>,
-                    >::try_create(
-                        display_name,
-                        return_type,
-                        params,
-                        data_type,
-                        None,
-                        need_drop,
+                    >::try_create_unary(
+                        display_name, return_type, params, data_type
                     )
                 }
                 DataType::Decimal(DecimalDataType::Decimal256(s)) => {
@@ -199,25 +190,22 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         MinMaxAnyState<DecimalType<i256>, CMP>,
                         DecimalType<i256>,
                         DecimalType<i256>,
-                    >::try_create(
-                        display_name,
-                        return_type,
-                        params,
-                        data_type,
-                        None,
-                        need_drop,
+                    >::try_create_unary(
+                        display_name, return_type, params, data_type
                     )
                 }
                 _ => {
                     let return_type = data_type.clone();
-                    AggregateUnaryFunction::<MinMaxAnyState<AnyType, CMP>, AnyType, AnyType>::try_create(
-                        display_name,
-                        return_type,
-                        params,
-                        data_type,
-                        None,
-                        need_drop,
+                    let func = AggregateUnaryFunction::<
+                        MinMaxAnyState<AnyType, CMP>,
+                        AnyType,
+                        AnyType,
+                    >::try_create(
+                        display_name, return_type, params, data_type
                     )
+                    .with_need_drop(need_drop);
+
+                    Ok(Arc::new(func))
                 }
             })
         }

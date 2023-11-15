@@ -143,14 +143,7 @@ where
 impl<const OVERFLOW: bool, T> Default for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal
-        + std::ops::AddAssign
-        + Serialize
-        + DeserializeOwned
-        + Copy
-        + Clone
-        + std::fmt::Debug
-        + std::cmp::PartialOrd,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
 {
     fn default() -> Self {
         Self {
@@ -162,14 +155,7 @@ where
 impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal
-        + std::ops::AddAssign
-        + Serialize
-        + DeserializeOwned
-        + Copy
-        + Clone
-        + std::fmt::Debug
-        + std::cmp::PartialOrd,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.value += T::to_owned_scalar(other);
@@ -229,14 +215,7 @@ pub fn try_create_aggregate_sum_function(
                 NumberSumState<NumberType<NUM>, NumberType<TSum>>,
                 NumberType<NUM>,
                 NumberType<TSum>,
-            >::try_create(
-                display_name,
-                return_type,
-                params,
-                arguments[0].clone(),
-                None,
-                false,
-            )
+            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
             let p = MAX_DECIMAL128_PRECISION;
@@ -254,26 +233,16 @@ pub fn try_create_aggregate_sum_function(
                     DecimalSumState<false, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
-                >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    None,
-                    false,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
                 )
             } else {
                 AggregateUnaryFunction::<
                     DecimalSumState<true, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
-                >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    None,
-                    false,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
                 )
             }
         }
@@ -292,26 +261,16 @@ pub fn try_create_aggregate_sum_function(
                     DecimalSumState<false, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
-                >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    None,
-                    false,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
                 )
             } else {
                 AggregateUnaryFunction::<
                     DecimalSumState<true, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
-                >::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                    None,
-                    false,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
                 )
             }
         }

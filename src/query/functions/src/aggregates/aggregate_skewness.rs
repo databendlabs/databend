@@ -58,12 +58,10 @@ where
     }
 }
 
-impl<T, R> UnaryState<T, R> for SkewnessStateV2<T>
+impl<T> UnaryState<T, Float64Type> for SkewnessStateV2<T>
 where
     T: ValueType + Sync + Send,
-    R: ValueType,
     T::Scalar: AsPrimitive<f64>,
-    R::Scalar: AsPrimitive<f64>,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
@@ -87,11 +85,11 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut R::ColumnBuilder,
+        builder: &mut <Float64Type as ValueType>::ColumnBuilder,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.n <= 2 {
-            R::push_default(builder);
+            builder.push(F64::from(0_f64));
             return Ok(());
         }
         let n = self.n as f64;
@@ -100,7 +98,7 @@ where
             .powi(3)
             .sqrt();
         if div == 0.0 {
-            R::push_default(builder);
+            builder.push(F64::from(0_f64));
             return Ok(());
         }
         let temp1 = (n * (n - 1.0)).sqrt() / (n - 2.0);
@@ -112,13 +110,7 @@ where
         if value.is_infinite() || value.is_nan() {
             return Err(ErrorCode::SemanticError("Skew is out of range!"));
         } else {
-            R::push_item(
-                builder,
-                R::try_downcast_scalar(
-                    &Scalar::Number(NumberScalar::Float64(F64::from(value))).as_ref(),
-                )
-                .unwrap(),
-            );
+            builder.push(F64::from(value));
         }
         Ok(())
     }
@@ -146,7 +138,7 @@ pub fn try_create_aggregate_skewness_function(
                 SkewnessStateV2<NumberType<NUM>>,
                 NumberType<NUM>,
                 Float64Type,
-            >::try_create(display_name, return_type, params, arguments[0].clone(), None, false)
+            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(
