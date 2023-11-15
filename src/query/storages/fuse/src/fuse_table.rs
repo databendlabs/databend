@@ -393,6 +393,10 @@ impl FuseTable {
         self.cluster_key_meta.clone().map(|v| v.0)
     }
 
+    pub fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        self.cluster_key_meta.clone()
+    }
+
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
     }

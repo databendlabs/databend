@@ -15,28 +15,38 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
+use common_base::base::tokio::runtime::Handle;
+use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StreamColumn;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::DatabaseType;
+use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use common_expression::ORIGIN_VERSION_COL_NAME;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_core::Pipeline;
+use common_sql::binder::STREAM_COLUMN_FACTORY;
 use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::io::SnapshotsIO;
 use common_storages_fuse::FuseTable;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+
+use crate::stream_pruner::StreamPruner;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
 pub const OPT_KEY_TABLE_NAME: &str = "table_name";
-pub const OPT_KEY_TABLE_ID: &str = "table_id";
+pub const OPT_KEY_DATABASE_NAME: &str = "table_database";
 pub const OPT_KEY_TABLE_VER: &str = "table_version";
 pub const OPT_KEY_MODE: &str = "mode";
 
@@ -46,7 +56,7 @@ pub struct StreamTable {
     stream_info: TableInfo,
 
     table_name: String,
-    table_id: u64,
+    table_database: String,
     table_version: u64,
     append_only: bool,
     snapshot_location: Option<String>,
@@ -59,10 +69,10 @@ impl StreamTable {
             .get(OPT_KEY_TABLE_NAME)
             .ok_or_else(|| ErrorCode::Internal("table name must be set"))?
             .clone();
-        let table_id = options
-            .get(OPT_KEY_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
-            .parse::<u64>()?;
+        let table_database = options
+            .get(OPT_KEY_DATABASE_NAME)
+            .ok_or_else(|| ErrorCode::Internal("table database must be set"))?
+            .clone();
         let table_version = options
             .get(OPT_KEY_TABLE_VER)
             .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
@@ -75,7 +85,7 @@ impl StreamTable {
         Ok(Box::new(StreamTable {
             stream_info: table_info,
             table_name,
-            table_id,
+            table_database,
             table_version,
             append_only,
             snapshot_location,
@@ -99,26 +109,28 @@ impl StreamTable {
         })
     }
 
+    pub fn offset(&self) -> u64 {
+        self.table_version
+    }
+
+    pub fn append_only(&self) -> bool {
+        self.append_only
+    }
+
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let catalog = ctx.get_catalog(self.stream_info.catalog()).await?;
-        let (ident, meta) = catalog.get_table_meta_by_id(self.table_id).await?;
-        if ident.seq <= self.table_version {
-            return Ok((PartStatistics::default(), Partitions::default()));
-        }
-        let table_info = TableInfo {
-            ident,
-            desc: "".to_owned(),
-            name: self.table_name.clone(),
-            meta: meta.as_ref().clone(),
-            tenant: "".to_owned(),
-            db_type: DatabaseType::NormalDB,
-        };
-        let table = catalog.get_table_by_info(&table_info)?;
+        let start = Instant::now();
+        let table = ctx
+            .get_table(
+                self.stream_info.catalog(),
+                &self.table_database,
+                &self.table_name,
+            )
+            .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let latest_snapshot = fuse_table.read_table_snapshot().await?;
         if latest_snapshot.is_none() {
@@ -126,20 +138,21 @@ impl StreamTable {
         }
 
         let latest_snapshot = latest_snapshot.unwrap();
-        let latest_segments: HashSet<Location> =
-            HashSet::from_iter(latest_snapshot.segments.clone());
+        let latest_segments = HashSet::from_iter(latest_snapshot.segments.clone());
+
+        let summary = latest_snapshot.summary.block_count as usize;
         drop(latest_snapshot);
         let operator = fuse_table.get_operator();
-        let base_segments: HashSet<Location> =
-            if let Some(snapshot_location) = &self.snapshot_location {
-                let (base_snapshot, _) =
-                    SnapshotsIO::read_snapshot(snapshot_location.clone(), operator.clone()).await?;
-                HashSet::from_iter(base_snapshot.segments.clone())
-            } else {
-                HashSet::new()
-            };
+        let base_segments = if let Some(snapshot_location) = &self.snapshot_location {
+            let (base_snapshot, _) =
+                SnapshotsIO::read_snapshot(snapshot_location.clone(), operator.clone()).await?;
+            HashSet::from_iter(base_snapshot.segments.clone())
+        } else {
+            HashSet::new()
+        };
 
-        let fuse_segment_io = SegmentsIO::create(ctx, operator, fuse_table.schema());
+        let fuse_segment_io =
+            SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
 
         let diff_in_base = base_segments
             .difference(&latest_segments)
@@ -172,8 +185,53 @@ impl StreamTable {
                 }
             });
         }
+        if latest_blocks.is_empty() {
+            return Ok((PartStatistics::default(), Partitions::default()));
+        }
 
-        todo!()
+        let table_schema = fuse_table.schema_with_stream();
+        let bloom_index_cols = fuse_table.bloom_index_cols();
+        let (cluster_keys, cluster_key_meta) =
+            if !fuse_table.is_native() || fuse_table.cluster_key_meta().is_none() {
+                (vec![], None)
+            } else {
+                (
+                    fuse_table.cluster_keys(ctx.clone()),
+                    fuse_table.cluster_key_meta(),
+                )
+            };
+        let stream_pruner = StreamPruner::create(
+            &ctx,
+            operator,
+            table_schema.clone(),
+            push_downs.clone(),
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+        )?;
+
+        let block_metas = stream_pruner.pruning(latest_blocks).await?;
+        let pruning_stats = stream_pruner.pruning_stats();
+
+        log::info!(
+            "prune snapshot block end, final block numbers:{}, cost:{}",
+            block_metas.len(),
+            start.elapsed().as_secs()
+        );
+
+        let block_metas = block_metas
+            .into_iter()
+            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .collect::<Vec<_>>();
+
+        fuse_table.read_partitions_with_metas(
+            ctx.clone(),
+            table_schema,
+            push_downs,
+            &block_metas,
+            summary,
+            pruning_stats,
+        )
     }
 }
 
@@ -187,6 +245,26 @@ impl Table for StreamTable {
         &self.stream_info
     }
 
+    /// whether column prune(projection) can help in table read
+    fn support_column_projection(&self) -> bool {
+        true
+    }
+
+    fn stream_columns(&self) -> Vec<StreamColumn> {
+        vec![
+            STREAM_COLUMN_FACTORY
+                .get_stream_column(ORIGIN_VERSION_COL_NAME)
+                .unwrap(),
+            STREAM_COLUMN_FACTORY
+                .get_stream_column(ORIGIN_BLOCK_ID_COL_NAME)
+                .unwrap(),
+            STREAM_COLUMN_FACTORY
+                .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
+                .unwrap(),
+        ]
+    }
+
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -194,6 +272,25 @@ impl Table for StreamTable {
         push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        todo!()
+        self.do_read_partitions(ctx, push_downs).await
+    }
+
+    #[minitrace::trace]
+    fn read_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+        put_cache: bool,
+    ) -> Result<()> {
+        eprintln!("plan: {:?}", plan);
+        let table = block_in_place(|| {
+            Handle::current().block_on(ctx.get_table(
+                self.stream_info.catalog(),
+                &self.table_database,
+                &self.table_name,
+            ))
+        })?;
+        table.read_data(ctx, plan, pipeline, put_cache)
     }
 }

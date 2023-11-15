@@ -3087,10 +3087,21 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "common-base",
  "common-catalog",
  "common-exception",
+ "common-expression",
  "common-meta-app",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-sql",
  "common-storages-fuse",
+ "futures",
+ "futures-util",
+ "log",
+ "minitrace 0.6.2",
+ "opendal",
+ "storages-common-pruner",
  "storages-common-table-meta",
 ]
 

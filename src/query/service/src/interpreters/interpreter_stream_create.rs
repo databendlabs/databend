@@ -27,8 +27,8 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use common_storages_stream::stream_table::StreamTable;
 use common_storages_stream::stream_table::MODE_APPEND_ONLY;
+use common_storages_stream::stream_table::OPT_KEY_DATABASE_NAME;
 use common_storages_stream::stream_table::OPT_KEY_MODE;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use common_storages_stream::stream_table::STREAM_ENGINE;
@@ -58,38 +58,50 @@ impl Interpreter for CreateStreamInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-        let table = catalog
-            .get_table(tenant.as_str(), &plan.table_database, &plan.table_name)
+        let table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.table_database, &plan.table_name)
             .await?;
+        if !table.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled for table '{}.{}'",
+                plan.table_database, plan.table_name
+            )));
+        }
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_info = fuse_table.get_table_info();
-        let table_id = table_info.ident.table_id.to_string();
         let table_version = table_info.ident.seq;
         let schema = table_info.schema().clone();
 
         let mut options = BTreeMap::new();
         match &plan.navigation {
             Some(StreamNavigation::AtStream { database, name }) => {
-                let stream = catalog.get_table(tenant.as_str(), database, name).await?;
+                let stream = self.ctx.get_table(&plan.catalog, database, name).await?;
                 let stream = StreamTable::try_from_table(stream.as_ref())?;
                 let stream_opts = stream.get_table_info().options();
-                let stream_table_id = stream_opts
-                    .get(OPT_KEY_TABLE_ID)
+                let stream_table_name = stream_opts
+                    .get(OPT_KEY_TABLE_NAME)
                     .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
-                if stream_table_id != &table_id {
+                let stream_database_name = stream_opts
+                    .get(OPT_KEY_DATABASE_NAME)
+                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
+                if stream_table_name != &plan.table_name
+                    || stream_database_name != &plan.table_database
+                {
                     return Err(ErrorCode::IllegalStream(format!(
-                        "The stream '{name}' is not match the table '{}'",
-                        plan.table_name
+                        "The stream '{name}' is not match the table '{}.{}'",
+                        plan.table_database, plan.table_name
                     )));
                 }
                 options = stream.get_table_info().options().clone();
             }
             None => {
                 options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
-                options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
+                options.insert(
+                    OPT_KEY_DATABASE_NAME.to_string(),
+                    plan.table_database.clone(),
+                );
                 options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
                 options.insert(OPT_KEY_MODE.to_string(), MODE_APPEND_ONLY.to_string());
                 if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
@@ -113,6 +125,8 @@ impl Interpreter for CreateStreamInterpreter {
                 ..Default::default()
             },
         };
+
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         catalog.create_table(plan).await?;
 
         Ok(PipelineBuildResult::create())
