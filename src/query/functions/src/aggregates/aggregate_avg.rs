@@ -112,6 +112,8 @@ where
 }
 
 struct DecimalAvgData {
+    // only for decimals
+    // AVG：AVG(DECIMAL(a, b)) -> DECIMAL(38 or 76, max(b, 4))。
     pub scale_add: u8,
 }
 
@@ -255,7 +257,7 @@ pub fn try_create_aggregate_avg_function(
             let p = MAX_DECIMAL128_PRECISION;
             let decimal_size = DecimalSize {
                 precision: p,
-                scale: s.scale,
+                scale: s.scale.max(4),
             };
 
             // DecimalWidth<int64_t> = 18
@@ -295,7 +297,7 @@ pub fn try_create_aggregate_avg_function(
             let p = MAX_DECIMAL256_PRECISION;
             let decimal_size = DecimalSize {
                 precision: p,
-                scale: s.scale,
+                scale: s.scale.max(4),
             };
 
             let overflow = s.precision > 18;
