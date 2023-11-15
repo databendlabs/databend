@@ -17,7 +17,7 @@ use std::ops::Range;
 use common_base::rangemap::RangeMerger;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::metrics::copy::metrics_inc_copy_read_size_bytes;
+use common_metrics::storage::metrics_inc_copy_read_size_bytes;
 use opendal::BlockingOperator;
 
 use crate::parquet2::parquet_reader::MergeIOReadResult;
