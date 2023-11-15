@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -152,7 +153,7 @@ fn test_extend_values() {
 fn test_extend() {
     let mut array = MutableUtf8Array::<i32>::new();
 
-    array.extend([Some("hi"), None, Some("there"), None].into_iter());
+    array.extend([Some("hi"), None, Some("there"), None]);
 
     let array: Utf8Array<i32> = array.into();
 
@@ -166,7 +167,7 @@ fn test_extend() {
 fn as_arc() {
     let mut array = MutableUtf8Array::<i32>::new();
 
-    array.extend([Some("hi"), None, Some("there"), None].into_iter());
+    array.extend([Some("hi"), None, Some("there"), None]);
 
     assert_eq!(
         Utf8Array::<i32>::from([Some("hi"), None, Some("there"), None]),

@@ -32,21 +32,21 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use common_pipeline_transforms::processors::transforms::UnknownMode;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::BlockMetaTransform;
+use common_pipeline_transforms::processors::BlockMetaTransformer;
+use common_pipeline_transforms::processors::UnknownMode;
 
 use crate::api::DataPacket;
 use crate::api::ExchangeDeserializeMeta;
 use crate::api::FragmentData;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
-use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
-use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {

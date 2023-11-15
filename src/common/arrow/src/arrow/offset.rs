@@ -1,3 +1,4 @@
+// Copyright 2020-2022 Jorge C. Leitão
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -200,7 +201,7 @@ impl<O: Offset> Offsets<O> {
     /// Returns `true` if the offsets has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.len_proxy() == 0
     }
 
     /// Returns the byte slice stored in this buffer
@@ -412,7 +413,7 @@ impl<O: Offset> OffsetsBuffer<O> {
     /// Returns `true` if the offsets has a length of 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.len_proxy() == 0
     }
 
     /// Returns the byte slice stored in this buffer

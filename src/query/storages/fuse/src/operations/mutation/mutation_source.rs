@@ -33,6 +33,10 @@ use common_expression::Expr;
 use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 
 use super::mutation_meta::SerializeBlock;
@@ -43,10 +47,6 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Processor;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 

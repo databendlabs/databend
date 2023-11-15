@@ -566,6 +566,18 @@ impl<'a> Binder {
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
             }
+            Statement::CreatePipe(_) => {
+                todo!()
+            }
+            Statement::DescribePipe(_) => {
+                todo!()
+            }
+            Statement::AlterPipe(_) => {
+                todo!()
+            }
+            Statement::DropPipe(_) => {
+                todo!()
+            }
         };
         Ok(plan)
     }

@@ -29,6 +29,7 @@ pub struct SplitByExprMutator {
 }
 
 impl SplitByExprMutator {
+    #[allow(dead_code)]
     pub fn create(expr: Option<Expr>, func_ctx: FunctionContext) -> Self {
         Self { expr, func_ctx }
     }

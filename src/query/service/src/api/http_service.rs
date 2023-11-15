@@ -156,8 +156,10 @@ impl HttpService {
 #[async_trait::async_trait]
 impl Server for HttpService {
     #[async_backtrace::framed]
-    async fn shutdown(&mut self, graceful: bool) {
-        self.shutdown_handler.shutdown(graceful).await;
+    async fn shutdown(&mut self, _graceful: bool) {
+        // intendfully do nothing: sometimes we hope to diagnose the backtraces or metrics after
+        // the process got the sigterm signal, we can still leave the admin service port open until
+        // the process exited. it's not an user facing service, it's allowed to shutdown forcely.
     }
 
     #[async_backtrace::framed]

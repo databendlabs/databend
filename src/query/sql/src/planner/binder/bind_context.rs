@@ -190,7 +190,7 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
-            lambda_info: LambdaInfo::default(),
+            lambda_info: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
             allow_internal_columns: parent.allow_internal_columns,

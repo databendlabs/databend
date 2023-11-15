@@ -36,14 +36,14 @@ pub struct ReplaceDeduplicate {
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub table_schema: TableSchemaRef,
-    pub select_ctx: Option<SelectCtx>,
+    pub select_ctx: Option<ReplaceSelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
     pub need_insert: bool,
     pub delete_when: Option<(RemoteExpr, String)>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct SelectCtx {
+pub struct ReplaceSelectCtx {
     pub select_column_bindings: Vec<ColumnBinding>,
     pub select_schema: DataSchemaRef,
 }

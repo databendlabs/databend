@@ -100,22 +100,4 @@ impl ProbeState {
             string_items_buf,
         }
     }
-
-    // Reset some states which changed during probe.
-    // Only be called when spill is enabled.
-    pub fn reset(&mut self) {
-        self.probe_indexes = vec![0; self.max_block_size];
-        self.build_indexes = vec![
-            RowPtr {
-                chunk_index: 0,
-                row_index: 0,
-            };
-            self.max_block_size
-        ];
-        self.valids = None;
-        self.row_state = None;
-        self.row_state_indexes = None;
-        self.probe_unmatched_indexes = None;
-        self.markers = None;
-    }
 }

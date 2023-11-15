@@ -53,10 +53,15 @@ impl LockHolder {
         revision: u64,
         expire_secs: u64,
     ) -> Result<()> {
-        let sleep_range: std::ops::RangeInclusive<u64> =
-            (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
+        let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
         let delete_table_lock_req = lock.gen_delete_lock_req(revision);
         let extend_table_lock_req = lock.gen_extend_lock_req(revision, expire_secs, false);
+        self.try_extend_lock(
+            catalog.clone(),
+            extend_table_lock_req.clone(),
+            Some(Duration::from_millis(expire_secs * 1000)),
+        )
+        .await?;
 
         GlobalIORuntime::instance().spawn(query_id, {
             let self_clone = self.clone();
