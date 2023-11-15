@@ -49,7 +49,7 @@ fn table_triple(i: Input) -> IResult<TableIdentifier> {
     map(dot_separated_idents_1_to_3, TableIdentifier::from_tuple)(i)
 }
 
-fn copy_into_table(i: Input) -> IResult<Statement> {
+pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
         map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
