@@ -131,7 +131,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `VIRTUAL`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, or `CONNECTION`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `VIRTUAL`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -197,7 +197,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STAGE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `TASK`, `MASKING`, `VIEW`, `FILE`, or `CONNECTION`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STAGE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `TASK`, `MASKING`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------

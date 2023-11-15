@@ -33,6 +33,7 @@ use nom::Slice;
 use crate::ast::*;
 use crate::input::Input;
 use crate::parser::copy::copy_into;
+use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
@@ -1565,6 +1566,69 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! { SHOW ~ NETWORK ~ POLICIES },
     );
 
+    let create_pipe = map(
+        rule! {
+            CREATE ~ PIPE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ( AUTO_INGEST ~ "=" ~ #literal_bool )?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ AS ~ #copy_into_table
+        },
+        |(_, _, opt_if_not_exists, pipe, ingest, comment_opt, _, copy_stmt)| {
+            let copy_stmt = match copy_stmt {
+                Statement::CopyIntoTable(stmt) => stmt,
+                _ => {
+                    unreachable!()
+                }
+            };
+            Statement::CreatePipe(CreatePipeStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: pipe.to_string(),
+                auto_ingest: ingest.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                copy_stmt,
+            })
+        },
+    );
+
+    let alter_pipe = map(
+        rule! {
+            ALTER ~ PIPE ~ ( IF ~ ^EXISTS )?
+            ~ #ident ~ #alter_pipe_option
+        },
+        |(_, _, opt_if_exists, task, options)| {
+            Statement::AlterPipe(AlterPipeStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+                options,
+            })
+        },
+    );
+
+    let drop_pipe = map(
+        rule! {
+            DROP ~ PIPE ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, opt_if_exists, task)| {
+            Statement::DropPipe(DropPipeStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+            })
+        },
+    );
+
+    let desc_pipe = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PIPE ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::DescribePipe(DescribePipeStmt {
+                name: task.to_string(),
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1724,7 +1788,18 @@ AS
          | #execute_task: "`EXECUTE TASK <name>`"
         ),
         rule!(
-        #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+            #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
+  [ AUTO_INGEST = [ TRUE | FALSE ] ]
+  [ COMMENT = '<string_literal>' ]
+AS
+  <copy_sql>`"
+            | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
+            | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
+            | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
+
+        ),
+        rule!(
+            #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
         | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"
@@ -2684,6 +2759,35 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+    )(i)
+}
+
+pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
+    let set = map(
+        rule! {
+             SET
+             ~ ( PIPE_EXECUTION_PAUSED ~ "=" ~ #literal_bool )?
+             ~ ( COMMENT ~ "=" ~ #literal_string )?
+        },
+        |(_, execution_parsed, comment)| AlterPipeOptions::Set {
+            execution_paused: execution_parsed.map(|(_, _, paused)| paused),
+            comments: comment.map(|(_, _, comment)| comment),
+        },
+    );
+    let refresh = map(
+        rule! {
+             REFRESH
+             ~ ( PREFIX ~ "=" ~ #literal_string )?
+             ~ ( MODIFIED_AFTER ~ "=" ~ #literal_string )?
+        },
+        |(_, prefix, modified_after)| AlterPipeOptions::Refresh {
+            prefix: prefix.map(|(_, _, prefix)| prefix),
+            modified_after: modified_after.map(|(_, _, modified_after)| modified_after),
+        },
+    );
+    rule!(
+        #set
+        | #refresh
     )(i)
 }
 
