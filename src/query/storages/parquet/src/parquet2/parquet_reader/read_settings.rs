@@ -12,20 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data;
-mod deserialize;
-mod filter;
-mod read_settings;
-mod reader;
-mod reader_merge_io;
-mod reader_merge_io_async;
-mod reader_merge_io_sync;
+use std::sync::Arc;
 
-pub use data::BlockIterator;
-pub use data::IndexedChunk;
-pub use data::IndexedChunks;
-pub use data::Parquet2PartData;
-pub use read_settings::ReadSettings;
-pub use reader::Parquet2Reader;
-pub use reader_merge_io::MergeIOReadResult;
-pub use reader_merge_io::OwnerMemory;
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
+
+#[derive(Clone, Copy)]
+pub struct ReadSettings {
+    pub max_gap_size: u64,
+    pub max_range_size: u64,
+}
+
+impl ReadSettings {
+    pub fn from_ctx(ctx: &Arc<dyn TableContext>) -> Result<ReadSettings> {
+        Ok(ReadSettings {
+            max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+            max_range_size: ctx
+                .get_settings()
+                .get_storage_io_max_page_bytes_for_read()?,
+        })
+    }
+}

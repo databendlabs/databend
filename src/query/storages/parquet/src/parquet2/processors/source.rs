@@ -102,7 +102,9 @@ impl SyncSource for SyncParquet2Source {
             None => Ok(None),
             Some(part) => {
                 let part_clone = part.clone();
-                let data = self.block_reader.readers_from_blocking_io(part)?;
+                let data = self
+                    .block_reader
+                    .readers_from_blocking_io(self.ctx.clone(), part)?;
                 metrics_inc_copy_read_part_counter();
                 Ok(Some(DataBlock::empty_with_meta(Box::new(
                     Parquet2SourceMeta {
@@ -180,7 +182,7 @@ impl Processor for AsyncParquet2Source {
             let parquet_part = ParquetPart::from_part(&part)?;
             let block_reader = self.block_reader.clone();
             let data = block_reader
-                .readers_from_non_blocking_io(parquet_part)
+                .readers_from_non_blocking_io(self.ctx.clone(), parquet_part)
                 .await?;
             metrics_inc_copy_read_part_counter();
             self.output_data = Some(vec![(part, data)]);

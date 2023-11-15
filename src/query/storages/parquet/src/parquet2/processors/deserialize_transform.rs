@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::vec;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -48,13 +49,13 @@ use opendal::Operator;
 
 use super::source::Parquet2SourceMeta;
 use crate::parquet2::parquet_reader::BlockIterator;
-use crate::parquet2::parquet_reader::IndexedReaders;
+use crate::parquet2::parquet_reader::IndexedChunks;
 use crate::parquet2::parquet_reader::Parquet2PartData;
 use crate::parquet2::parquet_reader::Parquet2Reader;
+use crate::parquet2::parquet_reader::ReadSettings;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
 use crate::parquet2::pruning::PartitionPruner;
 use crate::parquet2::Parquet2RowGroupPart;
-use crate::parquet2::Parquet2SmallGroupPart;
 use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
 
@@ -94,6 +95,9 @@ pub struct Parquet2DeserializeTransform {
     // used for collect num_rows for small files
     is_copy: bool,
     copy_status: Arc<CopyStatus>,
+
+    merge_read_max_gap_size: u64,
+    merge_read_max_range_size: u64,
 }
 
 impl Parquet2DeserializeTransform {
@@ -131,6 +135,10 @@ impl Parquet2DeserializeTransform {
 
                 is_copy: matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable),
                 copy_status: ctx.get_copy_status(),
+                merge_read_max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+                merge_read_max_range_size: ctx
+                    .get_settings()
+                    .get_storage_io_max_page_bytes_for_read()?,
             },
         )))
     }
@@ -147,39 +155,6 @@ impl Parquet2DeserializeTransform {
         self.scan_progress.incr(&progress_values);
         self.output_data.push(data_block);
         Ok(())
-    }
-
-    fn process_small_groups(&mut self, part: &Parquet2SmallGroupPart) -> Result<Vec<DataBlock>> {
-        let mut blocks = Vec::new();
-        for (path, data) in part.groups.iter() {
-            blocks.extend(self.process_small_group(path.as_str(), data)?);
-        }
-        Ok(blocks)
-    }
-
-    fn process_small_group(&mut self, path: &str, groups: &Vec<usize>) -> Result<Vec<DataBlock>> {
-        let mut res = Vec::new();
-        let builder = Memory::default();
-        let op = Operator::new(builder)?.finish();
-        let blocking_op = op.blocking();
-        let parts = self.partition_pruner.prune_file_group(path, &op, groups)?;
-
-        for part in parts {
-            let mut readers = self
-                .source_reader
-                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
-            if let Some(block) = self.process_row_group(&part, &mut readers)? {
-                res.push(block)
-            }
-        }
-        if self.is_copy {
-            let num_rows_loaded = res.iter().map(|b| b.num_rows()).sum();
-            self.copy_status.add_chunk(path, FileStatus {
-                num_rows_loaded,
-                error: None,
-            })
-        }
-        Ok(res)
     }
 
     fn process_small_files(
@@ -206,11 +181,18 @@ impl Parquet2DeserializeTransform {
             .partition_pruner
             .prune_one_file(path, &op, data_size as u64)?;
 
+        let setings = ReadSettings {
+            max_gap_size: self.merge_read_max_gap_size,
+            max_range_size: self.merge_read_max_range_size,
+        };
+
         for part in parts {
-            let mut readers = self
-                .source_reader
-                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
-            if let Some(block) = self.process_row_group(&part, &mut readers)? {
+            let readers = self.source_reader.row_group_readers_from_blocking_io(
+                &setings,
+                &part,
+                &blocking_op,
+            )?;
+            if let Some(block) = self.process_row_group(&part, &mut readers.column_buffers()?)? {
                 res.push(block)
             }
         }
@@ -227,7 +209,7 @@ impl Parquet2DeserializeTransform {
     fn process_row_group(
         &mut self,
         part: &Parquet2RowGroupPart,
-        readers: &mut IndexedReaders,
+        readers: &mut IndexedChunks,
     ) -> Result<Option<DataBlock>> {
         let row_selection = part
             .row_selection
@@ -246,7 +228,7 @@ impl Parquet2DeserializeTransform {
                 filter,
                 top_k,
             }) => {
-                let chunks = reader.read_from_readers(readers)?;
+                let chunks = reader.read_from_merge_io(readers)?;
 
                 // only if there is not dictionary page, we can push down the row selection
                 let can_push_down = chunks
@@ -312,7 +294,8 @@ impl Parquet2DeserializeTransform {
                 }
 
                 // Step 6: Read remain columns.
-                let chunks = self.remain_reader.read_from_readers(readers)?;
+                let chunks = self.remain_reader.read_from_merge_io(readers)?;
+
                 let can_push_down = chunks
                     .iter()
                     .all(|(id, _)| !part.column_metas[id].has_dictionary);
@@ -346,7 +329,8 @@ impl Parquet2DeserializeTransform {
             }
             None => {
                 // for now only use current_row_group when prewhere_info is None
-                let chunks = self.remain_reader.read_from_readers(readers)?;
+                // for now only use current_row_group when prewhere_info is None
+                let chunks = self.remain_reader.read_from_merge_io(readers)?;
                 let mut current_row_group =
                     self.remain_reader
                         .get_deserializer(part, chunks, row_selection)?;
@@ -431,12 +415,6 @@ impl Processor for Parquet2DeserializeTransform {
                 (ParquetPart::Parquet2RowGroup(rg), Parquet2PartData::RowGroup(mut reader)) => {
                     if let Some(block) = self.process_row_group(rg, &mut reader)? {
                         self.add_block(block)?;
-                    }
-                }
-                (ParquetPart::Parquet2SmallGroup(p), Parquet2PartData::SmallGroups(_)) => {
-                    let blocks = self.process_small_groups(p)?;
-                    if !blocks.is_empty() {
-                        self.add_block(DataBlock::concat(&blocks)?)?;
                     }
                 }
                 (ParquetPart::ParquetFiles(p), Parquet2PartData::SmallFiles(buffers)) => {

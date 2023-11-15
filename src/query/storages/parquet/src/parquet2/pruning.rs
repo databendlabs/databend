@@ -27,7 +27,6 @@ use common_arrow::parquet::indexes::Interval;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::parquet::read::read_metadata;
 use common_arrow::parquet::read::read_metadata_with_size;
 use common_arrow::parquet::read::read_pages_locations;
 use common_catalog::plan::PartInfo;
@@ -49,11 +48,9 @@ use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::partition::ColumnMeta;
 use super::Parquet2RowGroupPart;
-use super::Parquet2SmallGroupPart;
 use crate::parquet2::statistics::collect_row_group_stats;
 use crate::parquet2::statistics::BatchStatistics;
 use crate::parquet_part::collect_small_file_parts;
@@ -100,30 +97,21 @@ impl PartitionPruner {
         let file_meta = read_metadata_with_size(&mut reader, file_size).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
-        let (_, parts) = self.read_and_prune_file_meta(path, file_meta, &vec![], op.clone())?;
-        Ok(parts)
-    }
-
-    pub fn prune_file_group(
-        &self,
-        path: &str,
-        op: &Operator,
-        groups: &Vec<usize>,
-    ) -> Result<Vec<Parquet2RowGroupPart>> {
-        let blocking_op = op.blocking();
-        let mut reader = blocking_op.reader(path)?;
-        let file_meta = read_metadata(&mut reader).map_err(|e| {
-            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
-        })?;
-        let (_, parts) = self.read_and_prune_file_meta(path, file_meta, groups, op.clone())?;
+        let (_, parts) = self.read_and_prune_file_meta(path, file_meta, op.clone())?;
         Ok(parts)
     }
 
     #[async_backtrace::framed]
-    fn get_row_group_statistic(
+    pub fn read_and_prune_file_meta(
         &self,
-        file_meta: &FileMetaData,
-    ) -> Result<(Option<Vec<StatisticsOfColumns>>, Vec<bool>)> {
+        path: &str,
+        file_meta: FileMetaData,
+        operator: Operator,
+    ) -> Result<(PartStatistics, Vec<Parquet2RowGroupPart>)> {
+        let mut stats = PartStatistics::default();
+        let mut partitions = vec![];
+
+        let is_blocking_io = operator.info().native_capability().blocking;
         let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
         let no_stats = file_meta.row_groups.iter().any(|r| {
@@ -157,144 +145,9 @@ impl PartitionPruner {
         } else {
             None
         };
-        Ok((row_group_stats, row_group_pruned))
-    }
 
-    #[async_backtrace::framed]
-    fn make_row_group_part(
-        &self,
-        path: &str,
-        group_meta: &RowGroupMetaData,
-        group_id: usize,
-        row_group_stats: &Option<Vec<StatisticsOfColumns>>,
-        operator: Operator,
-    ) -> Result<Parquet2RowGroupPart> {
-        let is_blocking_io = operator.info().native_capability().blocking;
-        // Currently, only blocking io is allowed to prune pages.
-        let row_selection = if self.page_pruners.is_some()
-            && is_blocking_io
-            && group_meta.columns().iter().all(|c| {
-                c.column_chunk().column_index_offset.is_some()
-                    && c.column_chunk().column_index_length.is_some()
-            }) {
-            let mut reader = operator.blocking().reader(path)?;
-            self.page_pruners
-                .as_ref()
-                .map(|pruners| filter_pages(&mut reader, &self.schema, group_meta, pruners))
-                .transpose()
-                .unwrap_or(None)
-        } else {
-            None
-        };
-
-        let mut column_metas = HashMap::with_capacity(self.columns_to_read.len());
-        for index in self.columns_to_read.iter() {
-            let c = &group_meta.columns()[*index];
-            let (offset, length) = c.byte_range();
-
-            let min_max = self
-                .top_k
-                .as_ref()
-                .filter(|(tk, _)| tk.leaf_id == *index)
-                .zip(row_group_stats.as_ref())
-                .map(|((_, offset), stats)| {
-                    let stat = stats[group_id].get(&(*offset as u32)).unwrap();
-                    (stat.min().clone(), stat.max().clone())
-                });
-
-            column_metas.insert(*index, ColumnMeta {
-                offset,
-                length,
-                num_values: c.num_values(),
-                compression: c.compression(),
-                uncompressed_size: c.uncompressed_size() as u64,
-                min_max,
-                has_dictionary: c.dictionary_page_offset().is_some(),
-            });
-        }
-
-        Ok(Parquet2RowGroupPart {
-            location: path.to_string(),
-            num_rows: group_meta.num_rows(),
-            column_metas,
-            row_selection,
-            sort_min_max: None,
-        })
-    }
-
-    fn collect_small_group_parts(
-        &self,
-        small_group: HashMap<String, Vec<(usize, usize, usize)>>,
-        partitions: &mut Vec<Arc<Box<dyn PartInfo>>>,
-        mut max_compression_ratio: f64,
-        mut max_compressed_size: u64,
-    ) {
-        if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
-            // just incase
-            max_compression_ratio = 1.0;
-        }
-        if max_compressed_size == 0 {
-            // there are no large files, so we choose a default value.
-            max_compressed_size = ((128usize << 20) as f64 / max_compression_ratio) as u64;
-        }
-        let max_files = self.columns_to_read.len() * 2;
-        let mut groups = HashMap::with_capacity(small_group.len());
-        let mut uncompressed_size: usize = 0;
-        let mut compressed_size: usize = 0;
-        let mut group_num: usize = 0;
-        for (path, group_size) in small_group.into_iter() {
-            uncompressed_size += group_size.iter().map(|(_, _, u)| u).sum::<usize>();
-            compressed_size += group_size.iter().map(|(_, c, _)| c).sum::<usize>();
-            group_num += group_size.len();
-            groups.insert(path, group_size.into_iter().map(|(c, _, _)| c).collect());
-            if (compressed_size as u64) > max_compressed_size || group_num >= max_files {
-                partitions.push(Arc::new(Box::new(ParquetPart::Parquet2SmallGroup(
-                    Parquet2SmallGroupPart {
-                        groups: groups.clone(),
-                        uncompressed_size,
-                        compressed_size,
-                    },
-                )) as Box<dyn PartInfo>));
-                uncompressed_size = 0;
-                compressed_size = 0;
-                groups.clear();
-            }
-        }
-        if !groups.is_empty() {
-            partitions.push(Arc::new(Box::new(ParquetPart::Parquet2SmallGroup(
-                Parquet2SmallGroupPart {
-                    groups,
-                    uncompressed_size,
-                    compressed_size,
-                },
-            )) as Box<dyn PartInfo>));
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub fn read_and_prune_file_meta(
-        &self,
-        path: &str,
-        file_meta: FileMetaData,
-        groups: &Vec<usize>,
-        operator: Operator,
-    ) -> Result<(PartStatistics, Vec<Parquet2RowGroupPart>)> {
-        let mut stats = PartStatistics::default();
-        let mut partitions = vec![];
-
-        let (row_group_stats, row_group_pruned) = self.get_row_group_statistic(&file_meta)?;
-        let mut prune_groups = vec![true; file_meta.row_groups.len()];
-        if !groups.is_empty() {
-            prune_groups = vec![false; file_meta.row_groups.len()];
-            for group in groups {
-                prune_groups[*group] = true;
-            }
-        }
         for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
             if row_group_pruned[rg_idx] {
-                continue;
-            }
-            if !prune_groups[rg_idx] {
                 continue;
             }
 
@@ -303,13 +156,55 @@ impl PartitionPruner {
             stats.partitions_scanned += 1;
 
             // Currently, only blocking io is allowed to prune pages.
-            partitions.push(self.make_row_group_part(
-                path,
-                rg,
-                rg_idx,
-                &row_group_stats,
-                operator.clone(),
-            )?);
+            let row_selection = if self.page_pruners.is_some()
+                && is_blocking_io
+                && rg.columns().iter().all(|c| {
+                    c.column_chunk().column_index_offset.is_some()
+                        && c.column_chunk().column_index_length.is_some()
+                }) {
+                let mut reader = operator.blocking().reader(path)?;
+                self.page_pruners
+                    .as_ref()
+                    .map(|pruners| filter_pages(&mut reader, &self.schema, rg, pruners))
+                    .transpose()
+                    .unwrap_or(None)
+            } else {
+                None
+            };
+
+            let mut column_metas = HashMap::with_capacity(self.columns_to_read.len());
+            for index in self.columns_to_read.iter() {
+                let c = &rg.columns()[*index];
+                let (offset, length) = c.byte_range();
+
+                let min_max = self
+                    .top_k
+                    .as_ref()
+                    .filter(|(tk, _)| tk.leaf_id == *index)
+                    .zip(row_group_stats.as_ref())
+                    .map(|((_, offset), stats)| {
+                        let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
+                        (stat.min().clone(), stat.max().clone())
+                    });
+
+                column_metas.insert(*index, ColumnMeta {
+                    offset,
+                    length,
+                    num_values: c.num_values(),
+                    compression: c.compression(),
+                    uncompressed_size: c.uncompressed_size() as u64,
+                    min_max,
+                    has_dictionary: c.dictionary_page_offset().is_some(),
+                });
+            }
+
+            partitions.push(Parquet2RowGroupPart {
+                location: path.to_string(),
+                num_rows: rg.num_rows(),
+                column_metas,
+                row_selection,
+                sort_min_max: None,
+            })
         }
         Ok((stats, partitions))
     }
@@ -352,8 +247,6 @@ impl PartitionPruner {
         // 2. Use file meta to prune row groups or pages.
         let mut max_compression_ratio = self.compression_ratio;
         let mut max_compressed_size = 0u64;
-        let mut small_group: HashMap<String, Vec<(usize, usize, usize)>> =
-            HashMap::with_capacity(locations.len());
 
         // If one row group does not have stats, we cannot use the stats for topk optimization.
         for (file_id, file_meta) in file_metas.into_iter().enumerate() {
@@ -365,54 +258,18 @@ impl PartitionPruner {
                 });
             }
             stats.partitions_total += file_meta.row_groups.len();
-            let mut parts = Vec::with_capacity(file_meta.row_groups.len());
-            let (row_group_stats, row_group_pruned) = self.get_row_group_statistic(&file_meta)?;
-            for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
-                if row_group_pruned[rg_idx] {
-                    continue;
-                }
-                stats.read_rows += rg.num_rows();
-                stats.read_bytes += rg.total_byte_size();
-                if self.parquet_fast_read_bytes > (rg.total_byte_size() + rg.compressed_size()) {
-                    match small_group.get_mut(path) {
-                        Some(rgs) => {
-                            rgs.push((rg_idx, rg.compressed_size(), rg.total_byte_size()));
-                        }
-                        None => {
-                            let mut rgs = Vec::with_capacity(file_meta.row_groups.len());
-                            rgs.push((rg_idx, rg.compressed_size(), rg.total_byte_size()));
-                            small_group.insert(path.to_string(), rgs);
-                        }
-                    };
-                } else {
-                    parts.push(self.make_row_group_part(
-                        path,
-                        rg,
-                        rg_idx,
-                        &row_group_stats,
-                        operator.clone(),
-                    )?);
-                }
-            }
+            let (sub_stats, parts) =
+                self.read_and_prune_file_meta(path, file_meta, operator.clone())?;
 
             for p in parts {
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
                 max_compressed_size = max_compressed_size.max(p.compressed_size());
                 partitions.push(Arc::new(
-                    Box::new(ParquetPart::Parquet2RowGroup(p.clone())) as Box<dyn PartInfo>
+                    Box::new(ParquetPart::Parquet2RowGroup(p)) as Box<dyn PartInfo>
                 ));
-                stats.partitions_scanned += 1;
             }
-        }
-
-        if !small_group.is_empty() {
-            self.collect_small_group_parts(
-                small_group,
-                &mut partitions,
-                max_compression_ratio,
-                max_compressed_size,
-            );
+            stats.merge(&sub_stats);
         }
 
         let num_large_partitions = partitions.len();
