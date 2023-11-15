@@ -18,6 +18,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::RwLock;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -101,6 +102,7 @@ pub struct FuseTable {
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
 
+    pub(crate) prev_snapshot: Arc<RwLock<Option<Arc<TableSnapshot>>>>,
     table_type: FuseTableType,
 }
 
@@ -188,6 +190,7 @@ impl FuseTable {
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
+            prev_snapshot: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -515,16 +518,8 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            &self.operator,
-        )
-        .await
+        self.commit_to_meta_server(ctx.as_ref(), &table_info, new_snapshot, None, &None)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -568,16 +563,8 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            &self.operator,
-        )
-        .await
+        self.commit_to_meta_server(ctx.as_ref(), &table_info, new_snapshot, None, &None)
+            .await
     }
 
     #[minitrace::trace]

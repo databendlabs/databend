@@ -109,36 +109,81 @@ impl FuseTable {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    pub async fn commit_to_meta_server(
+    async fn check_lvt_conflict(
+        &self,
         ctx: &dyn TableContext,
         table_info: &TableInfo,
-        location_generator: &TableMetaLocationGenerator,
-        snapshot: TableSnapshot,
-        table_statistics: Option<TableSnapshotStatistics>,
-        copied_files: &Option<UpsertTableCopiedFileReq>,
-        operator: &Operator,
+        snapshot: &TableSnapshot,
     ) -> Result<()> {
         let catalog = table_info.catalog();
         let catalog = ctx.get_catalog(catalog).await?;
         let lvt = catalog.get_table_lvt(table_info.ident.table_id).await?;
         if let Some(lvt) = lvt.time {
-            let now_ms = if let Some(snapshot_time) = snapshot.timestamp {
-                snapshot_time.timestamp_micros() as u64
-            } else {
-                chrono::Utc::now().timestamp_micros() as u64
+            let prev_snapshot_opt = {
+                let prev_snapshot_opt = self.prev_snapshot.read().await;
+                prev_snapshot_opt.to_owned()
             };
-            if lvt > now_ms {
-                info!(
-                    "when commit table {:?}, lvt {} conflict",
-                    table_info.name, lvt
-                );
-                return Err(ErrorCode::StorageOther(
-                    "commit fail by lvt conflict".to_string(),
-                ));
+            let prev_snapshot = if let Some(prev_snapshot) = prev_snapshot_opt.to_owned() {
+                Some(prev_snapshot)
+            } else if let Some((prev_snapshot_id, format_version, table_version)) =
+                snapshot.prev_snapshot_id
+            {
+                let location_generator = &self.meta_location_generator;
+                let prev_snapshot_loc = location_generator.gen_snapshot_location(
+                    &prev_snapshot_id,
+                    format_version,
+                    table_version,
+                )?;
+                let read_prev_snapshot_opt = self
+                    .read_table_snapshot_by_location(prev_snapshot_loc.clone())
+                    .await?;
+                if let Some(prev_snapshot) = read_prev_snapshot_opt {
+                    let mut prev_snapshot_opt = self.prev_snapshot.write().await;
+                    *prev_snapshot_opt = Some(prev_snapshot.clone());
+                    Some(prev_snapshot)
+                } else {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "read prev snapshot at {:?} fail",
+                        prev_snapshot_loc
+                    )));
+                }
+            } else {
+                None
+            };
+
+            if let Some(prev_snapshot) = prev_snapshot {
+                let now_ms = if let Some(snapshot_time) = prev_snapshot.timestamp {
+                    snapshot_time.timestamp_micros() as u64
+                } else {
+                    chrono::Utc::now().timestamp_micros() as u64
+                };
+                if lvt > now_ms {
+                    info!(
+                        "when commit table {:?}, lvt {} conflict",
+                        table_info.name, lvt
+                    );
+                    return Err(ErrorCode::StorageOther(
+                        "commit fail by lvt conflict".to_string(),
+                    ));
+                }
             }
         }
 
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn commit_to_meta_server(
+        &self,
+        ctx: &dyn TableContext,
+        table_info: &TableInfo,
+        snapshot: TableSnapshot,
+        table_statistics: Option<TableSnapshotStatistics>,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
+    ) -> Result<()> {
+        self.check_lvt_conflict(ctx, table_info, &snapshot).await?;
+
+        let location_generator = &self.meta_location_generator;
         let snapshot_location = location_generator.gen_snapshot_location(
             &snapshot.snapshot_id,
             TableSnapshot::VERSION,
@@ -148,6 +193,7 @@ impl FuseTable {
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
         // 1. write down snapshot
+        let operator = &self.operator;
         snapshot.write_meta(operator, &snapshot_location).await?;
         if need_to_save_statistics {
             table_statistics
@@ -319,12 +365,11 @@ impl FuseTable {
 
         // Status
         ctx.set_status_info("mutation: begin try to commit");
+        let table_version = self.current_table_version();
 
         loop {
-            let mut snapshot_tobe_committed = TableSnapshot::from_previous(
-                latest_snapshot.as_ref(),
-                Some(self.current_table_version()),
-            );
+            let mut snapshot_tobe_committed =
+                TableSnapshot::from_previous(latest_snapshot.as_ref(), Some(table_version));
 
             let schema = self.schema();
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
@@ -340,16 +385,15 @@ impl FuseTable {
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
 
-            match Self::commit_to_meta_server(
-                ctx.as_ref(),
-                latest_table_info,
-                &self.meta_location_generator,
-                snapshot_tobe_committed,
-                None,
-                &None,
-                &self.operator,
-            )
-            .await
+            match self
+                .commit_to_meta_server(
+                    ctx.as_ref(),
+                    latest_table_info,
+                    snapshot_tobe_committed,
+                    None,
+                    &None,
+                )
+                .await
             {
                 Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
                     match backoff.next_backoff() {
