@@ -65,7 +65,7 @@ impl PartitionedPayload {
         let validity_offsets = payloads[0].validity_offsets.clone();
         let hash_offset = payloads[0].hash_offset;
         let state_offset = payloads[0].state_offset;
-        let state_addr_offsets = payloads[0].state_addr_offsets;
+        let state_addr_offsets = payloads[0].state_addr_offsets.clone();
         let state_layout = payloads[0].state_layout;
 
         PartitionedPayload {
@@ -176,9 +176,6 @@ impl PartitionedPayload {
             state.clear();
 
             while self.gather_flush(&other, state) {
-                if state.row_count == 0 {
-                    continue;
-                }
                 // copy rows
                 for partition in 0..self.partition_count as usize {
                     let payload = &mut self.payloads[partition];

@@ -100,7 +100,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             output: OutputPort::create(),
             buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
-            flush_state: PayloadFlushState::new(),
+            flush_state: PayloadFlushState::default(),
             partition_payloads: vec![],
             initialized_all_inputs: false,
             max_partition_count: 0,

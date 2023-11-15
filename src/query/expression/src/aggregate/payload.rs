@@ -159,12 +159,14 @@ impl Payload {
             || self.pages[self.current_write_page - 1].rows
                 == self.pages[self.current_write_page - 1].capacity
         {
-            self.pages.push(Page {
-                data: Vec::with_capacity(self.row_per_page * self.tuple_size),
-                rows: 0,
-                capacity: self.row_per_page,
-            });
-            self.current_write_page = self.pages.len();
+            self.current_write_page += 1;
+            if self.current_write_page > self.pages.len() {
+                self.pages.push(Page {
+                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
+                    rows: 0,
+                    capacity: self.row_per_page,
+                });
+            }
         }
         &mut self.pages[self.current_write_page - 1]
     }
@@ -182,10 +184,14 @@ impl Payload {
         group_columns: &[Column],
     ) {
         let tuple_size = self.tuple_size;
+        let mut page = self.writable_page();
         for idx in select_vector.iter().take(new_group_rows).copied() {
-            let page = self.writable_page();
             address[idx] = unsafe { page.data.as_ptr().add(page.rows * tuple_size) as *const u8 };
             page.rows += 1;
+
+            if page.rows == page.capacity {
+                page = self.writable_page();
+            }
         }
 
         self.total_rows += new_group_rows;
@@ -299,9 +305,9 @@ impl Payload {
         address: &[*const u8],
     ) {
         let tuple_size = self.tuple_size;
+        let mut page = self.writable_page();
         for i in 0..row_count {
             let index = select_vector[i];
-            let page = self.writable_page();
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     address[index],
@@ -310,6 +316,10 @@ impl Payload {
                 )
             }
             page.rows += 1;
+
+            if page.rows == page.capacity {
+                page = self.writable_page();
+            }
         }
 
         self.total_rows += row_count;

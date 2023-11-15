@@ -121,7 +121,7 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
     ) -> Result<Box<dyn Processor>> {
         let hash_table = if !enable_experimental_aggregate_hashtable {
             let arena = Arc::new(Bump::new());
-            let hashtable = method.create_hash_table(arena.clone())?;
+            let hashtable = method.create_hash_table(arena)?;
             let _dropper = GroupByHashTableDropper::<Method>::create();
             HashTable::HashTable(HashTableCell::create(hashtable, _dropper))
         } else {
@@ -138,7 +138,7 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             TransformPartialGroupBy::<Method> {
                 method,
                 hash_table,
-                probe_state: ProbeState::new(),
+                probe_state: ProbeState::default(),
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
             },

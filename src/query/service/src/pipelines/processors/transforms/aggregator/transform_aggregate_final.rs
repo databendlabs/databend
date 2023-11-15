@@ -61,7 +61,7 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
             TransformFinalAggregate::<Method> {
                 method,
                 params,
-                flush_state: PayloadFlushState::new(),
+                flush_state: PayloadFlushState::default(),
             },
         )))
     }
@@ -76,7 +76,7 @@ where Method: HashMethodBounds
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut reach_limit = false;
             let arena = Arc::new(Bump::new());
-            let hashtable = self.method.create_hash_table::<usize>(arena.clone())?;
+            let hashtable = self.method.create_hash_table::<usize>(arena)?;
             let _dropper = AggregateHashTableDropper::create(self.params.clone());
             let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
 

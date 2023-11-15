@@ -47,13 +47,10 @@ pub struct PayloadFlushState {
     pub state_places: [StateAddr; BATCH_SIZE],
 }
 
-unsafe impl Send for PayloadFlushState {}
-unsafe impl Sync for PayloadFlushState {}
-
-impl PayloadFlushState {
-    pub fn new() -> PayloadFlushState {
+impl Default for PayloadFlushState {
+    fn default() -> Self {
         PayloadFlushState {
-            probe_state: ProbeState::new(),
+            probe_state: ProbeState::default(),
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,
@@ -64,7 +61,12 @@ impl PayloadFlushState {
             state_places: [StateAddr::new(0); BATCH_SIZE],
         }
     }
+}
 
+unsafe impl Send for PayloadFlushState {}
+unsafe impl Sync for PayloadFlushState {}
+
+impl PayloadFlushState {
     pub fn clear(&mut self) {
         self.row_count = 0;
         self.flush_partition = 0;

@@ -416,7 +416,7 @@ unsafe fn row_match_column_type<T: ArgType>(
             let validity_address = address[idx].add(validity_offset);
             let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
             let is_set = is_all_set || validity.get_bit_unchecked(idx);
-            if is_set && is_set {
+            if is_set && is_set2 {
                 let address = address[idx].add(col_offset);
                 let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
                 let value = T::index_column_unchecked(&col, idx);

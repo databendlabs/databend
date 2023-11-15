@@ -55,7 +55,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
             TransformFinalGroupBy::<Method> {
                 method,
                 params,
-                flush_state: PayloadFlushState::new(),
+                flush_state: PayloadFlushState::default(),
             },
         )))
     }

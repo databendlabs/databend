@@ -33,6 +33,7 @@ use crate::StateAddr;
 use crate::LOAD_FACTOR;
 use crate::MAX_ROWS_IN_HT;
 
+// The high 16 bits are the salt, the low 48 bits are the pointer address
 pub type Entry = u64;
 
 pub struct AggregateHashTable {
@@ -41,6 +42,10 @@ pub struct AggregateHashTable {
     current_radix_bits: u64,
     entries: Vec<Entry>,
     capacity: usize,
+    disable_expand_ht: bool,
+
+    // how many rows probe into this hash table
+    probe_input_rows: usize,
 }
 
 unsafe impl Send for AggregateHashTable {}
@@ -68,6 +73,8 @@ impl AggregateHashTable {
             payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits),
             capacity,
             config,
+            disable_expand_ht: false,
+            probe_input_rows: 0,
         }
     }
 
@@ -160,9 +167,8 @@ impl AggregateHashTable {
     ) -> usize {
         self.maybe_repartition();
 
-        if self.config.partial_agg
-            && self.current_radix_bits == self.config.max_radix_bits
-            && self.capacity >= MAX_ROWS_IN_HT
+        if self.current_radix_bits == self.config.max_radix_bits
+            && self.should_disable_expand_hash_table()
         {
             // directly append rows
             state.set_incr_empty_vector(row_count);
@@ -180,6 +186,8 @@ impl AggregateHashTable {
             }
             self.resize(new_capacity);
         }
+
+        self.probe_input_rows += row_count;
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -379,9 +387,15 @@ impl AggregateHashTable {
         let bytes_per_partition = self.payload.memory_size() / self.payload.partition_count();
 
         let mut new_radix_bits = self.current_radix_bits;
+
         // 256k
         if bytes_per_partition > 256 * 1024 {
             new_radix_bits += self.config.repartition_radix_bits_incr;
+
+            // If reducion is small and input rows will be very large, directly repartition to max radix bits
+            if self.should_disable_expand_hash_table() {
+                new_radix_bits = self.config.max_radix_bits;
+            }
         }
 
         loop {
@@ -412,7 +426,7 @@ impl AggregateHashTable {
                 1,
             );
             let payload = std::mem::replace(&mut self.payload, temp_payload);
-            let mut state = PayloadFlushState::new();
+            let mut state = PayloadFlushState::default();
 
             self.current_radix_bits = current_max_radix_bits;
             self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
@@ -463,6 +477,20 @@ impl AggregateHashTable {
 
         self.entries = entries;
         self.capacity = new_capacity;
+    }
+
+    pub fn should_disable_expand_hash_table(&mut self) -> bool {
+        if self.disable_expand_ht {
+            return true;
+        }
+
+        if !self.config.partial_agg || self.capacity < MAX_ROWS_IN_HT {
+            return false;
+        }
+
+        let ratio = self.probe_input_rows as f64 / self.len() as f64;
+        self.disable_expand_ht = ratio <= self.config.min_reduction;
+        self.disable_expand_ht
     }
 
     pub fn initial_capacity() -> usize {

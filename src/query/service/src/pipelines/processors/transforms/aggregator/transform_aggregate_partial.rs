@@ -126,7 +126,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
     ) -> Result<Box<dyn Processor>> {
         let hash_table = if !enable_experimental_aggregate_hashtable {
             let arena = Arc::new(Bump::new());
-            let hashtable = method.create_hash_table(arena.clone())?;
+            let hashtable = method.create_hash_table(arena)?;
             let _dropper = AggregateHashTableDropper::create(params.clone());
             let hashtable = HashTableCell::create(hashtable, _dropper);
 
@@ -151,7 +151,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 method,
                 params,
                 hash_table,
-                probe_state: ProbeState::new(),
+                probe_state: ProbeState::default(),
                 settings: AggregateSettings::try_from(ctx)?,
             },
         ))

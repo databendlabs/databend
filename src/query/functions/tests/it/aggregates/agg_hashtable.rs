@@ -53,7 +53,6 @@ use itertools::Itertools;
 fn test_agg_hashtable() {
     let factory = AggregateFunctionFactory::instance();
     let m: usize = 4;
-    const BATCH_SIZE: usize = 8192;
     for n in [100, 1000, 10_000, 100_000] {
         let columns = vec![
             StringType::from_data(
@@ -89,13 +88,12 @@ fn test_agg_hashtable() {
         ];
 
         let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
-        let radix_bits = 3;
 
         let config = HashTableConfig::default();
         let mut hashtable =
             AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
-        let mut state = ProbeState::new();
+        let mut state = ProbeState::default();
         let _ = hashtable
             .add_groups(&mut state, &group_columns, &params, n)
             .unwrap();
@@ -103,15 +101,15 @@ fn test_agg_hashtable() {
         let mut hashtable2 =
             AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
-        let mut state2 = ProbeState::new();
+        let mut state2 = ProbeState::default();
         let _ = hashtable2
             .add_groups(&mut state2, &group_columns, &params, n)
             .unwrap();
 
-        let mut flush_state = PayloadFlushState::new();
+        let mut flush_state = PayloadFlushState::default();
         let _ = hashtable.combine(hashtable2, &mut flush_state);
 
-        let mut merge_state = PayloadFlushState::new();
+        let mut merge_state = PayloadFlushState::default();
 
         let mut blocks = Vec::new();
         loop {

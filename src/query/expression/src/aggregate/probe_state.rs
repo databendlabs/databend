@@ -36,11 +36,8 @@ pub struct ProbeState {
     pub partition_entries: HashMap<usize, (SelectVector, usize), PerfectHashBuilder>,
 }
 
-unsafe impl Send for ProbeState {}
-unsafe impl Sync for ProbeState {}
-
-impl ProbeState {
-    pub fn new() -> Self {
+impl Default for ProbeState {
+    fn default() -> Self {
         Self {
             group_hashes: [0_u64; BATCH_SIZE],
             addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
@@ -53,6 +50,12 @@ impl ProbeState {
             row_count: 0,
         }
     }
+}
+
+unsafe impl Send for ProbeState {}
+unsafe impl Sync for ProbeState {}
+
+impl ProbeState {
     pub fn set_incr_empty_vector(&mut self, row_count: usize) {
         for i in 0..row_count {
             self.empty_vector[i] = i;
