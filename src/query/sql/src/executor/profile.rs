@@ -31,12 +31,13 @@ use common_profile::ProjectSetAttribute;
 use common_profile::QueryProfile;
 use common_profile::SortAttribute;
 use common_profile::TableScanAttribute;
+use common_profile::UdfAttribute;
 use common_profile::WindowAttribute;
 use itertools::Itertools;
 
 use crate::executor::format::pretty_display_agg_desc;
-use crate::executor::physical_plans::common::FragmentKind;
-use crate::executor::physical_plans::physical_window::WindowFunction;
+use crate::executor::physical_plans::FragmentKind;
+use crate::executor::physical_plans::WindowFunction;
 use crate::executor::PhysicalPlan;
 use crate::planner::Metadata;
 use crate::MetadataRef;
@@ -501,6 +502,27 @@ fn flatten_plan_node_profile(
                 execution_info: proc_prof.into(),
                 children: vec![],
                 attribute: OperatorAttribute::Empty,
+            };
+            plan_node_profs.push(prof);
+        }
+        PhysicalPlan::Udf(udf) => {
+            flatten_plan_node_profile(metadata, &udf.input, profs, plan_node_profs)?;
+            let proc_prof = profs.get(&udf.plan_id).copied().unwrap_or_default();
+            let prof = OperatorProfile {
+                id: udf.plan_id,
+                operator_type: OperatorType::Udf,
+                execution_info: proc_prof.into(),
+                children: vec![udf.input.get_id()],
+                attribute: OperatorAttribute::Udf(UdfAttribute {
+                    scalars: udf
+                        .udf_funcs
+                        .iter()
+                        .map(|func| {
+                            let arg_exprs = func.arg_exprs.join(", ");
+                            format!("{}({})", func.func_name, arg_exprs)
+                        })
+                        .join(", "),
+                }),
             };
             plan_node_profs.push(prof);
         }

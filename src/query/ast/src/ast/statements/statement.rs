@@ -21,6 +21,8 @@ use common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::statements::connection::CreateConnectionStmt;
+use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -194,6 +196,11 @@ pub enum Statement {
         location: String,
         pattern: Option<String>,
     },
+    // Connection
+    CreateConnection(CreateConnectionStmt),
+    DropConnection(DropConnectionStmt),
+    DescribeConnection(DescribeConnectionStmt),
+    ShowConnections(ShowConnectionsStmt),
 
     // UserDefinedFileFormat
     CreateFileFormat {
@@ -241,6 +248,12 @@ pub enum Statement {
     DescribeTask(DescribeTaskStmt),
     DropTask(DropTaskStmt),
     ShowTasks(ShowTasksStmt),
+
+    // pipes
+    CreatePipe(CreatePipeStmt),
+    DescribePipe(DescribePipeStmt),
+    DropPipe(DropPipeStmt),
+    AlterPipe(AlterPipeStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -277,6 +290,11 @@ impl Statement {
                 }
                 format!("{}", Statement::CreateStage(stage_clone))
             }
+            Statement::AttachTable(attach) => {
+                let mut attach_clone = attach.clone();
+                attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
+                format!("{}", Statement::AttachTable(attach_clone))
+            }
             _ => format!("{}", self),
         }
     }
@@ -294,6 +312,7 @@ impl Display for Statement {
                     ExplainKind::Pipeline => write!(f, " PIPELINE")?,
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
+                    ExplainKind::Optimized => write!(f, " Optimized")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::JOIN => write!(f, " JOIN")?,
@@ -552,6 +571,14 @@ impl Display for Statement {
             Statement::DropTask(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTasks(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTask(stmt) => write!(f, "{stmt}")?,
+            Statement::CreatePipe(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribePipe(stmt) => write!(f, "{stmt}")?,
+            Statement::DropPipe(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterPipe(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowConnections(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

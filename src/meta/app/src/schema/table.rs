@@ -737,6 +737,7 @@ pub enum TableInfoFilter {
 pub struct ListDroppedTableReq {
     pub inner: DatabaseNameIdent,
     pub filter: TableInfoFilter,
+    pub limit: Option<usize>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

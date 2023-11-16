@@ -1166,6 +1166,8 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
         value(JsonOperator::Question, rule! { "?" }),
         value(JsonOperator::QuestionOr, rule! { "?|" }),
         value(JsonOperator::QuestionAnd, rule! { "?&" }),
+        value(JsonOperator::AtArrow, rule! { "@>" }),
+        value(JsonOperator::ArrowAt, rule! { "<@" }),
     ))(i)
 }
 

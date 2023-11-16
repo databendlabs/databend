@@ -27,11 +27,11 @@ use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::CommitSink;
-use common_sql::executor::CompactSource;
-use common_sql::executor::Exchange;
-use common_sql::executor::FragmentKind;
-use common_sql::executor::MutationKind;
+use common_sql::executor::physical_plans::CommitSink;
+use common_sql::executor::physical_plans::CompactSource;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::FragmentKind;
+use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
@@ -151,7 +151,7 @@ impl OptimizeTableInterpreter {
 
         // check if the table is locked.
         let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        if table_lock.check_lock(catalog.clone()).await? {
+        if self.plan.need_lock && table_lock.check_lock(catalog.clone()).await? {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table

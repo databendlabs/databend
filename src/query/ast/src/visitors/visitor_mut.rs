@@ -710,4 +710,9 @@ pub trait VisitorMut: Sized {
 
         walk_join_condition_mut(self, condition);
     }
+
+    fn visit_create_connection(&mut self, _stmt: &mut CreateConnectionStmt) {}
+    fn visit_drop_connection(&mut self, _stmt: &mut DropConnectionStmt) {}
+    fn visit_describe_connection(&mut self, _stmt: &mut DescribeConnectionStmt) {}
+    fn visit_show_connections(&mut self, _stmt: &mut ShowConnectionsStmt) {}
 }

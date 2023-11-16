@@ -33,15 +33,15 @@ use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_transforms::processors::transforms::sort_merge;
-use common_sql::executor::RangeJoin;
+use common_pipeline_transforms::processors::sort_merge;
+use common_sql::executor::physical_plans::RangeJoin;
 
-use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_block;
-use crate::pipelines::processors::transforms::range_join::ie_join_util::order_match;
-use crate::pipelines::processors::transforms::range_join::ie_join_util::probe_l1;
+use crate::pipelines::processors::transforms::range_join::filter_block;
+use crate::pipelines::processors::transforms::range_join::order_match;
+use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 
-pub(crate) struct IEJoinState {
+pub struct IEJoinState {
     l1_data_type: DataType,
     // Sort description for L1
     pub(crate) l1_sort_descriptions: Vec<SortColumnDescription>,
@@ -315,10 +315,10 @@ impl RangeJoinState {
                     continue;
                 }
             }
+            let idx_val = unsafe { l2.index_unchecked(idx) };
             while off2 < len {
-                let order =
-                    unsafe { l2.index_unchecked(idx) }.cmp(&unsafe { l2.index_unchecked(off2) });
-                if !order_match(&self.conditions[1].operator, order) {
+                let off2_val = unsafe { l2.index_unchecked(off2) };
+                if !order_match(&self.conditions[1].operator, &idx_val, &off2_val) {
                     break;
                 }
                 let p2 = p_array[off2];

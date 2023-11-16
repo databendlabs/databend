@@ -21,10 +21,10 @@ use common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
-use crate::processors::port::InputPort;
-use crate::processors::port::OutputPort;
-use crate::processors::processor::ProcessorPtr;
 use crate::processors::DuplicateProcessor;
+use crate::processors::InputPort;
+use crate::processors::OutputPort;
+use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;

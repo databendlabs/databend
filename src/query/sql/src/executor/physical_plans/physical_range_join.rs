@@ -189,7 +189,9 @@ fn resolve_range_condition(
                             |index| right_schema.index_of(&index.to_string()).unwrap(),
                         ));
                     }
-                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => unreachable!(),
+                    JoinPredicate::ALL(_)
+                    | JoinPredicate::Both { .. }
+                    | JoinPredicate::Other(_) => unreachable!(),
                 }
             }
             let op = if opposite {

@@ -56,7 +56,7 @@ impl AuthType {
     }
 
     fn bad_auth_types(s: &str) -> String {
-        let all = vec![
+        let all = [
             NO_PASSWORD_STR,
             SHA256_PASSWORD_STR,
             DOUBLE_SHA1_PASSWORD_STR,

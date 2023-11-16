@@ -20,3 +20,23 @@ export BENDSQL_CLIENT_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST}
 export MYSQL_CLIENT_SHARE_1_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_1_PORT} ${MYSQL_DATABASE} -s"
 export MYSQL_CLIENT_SHARE_2_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_2_PORT} ${MYSQL_DATABASE} -s"
 export MYSQL_CLIENT_SHARE_3_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_3_PORT} ${MYSQL_DATABASE} -s"
+
+
+query() {
+	echo ">>>> $1"
+	echo "$1" | $BENDSQL_CLIENT_CONNECT
+	echo "<<<<"
+}
+
+stmt() {
+	echo ">>>> $1"
+	echo "$1" | $BENDSQL_CLIENT_CONNECT
+	if [ $? -ne 0 ]; then
+		echo "<<<<"
+	fi
+	return 0
+}
+
+comment() {
+	echo "#### $1"
+}

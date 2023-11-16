@@ -22,7 +22,7 @@ use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
 use crate::ColumnBinding;

@@ -22,4 +22,3 @@ mod transform_merge_into_mutation_aggregator;
 pub use processor_broadcast::BroadcastProcessor;
 pub use processor_replace_into::ReplaceIntoProcessor;
 pub use processor_unbranched_replace_into::UnbranchedReplaceIntoProcessor;
-pub use transform_merge_into_mutation_aggregator::MergeIntoOperationAggregator;

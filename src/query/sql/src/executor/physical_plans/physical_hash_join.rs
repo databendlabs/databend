@@ -26,7 +26,7 @@ use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::Exchange;
+use crate::executor::physical_plans::Exchange;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
@@ -89,7 +89,6 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
-
         // Unify the data types of the left and right exchange keys.
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -178,12 +177,13 @@ impl PhysicalPlanBuilder {
             .iter()
             .zip(join.right_conditions.iter())
         {
-            let left_expr = left_condition
-                .type_check(probe_schema.as_ref())?
-                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
             let right_expr = right_condition
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
+            let left_expr = left_condition
+                .type_check(probe_schema.as_ref())?
+                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
                     (left_condition, right_condition)

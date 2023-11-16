@@ -180,7 +180,7 @@ impl AccessChecker for PrivilegeAccess {
                         vec![UserPrivilegeType::Select],
                         true,
                     )
-                    .await?
+                        .await?
                 }
             }
             Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => {
@@ -194,7 +194,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Select],
                     true,
                 )
-                .await?
+                    .await?
             }
             Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
@@ -234,7 +234,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Create],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::AlterVirtualColumn(plan) => {
                 self.validate_access(
@@ -246,7 +246,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropVirtualColumn(plan) => {
                 self.validate_access(
@@ -258,7 +258,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Drop],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::RefreshVirtualColumn(plan) => {
                 self.validate_access(
@@ -270,7 +270,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Super],
                     false,
                 )
-                .await?;
+                    .await?;
             }
 
             // Table.
@@ -284,7 +284,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Select],
                     true,
                 )
-                .await?
+                    .await?
             }
             Plan::DescribeTable(plan) => {
                 self.validate_access(
@@ -296,7 +296,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Select],
                     true,
                 )
-                .await?
+                    .await?
             }
             Plan::CreateTable(plan) => {
                 self.validate_access(
@@ -304,7 +304,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Create],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropTable(plan) => {
                 self.validate_access(
@@ -312,7 +312,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::UndropTable(plan) => {
                 self.validate_access(
@@ -320,7 +320,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::RenameTable(plan) => {
                 // You must have ALTER and DROP privileges for the original table,
@@ -334,7 +334,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop],
                     true,
                 )
-                .await?;
+                    .await?;
                 // TODO(liyz): need only check the create privilege on the target database? the target
                 // table may still not existed yet.
                 self.validate_access(
@@ -346,7 +346,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Create, UserPrivilegeType::Insert],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::SetOptions(plan) => {
                 self.validate_access(
@@ -358,7 +358,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::AddTableColumn(plan) => {
                 self.validate_access(
@@ -370,7 +370,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::RenameTableColumn(plan) => {
                 self.validate_access(
@@ -382,7 +382,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::ModifyTableColumn(plan) => {
                 self.validate_access(
@@ -394,7 +394,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropTableColumn(plan) => {
                 self.validate_access(
@@ -406,7 +406,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::AlterTableClusterKey(plan) => {
                 self.validate_access(
@@ -418,7 +418,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropTableClusterKey(plan) => {
                 self.validate_access(
@@ -430,7 +430,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::ReclusterTable(plan) => {
                 self.validate_access(
@@ -442,7 +442,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::TruncateTable(plan) => {
                 self.validate_access(
@@ -454,7 +454,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Delete],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::OptimizeTable(plan) => {
                 self.validate_access(
@@ -466,7 +466,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Super],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::VacuumTable(plan) => {
                 self.validate_access(
@@ -478,7 +478,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Super],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::VacuumDropTable(plan) => {
                 self.validate_access(
@@ -486,7 +486,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Super],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::AnalyzeTable(plan) => {
                 self.validate_access(
@@ -498,7 +498,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Super],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             // Others.
             Plan::Insert(plan) => {
@@ -511,7 +511,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Insert],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::Replace(plan) => {
                 self.validate_access(
@@ -523,7 +523,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::MergeInto(plan) => {
                 self.validate_access(
@@ -535,7 +535,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::Delete(plan) => {
                 self.validate_access(
@@ -547,7 +547,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Delete],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::Update(plan) => {
                 self.validate_access(
@@ -559,7 +559,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Update],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::CreateView(plan) => {
                 self.validate_access(
@@ -567,7 +567,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Create],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::AlterView(plan) => {
                 self.validate_access(
@@ -575,7 +575,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropView(plan) => {
                 self.validate_access(
@@ -583,7 +583,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
-                .await?;
+                    .await?;
             }
             Plan::CreateUser(_) => {
                 self.validate_access(
@@ -591,7 +591,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::CreateUser],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropUser(_) => {
                 self.validate_access(
@@ -599,7 +599,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::DropUser],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::CreateRole(_) => {
                 self.validate_access(
@@ -607,7 +607,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::CreateRole],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::DropRole(_) => {
                 self.validate_access(
@@ -615,7 +615,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::DropRole],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             Plan::GrantShareObject(_)
             | Plan::RevokeShareObject(_)
@@ -673,7 +673,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
                 let from = plan.from.clone();
-                return self.check(ctx, &from).await
+                return self.check(ctx, &from).await;
             }
 
             Plan::CreateShareEndpoint(_)
@@ -697,6 +697,10 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropNetworkPolicy(_)
             | Plan::DescNetworkPolicy(_)
             | Plan::ShowNetworkPolicies(_)
+            | Plan::CreateConnection(_)
+            | Plan::ShowConnections(_)
+            | Plan::DescConnection(_)
+            | Plan::DropConnection(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
@@ -712,7 +716,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::CreateDataMask],
                     false,
                 )
-                .await?;
+                    .await?;
             }
             // Note: No need to check privileges
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges

@@ -39,6 +39,7 @@ use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::UDFServerCall;
+use crate::plans::VisitorMut;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -341,33 +342,26 @@ fn rewrite_scalar_index(
     columns: &HashMap<String, IndexType>,
     scalar: &mut ScalarExpr,
 ) {
-    match scalar {
-        ScalarExpr::BoundColumnRef(col) => {
-            if let Some(index) = columns.get(&col.column.column_name) {
-                col.column.table_index = Some(table_index);
+    struct RewriteVisitor<'a> {
+        table_index: IndexType,
+        columns: &'a HashMap<String, IndexType>,
+    }
+
+    impl<'a> VisitorMut<'a> for RewriteVisitor<'a> {
+        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) -> Result<()> {
+            if let Some(index) = self.columns.get(&col.column.column_name) {
+                col.column.table_index = Some(self.table_index);
                 col.column.index = *index;
             }
+            Ok(())
         }
-        ScalarExpr::AggregateFunction(agg) => {
-            agg.args
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        ScalarExpr::FunctionCall(func) => {
-            func.arguments
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        ScalarExpr::CastExpr(cast) => {
-            rewrite_scalar_index(table_index, columns, &mut cast.argument);
-        }
-        ScalarExpr::UDFServerCall(udf) => {
-            udf.arguments
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        _ => { /*  do nothing */ }
     }
+
+    let mut visitor = RewriteVisitor {
+        table_index,
+        columns,
+    };
+    visitor.visit(scalar).unwrap();
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.
@@ -1019,6 +1013,7 @@ fn rewrite_query_item(
                 UDFServerCall {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),

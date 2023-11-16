@@ -20,8 +20,13 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::SeqV;
+use crate::SeqValue;
 
-/// `Change` describes a state change, including the states before and after a change.
+/// `Change` describes a state transition: the states before and after an operation.
+///
+/// Note that a success add-operation has a None `prev`, and a maybe-Some `result`.
+/// Because the inserted value may have already expired and will be deleted at once,
+/// the `result` could also be possible to be None.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From)]
 pub struct Change<T, ID = u64>
 where
@@ -81,20 +86,34 @@ where
         self.prev != self.result
     }
 
-    /// Assumes it is a state change of an add operation and return Ok if the add operation succeed.
+    /// Assumes it is a state transition of an add operation and return Ok if the add operation succeed.
     /// Otherwise it returns an error that is built by provided function.
-    pub fn added_or_else<F, E>(self, f: F) -> Result<SeqV<T>, E>
+    ///
+    /// Note that a success add-operation has a None `prev`, and a maybe-Some `result`.
+    /// Because the inserted value may have already expired and will be deleted at once,
+    /// the `result` could also be possible to be None.
+    #[allow(dead_code)]
+    pub fn added_or_else<F, E>(self, make_err: F) -> Result<Option<SeqV<T>>, E>
     where F: FnOnce(SeqV<T>) -> E {
         let (prev, result) = self.unpack();
         if let Some(p) = prev {
-            return Err(f(p));
+            return Err(make_err(p));
         }
 
-        if let Some(res) = result {
-            return Ok(res);
+        Ok(result)
+    }
+
+    /// Return the `seq` in an Ok if an add operation succeed.
+    /// Otherwise it returns an error that is built by provided function.
+    pub fn added_seq_or_else<F, E>(self, make_err: F) -> Result<u64, E>
+    where F: FnOnce(SeqV<T>) -> E {
+        let (prev, result) = self.unpack();
+        if let Some(p) = prev {
+            return Err(make_err(p));
         }
 
-        unreachable!("impossible: both prev and result are None");
+        // result could be None if it expired.
+        Ok(result.seq())
     }
 }
 

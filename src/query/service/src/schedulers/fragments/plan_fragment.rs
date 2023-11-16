@@ -20,15 +20,16 @@ use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::ReplaceIntoShuffleStrategy;
-use common_sql::executor::CompactSource;
-use common_sql::executor::CopyIntoTable;
-use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::DeleteSource;
-use common_sql::executor::QuerySource;
-use common_sql::executor::ReclusterSource;
-use common_sql::executor::ReclusterTask;
-use common_sql::executor::ReplaceDeduplicate;
-use common_sql::executor::ReplaceInto;
+use common_sql::executor::physical_plans::CompactSource;
+use common_sql::executor::physical_plans::CopyIntoTable;
+use common_sql::executor::physical_plans::CopyIntoTableSource;
+use common_sql::executor::physical_plans::DeleteSource;
+use common_sql::executor::physical_plans::QuerySource;
+use common_sql::executor::physical_plans::ReclusterSource;
+use common_sql::executor::physical_plans::ReclusterTask;
+use common_sql::executor::physical_plans::ReplaceDeduplicate;
+use common_sql::executor::physical_plans::ReplaceInto;
+use common_sql::executor::physical_plans::TableScan;
 use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
@@ -41,7 +42,6 @@ use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanReplacer;
-use crate::sql::executor::TableScan;
 
 /// Type of plan fragment
 #[derive(Clone, Debug, PartialEq, Eq)]

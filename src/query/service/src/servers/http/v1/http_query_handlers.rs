@@ -15,6 +15,7 @@
 use common_base::base::mask_connection_info;
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use common_metrics::http::metrics_incr_http_response_errors_count;
 use highway::HighwayHash;
 use log::error;
 use log::info;
@@ -37,7 +38,6 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use crate::servers::http::metrics::metrics_incr_http_response_errors_count;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
@@ -113,6 +113,7 @@ impl QueryResponseField {
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
+    pub node_id: String,
     pub session: Option<HttpSessionConf>,
     pub schema: Vec<QueryResponseField>,
     pub data: Vec<Vec<JsonValue>>,
@@ -180,6 +181,7 @@ impl QueryResponse {
             state: state.state,
             schema: QueryResponseField::from_schema(schema),
             session_id: Some(session_id),
+            node_id: r.node_id,
             session: r.session,
             stats,
             affect: state.affect,
@@ -205,6 +207,7 @@ impl QueryResponse {
             data: vec![],
             schema: vec![],
             session_id: None,
+            node_id: "".to_string(),
             session: None,
             next_uri: None,
             stats_uri: None,
@@ -217,7 +220,7 @@ impl QueryResponse {
 
 #[poem::handler]
 async fn query_final_handler(
-    _ctx: &HttpQueryContext,
+    ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
@@ -240,7 +243,7 @@ async fn query_final_handler(
                 }
                 Ok(QueryResponse::from_internal(query_id, response, true))
             }
-            None => Err(query_id_not_found(query_id)),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -277,7 +280,7 @@ async fn query_cancel_handler(
 
 #[poem::handler]
 async fn query_state_handler(
-    _ctx: &HttpQueryContext,
+    ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
@@ -293,7 +296,7 @@ async fn query_state_handler(
                 let response = query.get_response_state_only().await;
                 Ok(QueryResponse::from_internal(query_id, response, false))
             }
-            None => Err(query_id_not_found(query_id)),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -302,7 +305,7 @@ async fn query_state_handler(
 
 #[poem::handler]
 async fn query_page_handler(
-    _ctx: &HttpQueryContext,
+    ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
@@ -322,7 +325,7 @@ async fn query_page_handler(
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query_id, resp, false))
             }
-            None => Err(query_id_not_found(query_id)),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -399,9 +402,9 @@ pub fn query_route() -> Route {
     route
 }
 
-fn query_id_not_found(query_id: String) -> PoemError {
+fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
     PoemError::from_string(
-        format!("query id not found {}", query_id),
+        format!("query id {} not found on {}", query_id, node_id),
         StatusCode::NOT_FOUND,
     )
 }

@@ -17,9 +17,9 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::with_number_mapped_type;
 use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_sql::executor::Window;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_sql::executor::physical_plans::Window;
 
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;

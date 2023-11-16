@@ -33,6 +33,7 @@ use nom::Slice;
 use crate::ast::*;
 use crate::input::Input;
 use crate::parser::copy::copy_into;
+use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
@@ -60,7 +61,7 @@ pub enum CreateDatabaseOption {
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | MEMO )? ~ #statement
+            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
         },
         |(_, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -80,6 +81,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
+                    Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
@@ -624,11 +626,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_drop_tables_status = map(
         rule! {
-            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )?
+            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, _, opt_database)| {
+        |(_, _, _, opt_database, limit)| {
             Statement::ShowDropTables(ShowDropTablesStmt {
                 database: opt_database.map(|(_, database)| database),
+                limit,
             })
         },
     );
@@ -790,7 +793,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
         },
         |(_, _, _, database_option, option)| {
             let (catalog, database) = database_option.map_or_else(
@@ -1201,6 +1204,51 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    // connections
+    let connection_opt = connection_opt("=");
+    let create_connection = map_res(
+        rule! {
+            CREATE ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
+        },
+        |(_, _, opt_if_not_exists, connection_name, _, _, storage_type, options)| {
+            let options =
+                BTreeMap::from_iter(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
+            Ok(Statement::CreateConnection(CreateConnectionStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: connection_name,
+                storage_type,
+                storage_params: options,
+            }))
+        },
+    );
+
+    let drop_connection = map(
+        rule! {
+            DROP ~ CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, connection_name)| {
+            Statement::DropConnection(DropConnectionStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: connection_name,
+            })
+        },
+    );
+
+    let desc_connection = map(
+        rule! {
+            (DESC | DESCRIBE) ~ CONNECTION ~ #ident
+        },
+        |(_, _, name)| Statement::DescribeConnection(DescribeConnectionStmt { name }),
+    );
+
+    let show_connections = map(
+        rule! {
+              SHOW ~ CONNECTIONS
+        },
+        |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
+    );
+
     let call = map(
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
@@ -1518,6 +1566,69 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! { SHOW ~ NETWORK ~ POLICIES },
     );
 
+    let create_pipe = map(
+        rule! {
+            CREATE ~ PIPE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ( AUTO_INGEST ~ "=" ~ #literal_bool )?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ AS ~ #copy_into_table
+        },
+        |(_, _, opt_if_not_exists, pipe, ingest, comment_opt, _, copy_stmt)| {
+            let copy_stmt = match copy_stmt {
+                Statement::CopyIntoTable(stmt) => stmt,
+                _ => {
+                    unreachable!()
+                }
+            };
+            Statement::CreatePipe(CreatePipeStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: pipe.to_string(),
+                auto_ingest: ingest.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                copy_stmt,
+            })
+        },
+    );
+
+    let alter_pipe = map(
+        rule! {
+            ALTER ~ PIPE ~ ( IF ~ ^EXISTS )?
+            ~ #ident ~ #alter_pipe_option
+        },
+        |(_, _, opt_if_exists, task, options)| {
+            Statement::AlterPipe(AlterPipeStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+                options,
+            })
+        },
+    );
+
+    let drop_pipe = map(
+        rule! {
+            DROP ~ PIPE ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, opt_if_exists, task)| {
+            Statement::DropPipe(DropPipeStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+            })
+        },
+    );
+
+    let desc_pipe = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PIPE ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::DescribePipe(DescribePipeStmt {
+                name: task.to_string(),
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1676,6 +1787,23 @@ AS
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
         ),
+        rule!(
+            #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
+  [ AUTO_INGEST = [ TRUE | FALSE ] ]
+  [ COMMENT = '<string_literal>' ]
+AS
+  <copy_sql>`"
+            | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
+            | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
+            | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
+
+        ),
+        rule!(
+            #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+        | #show_connections: "`SHOW CONNECTIONS`"
+        ),
     ));
 
     map(
@@ -1751,9 +1879,20 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         }
     });
 
+    let source_table = map(
+        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
+        |((catalog, database, table), alias)| MergeSource::Table {
+            catalog,
+            database,
+            table,
+            alias,
+        },
+    );
+
     rule!(
           #streaming_v2
         | #query
+        | #source_table
     )(i)
 }
 
@@ -2524,6 +2663,29 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     ))(i)
 }
 
+pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
+    alt((map(
+        rule! {
+            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+        },
+        |(retain_hours_opt, dry_run_opt, opt_limit)| {
+            let retain_hours = match retain_hours_opt {
+                Some(retain_hours) => Some(retain_hours.1),
+                None => None,
+            };
+            let dry_run = match dry_run_opt {
+                Some(_) => Some(()),
+                None => None,
+            };
+            VacuumDropTableOption {
+                retain_hours,
+                dry_run,
+                limit: opt_limit.map(|(_, limit)| limit as usize),
+            }
+        },
+    ),))(i)
+}
+
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
@@ -2597,6 +2759,35 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+    )(i)
+}
+
+pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
+    let set = map(
+        rule! {
+             SET
+             ~ ( PIPE_EXECUTION_PAUSED ~ "=" ~ #literal_bool )?
+             ~ ( COMMENT ~ "=" ~ #literal_string )?
+        },
+        |(_, execution_parsed, comment)| AlterPipeOptions::Set {
+            execution_paused: execution_parsed.map(|(_, _, paused)| paused),
+            comments: comment.map(|(_, _, comment)| comment),
+        },
+    );
+    let refresh = map(
+        rule! {
+             REFRESH
+             ~ ( PREFIX ~ "=" ~ #literal_string )?
+             ~ ( MODIFIED_AFTER ~ "=" ~ #literal_string )?
+        },
+        |(_, prefix, modified_after)| AlterPipeOptions::Refresh {
+            prefix: prefix.map(|(_, _, prefix)| prefix),
+            modified_after: modified_after.map(|(_, _, modified_after)| modified_after),
+        },
+    );
+    rule!(
+        #set
+        | #refresh
     )(i)
 }
 

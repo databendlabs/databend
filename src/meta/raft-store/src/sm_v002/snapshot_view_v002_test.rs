@@ -51,7 +51,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     let d = top_level.newest().unwrap().as_ref();
 
-    assert_eq!(top_level.iter_levels().count(), 1);
+    assert_eq!(top_level.iter_arc_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
@@ -62,12 +62,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = d
-        .str_map()
-        .range::<str, _>(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = d.str_map().range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (s("a"), Marked::new_with_meta(1, b("a0"), None)),
@@ -98,12 +93,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let d = compacted.newest().unwrap().as_ref();
 
-    let got = d
-        .str_map()
-        .range::<String, _>(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = d.str_map().range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (

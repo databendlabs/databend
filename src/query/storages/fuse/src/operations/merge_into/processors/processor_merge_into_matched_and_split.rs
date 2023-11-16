@@ -27,17 +27,15 @@ use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::PipeItem;
 use common_sql::evaluator::BlockOperator;
-use common_sql::executor::MatchExpr;
-use common_storage::metrics::merge_into::merge_into_matched_operation_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
+use common_sql::executor::physical_plans::MatchExpr;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
@@ -57,6 +55,7 @@ impl BlockMetaInfo for SourceFullMatched {
     }
 }
 
+#[allow(dead_code)]
 enum MutationKind {
     Update(UpdateDataBlockMutation),
     Delete(DeleteDataBlockMutation),
@@ -141,6 +140,7 @@ impl MatchedSplitProcessor {
                         filter.clone(),
                         ctx.get_function_context()?,
                         row_id_idx,
+                        input_schema.num_fields(),
                     ),
                 }))
             } else {
@@ -270,6 +270,7 @@ impl Processor for MatchedSplitProcessor {
             }
             let start = Instant::now();
             let mut current_block = data_block;
+
             for op in self.ops.iter() {
                 match op {
                     MutationKind::Update(update_mutation) => {

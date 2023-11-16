@@ -147,7 +147,7 @@ impl Runner {
             Ok(mut rows) => {
                 while let Some(row) = rows.next().await {
                     if let Ok(row) = row {
-                        match (row.values().get(0), row.values().get(5)) {
+                        match (row.values().first(), row.values().get(5)) {
                             (Some(Value::String(name)), Some(Value::String(ty))) => {
                                 let data_type = match ty.as_str() {
                                     "UInt64" => DataType::Number(NumberDataType::UInt64),

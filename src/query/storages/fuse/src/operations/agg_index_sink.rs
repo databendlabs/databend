@@ -25,8 +25,9 @@ use common_expression::types::ValueType;
 use common_expression::BlockRowIndex;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
 use opendal::Operator;
@@ -34,9 +35,6 @@ use opendal::Operator;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
-use crate::metrics::metrics_inc_agg_index_write_bytes;
-use crate::metrics::metrics_inc_agg_index_write_milliseconds;
-use crate::metrics::metrics_inc_agg_index_write_nums;
 
 pub struct AggIndexSink {
     data_accessor: Operator,

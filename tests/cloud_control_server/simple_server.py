@@ -17,14 +17,14 @@ TASK_RUN_DB = {}
 
 def load_data_from_json():
     script_directory = os.path.dirname(os.path.abspath(__file__))
-    directory_path = os.path.join(script_directory, "testdata", "tasks")
+    task_directory_path = os.path.join(script_directory, "testdata", "tasks")
 
-    for file_name in os.listdir(directory_path):
+    for file_name in os.listdir(task_directory_path):
         if file_name.endswith(".json"):
-            with open(os.path.join(directory_path, file_name), "r") as f:
-                task_data = json.load(f)
+            with open(os.path.join(task_directory_path, file_name), "r") as f:
+                task_run_data = json.load(f)
                 task = task_pb2.Task()
-                json_format.ParseDict(task_data["Task"], task)
+                json_format.ParseDict(task_run_data["Task"], task)
                 TASK_DB[task.task_name] = task
 
 
@@ -50,6 +50,27 @@ def create_task_request_to_task(id, create_task_request):
     task.updated_at = datetime.now(timezone.utc).isoformat()
 
     return task
+
+
+def create_task_run_from_task(task):
+    task_run = task_pb2.TaskRun()
+
+    task_run.task_name = task.task_name
+    task_run.owner = task.owner
+    task_run.query_text = task.query_text
+    task_run.schedule_options.CopyFrom(task.schedule_options)
+    task_run.warehouse_options.CopyFrom(task.warehouse_options)
+    task_run.state = task_pb2.TaskRun.SUCCEEDED
+    task_run.attempt_number = 0
+    task_run.comment = task.comment
+    task_run.error_code = 0
+    task_run.error_message = ""
+    task_run.run_id = "1ftx"
+    task_run.query_id = "qwert"
+    task_run.scheduled_time = datetime.now(timezone.utc).isoformat()
+    task_run.completed_time = datetime.now(timezone.utc).isoformat()
+
+    return task_run
 
 
 class TaskService(task_pb2_grpc.TaskServiceServicer):
@@ -154,6 +175,8 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ExecuteTask(self, request, context):
         print("ExecuteTask", request)
+        for task_name, task in TASK_DB.items():
+            TASK_RUN_DB[task_name] = create_task_run_from_task(task)
         return task_pb2.ExecuteTaskResponse(error=None)
 
     def ShowTasks(self, request, context):

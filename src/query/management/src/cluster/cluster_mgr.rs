@@ -92,14 +92,14 @@ impl ClusterApi for ClusterMgr {
             .metastore
             .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
 
-        let res = upsert_node.await?.added_or_else(|v| {
+        let res_seq = upsert_node.await?.added_seq_or_else(|v| {
             ErrorCode::ClusterNodeAlreadyExists(format!(
                 "Cluster ID already exists, seq [{}]",
                 v.seq
             ))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]

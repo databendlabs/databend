@@ -47,6 +47,82 @@ ShowTables(
 
 
 ---------- Input ----------
+show drop tables
+---------- Output ---------
+SHOW DROP TABLE
+---------- AST ------------
+ShowDropTables(
+    ShowDropTablesStmt {
+        database: None,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show drop tables like 't%'
+---------- Output ---------
+SHOW DROP TABLE LIKE 't%'
+---------- AST ------------
+ShowDropTables(
+    ShowDropTablesStmt {
+        database: None,
+        limit: Some(
+            Like {
+                pattern: "t%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+show drop tables where name='t'
+---------- Output ---------
+SHOW DROP TABLE WHERE (name = 't')
+---------- AST ------------
+ShowDropTables(
+    ShowDropTablesStmt {
+        database: None,
+        limit: Some(
+            Where {
+                selection: BinaryOp {
+                    span: Some(
+                        27..28,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            23..27,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "name",
+                                quote: None,
+                                span: Some(
+                                    23..27,
+                                ),
+                            },
+                        ),
+                    },
+                    right: Literal {
+                        span: Some(
+                            28..31,
+                        ),
+                        lit: String(
+                            "t",
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show tables format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
 SHOW TABLES
@@ -1372,7 +1448,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '******min', aws_secret_key = '******min', endpoint_url = '******900' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1443,7 +1519,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '******min', aws_secret_key = '******min', endpoint_url = '******900' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -7081,7 +7157,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '******b3c', aws_secret_key = '******y6z' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7118,7 +7194,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '******b3c', aws_secret_key = '******y6z' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7155,7 +7231,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '******y6z', account_name = '******b3c' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8439,7 +8515,7 @@ VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
-        option: VacuumTableOption {
+        option: VacuumDropTableOption {
             retain_hours: Some(
                 Literal {
                     span: Some(
@@ -8451,6 +8527,7 @@ VacuumDropTable(
                 },
             ),
             dry_run: None,
+            limit: None,
         },
     },
 )
@@ -8465,7 +8542,7 @@ VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
-        option: VacuumTableOption {
+        option: VacuumDropTableOption {
             retain_hours: Some(
                 Literal {
                     span: Some(
@@ -8479,6 +8556,7 @@ VacuumDropTable(
             dry_run: Some(
                 (),
             ),
+            limit: None,
         },
     },
 )
@@ -8501,7 +8579,7 @@ VacuumDropTable(
                 ),
             },
         ),
-        option: VacuumTableOption {
+        option: VacuumDropTableOption {
             retain_hours: Some(
                 Literal {
                     span: Some(
@@ -8513,6 +8591,44 @@ VacuumDropTable(
                 },
             ),
             dry_run: None,
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;
+---------- Output ---------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    23..25,
+                ),
+            },
+        ),
+        option: VacuumDropTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        33..35,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
+            limit: Some(
+                10,
+            ),
         },
     },
 )
@@ -9520,7 +9636,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '******900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -9589,7 +9705,7 @@ COPY INTO mytable
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '******900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -9947,7 +10063,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '******key', aws_secret_key = '******key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -10243,7 +10359,7 @@ COPY INTO books FROM 's3://databend/books.csv'
                 )
                 FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '********', endpoint_url = '********', region = '********', secret_access_key = '********' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '******SER', endpoint_url = '******00/', region = '******t-2', secret_access_key = '******123' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13589,6 +13705,302 @@ DESCRIBE TASK MyTask
 DescribeTask(
     DescribeTaskStmt {
         name: "MyTask",
+    },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = ******lue
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        if_not_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                32..39,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP CONNECTION IF EXISTS my_conn;
+---------- Output ---------
+CREATE CONNECTION IF NOT EXISTS my_conn 
+---------- AST ------------
+DropConnection(
+    DropConnectionStmt {
+        if_exists: true,
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                26..33,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+DESC CONNECTION my_conn;
+---------- Output ---------
+CREATE CONNECTION my_conn 
+---------- AST ------------
+DescribeConnection(
+    DescribeConnectionStmt {
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                16..23,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW CONNECTIONS;
+---------- Output ---------
+SHOW CONNECTIONS
+---------- AST ------------
+ShowConnections(
+    ShowConnectionsStmt,
+)
+
+
+---------- Input ----------
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
+---------- Output ---------
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM @~/MyStage1 FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+CreatePipe(
+    CreatePipeStmt {
+        if_not_exists: true,
+        name: "MyPipe1",
+        auto_ingest: true,
+        comments: "This is test pipe 1",
+        copy_stmt: CopyIntoTableStmt {
+            src: Location(
+                Stage(
+                    "~/MyStage1",
+                ),
+            ),
+            dst: TableIdentifier {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    name: "MyTable1",
+                    quote: None,
+                    span: Some(
+                        98..106,
+                    ),
+                },
+            },
+            dst_columns: None,
+            hints: None,
+            file_format: {
+                "type": "CSV",
+            },
+            files: None,
+            pattern: None,
+            force: false,
+            validation_mode: "",
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            on_error: "abort",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
+---------- Output ---------
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+CreatePipe(
+    CreatePipeStmt {
+        if_not_exists: false,
+        name: "pipe1",
+        auto_ingest: false,
+        comments: "",
+        copy_stmt: CopyIntoTableStmt {
+            src: Location(
+                Stage(
+                    "~/mybucket/data.csv",
+                ),
+            ),
+            dst: TableIdentifier {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        name: "db1",
+                        quote: None,
+                        span: Some(
+                            31..34,
+                        ),
+                    },
+                ),
+                table: Identifier {
+                    name: "MyTable1",
+                    quote: None,
+                    span: Some(
+                        35..43,
+                    ),
+                },
+            },
+            dst_columns: None,
+            hints: None,
+            file_format: {},
+            files: None,
+            pattern: None,
+            force: false,
+            validation_mode: "",
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            on_error: "abort",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe REFRESH
+---------- Output ---------
+ALTER PIPE mypipe REFRESH
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Refresh {
+            prefix: None,
+            modified_after: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe REFRESH PREFIX='d1/'
+---------- Output ---------
+ALTER PIPE mypipe REFRESH PREFIX = 'd1/'
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Refresh {
+            prefix: Some(
+                "d1/",
+            ),
+            modified_after: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe REFRESH PREFIX='d1/' MODIFIED_AFTER='2018-07-30T13:56:46-07:00'
+---------- Output ---------
+ALTER PIPE mypipe REFRESH PREFIX = 'd1/' MODIFIED_AFTER = '2018-07-30T13:56:46-07:00'
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Refresh {
+            prefix: Some(
+                "d1/",
+            ),
+            modified_after: Some(
+                "2018-07-30T13:56:46-07:00",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
+---------- Output ---------
+ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
+---------- AST ------------
+AlterPipe(
+    AlterPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+        options: Set {
+            execution_paused: Some(
+                true,
+            ),
+            comments: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP PIPE mypipe
+---------- Output ---------
+DROP PIPE mypipe
+---------- AST ------------
+DropPipe(
+    DropPipeStmt {
+        if_exists: false,
+        name: "mypipe",
+    },
+)
+
+
+---------- Input ----------
+DESC PIPE mypipe
+---------- Output ---------
+DESCRIBE PIPE mypipe
+---------- AST ------------
+DescribePipe(
+    DescribePipeStmt {
+        name: "mypipe",
     },
 )
 

@@ -164,6 +164,7 @@ impl DPhpy {
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
                         | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
                 ) {
                     left_is_subquery = true;
                 }
@@ -176,6 +177,7 @@ impl DPhpy {
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
                         | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
                 ) {
                     right_is_subquery = true;
                 }
@@ -220,6 +222,7 @@ impl DPhpy {
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
+            | RelOperator::Udf(_)
             | RelOperator::Filter(_) => {
                 if join_child {
                     // If plan is filter, save it
@@ -284,11 +287,11 @@ impl DPhpy {
             // Find the corresponding join relations in `join_conditions`
             let mut left_relation_set = HashSet::new();
             let mut right_relation_set = HashSet::new();
-            let left_used_tables = left_condition.used_tables(self.metadata.clone())?;
+            let left_used_tables = left_condition.used_tables()?;
             for table in left_used_tables.iter() {
                 left_relation_set.insert(self.table_index_map[table]);
             }
-            let right_used_tables = right_condition.used_tables(self.metadata.clone())?;
+            let right_used_tables = right_condition.used_tables()?;
             for table in right_used_tables.iter() {
                 right_relation_set.insert(self.table_index_map[table]);
             }

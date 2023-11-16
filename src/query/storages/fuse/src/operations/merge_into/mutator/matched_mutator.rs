@@ -36,12 +36,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_rows_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_rows_counter;
+use common_metrics::storage::*;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -123,7 +118,7 @@ impl MatchedAggregator {
             io_request_semaphore,
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
-            segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+            segment_locations: AHashMap::from_iter(segment_locations),
         })
     }
 

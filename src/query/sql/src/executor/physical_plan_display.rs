@@ -18,44 +18,45 @@ use std::fmt::Formatter;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::physical_plans::physical_merge_into_add_row_number::MergeIntoAddRowNumber;
-use super::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
-use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
-use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
-use crate::executor::physical_plans::physical_commit_sink::CommitSink;
-use crate::executor::physical_plans::physical_compact_source::CompactSource;
-use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
-use crate::executor::physical_plans::physical_copy_into::CopyIntoTable;
-use crate::executor::physical_plans::physical_cte_scan::CteScan;
-use crate::executor::physical_plans::physical_delete_source::DeleteSource;
-use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
-use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
-use crate::executor::physical_plans::physical_exchange::Exchange;
-use crate::executor::physical_plans::physical_exchange_sink::ExchangeSink;
-use crate::executor::physical_plans::physical_exchange_source::ExchangeSource;
-use crate::executor::physical_plans::physical_filter::Filter;
-use crate::executor::physical_plans::physical_hash_join::HashJoin;
-use crate::executor::physical_plans::physical_lambda::Lambda;
-use crate::executor::physical_plans::physical_limit::Limit;
-use crate::executor::physical_plans::physical_materialized_cte::MaterializedCte;
-use crate::executor::physical_plans::physical_merge_into::MergeInto;
-use crate::executor::physical_plans::physical_merge_into::MergeIntoSource;
-use crate::executor::physical_plans::physical_project::Project;
-use crate::executor::physical_plans::physical_project_set::ProjectSet;
-use crate::executor::physical_plans::physical_range_join::RangeJoin;
-use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
-use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
-use crate::executor::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer;
-use crate::executor::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate;
-use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
-use crate::executor::physical_plans::physical_row_fetch::RowFetch;
-use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
-use crate::executor::physical_plans::physical_sort::Sort;
-use crate::executor::physical_plans::physical_table_scan::TableScan;
-use crate::executor::physical_plans::physical_union_all::UnionAll;
-use crate::executor::physical_plans::physical_window::Window;
-use crate::executor::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::AggregateExpand;
+use crate::executor::physical_plans::AggregateFinal;
+use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::CommitSink;
+use crate::executor::physical_plans::CompactSource;
+use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoTable;
+use crate::executor::physical_plans::CteScan;
+use crate::executor::physical_plans::DeleteSource;
+use crate::executor::physical_plans::DistributedInsertSelect;
+use crate::executor::physical_plans::EvalScalar;
+use crate::executor::physical_plans::Exchange;
+use crate::executor::physical_plans::ExchangeSink;
+use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::Filter;
+use crate::executor::physical_plans::HashJoin;
+use crate::executor::physical_plans::Lambda;
+use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::MaterializedCte;
+use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoAddRowNumber;
+use crate::executor::physical_plans::MergeIntoAppendNotMatched;
+use crate::executor::physical_plans::MergeIntoSource;
+use crate::executor::physical_plans::Project;
+use crate::executor::physical_plans::ProjectSet;
+use crate::executor::physical_plans::RangeJoin;
+use crate::executor::physical_plans::ReclusterSink;
+use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::ReplaceAsyncSourcer;
+use crate::executor::physical_plans::ReplaceDeduplicate;
+use crate::executor::physical_plans::ReplaceInto;
+use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::RuntimeFilterSource;
+use crate::executor::physical_plans::Sort;
+use crate::executor::physical_plans::TableScan;
+use crate::executor::physical_plans::Udf;
+use crate::executor::physical_plans::UnionAll;
+use crate::executor::physical_plans::Window;
 use crate::plans::JoinType;
 
 impl PhysicalPlan {
@@ -113,6 +114,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
         }
 
         for node in self.node.children() {
@@ -526,5 +528,19 @@ impl Display for ReclusterSource {
 impl Display for ReclusterSink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ReclusterSink")
+    }
+}
+
+impl Display for Udf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let scalars = self
+            .udf_funcs
+            .iter()
+            .map(|func| {
+                let arg_exprs = func.arg_exprs.join(", ");
+                format!("{}({})", func.func_name, arg_exprs)
+            })
+            .collect::<Vec<String>>();
+        write!(f, "Udf functions: {}", scalars.join(", "))
     }
 }

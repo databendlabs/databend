@@ -15,5 +15,5 @@ select a.$1 from @data/csv (files=>('select.csv'), file_format=>'csv') a order b
 query error select columns from csv file must in the form of
 select * from @data/csv (files=>('select.csv'), file_format=>'csv')
 
-query error can not select *
+query error 1065.*select \* from file only support parquet format
 select *, $1 from @data/csv (files=>('select.csv'), file_format=>'csv')

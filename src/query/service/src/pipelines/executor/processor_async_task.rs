@@ -15,6 +15,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
@@ -24,23 +25,24 @@ use common_base::base::tokio::time::sleep;
 use common_base::runtime::catch_unwind;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    inner: BoxFuture<'static, Result<()>>,
+    inner: BoxFuture<'static, (Duration, Result<()>)>,
 }
 
 impl ProcessorAsyncTask {
@@ -50,6 +52,7 @@ impl ProcessorAsyncTask {
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
+        weak_executor: Weak<PipelineExecutor>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
@@ -77,18 +80,29 @@ impl ProcessorAsyncTask {
                 match futures::future::select(interval, inner).await {
                     Either::Left((_, right)) => {
                         inner = right;
+                        let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
+                        let running_graph_format =
+                            match elapsed >= Duration::from_secs(200) && active_workers == 0 {
+                                false => String::new(),
+                                true => match weak_executor.upgrade() {
+                                    None => String::new(),
+                                    Some(executor) => executor.graph.format_graph_nodes(),
+                                },
+                            };
+
                         warn!(
-                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
+                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
                             query_id,
                             processor_id,
                             processor_name,
-                            start.elapsed(),
+                            elapsed,
                             active_workers,
+                            running_graph_format
                         );
                     }
                     Either::Right((res, _)) => {
-                        return res;
+                        return (start.elapsed(), res);
                     }
                 }
             }
@@ -116,17 +130,22 @@ impl Future for ProcessorAsyncTask {
 
         match catch_unwind(move || inner.poll(cx)) {
             Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready(res)) => {
+            Ok(Poll::Ready((elapsed, res))) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        res,
+                        Some(elapsed),
+                    ),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), None),
                 );
 
                 Poll::Ready(())
