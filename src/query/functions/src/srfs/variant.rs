@@ -295,7 +295,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             ValueRef::Scalar(ScalarRef::String(v)) => match parse_json_path(v) {
                                 Ok(jsonpath) => {
                                     let path = unsafe { std::str::from_utf8_unchecked(v) };
-                                    let selector = Selector::new(jsonpath, SelectorMode::All);
+                                    let selector = Selector::new(jsonpath, SelectorMode::First);
                                     json_path = Some((path, selector));
                                 }
                                 Err(_) => {
@@ -394,7 +394,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             _ => {}
                         }
                     }
-                    let mut generator = FlattenGenerator::create(json_path, outer, recursive, mode);
+                    let mut generator = FlattenGenerator::create(outer, recursive, mode);
 
                     for (row, max_nums_per_row) in
                         max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
@@ -404,7 +404,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 results.push((Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0));
                             }
                             ScalarRef::Variant(val) => {
-                                let columns = generator.generate((row + 1) as u64, val);
+                                let columns = match json_path {
+                                    Some((path, ref selector)) => {
+                                        // get inner input values by path
+                                        let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                        selector.select(
+                                            val,
+                                            &mut builder.data,
+                                            &mut builder.offsets,
+                                        );
+                                        let inner_val = builder.pop().unwrap_or_default();
+                                        generator.generate((row + 1) as u64, &inner_val, path)
+                                    }
+                                    None => generator.generate((row + 1) as u64, val, ""),
+                                };
                                 let len = columns[0].len();
                                 *max_nums_per_row = std::cmp::max(*max_nums_per_row, len);
 
@@ -428,22 +441,16 @@ pub enum FlattenMode {
     Array,
 }
 
-pub struct FlattenGenerator<'a> {
-    json_path: Option<(&'a str, Selector<'a>)>,
+#[derive(Copy, Clone)]
+pub struct FlattenGenerator {
     outer: bool,
     recursive: bool,
     mode: FlattenMode,
 }
 
-impl<'a> FlattenGenerator<'a> {
-    pub fn create(
-        json_path: Option<(&'a str, Selector<'a>)>,
-        outer: bool,
-        recursive: bool,
-        mode: FlattenMode,
-    ) -> FlattenGenerator<'a> {
+impl FlattenGenerator {
+    pub fn create(outer: bool, recursive: bool, mode: FlattenMode) -> FlattenGenerator {
         Self {
-            json_path,
             outer,
             recursive,
             mode,
@@ -540,29 +547,17 @@ impl<'a> FlattenGenerator<'a> {
         }
     }
 
-    pub fn generate(&mut self, seq: u64, input: &[u8]) -> Vec<Column> {
-        // get inner input values by path
-        let mut builder = StringColumnBuilder::with_capacity(0, 0);
-        let path = if let Some((path, selector)) = &self.json_path {
-            selector.select(input, &mut builder.data, &mut builder.offsets);
-            path.to_string()
-        } else {
-            builder.put_slice(input);
-            builder.commit_row();
-            "".to_string()
-        };
-        let inputs = builder.build();
-
+    pub fn generate(&mut self, seq: u64, input: &[u8], path: &str) -> Vec<Column> {
         let mut keys: Vec<Option<Vec<u8>>> = vec![];
         let mut paths: Vec<Option<Vec<u8>>> = vec![];
         let mut indices: Vec<Option<u64>> = vec![];
         let mut values: Vec<Option<Vec<u8>>> = vec![];
         let mut thises: Vec<Option<Vec<u8>>> = vec![];
 
-        for input in inputs.iter() {
+        if !input.is_empty() {
             self.flatten(
                 input,
-                &path,
+                path,
                 &mut keys,
                 &mut paths,
                 &mut indices,

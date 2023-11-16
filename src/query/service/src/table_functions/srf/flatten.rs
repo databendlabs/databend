@@ -29,10 +29,11 @@ use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::*;
 use common_expression::DataBlock;
-use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_functions::srfs::FlattenGenerator;
+use common_functions::srfs::FlattenMode;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -44,22 +45,15 @@ use common_pipeline_sources::SyncSourcer;
 use common_storages_factory::Table;
 use common_storages_fuse::table_functions::string_value;
 use common_storages_fuse::TableContext;
-use jsonb::array_length;
-use jsonb::as_str;
-use jsonb::get_by_index;
-use jsonb::get_by_name;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::jsonpath::Selector;
-use jsonb::object_keys;
 
 pub struct FlattenTable {
     table_info: TableInfo,
     input: Vec<u8>,
     path: Option<Vec<u8>>,
-    outer: bool,
-    recursive: bool,
-    mode: FlattenMode,
+    generator: FlattenGenerator,
     table_args: TableArgs,
 }
 
@@ -196,13 +190,14 @@ impl FlattenTable {
             },
             ..Default::default()
         };
+
+        let generator = FlattenGenerator::create(outer, recursive, mode);
+
         Ok(Arc::new(FlattenTable {
             table_info,
             input: input.clone(),
             path: path.cloned(),
-            outer,
-            recursive,
-            mode,
+            generator,
             table_args,
         }))
     }
@@ -258,9 +253,7 @@ impl Table for FlattenTable {
                     output,
                     self.input.clone(),
                     self.path.clone(),
-                    self.outer,
-                    self.recursive,
-                    self.mode,
+                    self.generator,
                 )
             },
             1,
@@ -270,21 +263,12 @@ impl Table for FlattenTable {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-enum FlattenMode {
-    Both,
-    Object,
-    Array,
-}
-
 struct FlattenSource {
     finished: bool,
 
     input: Vec<u8>,
     path: Option<Vec<u8>>,
-    outer: bool,
-    recursive: bool,
-    mode: FlattenMode,
+    generator: FlattenGenerator,
 }
 
 impl FlattenSource {
@@ -293,108 +277,14 @@ impl FlattenSource {
         output: Arc<OutputPort>,
         input: Vec<u8>,
         path: Option<Vec<u8>>,
-        outer: bool,
-        recursive: bool,
-        mode: FlattenMode,
+        generator: FlattenGenerator,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx.clone(), output, Self {
             finished: false,
             input,
             path,
-            outer,
-            recursive,
-            mode,
+            generator,
         })
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn flatten(
-        &mut self,
-        input: &[u8],
-        path: &str,
-        keys: &mut Vec<Option<Vec<u8>>>,
-        paths: &mut Vec<Option<Vec<u8>>>,
-        indices: &mut Vec<Option<u64>>,
-        values: &mut Vec<Option<Vec<u8>>>,
-        thises: &mut Vec<Option<Vec<u8>>>,
-    ) {
-        match self.mode {
-            FlattenMode::Object => {
-                self.flatten_object(input, path, keys, paths, indices, values, thises);
-            }
-            FlattenMode::Array => {
-                self.flatten_array(input, path, keys, paths, indices, values, thises);
-            }
-            FlattenMode::Both => {
-                self.flatten_array(input, path, keys, paths, indices, values, thises);
-                self.flatten_object(input, path, keys, paths, indices, values, thises);
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn flatten_array(
-        &mut self,
-        input: &[u8],
-        path: &str,
-        keys: &mut Vec<Option<Vec<u8>>>,
-        paths: &mut Vec<Option<Vec<u8>>>,
-        indices: &mut Vec<Option<u64>>,
-        values: &mut Vec<Option<Vec<u8>>>,
-        thises: &mut Vec<Option<Vec<u8>>>,
-    ) {
-        if let Some(len) = array_length(input) {
-            for i in 0..len {
-                let val = get_by_index(input, i).unwrap();
-                keys.push(None);
-                let inner_path = format!("{}[{}]", path, i);
-                paths.push(Some(inner_path.as_bytes().to_vec()));
-                indices.push(Some(i.try_into().unwrap()));
-                values.push(Some(val.clone()));
-                thises.push(Some(input.to_vec().clone()));
-
-                if self.recursive {
-                    self.flatten(&val, &inner_path, keys, paths, indices, values, thises);
-                }
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn flatten_object(
-        &mut self,
-        input: &[u8],
-        path: &str,
-        keys: &mut Vec<Option<Vec<u8>>>,
-        paths: &mut Vec<Option<Vec<u8>>>,
-        indices: &mut Vec<Option<u64>>,
-        values: &mut Vec<Option<Vec<u8>>>,
-        thises: &mut Vec<Option<Vec<u8>>>,
-    ) {
-        if let Some(obj_keys) = object_keys(input) {
-            if let Some(len) = array_length(&obj_keys) {
-                for i in 0..len {
-                    let key = get_by_index(&obj_keys, i).unwrap();
-                    let name = as_str(&key).unwrap();
-                    let val = get_by_name(input, &name, false).unwrap();
-
-                    keys.push(Some(name.as_bytes().to_vec()));
-                    let inner_path = if !path.is_empty() {
-                        format!("{}.{}", path, name)
-                    } else {
-                        name.to_string()
-                    };
-                    paths.push(Some(inner_path.as_bytes().to_vec()));
-                    indices.push(None);
-                    values.push(Some(val.clone()));
-                    thises.push(Some(input.to_vec().clone()));
-
-                    if self.recursive {
-                        self.flatten(&val, &inner_path, keys, paths, indices, values, thises);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -407,67 +297,29 @@ impl SyncSource for FlattenSource {
         }
         self.finished = true;
 
-        // get inner input values by path
-        let mut builder = StringColumnBuilder::with_capacity(0, 0);
-        let path = if let Some(path) = &self.path {
-            match parse_json_path(path) {
-                Ok(json_path) => {
-                    let selector = Selector::new(json_path, SelectorMode::All);
-                    selector.select(&self.input, &mut builder.data, &mut builder.offsets);
-                    unsafe { String::from_utf8_unchecked(path.to_vec()) }
-                }
-                Err(_) => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Invalid JSON Path {:?}",
-                        String::from_utf8_lossy(path)
-                    )));
+        let columns = match &self.path {
+            Some(path) => {
+                match parse_json_path(path) {
+                    Ok(json_path) => {
+                        // get inner input values by path
+                        let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                        let selector = Selector::new(json_path, SelectorMode::First);
+                        selector.select(&self.input, &mut builder.data, &mut builder.offsets);
+                        let path = unsafe { std::str::from_utf8_unchecked(path) };
+                        let inner_val = builder.pop().unwrap_or_default();
+                        self.generator.generate(1, &inner_val, path)
+                    }
+                    Err(_) => {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Invalid JSON Path {:?}",
+                            String::from_utf8_lossy(path)
+                        )));
+                    }
                 }
             }
-        } else {
-            builder.put_slice(&self.input);
-            builder.commit_row();
-            "".to_string()
+            None => self.generator.generate(1, &self.input, ""),
         };
-        let inputs = builder.build();
-
-        let mut keys: Vec<Option<Vec<u8>>> = vec![];
-        let mut paths: Vec<Option<Vec<u8>>> = vec![];
-        let mut indices: Vec<Option<u64>> = vec![];
-        let mut values: Vec<Option<Vec<u8>>> = vec![];
-        let mut thises: Vec<Option<Vec<u8>>> = vec![];
-
-        for input in inputs.iter() {
-            self.flatten(
-                input,
-                &path,
-                &mut keys,
-                &mut paths,
-                &mut indices,
-                &mut values,
-                &mut thises,
-            );
-        }
-
-        if self.outer && values.is_empty() {
-            // add an empty row
-            keys.push(None);
-            paths.push(None);
-            indices.push(None);
-            values.push(None);
-            thises.push(None);
-        }
-
-        // TODO: generate sequence number associated with the input record
-        let seqs: Vec<u64> = [1].repeat(values.len());
-
-        let block = DataBlock::new_from_columns(vec![
-            UInt64Type::from_data(seqs),
-            StringType::from_opt_data(keys),
-            StringType::from_opt_data(paths),
-            UInt64Type::from_opt_data(indices),
-            VariantType::from_opt_data(values),
-            VariantType::from_opt_data(thises),
-        ]);
+        let block = DataBlock::new_from_columns(columns);
         Ok(Some(block))
     }
 }
