@@ -24,6 +24,7 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -318,8 +319,39 @@ impl Processor for MatchedSplitProcessor {
                 current_block = op.execute(&self.ctx.get_function_context()?, current_block)?;
                 metrics_inc_merge_into_append_blocks_counter(1);
                 metrics_inc_merge_into_append_blocks_rows_counter(current_block.num_rows() as u32);
+
+                // cornor case: for merge into update, if the target table's column is not null,
+                // if target table has three columns like (a,b,c), if we use update set target_table.a = xxx,
+                // it's fine because we have cast the xxx'data_type into a's data_type in `generate_update_list()`,
+                // but for b,c, the hash table will transform the origin data_type (b_type,c_type) into
+                // (nullable(b_type),nullable(c_type)), so we will get datatype not match error, let's transform
+                // them back here.
+                let res_entries = current_block.columns();
+                let mut cast_exprs = Vec::with_capacity(res_entries.len());
+                assert_eq!(self.target_table_schema.fields.len(), res_entries.len());
+                for (idx, field) in self.target_table_schema.fields.iter().enumerate() {
+                    cast_exprs.push(Expr::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(Expr::ColumnRef {
+                            span: None,
+                            id: idx,
+                            data_type: res_entries[idx].data_type.clone(),
+                            display_name: "".to_string(),
+                        }),
+                        dest_type: field.data_type().clone(),
+                    })
+                }
+                let cast_operator = BlockOperator::Map {
+                    exprs: cast_exprs,
+                    projections: Some((res_entries.len()..res_entries.len() * 2).collect()),
+                };
+                current_block =
+                    cast_operator.execute(&self.ctx.get_function_context()?, current_block)?;
+
                 current_block =
                     current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
+
                 self.output_data_updated_data = Some(current_block);
             }
             let elapsed_time = start.elapsed().as_millis() as u64;
