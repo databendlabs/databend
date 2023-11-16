@@ -29,6 +29,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 use common_pipeline_transforms::processors::create_dummy_item;
+use common_sql::binder::MergeIntoType;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::MergeInto;
@@ -50,12 +51,6 @@ use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::DeduplicateRowNumber;
 use crate::pipelines::processors::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
-
-enum MergeIntoType {
-    MatechedOnly,
-    InsertOnly,
-    FullOperation,
-}
 
 impl PipelineBuilder {
     // Build and add row_number column
@@ -274,8 +269,6 @@ impl PipelineBuilder {
 
         self.build_pipeline(input)?;
 
-        let merge_type = get_merge_type(matched.len(), unmatched.len())?;
-
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -383,6 +376,7 @@ impl PipelineBuilder {
             get_output_len(&pipe_items),
             pipe_items.clone(),
         ));
+
 
         // row_id port0_1
         // matched update data port0_2
@@ -665,16 +659,4 @@ impl PipelineBuilder {
     }
 }
 
-fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoType> {
-    if matched_len == 0 && unmatched_len > 0 {
-        Ok(MergeIntoType::InsertOnly)
-    } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(MergeIntoType::MatechedOnly)
-    } else if unmatched_len > 0 && matched_len > 0 {
-        Ok(MergeIntoType::FullOperation)
-    } else {
-        Err(ErrorCode::SemanticError(
-            "we must have macthed or unmatched clause at least one",
-        ))
-    }
-}
+

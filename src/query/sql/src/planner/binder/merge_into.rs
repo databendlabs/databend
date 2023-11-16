@@ -55,8 +55,23 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-// implementation of merge into for now:
-//      use an left outer join for target_source and source.
+#[derive(Clone)]
+pub enum MergeIntoType {
+    MatechedOnly,
+    InsertOnly,
+    FullOperation,
+}
+
+// Optimize Rule:
+// for now we think right source table is small table in default.
+// 1. matched only:
+//      right semi join
+// 2. unmatched only:
+//      right anti join
+// 3. macthed and unmatched:
+//      right outer
+// we will improt optimizer for these join type in the future.
+
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]
@@ -93,6 +108,10 @@ impl Binder {
         }
 
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
+
+
+        let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
+
         let mut unmatched_evaluators =
             Vec::<UnmatchedEvaluator>::with_capacity(unmatched_clauses.len());
         let mut matched_evaluators = Vec::<MatchedEvaluator>::with_capacity(matched_clauses.len());
@@ -323,6 +342,7 @@ impl Binder {
             unmatched_evaluators,
             target_table_idx: table_index,
             field_index_map,
+            merge_type
         })))
     }
 
@@ -564,5 +584,19 @@ impl Binder {
             }
         }
         false
+    }
+}
+
+fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoType> {
+    if matched_len == 0 && unmatched_len > 0 {
+        Ok(MergeIntoType::InsertOnly)
+    } else if unmatched_len == 0 && matched_len > 0 {
+        Ok(MergeIntoType::MatechedOnly)
+    } else if unmatched_len > 0 && matched_len > 0 {
+        Ok(MergeIntoType::FullOperation)
+    } else {
+        Err(ErrorCode::SemanticError(
+            "we must have macthed or unmatched clause at least one",
+        ))
     }
 }

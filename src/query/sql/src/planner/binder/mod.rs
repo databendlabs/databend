@@ -66,3 +66,4 @@ pub use scalar_common::*;
 pub use table::parse_result_scan_args;
 pub use values::bind_values;
 pub use window::WindowOrderByInfo;
+pub use merge_into::MergeIntoType;
