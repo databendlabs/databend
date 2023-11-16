@@ -17,6 +17,7 @@ use common_expression::ColumnVec;
 use common_expression::DataBlock;
 
 pub struct BuildState {
+    // The `generation_state` is used to generate build side `DataBlock`.
     pub(crate) generation_state: BuildBlockGenerationState,
     /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) outer_scan_map: Vec<Vec<bool>>,

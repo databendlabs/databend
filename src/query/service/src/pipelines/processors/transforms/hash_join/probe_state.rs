@@ -23,23 +23,30 @@ use crate::sql::plans::JoinType;
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
     pub(crate) max_block_size: usize,
+    // The `mutable_indexes` is used to call `take` or `gather`.
     pub(crate) mutable_indexes: MutableIndexes,
+    // The `generation_state` is used to generate probe side `DataBlock`.
     pub(crate) generation_state: ProbeBlockGenerationState,
-    pub(crate) selection: Vec<u32>,
+    // The `hashes` store hashes of keys and will be converted in-place to pointers for memory reuse.
     pub(crate) hashes: Vec<u64>,
+    // The `func_ctx` is used to handle `other_predicate`.
     pub(crate) func_ctx: FunctionContext,
+    // The `row_state` is used to record whether a row in probe input is matched.
+    pub(crate) row_state: Option<Vec<usize>>,
+    // The row_state_indexes[idx] = i records the row_state[i] has been increased 1 by the idx,
+    // if idx is filtered by other conditions, we will set row_state[idx] = row_state[idx] - 1.
+    // Safe to unwrap.
+    pub(crate) row_state_indexes: Option<Vec<usize>>,
+    // The `probe_unmatched_indexes` is used to store unmatched keys index of input.
+    pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
+    // The `markers` is used for right mark join.
+    pub(crate) markers: Option<Vec<u8>>,
+    // Early filtering.
+    pub(crate) selection: Vec<u32>,
     pub(crate) selection_count: usize,
     pub(crate) num_keys: u64,
     pub(crate) num_keys_hash_matched: u64,
     pub(crate) probe_with_selection: bool,
-    // In the probe phase, the probe block with N rows could join result into M rows
-    // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
-    // probe_indexes: the result index to the probe block row -> [0, 1, 2, 2, 3]
-    // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
-    pub(crate) row_state: Option<Vec<usize>>,
-    pub(crate) row_state_indexes: Option<Vec<usize>>,
-    pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
-    pub(crate) markers: Option<Vec<u8>>,
 }
 
 impl ProbeState {
