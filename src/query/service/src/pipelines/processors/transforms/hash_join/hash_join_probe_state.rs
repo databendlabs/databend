@@ -181,7 +181,7 @@ impl HashJoinProbeState {
         } else {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let probe_keys = self
+        let mut probe_keys = self
             .hash_join_state
             .hash_join_desc
             .probe_keys
@@ -230,6 +230,11 @@ impl HashJoinProbeState {
                 }
             }
             probe_state.valids = valids;
+        }
+
+        for (col, ty) in probe_keys.iter_mut() {
+            *col = col.remove_nullable();
+            *ty = ty.remove_nullable();
         }
 
         let input = input.project(&self.probe_projections);

@@ -108,4 +108,31 @@ impl DataBlock {
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }
+
+    pub fn choose_hash_join_hash_method_with_types(
+        hash_key_types: &[DataType],
+    ) -> Result<HashMethodKind> {
+        let mut group_key_len = 0;
+        for hash_key_type in hash_key_types {
+            let not_null_type = hash_key_type.remove_nullable();
+            if not_null_type.is_numeric()
+                || not_null_type.is_date_or_date_time()
+                || not_null_type.is_decimal()
+            {
+                group_key_len += not_null_type.numeric_byte_size().unwrap();
+            } else {
+                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
+            }
+        }
+
+        match group_key_len {
+            1 => Ok(HashMethodKind::KeysU8(HashMethodKeysU8::default())),
+            2 => Ok(HashMethodKind::KeysU16(HashMethodKeysU16::default())),
+            3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::default())),
+            5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
+            9..=16 => Ok(HashMethodKind::KeysU128(HashMethodKeysU128::default())),
+            17..=32 => Ok(HashMethodKind::KeysU256(HashMethodKeysU256::default())),
+            _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
+        }
+    }
 }

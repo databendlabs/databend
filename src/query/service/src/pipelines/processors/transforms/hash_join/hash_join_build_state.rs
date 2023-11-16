@@ -24,6 +24,7 @@ use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::arrow::and_validities;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -115,7 +116,7 @@ impl HashJoinBuildState {
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
+        let method = DataBlock::choose_hash_join_hash_method_with_types(&hash_key_types)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
@@ -353,40 +354,74 @@ impl HashJoinBuildState {
         let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
 
         macro_rules! insert_key {
-            ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
-                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
+                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
-                let mut local_space: Vec<u8> = Vec::with_capacity($chunk.num_rows() * entry_size);
+                let valid_num = match &$valids {
+                    Some(valids) => valids.len() - valids.unset_bits(),
+                    None => $chunk.num_rows(),
+                };
+                let mut local_space: Vec<u8> = Vec::with_capacity(valid_num * entry_size);
                 let mut raw_entry_ptr = unsafe {
                     std::mem::transmute::<*mut u8, *mut RawEntry<$t>>(local_space.as_mut_ptr())
                 };
 
-                for (row_index, key) in build_keys_iter.enumerate() {
-                    let row_ptr = RowPtr {
-                        chunk_index: $chunk_index,
-                        row_index: row_index as u32,
-                    };
+                match $valids {
+                    Some(valids) => {
+                        for (row_index, (key, valid)) in
+                            build_keys_iter.zip(valids.iter()).enumerate()
+                        {
+                            if !valid {
+                                continue;
+                            }
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
 
-                    // # Safety
-                    // The memory address of `raw_entry_ptr` is valid.
-                    unsafe {
-                        *raw_entry_ptr = RawEntry {
-                            row_ptr,
-                            key: *key,
-                            next: 0,
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            unsafe {
+                                *raw_entry_ptr = RawEntry {
+                                    row_ptr,
+                                    key: *key,
+                                    next: 0,
+                                }
+                            }
+                            $table.insert(*key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
-                    $table.insert(*key, raw_entry_ptr);
-                    raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                    None => {
+                        for (row_index, key) in build_keys_iter.enumerate() {
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
+
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            unsafe {
+                                *raw_entry_ptr = RawEntry {
+                                    row_ptr,
+                                    key: *key,
+                                    next: 0,
+                                }
+                            }
+                            $table.insert(*key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                        }
+                    }
                 }
+
                 local_raw_entry_spaces.push(local_space);
             }};
         }
 
         macro_rules! insert_string_key {
-            ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
+                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
@@ -396,40 +431,81 @@ impl HashJoinBuildState {
                     // must return `KeysState::Column(Column::String)`.
                     _ => unreachable!(),
                 };
+                let valid_num = match &$valids {
+                    Some(valids) => valids.len() - valids.unset_bits(),
+                    None => $chunk.num_rows(),
+                };
                 let mut entry_local_space: Vec<u8> =
-                    Vec::with_capacity($chunk.num_rows() * entry_size);
+                    Vec::with_capacity(valid_num * entry_size);
                 let mut string_local_space: Vec<u8> =
                     Vec::with_capacity(*space_size as usize);
                 let mut raw_entry_ptr = unsafe { std::mem::transmute::<*mut u8, *mut StringRawEntry>(entry_local_space.as_mut_ptr()) };
                 let mut string_local_space_ptr = string_local_space.as_mut_ptr();
 
-                for (row_index, key) in build_keys_iter.enumerate() {
-                    let row_ptr = RowPtr {
-                        chunk_index: $chunk_index,
-                        row_index: row_index as u32,
-                    };
+                match $valids {
+                    Some(valids) => {
+                        for (row_index, (key, valid)) in build_keys_iter.zip(valids.iter()).enumerate() {
+                            if !valid {
+                                continue;
+                            }
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
 
-                    // # Safety
-                    // The memory address of `raw_entry_ptr` is valid.
-                    // string_offset + key.len() <= space_size.
-                    unsafe {
-                        (*raw_entry_ptr).row_ptr = row_ptr;
-                        (*raw_entry_ptr).length = key.len() as u32;
-                        (*raw_entry_ptr).next = 0;
-                        (*raw_entry_ptr).key = string_local_space_ptr;
-                        // The size of `early` is 4.
-                        std::ptr::copy_nonoverlapping(
-                            key.as_ptr(),
-                            (*raw_entry_ptr).early.as_mut_ptr(),
-                            std::cmp::min(STRING_EARLY_SIZE, key.len()),
-                        );
-                        std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
-                        string_local_space_ptr = string_local_space_ptr.add(key.len());
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            // string_offset + key.len() <= space_size.
+                            unsafe {
+                                (*raw_entry_ptr).row_ptr = row_ptr;
+                                (*raw_entry_ptr).length = key.len() as u32;
+                                (*raw_entry_ptr).next = 0;
+                                (*raw_entry_ptr).key = string_local_space_ptr;
+                                // The size of `early` is 4.
+                                std::ptr::copy_nonoverlapping(
+                                    key.as_ptr(),
+                                    (*raw_entry_ptr).early.as_mut_ptr(),
+                                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
+                                );
+                                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                                string_local_space_ptr = string_local_space_ptr.add(key.len());
+                            }
+
+                            $table.insert(key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                        }
                     }
+                    None => {
+                        for (row_index, key) in build_keys_iter.enumerate() {
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
 
-                    $table.insert(key, raw_entry_ptr);
-                    raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            // string_offset + key.len() <= space_size.
+                            unsafe {
+                                (*raw_entry_ptr).row_ptr = row_ptr;
+                                (*raw_entry_ptr).length = key.len() as u32;
+                                (*raw_entry_ptr).next = 0;
+                                (*raw_entry_ptr).key = string_local_space_ptr;
+                                // The size of `early` is 4.
+                                std::ptr::copy_nonoverlapping(
+                                    key.as_ptr(),
+                                    (*raw_entry_ptr).early.as_mut_ptr(),
+                                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
+                                );
+                                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                                string_local_space_ptr = string_local_space_ptr.add(key.len());
+                            }
+
+                            $table.insert(key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                        }
+                    }
                 }
+
                 local_raw_entry_spaces.push(entry_local_space);
                 local_raw_entry_spaces.push(string_local_space);
             }};
@@ -466,7 +542,7 @@ impl HashJoinBuildState {
             } else {
                 Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
             };
-            let columns: Vec<(Column, DataType)> = self
+            let mut build_keys: Vec<(Column, DataType)> = self
                 .hash_join_state
                 .hash_join_desc
                 .build_keys
@@ -497,15 +573,44 @@ impl HashJoinBuildState {
             }
             *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
+            let mut valids = None;
+            if build_keys
+                .iter()
+                .any(|(_, ty)| ty.is_nullable() || ty.is_null())
+            {
+                for (col, _) in build_keys.iter() {
+                    let (is_all_null, tmp_valids) = col.validity();
+                    if is_all_null {
+                        valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
+                        break;
+                    } else {
+                        valids = and_validities(valids, tmp_valids.cloned());
+                    }
+                }
+            }
+
+            valids = match valids {
+                Some(valids) => {
+                    if valids.unset_bits() == valids.len() {
+                        continue;
+                    } else if valids.unset_bits() == 0 {
+                        None
+                    } else {
+                        Some(valids)
+                    }
+                }
+                None => None,
+            };
+
             match self.hash_join_state.hash_join_desc.join_type {
                 JoinType::LeftMark => {
                     let markers = &mut mark_scan_map[chunk_index];
                     self.hash_join_state
-                        .init_markers(&columns, chunk.num_rows(), markers);
+                        .init_markers(&build_keys, chunk.num_rows(), markers);
                 }
                 JoinType::RightMark => {
-                    if !has_null && !columns.is_empty() {
-                        if let Some(validity) = columns[0].0.validity().1 {
+                    if !has_null && !build_keys.is_empty() {
+                        if let Some(validity) = build_keys[0].0.validity().1 {
                             if validity.unset_bits() > 0 {
                                 has_null = true;
                                 let mut has_null_ref = self
@@ -522,30 +627,35 @@ impl HashJoinBuildState {
                 _ => {}
             };
 
+            for (col, ty) in build_keys.iter_mut() {
+                *col = col.remove_nullable();
+                *ty = ty.remove_nullable();
+            }
+
             match hashtable {
                 HashJoinHashTable::Serializer(table) => insert_string_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
                 },
                 HashJoinHashTable::SingleString(table) => insert_string_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
                 },
                 HashJoinHashTable::KeysU8(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
                 },
                 HashJoinHashTable::KeysU16(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
                 },
                 HashJoinHashTable::KeysU32(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
                 },
                 HashJoinHashTable::KeysU64(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
                 },
                 HashJoinHashTable::KeysU128(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
                 },
                 HashJoinHashTable::KeysU256(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
+                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
                 },
                 HashJoinHashTable::Null => {
                     return Err(ErrorCode::AbortedQuery(
