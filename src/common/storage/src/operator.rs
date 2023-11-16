@@ -71,8 +71,6 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?)?,
         StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?)?,
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
-        // Wait for https://github.com/apache/incubator-opendal/issues/3595
-        // StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
         StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
         v => {
@@ -337,26 +335,6 @@ fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
 
     Ok(builder)
 }
-
-/// init_redis_operator will init a redis operator.
-// fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Builder> {
-//     let mut builder = services::Redis::default();
-//
-//     builder.endpoint(&v.endpoint_url);
-//     builder.root(&v.root);
-//     builder.db(v.db);
-//     if let Some(v) = v.default_ttl {
-//         builder.default_ttl(Duration::from_secs(v as u64));
-//     }
-//     if let Some(v) = &v.username {
-//         builder.username(v);
-//     }
-//     if let Some(v) = &v.password {
-//         builder.password(v);
-//     }
-//
-//     Ok(builder)
-// }
 
 /// init_webhdfs_operator will init a WebHDFS operator
 fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {

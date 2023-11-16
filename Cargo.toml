@@ -113,8 +113,6 @@ opendal = { version = "0.42", features = [
     "layers-prometheus-client",
     "services-ipfs",
     "services-moka",
-    # Disable redis service for https://github.com/apache/incubator-opendal/issues/3595
-    #    "services-redis",
     "trust-dns",
 ] }
 ethnum = { version = "1.3.2" }
