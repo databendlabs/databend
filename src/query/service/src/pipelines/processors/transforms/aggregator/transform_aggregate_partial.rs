@@ -122,9 +122,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
         config: HashTableConfig,
-        enable_experimental_aggregate_hashtable: bool,
     ) -> Result<Box<dyn Processor>> {
-        let hash_table = if !enable_experimental_aggregate_hashtable {
+        let hash_table = if !params.enable_experimental_aggregate_hashtable {
             let arena = Arc::new(Bump::new());
             let hashtable = method.create_hash_table(arena)?;
             let _dropper = AggregateHashTableDropper::create(params.clone());

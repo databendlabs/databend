@@ -65,6 +65,57 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
             },
         )))
     }
+
+    fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
+        let mut agg_hashtable: Option<AggregateHashTable> = None;
+        if let AggregateMeta::Partitioned { bucket: _, data } = meta {
+            for bucket_data in data {
+                match bucket_data {
+                    AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            ht.combine_payloads(&payload, &mut self.flush_state)?;
+                        }
+                        None => {
+                            let capacity =
+                                AggregateHashTable::get_capacity_for_count(payload.len());
+
+                            let mut hashtable = AggregateHashTable::new_with_capacity(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                HashTableConfig::default().with_initial_radix_bits(0),
+                                capacity,
+                            );
+                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            agg_hashtable = Some(hashtable);
+                        }
+                    },
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        if let Some(mut ht) = agg_hashtable {
+            let mut blocks = vec![];
+            self.flush_state.clear();
+            loop {
+                if ht.merge_result(&mut self.flush_state)? {
+                    let mut cols = self.flush_state.take_aggregate_results();
+                    cols.extend_from_slice(&self.flush_state.group_columns);
+
+                    blocks.push(DataBlock::new_from_columns(cols));
+                } else {
+                    break;
+                }
+            }
+
+            if blocks.is_empty() {
+                return Ok(DataBlock::empty());
+            }
+            return DataBlock::concat(&blocks);
+        }
+
+        Ok(DataBlock::empty())
+    }
 }
 
 impl<Method> BlockMetaTransform<AggregateMeta<Method, usize>> for TransformFinalAggregate<Method>
@@ -73,14 +124,16 @@ where Method: HashMethodBounds
     const NAME: &'static str = "TransformFinalAggregate";
 
     fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
+        if self.params.enable_experimental_aggregate_hashtable {
+            return self.transform_agg_hashtable(meta);
+        }
+
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut reach_limit = false;
             let arena = Arc::new(Bump::new());
             let hashtable = self.method.create_hash_table::<usize>(arena)?;
             let _dropper = AggregateHashTableDropper::create(self.params.clone());
             let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
-
-            let mut agg_hashtable: Option<AggregateHashTable> = None;
 
             for bucket_data in data {
                 match bucket_data {
@@ -186,45 +239,8 @@ where Method: HashMethodBounds
                             }
                         }
                     },
-                    AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
-                        Some(ht) => {
-                            ht.combine_payloads(&payload, &mut self.flush_state)?;
-                        }
-                        None => {
-                            let capacity =
-                                AggregateHashTable::get_capacity_for_count(payload.len());
-
-                            let mut hashtable = AggregateHashTable::new_with_capacity(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                HashTableConfig::default().with_initial_radix_bits(0),
-                                capacity,
-                            );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
-                            agg_hashtable = Some(hashtable);
-                        }
-                    },
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 }
-            }
-
-            if let Some(mut ht) = agg_hashtable {
-                let mut blocks = vec![];
-                self.flush_state.clear();
-                loop {
-                    if ht.merge_result(&mut self.flush_state)? {
-                        let mut cols = self.flush_state.take_aggregate_results();
-                        cols.extend_from_slice(&self.flush_state.group_columns);
-
-                        blocks.push(DataBlock::new_from_columns(cols));
-                    } else {
-                        break;
-                    }
-                }
-
-                if blocks.is_empty() {
-                    return Ok(DataBlock::empty());
-                }
-                return DataBlock::concat(&blocks);
             }
 
             let keys_len = hash_cell.hashtable.len();
