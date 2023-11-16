@@ -69,21 +69,14 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
-struct TestHttpQueryRequest {
-    ep: EndpointType,
+struct TestHttpQueryRequest<'a> {
+    ep: &'a EndpointType,
     json: serde_json::Value,
     headers: HeaderMap,
 }
 
-impl TestHttpQueryRequest {
-    fn new(json: serde_json::Value) -> Self {
-        let session_middleware =
-            HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-        let ep = Route::new()
-            .nest("/v1/query", query_route())
-            .with(session_middleware);
-
+impl<'a> TestHttpQueryRequest<'a> {
+    fn new(ep: &'a EndpointType, json: serde_json::Value) -> Self {
         Self {
             ep,
             json,
@@ -91,19 +84,23 @@ impl TestHttpQueryRequest {
         }
     }
 
-    fn with_headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = headers;
-        self
-    }
+    // fn with_headers(mut self, headers: HeaderMap) -> Self {
+    //    self.headers = headers;
+    //    self
+    // }
 
-    async fn call(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
+    async fn fetch(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
         let mut resps = vec![];
 
         let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
+        let mut next_uri = resp.next_uri.clone();
         resps.push((status, resp.clone()));
 
-        while let Some(next_uri) = resp.next_uri.as_ref() {
-            let (status, resp) = self.do_request(Method::GET, &next_uri).await?;
+        while next_uri.is_some() {
+            let (status, resp) = self
+                .do_request(Method::GET, next_uri.as_ref().unwrap())
+                .await?;
+            next_uri = resp.next_uri.clone();
             resps.push((status, resp));
         }
 
@@ -1319,6 +1316,8 @@ async fn test_multi_partition() -> Result<()> {
 async fn test_affect() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
+    let ep = create_endpoint().await?;
+
     let sqls = vec![
         (
             serde_json::json!({"sql": "set max_threads=1", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
@@ -1386,8 +1385,8 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let request = TestHttpQueryRequest::new(json.clone());
-        let paged_resps = request.call().await?;
+        let request = TestHttpQueryRequest::new(&ep, json.clone());
+        let paged_resps = request.fetch().await?;
         let result = paged_resps.last().unwrap();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
