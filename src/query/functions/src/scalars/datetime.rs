@@ -97,6 +97,9 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // [date | timestamp] +/- number
     register_timestamp_add_sub(registry);
+
+    // timestamp functions
+    register_timestamp_functions(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -1409,3 +1412,5 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         }),
     );
 }
+
+fn register_timestamp_functions(registry: &mut FunctionRegistry) {}
