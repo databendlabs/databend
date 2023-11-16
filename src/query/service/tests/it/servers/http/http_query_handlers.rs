@@ -212,7 +212,7 @@ async fn test_return_when_finish() -> Result<()> {
     for (sql, state) in [
         ("select * from numbers(1)", ExecuteStateKind::Succeeded),
         ("bad sql", ExecuteStateKind::Failed), // parse fail
-        ("select cast(null as boolean)", ExecuteStateKind::Failed), // execute fail at once
+        ("select cast(null as boolean)", ExecuteStateKind::Succeeded),
         ("create table t1(a int)", ExecuteStateKind::Failed),
     ] {
         let start_time = std::time::Instant::now();
