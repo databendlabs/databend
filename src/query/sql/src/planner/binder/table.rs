@@ -538,6 +538,7 @@ impl Binder {
             .get_property(&func_name.name)
             .map(|p| p.kind == FunctionKind::SRF)
             .unwrap_or(false)
+            && !func_name.name.eq_ignore_ascii_case("flatten")
         {
             // If it is a set-returning function, we bind it as a subquery.
             let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
