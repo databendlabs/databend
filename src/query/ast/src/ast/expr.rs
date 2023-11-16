@@ -492,6 +492,10 @@ pub enum JsonOperator {
     QuestionOr,
     /// ?& Checks whether all of the text keys exist as top-level keys or array elements.
     QuestionAnd,
+    /// @> Checks whether left json contains the right json
+    AtArrow,
+    /// <@ Checks whether right json contains the left json
+    ArrowAt,
 }
 
 impl JsonOperator {
@@ -504,6 +508,8 @@ impl JsonOperator {
             JsonOperator::Question => "json_exists_key".to_string(),
             JsonOperator::QuestionOr => "json_exists_any_keys".to_string(),
             JsonOperator::QuestionAnd => "json_exists_all_keys".to_string(),
+            JsonOperator::AtArrow => "json_contains_in_left".to_string(),
+            JsonOperator::ArrowAt => "json_contains_in_right".to_string(),
         }
     }
 }
@@ -767,6 +773,12 @@ impl Display for JsonOperator {
             }
             JsonOperator::QuestionAnd => {
                 write!(f, "?&")
+            }
+            JsonOperator::AtArrow => {
+                write!(f, "@>")
+            }
+            JsonOperator::ArrowAt => {
+                write!(f, "<@")
             }
         }
     }

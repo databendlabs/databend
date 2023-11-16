@@ -164,6 +164,7 @@ impl DPhpy {
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
                         | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
                 ) {
                     left_is_subquery = true;
                 }
@@ -176,6 +177,7 @@ impl DPhpy {
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
                         | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
                 ) {
                     right_is_subquery = true;
                 }
@@ -220,6 +222,7 @@ impl DPhpy {
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
+            | RelOperator::Udf(_)
             | RelOperator::Filter(_) => {
                 if join_child {
                     // If plan is filter, save it

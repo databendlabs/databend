@@ -2005,7 +2005,6 @@ dependencies = [
  "comfy-table 6.1.4",
  "common-arrow",
  "common-ast",
- "common-base",
  "common-datavalues",
  "common-exception",
  "common-hashtable",
@@ -2018,7 +2017,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "lexical-core",
  "log",
  "match-template",
@@ -2052,7 +2051,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -2099,7 +2098,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "lexical-core",
  "libm",
  "match-template",
@@ -2583,7 +2582,7 @@ dependencies = [
  "common-expression",
  "common-pipeline-core",
  "common-profile",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "match-template",
 ]
 
@@ -2732,7 +2731,6 @@ dependencies = [
  "simsearch",
  "storages-common-table-meta",
  "time",
- "url",
 ]
 
 [[package]]
@@ -2816,7 +2814,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "log",
  "metrics",
  "minitrace 0.6.2",
@@ -3112,7 +3110,7 @@ dependencies = [
  "common-users",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "log",
  "once_cell",
  "opendal",
@@ -3982,7 +3980,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "jwt-simple",
  "lazy_static",
  "log",
@@ -4102,7 +4100,7 @@ dependencies = [
  "databend-sql",
  "ethnum",
  "itertools 0.11.0",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -4478,7 +4476,7 @@ dependencies = [
  "databend-query",
  "futures",
  "futures-util",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "jwt-simple",
  "log",
  "opendal",
@@ -7265,7 +7263,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.3.0"
-source = "git+https://github.com/datafuselabs/jsonb?rev=d11c9a9#d11c9a9442ea0efbdb98321479c5c50d34e5f606"
+source = "git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9#1d7a3e94e45271086510ed4c8b71acc5bf2104bc"
 dependencies = [
  "byteorder",
  "fast-float",
