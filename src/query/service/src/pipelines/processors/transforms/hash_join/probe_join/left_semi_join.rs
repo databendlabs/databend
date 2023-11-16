@@ -14,7 +14,6 @@
 
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -108,8 +107,8 @@ impl HashJoinProbeState {
         // Build states.
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };
 
-        // For semi join, it defaults to all.
-        let mut row_state = vec![0_u32; input.num_rows()];
+        // For semi join, it defaults to false.
+        let mut row_state = vec![false; input.num_rows()];
         let other_predicate = self
             .hash_join_state
             .hash_join_desc
@@ -143,7 +142,6 @@ impl HashJoinProbeState {
 
                 while matched_idx == max_block_size {
                     self.process_left_semi_join_block(
-                        &mut result_blocks,
                         matched_idx,
                         input,
                         probe_indexes,
@@ -187,7 +185,6 @@ impl HashJoinProbeState {
 
                 while matched_idx == max_block_size {
                     self.process_left_semi_join_block(
-                        &mut result_blocks,
                         matched_idx,
                         input,
                         probe_indexes,
@@ -215,7 +212,6 @@ impl HashJoinProbeState {
 
         if matched_idx > 0 {
             self.process_left_semi_join_block(
-                &mut result_blocks,
                 matched_idx,
                 input,
                 probe_indexes,
@@ -227,38 +223,29 @@ impl HashJoinProbeState {
             )?;
         }
 
-        Ok(result_blocks)
-    }
-
-    // modify the bm by the value row_state
-    // keep the index of the first positive state
-    // bitmap: [1, 1, 1] with row_state [0, 0], probe_index: [(0, 3)] => [0, 0, 0] (repeat the first element 3 times)
-    // bitmap will be [1, 1, 1] -> [1, 1, 1] -> [1, 0, 1] -> [1, 0, 0]
-    // row_state will be [0, 0] -> [1, 0] -> [1,0] -> [1, 0]
-    pub(crate) fn fill_null_for_semi_join(
-        &self,
-        bm: &mut MutableBitmap,
-        probe_indexes: &[u32],
-        row_state: &mut [u32],
-    ) {
-        for (index, row) in probe_indexes.iter().enumerate() {
-            unsafe {
-                if bm.get(index) {
-                    if *row_state.get_unchecked(*row as usize) == 0 {
-                        *row_state.get_unchecked_mut(*row as usize) = 1;
-                    } else {
-                        bm.set_unchecked(index, false);
-                    }
-                }
+        // Find all matched indexes and generate the result `DataBlock`.
+        matched_idx = 0;
+        for (i, state) in row_state.iter().enumerate() {
+            if *state {
+                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = i as u32 };
+                matched_idx += 1;
             }
         }
+        if matched_idx > 0 {
+            result_blocks.push(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_idx],
+                &mut probe_state.generation_state.string_items_buf,
+            )?);
+        }
+
+        Ok(result_blocks)
     }
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
     fn process_left_semi_join_block(
         &self,
-        result_blocks: &mut Vec<DataBlock>,
         matched_idx: usize,
         input: &DataBlock,
         probe_indexes: &[u32],
@@ -266,7 +253,7 @@ impl HashJoinProbeState {
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
         other_predicate: &Expr,
-        row_state: &mut [u32],
+        row_state: &mut [bool],
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -296,22 +283,39 @@ impl HashJoinProbeState {
         };
 
         let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_idx);
+        self.update_row_state(
+            &result_block,
+            other_predicate,
+            &probe_indexes[0..matched_idx],
+            row_state,
+        )?;
 
-        let mut bm = match self.get_other_filters(&result_block, other_predicate, &self.func_ctx)? {
-            (Some(b), _, _) => b.make_mut(),
-            (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
-            (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
-            _ => unreachable!(),
-        };
+        Ok(())
+    }
 
-        self.fill_null_for_semi_join(&mut bm, &probe_indexes[0..matched_idx], row_state);
-
-        if let Some(probe_block) = probe_block {
-            let result_block = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
-            if !result_block.is_empty() {
-                result_blocks.push(result_block);
+    #[inline]
+    pub(crate) fn update_row_state(
+        &self,
+        result_block: &DataBlock,
+        other_predicate: &Expr,
+        probe_indexes: &[u32],
+        row_state: &mut [bool],
+    ) -> Result<()> {
+        match self.get_other_filters(result_block, other_predicate, &self.func_ctx)? {
+            (Some(bm), _, _) => {
+                for (row, selected) in probe_indexes.iter().zip(bm.iter()) {
+                    if selected && unsafe { !*row_state.get_unchecked(*row as usize) } {
+                        unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
+                    }
+                }
             }
-        }
+            (_, true, _) => {
+                for row in probe_indexes.iter() {
+                    unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
+                }
+            }
+            _ => (),
+        };
         Ok(())
     }
 }
