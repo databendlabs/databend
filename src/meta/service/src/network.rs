@@ -28,6 +28,7 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::openraft::RaftNetworkFactory;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::SnapshotChunkRequest;
 use common_meta_types::AppendEntriesRequest;
 use common_meta_types::AppendEntriesResponse;
 use common_meta_types::InstallSnapshotError;
@@ -46,10 +47,12 @@ use common_meta_types::VoteResponse;
 use common_metrics::count::Count;
 use log::debug;
 use log::info;
+use log::warn;
 use openraft::async_trait::async_trait;
 use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
+use tonic::Code;
 
 use crate::grpc_helper::GrpcHelper;
 use crate::metrics::raft_metrics;
@@ -164,6 +167,14 @@ pub struct NetworkConnection {
     // TODO: this will be used when learners is upgrade to be stored in Membership
     #[allow(dead_code)]
     target_node: MembershipNode,
+
+    /// A counter to send snapshot via v0 API.
+    ///
+    /// v0 API should only be used during upgrading a meta cluster.
+    /// During this period, i.e., this counter is `>0`,
+    /// try to send via v0 if the remote is not upgraded.
+    /// When this counter reaches 0, start sending via v1 API.
+    install_snapshot_via_v0: u64,
 
     sto: RaftStore,
     conn_pool: Arc<Pool<ChannelManager>>,
@@ -306,6 +317,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         );
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
+        let bytes = rpc.data.len() as u64;
 
         let mut client = self
             .make_client()
@@ -314,15 +326,51 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
         let mut last_err = None;
 
-        for back_off in self.back_off() {
-            let req = common_tracing::inject_span_to_tonic_request(&rpc);
+        // It consumes a loop to retry sending install_snapshot via v0 API.
+        // Thus add another backoff of 0.
+        for back_off in [Duration::from_millis(0)]
+            .into_iter()
+            .chain(self.back_off())
+        {
+            raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
-            Network::incr_meta_metrics_sent_bytes_to_peer(&self.target, req.get_ref());
+            // Try send via `v1` API, if the remote peer does not provide `v1` API,
+            // revert to `v0` API.
 
-            let res = client
-                .install_snapshot(req)
-                .timed(observe_snapshot_send_spent(self.target))
-                .await;
+            let res = if self.install_snapshot_via_v0 == 0 {
+                // Send via v1 API
+
+                let v1_req = SnapshotChunkRequest::new_v1(rpc.clone());
+                let req = common_tracing::inject_span_to_tonic_request(v1_req);
+                let res = client
+                    .install_snapshot_v1(req)
+                    .timed(observe_snapshot_send_spent(self.target))
+                    .await;
+
+                if let Err(ref status) = res {
+                    if status.code() == Code::Unimplemented {
+                        warn!(
+                            "target={} does not support install_snapshot_v1 API, fallback to v0 API for next 10 times",
+                            self.target
+                        );
+                        // The remote peer may not be upgraded yet, try to send via v0 API for the
+                        // next 10 install_snapshot RPC and retry at once.
+                        self.install_snapshot_via_v0 = 10;
+                        continue;
+                    }
+                }
+                res
+            } else {
+                // Send via v0 API
+
+                self.install_snapshot_via_v0 -= 1;
+
+                let req = common_tracing::inject_span_to_tonic_request(rpc.clone());
+                client
+                    .install_snapshot(req)
+                    .timed(observe_snapshot_send_spent(self.target))
+                    .await
+            };
 
             info!("install_snapshot resp target={}: {:?}", self.target, res);
 
@@ -427,6 +475,7 @@ impl RaftNetworkFactory<TypeConfig> for Network {
             id: self.sto.id,
             target,
             target_node: node.clone(),
+            install_snapshot_via_v0: 0,
             sto: self.sto.clone(),
             conn_pool: self.conn_pool.clone(),
             backoff: self.backoff.clone(),
