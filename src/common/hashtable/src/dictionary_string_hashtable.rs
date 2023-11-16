@@ -49,7 +49,8 @@ impl FastHash for DictionaryKeys {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
         unsafe {
-            let hash = self.keys
+            let hash = self
+                .keys
                 .as_ref()
                 .iter()
                 .map(|x| x.as_ref().fast_hash())
