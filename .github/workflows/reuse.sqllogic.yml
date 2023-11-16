@@ -39,6 +39,7 @@ jobs:
           - "standalone"
           - "crdb"
           - "duckdb"
+          - "duckdb_join_small_block"
           - "base"
           - "ydb"
           - "tpcds"
