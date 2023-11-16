@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 60
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
@@ -126,7 +126,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 15
+        timeout-minutes: 60
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
