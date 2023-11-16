@@ -2168,7 +2168,6 @@ impl<'a> TypeChecker<'a> {
         if typ.eq(&SubqueryType::Scalar) {
             data_type = Box::new(data_type.wrap_nullable());
         }
-
         let subquery_expr = SubqueryExpr {
             span: subquery.span,
             subquery: Box::new(s_expr),
