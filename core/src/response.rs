@@ -14,7 +14,7 @@
 
 use serde::Deserialize;
 
-use crate::request::SessionConfig;
+use crate::request::SessionState;
 
 #[derive(Deserialize, Debug)]
 pub struct QueryError {
@@ -56,7 +56,7 @@ pub struct SchemaField {
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
-    pub session: Option<SessionConfig>,
+    pub session: Option<SessionState>,
     pub schema: Vec<SchemaField>,
     pub data: Vec<Vec<String>>,
     pub state: String,
@@ -78,14 +78,14 @@ mod test {
     #[test]
     fn deserialize_session_config() {
         let session_json = r#"{"database":"default","settings":{}}"#;
-        let session_config: SessionConfig = serde_json::from_str(session_json).unwrap();
+        let session_config: SessionState = serde_json::from_str(session_json).unwrap();
         assert_eq!(session_config.database, Some("default".to_string()));
         assert_eq!(session_config.settings, Some(BTreeMap::default()));
         assert_eq!(session_config.role, None);
         assert_eq!(session_config.secondary_roles, None);
 
         let session_json = r#"{"database":"default","settings":{},"role": "role1", "secondary_roles": [], "unknown_field": 1}"#;
-        let session_config: SessionConfig = serde_json::from_str(session_json).unwrap();
+        let session_config: SessionState = serde_json::from_str(session_json).unwrap();
         assert_eq!(session_config.database, Some("default".to_string()));
         assert_eq!(session_config.settings, Some(BTreeMap::default()));
         assert_eq!(session_config.role, Some("role1".to_string()));

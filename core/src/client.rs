@@ -33,7 +33,7 @@ use crate::presign::{presign_upload_to_stage, PresignedResponse, Reader};
 use crate::stage::StageLocation;
 use crate::{
     error::{Error, Result},
-    request::{PaginationConfig, QueryRequest, SessionConfig, StageAttachmentConfig},
+    request::{PaginationConfig, QueryRequest, SessionState, StageAttachmentConfig},
     response::{QueryError, QueryResponse},
 };
 
@@ -59,7 +59,7 @@ pub struct APIClient {
     tenant: Option<String>,
     warehouse: Arc<Mutex<Option<String>>>,
     database: Arc<Mutex<Option<String>>>,
-    session_settings: Arc<Mutex<BTreeMap<String, String>>>,
+    session_state: Arc<Mutex<SessionState>>,
 
     wait_time_secs: Option<i64>,
     max_rows_in_buffer: Option<i64>,
@@ -87,7 +87,7 @@ impl APIClient {
             "" => None,
             s => Some(s.to_string()),
         };
-        client.database = Arc::new(Mutex::new(database));
+        client.database = Arc::new(Mutex::new(database.clone()));
         let mut scheme = "https";
         let mut session_settings = BTreeMap::new();
         for (k, v) in u.query_pairs() {
@@ -165,8 +165,12 @@ impl APIClient {
         }
         client.cli = cli_builder.build()?;
         client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, client.port))?;
-        client.session_settings = Arc::new(Mutex::new(session_settings));
 
+        client.session_state = Arc::new(Mutex::new(
+            SessionState::default()
+                .with_settings(Some(session_settings))
+                .with_database(database),
+        ));
         Ok(client)
     }
 
@@ -184,35 +188,39 @@ impl APIClient {
         uuid::Uuid::new_v4().to_string()
     }
 
-    pub async fn handle_session(&self, session: &Option<SessionConfig>) {
-        let mut session_settings = self.session_settings.lock().await;
-        if let Some(session) = &session {
-            if session.database.is_some() {
-                let mut database = self.database.lock().await;
-                *database = session.database.clone();
-            }
-            if let Some(settings) = &session.settings {
-                for (k, v) in settings {
-                    match k.as_str() {
-                        "warehouse" => {
-                            let mut warehouse = self.warehouse.lock().await;
-                            *warehouse = Some(v.clone());
-                        }
-                        _ => {
-                            session_settings.insert(k.clone(), v.clone());
-                        }
-                    }
-                }
+    pub async fn handle_session(&self, session: &Option<SessionState>) {
+        let session = match session {
+            Some(session) => session,
+            None => return,
+        };
+
+        // save the updated session state from the server side
+        {
+            let mut session_state = self.session_state.lock().await;
+            *session_state = session.clone();
+        }
+
+        // process database changed via session.db
+        if session.database.is_some() {
+            let mut database = self.database.lock().await;
+            *database = session.database.clone();
+        }
+
+        // process warehouse changed via session settings
+        if let Some(settings) = session.settings.as_ref() {
+            if let Some(v) = settings.get("warehouse") {
+                let mut warehouse = self.warehouse.lock().await;
+                *warehouse = Some(v.clone());
             }
         }
     }
 
     pub async fn start_query(&self, sql: &str) -> Result<QueryResponse> {
         info!("start query: {}", sql);
-        let session_settings = self.make_session().await;
+        let session_state = self.session_state().await;
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
-            .with_session(session_settings);
+            .with_session(Some(session_state));
         let endpoint = self.endpoint.join("v1/query")?;
         let query_id = self.gen_query_id();
         let headers = self.make_headers(&query_id).await?;
@@ -335,20 +343,8 @@ impl APIClient {
         self.wait_for_query(resp).await
     }
 
-    async fn make_session(&self) -> Option<SessionConfig> {
-        let session_settings = self.session_settings.lock().await;
-        let database = self.database.lock().await;
-        if database.is_none() && session_settings.is_empty() {
-            return None;
-        }
-        let mut session = SessionConfig::default();
-        if database.is_some() {
-            session.database = database.clone();
-        }
-        if !session_settings.is_empty() {
-            session.settings = Some(session_settings.clone());
-        }
-        Some(session)
+    async fn session_state(&self) -> SessionState {
+        self.session_state.lock().await.clone()
     }
 
     fn make_pagination(&self) -> Option<PaginationConfig> {
@@ -399,7 +395,7 @@ impl APIClient {
             "insert with stage: {}, format: {:?}, copy: {:?}",
             sql, file_format_options, copy_options
         );
-        let session_settings = self.make_session().await;
+        let session_state = self.session_state().await;
         let stage_attachment = Some(StageAttachmentConfig {
             location: stage,
             file_format_options: Some(file_format_options),
@@ -407,7 +403,7 @@ impl APIClient {
         });
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
-            .with_session(session_settings)
+            .with_session(Some(session_state))
             .with_stage_attachment(stage_attachment);
         let endpoint = self.endpoint.join("v1/query")?;
         let query_id = self.gen_query_id();
@@ -540,7 +536,7 @@ impl Default for APIClient {
             database: Arc::new(Mutex::new(None)),
             user: "root".to_string(),
             password: None,
-            session_settings: Arc::new(Mutex::new(BTreeMap::new())),
+            session_state: Arc::new(Mutex::new(SessionState::default())),
             wait_time_secs: None,
             max_rows_in_buffer: None,
             max_rows_per_page: None,

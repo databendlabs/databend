@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct SessionConfig {
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
+pub struct SessionState {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -28,10 +28,27 @@ pub struct SessionConfig {
     pub secondary_roles: Option<Vec<String>>,
 }
 
+impl SessionState {
+    pub fn with_settings(mut self, settings: Option<BTreeMap<String, String>>) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    pub fn with_database(mut self, database: Option<String>) -> Self {
+        self.database = database;
+        self
+    }
+
+    pub fn with_role(mut self, role: Option<String>) -> Self {
+        self.role = role;
+        self
+    }
+}
+
 #[derive(Serialize, Debug)]
 pub struct QueryRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
-    session: Option<SessionConfig>,
+    session: Option<SessionState>,
     sql: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pagination: Option<PaginationConfig>,
@@ -68,7 +85,7 @@ impl<'r, 't: 'r> QueryRequest<'r> {
         }
     }
 
-    pub fn with_session(mut self, session: Option<SessionConfig>) -> Self {
+    pub fn with_session(mut self, session: Option<SessionState>) -> Self {
         self.session = session;
         self
     }
@@ -95,7 +112,7 @@ mod test {
     #[test]
     fn build_request() -> Result<()> {
         let req = QueryRequest::new("select 1")
-            .with_session(Some(SessionConfig {
+            .with_session(Some(SessionState {
                 database: Some("default".to_string()),
                 settings: Some(BTreeMap::new()),
                 role: None,
