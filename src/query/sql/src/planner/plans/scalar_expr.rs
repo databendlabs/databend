@@ -60,6 +60,16 @@ impl ScalarExpr {
                 self.columns.insert(col.column.index);
                 Ok(())
             }
+
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                for idx in subquery.outer_columns.iter() {
+                    self.columns.insert(*idx);
+                }
+                if let Some(child_expr) = subquery.child_expr.as_ref() {
+                    self.visit(child_expr)?;
+                }
+                Ok(())
+            }
         }
 
         let mut visitor = UsedColumnsVisitor {
@@ -151,6 +161,26 @@ impl ScalarExpr {
             }
             _ => None,
         }
+    }
+
+    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+        struct ReplaceColumnVisitor {
+            old: IndexType,
+            new: IndexType,
+        }
+
+        impl VisitorMut<'_> for ReplaceColumnVisitor {
+            fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
+                if col.column.index == self.old {
+                    col.column.index = self.new;
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = ReplaceColumnVisitor { old, new };
+        visitor.visit(self)?;
+        Ok(())
     }
 }
 
