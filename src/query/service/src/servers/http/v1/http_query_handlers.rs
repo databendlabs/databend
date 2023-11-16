@@ -109,7 +109,7 @@ impl QueryResponseField {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,

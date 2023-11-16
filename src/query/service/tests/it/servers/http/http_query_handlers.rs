@@ -69,6 +69,66 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
+struct TestHttpQueryRequest {
+    ep: EndpointType,
+    json: serde_json::Value,
+    headers: HeaderMap,
+}
+
+impl TestHttpQueryRequest {
+    fn new(json: serde_json::Value, headers: HeaderMap) -> Self {
+        let session_middleware =
+            HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+
+        let ep = Route::new()
+            .nest("/v1/query", query_route())
+            .with(session_middleware);
+
+        Self { ep, json, headers }
+    }
+
+    async fn call(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
+        let mut resps = vec![];
+
+        let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
+        resps.push((status, resp.clone()));
+
+        while let Some(next_uri) = resp.next_uri.as_ref() {
+            let (status, resp) = self.do_request(Method::GET, &next_uri).await?;
+            resps.push((status, resp));
+        }
+
+        Ok(resps)
+    }
+
+    async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+        let content_type = "application/json";
+        let basic = headers::Authorization::basic("root", "");
+        let body = serde_json::to_vec(&self.json).unwrap();
+
+        let mut req = Request::builder()
+            .uri(uri.parse().unwrap())
+            .method(method)
+            .header(header::CONTENT_TYPE, content_type)
+            .typed_header(basic)
+            .body(body);
+        req.headers_mut().extend(self.headers.clone().into_iter());
+
+        let resp = self
+            .ep
+            .call(req)
+            .await
+            .map_err(|e| ErrorCode::Internal(e.to_string()))
+            .unwrap();
+
+        let status_code = resp.status();
+        let body = resp.into_body().into_string().await.unwrap();
+        let query_resp = serde_json::from_str::<QueryResponse>(&body).unwrap();
+
+        Ok((status_code, query_resp))
+    }
+}
+
 // TODO(youngsofun): add test for
 // 1. query fail after started
 
