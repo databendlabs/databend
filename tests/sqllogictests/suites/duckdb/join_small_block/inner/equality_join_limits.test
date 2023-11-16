@@ -1,4 +1,7 @@
 statement ok
+set max_block_size = 1;
+
+statement ok
 drop table if exists t;
 
 statement ok
@@ -103,3 +106,6 @@ DROP TABLE t;
 
 statement ok
 DROP TABLE u;
+
+statement ok
+set max_block_size = 65536;

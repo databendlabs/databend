@@ -1,4 +1,7 @@
 statement ok
+set max_block_size = 1;
+
+statement ok
 drop view if exists list_int;
 
 statement ok
@@ -180,3 +183,6 @@ order by lhs.i, rhs.i;
 9 1 [9,10,11] 3 1 [3,4,5]
 9 1 [9,10,11] 5 1 [5,6,7]
 9 1 [9,10,11] 7 1 [7,8,9]
+
+statement ok
+set max_block_size = 65536;

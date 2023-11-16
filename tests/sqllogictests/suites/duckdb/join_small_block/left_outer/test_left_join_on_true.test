@@ -1,3 +1,6 @@
+statement ok
+set max_block_size = 1;
+
 # test non-lateral left joins
 statement ok
 drop table if exists integers;
@@ -43,4 +46,5 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i, j, k, l
 3	4	1	10
 3	4	2	20
 
-
+statement ok
+set max_block_size = 65536;

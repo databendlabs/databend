@@ -1,0 +1,58 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists test3;
+
+statement ok
+drop table if exists test4;
+
+# create the table integers with the values 0..1000
+statement ok
+CREATE TABLE test3 AS SELECT number r FROM numbers(1024);
+
+statement ok
+CREATE TABLE test4 AS SELECT number r FROM numbers(1024);
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;
+
+query I
+select count(*) from test3, test4 where test3.r = test4.r;
+----
+10240
+
+statement ok
+set max_block_size = 20;
+
+query I
+select count(*) from test3, test4 where test3.r = test4.r;
+----
+10240
+
+statement ok
+set max_block_size = 65536;

@@ -1,0 +1,225 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists tbl_1;
+
+statement ok
+drop table if exists tbl_2;
+
+statement ok
+create table tbl_1 (a decimal(4,0), b decimal(4,0))
+
+statement ok
+insert into tbl_1 values (1,NULL),(2,3),(NULL,NULL)
+
+statement ok
+create table tbl_2 (b decimal(4,0))
+
+statement ok
+insert into tbl_2 values (1),(2),(NULL)
+
+query I
+SELECT a from tbl_1 WHERE a IS DISTINCT FROM b
+----
+1
+2
+
+query I
+SELECT a from tbl_1 WHERE a IS NOT DISTINCT FROM b
+----
+NULL
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b) ORDER BY 1
+----
+1	1
+2	2
+NULL	NULL
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b AND a <> tbl_2.b) ORDER BY 1
+----
+
+query II rowsort
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
+----
+1	2
+1	NULL
+2	1
+2	NULL
+NULL	1
+NULL	2
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b AND a <> tbl_2.b) order by a,tbl_2.b
+----
+1	2
+2	1
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a <> tbl_2.b AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+----
+1	2
+2	1
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (tbl_2.b > a AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+----
+1	2
+
+statement ok
+DROP TABLE tbl_1;
+
+statement ok
+DROP TABLE tbl_2;
+
+#Vector with vector
+query III
+select a.a, b.b, a.a IS NOT DISTINCT FROM b.b AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
+----
+1	1	1
+1	2	0
+1	NULL	0
+2	1	0
+2	2	1
+2	NULL	0
+NULL	1	0
+NULL	2	0
+NULL	NULL	1
+
+query III
+select a.a, b.b, a.a IS DISTINCT FROM b.b AS "Is Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
+----
+1	1	0
+1	2	1
+1	NULL	1
+2	1	1
+2	2	0
+2	NULL	1
+NULL	1	1
+NULL	2	1
+NULL	NULL	0
+
+#constant with constant
+query I
+select null is not distinct from null;
+----
+1
+
+query I
+select null is distinct from null;
+----
+0
+
+# Vector with constant
+query II
+select a.a, a.a IS NOT DISTINCT FROM 1 AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	1
+2	0
+NULL	0
+
+query II
+select a.a, a.a IS DISTINCT FROM 1 AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	0
+2	1
+NULL	1
+
+query II
+select a.a, a.a IS NOT DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	0
+2	0
+NULL	1
+
+query II
+select a.a, a.a IS DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	1
+2	1
+NULL	0
+
+statement ok
+drop table if exists test_types;
+
+# More types (all numeric types, strings, dates, times, timestamps, interval)
+statement ok
+CREATE TABLE test_types(a tinyint, b smallint, c integer, d bigint, e double, f float, g varchar);
+
+statement ok
+INSERT INTO test_types values (NULL,NULL,NULL,NULL,NULL,NULL,NULL),(1,1,1,1,1,1,'1'),(10,10,10,10,10,10,'10')
+
+query I
+select count(*) FROM test_types where a IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where b IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where c IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where d IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where e IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where f IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where g IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where a IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where b IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where c IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where d IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where e IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where f IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where g IS NOT DISTINCT FROM NULL
+----
+1
+
+statement ok
+set max_block_size = 65536;
