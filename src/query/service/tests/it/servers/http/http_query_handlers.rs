@@ -76,7 +76,7 @@ struct TestHttpQueryRequest {
 }
 
 impl TestHttpQueryRequest {
-    fn new(json: serde_json::Value, headers: HeaderMap) -> Self {
+    fn new(json: serde_json::Value) -> Self {
         let session_middleware =
             HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
@@ -84,7 +84,16 @@ impl TestHttpQueryRequest {
             .nest("/v1/query", query_route())
             .with(session_middleware);
 
-        Self { ep, json, headers }
+        Self {
+            ep,
+            json,
+            headers: HeaderMap::new(),
+        }
+    }
+
+    fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.headers = headers;
+        self
     }
 
     async fn call(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
@@ -1310,8 +1319,6 @@ async fn test_multi_partition() -> Result<()> {
 async fn test_affect() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let route = create_endpoint().await?;
-
     let sqls = vec![
         (
             serde_json::json!({"sql": "set max_threads=1", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
@@ -1379,12 +1386,14 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-        assert_eq!(status, StatusCode::OK, "{} {:?}", json, result.error);
-        assert!(result.error.is_none(), "{} {:?}", json, result.error);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.affect, affect);
-        assert_eq!(result.session, session_conf);
+        let request = TestHttpQueryRequest::new(json.clone());
+        let paged_resps = request.call().await?;
+        let result = paged_resps.last().unwrap();
+        assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
+        assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
+        assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.1.affect, affect);
+        assert_eq!(result.1.session, session_conf);
     }
     Ok(())
 }
