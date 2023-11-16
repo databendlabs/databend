@@ -37,6 +37,8 @@ use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::version::raft_client_requires;
+use databend_meta::version::raft_server_provides;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
@@ -117,6 +119,22 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
     println!("Working DataVersion: {:?}", DATA_VERSION);
     println!();
+    println!(
+        "Raft Server Provides features: {}",
+        raft_server_provides()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!(
+        "Raft Client Requires features: {}",
+        raft_client_requires()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
     info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
 
