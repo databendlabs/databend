@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::binder::JoinPredicate;
-use crate::optimizer::rule::constant::false_constant;
-use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
 use crate::optimizer::rule::rewrite::filter_join::outer_to_inner;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
@@ -139,35 +137,13 @@ pub fn try_push_down_filter_join(
     let mut need_push = false;
 
     for predicate in predicates.into_iter() {
-        if is_falsy(&predicate) {
-            left_push_down = vec![false_constant()];
-            right_push_down = vec![false_constant()];
-            need_push = true;
-            break;
-        }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
-            JoinPredicate::ALL(_) => match join.join_type {
-                JoinType::Cross
-                | JoinType::Inner
-                | JoinType::LeftSemi
-                | JoinType::LeftAnti
-                | JoinType::RightSemi
-                | JoinType::RightAnti => {
-                    need_push = true;
-                    left_push_down.push(predicate.clone());
-                    right_push_down.push(predicate.clone());
-                }
-                JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
-                    need_push = true;
-                    right_push_down.push(predicate.clone());
-                }
-                JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
-                    need_push = true;
-                    left_push_down.push(predicate.clone());
-                }
-                JoinType::Full => original_predicates.push(predicate),
-            },
+            JoinPredicate::ALL(_) => {
+                need_push = true;
+                left_push_down.push(predicate.clone());
+                right_push_down.push(predicate.clone());
+            }
             JoinPredicate::Left(_) => {
                 if matches!(join.join_type, JoinType::Right) {
                     original_predicates.push(predicate);

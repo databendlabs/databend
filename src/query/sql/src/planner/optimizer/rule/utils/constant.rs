@@ -43,14 +43,6 @@ pub fn is_falsy(predicate: &ScalarExpr) -> bool {
     )
 }
 
-pub fn false_constant() -> ScalarExpr {
-    ConstantExpr {
-        span: None,
-        value: Scalar::Boolean(false),
-    }
-    .into()
-}
-
 pub fn check_uint_range(max: u64, value: &Scalar) -> (bool, u64) {
     let value = match *value {
         Scalar::Number(NumberScalar::UInt8(value)) => value as u64,
