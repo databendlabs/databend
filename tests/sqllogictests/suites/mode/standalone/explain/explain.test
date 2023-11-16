@@ -1537,3 +1537,57 @@ drop table products;
 
 statement ok
 drop table sales;
+
+statement ok
+create table t1 (a int);
+
+statement ok
+create table t2 (b int);
+
+query T
+explain select date from (select *, 'year' as date from t1 left join t2 on t1.a = t2.b) where date = '';
+----
+EvalScalar
+├── output columns: [date (#2)]
+├── expressions: ['year']
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: []
+    ├── join type: LEFT OUTER
+    ├── build keys: [t2.b (#1)]
+    ├── probe keys: [t1.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [t2.b (#1)]
+    │   ├── filters: [false]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── output columns: [b (#1)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [false], limit: NONE]
+    │       └── estimated rows: 0.00
+    └── Filter(Probe)
+        ├── output columns: [t1.a (#0)]
+        ├── filters: [false]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [a (#0)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [false], limit: NONE]
+            └── estimated rows: 0.00
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
