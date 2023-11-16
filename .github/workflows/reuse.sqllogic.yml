@@ -39,7 +39,6 @@ jobs:
           - "standalone"
           - "crdb"
           - "duckdb"
-          - "duckdb_join_small_block"
           - "base"
           - "ydb"
           - "tpcds"
@@ -51,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 60
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
@@ -113,7 +112,6 @@ jobs:
           - "query"
           - "crdb"
           - "duckdb"
-          - "duckdb_join_small_block"
           - "base"
           - "ydb"
           - "tpcds"
@@ -126,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 60
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
