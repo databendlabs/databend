@@ -494,8 +494,11 @@ impl AggregateHashTable {
             self.config.min_reductions[0]
         };
 
-        self.disable_expand_ht = ratio <= min_reduction;
-        self.disable_expand_ht
+        if self.len() >= L3_MAX_ROWS_IN_HT {
+            self.disable_expand_ht = ratio <= min_reduction;
+            return self.disable_expand_ht;
+        }
+        ratio <= min_reduction
     }
 
     pub fn initial_capacity() -> usize {

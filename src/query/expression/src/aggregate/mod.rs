@@ -62,7 +62,7 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     // min reduction ratio to control whether to expand the ht
-    // {1024 * 1024, 1.1} / {1024 * 1024, 2.0},
+    // {1024 * 1024, 1.1} / {16 * 1024 * 1024, 2.0},
     pub min_reductions: [f64; 2],
 }
 
