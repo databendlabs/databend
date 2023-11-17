@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use crate::new_sel;
-use crate::PerfectHashBuilder;
 use crate::SelectVector;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
@@ -33,7 +30,8 @@ pub struct ProbeState {
     pub temp_vector: SelectVector,
     pub row_count: usize,
 
-    pub partition_entries: HashMap<usize, (SelectVector, usize), PerfectHashBuilder>,
+    pub partition_entries: Vec<SelectVector>,
+    pub partition_count: Vec<usize>,
 }
 
 impl Default for ProbeState {
@@ -46,7 +44,8 @@ impl Default for ProbeState {
             no_match_vector: new_sel(),
             empty_vector: new_sel(),
             temp_vector: new_sel(),
-            partition_entries: HashMap::with_hasher(PerfectHashBuilder),
+            partition_entries: vec![],
+            partition_count: vec![],
             row_count: 0,
         }
     }
@@ -62,9 +61,14 @@ impl ProbeState {
         }
     }
 
-    pub fn reset_partitions(&mut self) {
-        for (_, (_, p)) in self.partition_entries.iter_mut() {
-            *p = 0;
+    pub fn reset_partitions(&mut self, partition_count: usize) {
+        if self.partition_entries.len() < partition_count {
+            self.partition_entries.resize(partition_count, new_sel());
+            self.partition_count.resize(partition_count, 0);
+        }
+
+        for i in 0..partition_count {
+            self.partition_count[i] = 0;
         }
     }
 }

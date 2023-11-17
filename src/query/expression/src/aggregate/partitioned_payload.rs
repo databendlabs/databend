@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::sync::Arc;
 
+use bumpalo::Bump;
 use itertools::Itertools;
 
 use super::payload::Payload;
@@ -37,6 +39,8 @@ pub struct PartitionedPayload {
     pub state_addr_offsets: Vec<usize>,
     pub state_layout: Option<Layout>,
 
+    arenas: Vec<Arc<Bump>>,
+
     partition_count: u64,
     mask_v: u64,
     shift_v: u64,
@@ -54,8 +58,10 @@ impl PartitionedPayload {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
 
+        let arena = Arc::new(Bump::new());
+
         let payloads = (0..partition_count)
-            .map(|_| Payload::new(group_types.clone(), aggrs.clone()))
+            .map(|_| Payload::new(arena.clone(), group_types.clone(), aggrs.clone()))
             .collect_vec();
 
         let group_sizes = payloads[0].group_sizes.clone();
@@ -78,6 +84,8 @@ impl PartitionedPayload {
             state_addr_offsets,
             state_layout,
             partition_count,
+
+            arenas: vec![arena],
             mask_v: mask(radix_bits),
             shift_v: shift(radix_bits),
         }
@@ -99,34 +107,28 @@ impl PartitionedPayload {
             );
         } else {
             // generate partition selection indices
-            state.reset_partitions();
+            state.reset_partitions(self.partition_count());
             let select_vector = &state.empty_vector;
 
             for idx in select_vector.iter().take(new_group_rows).copied() {
                 let hash = state.group_hashes[idx];
                 let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
-                match state.partition_entries.get_mut(&partition_idx) {
-                    Some((v, count)) => {
-                        v[*count] = idx;
-                        *count += 1;
-                    }
-                    None => {
-                        let mut v = [0; BATCH_SIZE];
-                        v[0] = idx;
-                        state.partition_entries.insert(partition_idx, (v, 1));
-                    }
-                }
+                let sel = &mut state.partition_entries[partition_idx];
+
+                sel[state.partition_count[partition_idx]] = idx;
+                state.partition_count[partition_idx] += 1;
             }
 
             for partition_index in 0..self.payloads.len() {
-                if let Some((select_vector, count)) =
-                    state.partition_entries.get_mut(&partition_index)
-                {
+                let count = state.partition_count[partition_index];
+                if count > 0 {
+                    let sel = &state.partition_entries[partition_index];
+
                     self.payloads[partition_index].reserve_append_rows(
-                        select_vector,
+                        sel,
                         &state.group_hashes,
                         &mut state.addresses,
-                        *count,
+                        count,
                         group_columns,
                     );
                 }
@@ -149,7 +151,7 @@ impl PartitionedPayload {
         new_partition_payload
     }
 
-    pub fn combine(&mut self, other: PartitionedPayload, state: &mut PayloadFlushState) {
+    pub fn combine(&mut self, mut other: PartitionedPayload, state: &mut PayloadFlushState) {
         if other.partition_count == self.partition_count {
             for (l, r) in self.payloads.iter_mut().zip(other.payloads.into_iter()) {
                 l.combine(r);
@@ -161,9 +163,10 @@ impl PartitionedPayload {
                 self.combine_single(payload, state)
             }
         }
+        self.arenas.append(&mut other.arenas);
     }
 
-    pub fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
+    fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
         if other.len() == 0 {
             return;
         }
@@ -177,12 +180,15 @@ impl PartitionedPayload {
                 // copy rows
                 for partition in 0..self.partition_count as usize {
                     let payload = &mut self.payloads[partition];
-                    if let Some(sel) = &state.probe_state.partition_entries.get_mut(&partition) {
-                        payload.copy_rows(&sel.0, sel.1, &state.addresses);
-                        payload.fetch_arenas(&mut other);
+                    let count = state.probe_state.partition_count[partition];
+
+                    if count > 0 {
+                        let sel = &state.probe_state.partition_entries[partition];
+                        payload.copy_rows(sel, count, &state.addresses);
                     }
                 }
             }
+            other.state_move_out = true;
         }
     }
 
@@ -205,7 +211,7 @@ impl PartitionedPayload {
         let rows = end - state.flush_page_row;
         state.row_count = rows;
 
-        state.probe_state.reset_partitions();
+        state.probe_state.reset_partitions(self.partition_count());
 
         for idx in 0..rows {
             state.addresses[idx] = other.data_ptr(page, idx + state.flush_page_row);
@@ -214,20 +220,10 @@ impl PartitionedPayload {
                 unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
-            match state.probe_state.partition_entries.get_mut(&partition_idx) {
-                Some((v, count)) => {
-                    v[*count] = idx;
-                    *count += 1;
-                }
-                None => {
-                    let mut v = [0; BATCH_SIZE];
-                    v[0] = idx;
-                    state
-                        .probe_state
-                        .partition_entries
-                        .insert(partition_idx, (v, 1));
-                }
-            }
+
+            let sel = &mut state.probe_state.partition_entries[partition_idx];
+            sel[state.probe_state.partition_count[partition_idx]] = idx;
+            state.probe_state.partition_count[partition_idx] += 1;
         }
         state.flush_page_row = end;
         true

@@ -37,7 +37,6 @@ use crate::MAX_PAGE_SIZE;
 // [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
 pub struct Payload {
     pub arena: Arc<Bump>,
-    pub external_arena: Vec<Arc<Bump>>,
     // if true, the states are moved out of the payload into other payload, and will not be dropped
     pub state_move_out: bool,
     pub group_types: Vec<DataType>,
@@ -74,7 +73,11 @@ pub type Pages = Vec<Page>;
 
 // TODO FIXME
 impl Payload {
-    pub fn new(group_types: Vec<DataType>, aggrs: Vec<AggregateFunctionRef>) -> Self {
+    pub fn new(
+        arena: Arc<Bump>,
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+    ) -> Self {
         let mut state_addr_offsets = Vec::new();
         let state_layout = if !aggrs.is_empty() {
             Some(get_layout_offsets(&aggrs, &mut state_addr_offsets).unwrap())
@@ -116,8 +119,7 @@ impl Payload {
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
 
         Self {
-            arena: Arc::new(Bump::new()),
-            external_arena: vec![],
+            arena,
             state_move_out: false,
             pages: vec![],
             current_write_page: 0,
@@ -146,7 +148,7 @@ impl Payload {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.pages.iter().map(|x| x.data.capacity()).sum()
+        self.total_rows * self.tuple_size
     }
 
     #[inline]
@@ -289,8 +291,6 @@ impl Payload {
     pub fn combine(&mut self, mut other: Payload) {
         self.total_rows += other.pages.iter().map(|x| x.rows).sum::<usize>();
         self.pages.append(other.pages.as_mut());
-
-        self.fetch_arenas(&mut other);
     }
 
     pub fn copy_rows(
@@ -323,12 +323,6 @@ impl Payload {
             self.total_rows,
             self.pages.iter().map(|x| x.rows).sum::<usize>()
         );
-    }
-
-    pub fn fetch_arenas(&mut self, other: &mut Self) {
-        self.external_arena.push(other.arena.clone());
-        self.external_arena.extend_from_slice(&other.external_arena);
-        other.state_move_out = true;
     }
 }
 

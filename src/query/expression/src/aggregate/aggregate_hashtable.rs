@@ -30,8 +30,9 @@ use crate::ColumnBuilder;
 use crate::HashTableConfig;
 use crate::Payload;
 use crate::StateAddr;
+use crate::L2_MAX_ROWS_IN_HT;
+use crate::L3_MAX_ROWS_IN_HT;
 use crate::LOAD_FACTOR;
-use crate::MAX_ROWS_IN_HT;
 
 // The high 16 bits are the salt, the low 48 bits are the pointer address
 pub type Entry = u64;
@@ -166,8 +167,6 @@ impl AggregateHashTable {
         group_columns: &[Column],
         row_count: usize,
     ) -> usize {
-        self.maybe_repartition();
-
         if self.current_radix_bits == self.config.max_radix_bits
             && self.should_disable_expand_hash_table()
         {
@@ -390,7 +389,7 @@ impl AggregateHashTable {
         let mut new_radix_bits = self.current_radix_bits;
 
         // 256k
-        if bytes_per_partition > 256 * 1024 {
+        if bytes_per_partition >= 256 * 1024 {
             new_radix_bits += self.config.repartition_radix_bits_incr;
 
             // If reducion is small and input rows will be very large, directly repartition to max radix bits
@@ -431,7 +430,6 @@ impl AggregateHashTable {
 
             self.current_radix_bits = current_max_radix_bits;
             self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
-            self.resize(self.capacity);
         }
     }
 
@@ -441,6 +439,8 @@ impl AggregateHashTable {
     }
 
     pub fn resize(&mut self, new_capacity: usize) {
+        self.maybe_repartition();
+
         let mask = (new_capacity - 1) as u64;
 
         let mut entries = vec![0; new_capacity];
@@ -482,12 +482,19 @@ impl AggregateHashTable {
             return true;
         }
 
-        if !self.config.partial_agg || self.capacity < MAX_ROWS_IN_HT {
+        if !self.config.partial_agg || self.len() < L2_MAX_ROWS_IN_HT {
             return false;
         }
 
         let ratio = self.probe_input_rows as f64 / self.len() as f64;
-        self.disable_expand_ht = ratio <= self.config.min_reduction;
+
+        let min_reduction = if self.len() >= L3_MAX_ROWS_IN_HT {
+            self.config.min_reductions[1]
+        } else {
+            self.config.min_reductions[0]
+        };
+
+        self.disable_expand_ht = ratio <= min_reduction;
         self.disable_expand_ht
     }
 

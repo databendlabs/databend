@@ -47,8 +47,10 @@ pub fn new_sel() -> SelectVector {
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
 pub(crate) const LOAD_FACTOR: f64 = 1.5;
-pub(crate) const MAX_ROWS_IN_HT: usize = 32 * 1024;
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
+
+pub(crate) const L2_MAX_ROWS_IN_HT: usize = 1024 * 1024 / 8;
+pub(crate) const L3_MAX_ROWS_IN_HT: usize = 16 * 1024 * 1024 / 8;
 
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
@@ -60,7 +62,8 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     // min reduction ratio to control whether to expand the ht
-    pub min_reduction: f64,
+    // {1024 * 1024, 1.1} / {1024 * 1024, 2.0},
+    pub min_reductions: [f64; 2],
 }
 
 impl Default for HashTableConfig {
@@ -72,7 +75,7 @@ impl Default for HashTableConfig {
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
             partial_agg: false,
-            min_reduction: 2.1,
+            min_reductions: [1.1, 2.0],
         }
     }
 }
