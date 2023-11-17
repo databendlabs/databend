@@ -171,7 +171,10 @@ impl Accessor for SharedAccessor {
             let content_length = parse_content_length(resp.headers())
                 .unwrap()
                 .expect("content_length must be valid");
-            Ok((RpRead::new(content_length), resp.into_body()))
+            Ok((
+                RpRead::new().with_size(Some(content_length)),
+                resp.into_body(),
+            ))
         } else {
             Err(parse_error(resp).await)
         }
