@@ -42,8 +42,11 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestGlobalServices;
+use headers::Authorization;
 use headers::Header;
+use headers::HeaderMapExt;
 use http::HeaderMap;
+use http::HeaderValue;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
@@ -58,6 +61,7 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use serde_json::Value;
 use tokio::time::sleep;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -72,6 +76,7 @@ type EndpointType = HTTPSessionEndpoint<Route>;
 struct TestHttpQueryRequest {
     ep: EndpointType,
     json: serde_json::Value,
+    auth_header: HeaderValue,
     headers: HeaderMap,
 }
 
@@ -84,11 +89,26 @@ impl TestHttpQueryRequest {
             .nest("/v1/query", query_route())
             .with(session_middleware);
 
-        Self {
+        let root_auth_header = {
+            let mut headers = HeaderMap::new();
+            headers.typed_insert(headers::Authorization::basic("root", ""));
+            headers["authorization"].clone()
+        };
+
+        let req = Self {
             ep,
             json,
+            auth_header: root_auth_header,
             headers: HeaderMap::new(),
-        }
+        };
+        req
+    }
+
+    fn with_basic_auth(mut self, username: &str, password: &str) -> Self {
+        let mut headers = HeaderMap::new();
+        headers.typed_insert(headers::Authorization::basic(username, password));
+        self.auth_header = headers["authorization"].clone();
+        self
     }
 
     // fn with_headers(mut self, headers: HeaderMap) -> Self {
@@ -114,6 +134,15 @@ impl TestHttpQueryRequest {
         Ok(resps)
     }
 
+    async fn fetch_data(&self) -> Result<Vec<Vec<Value>>> {
+        let mut result = vec![];
+        let resps = self.fetch().await?;
+        for (_, resp) in resps {
+            result.extend(resp.data);
+        }
+        Ok(result)
+    }
+
     async fn fetch_last(&self) -> Result<(StatusCode, QueryResponse)> {
         let resps = self.fetch().await?;
         Ok(resps.last().unwrap().clone())
@@ -121,14 +150,13 @@ impl TestHttpQueryRequest {
 
     async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
         let content_type = "application/json";
-        let basic = headers::Authorization::basic("root", "");
         let body = serde_json::to_vec(&self.json).unwrap();
 
         let mut req = Request::builder()
             .uri(uri.parse().unwrap())
             .method(method)
             .header(header::CONTENT_TYPE, content_type)
-            .typed_header(basic)
+            .header(header::AUTHORIZATION, self.auth_header.clone())
             .body(body);
         req.headers_mut().extend(self.headers.clone().into_iter());
 
@@ -1328,8 +1356,6 @@ async fn test_multi_partition() -> Result<()> {
 async fn test_affect() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let ep = create_endpoint().await?;
-
     let sqls = vec![
         (
             serde_json::json!({"sql": "set max_threads=1", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
@@ -1423,15 +1449,15 @@ async fn test_auth_configured_user() -> Result<()> {
         .build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+    let req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
+        .with_basic_auth(user_name, pass_word);
+    let v = req.fetch_data().await?;
 
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
-
-    let basic = headers::Authorization::basic(user_name, pass_word);
-    // root user can only login in localhost
-    assert_auth_current_user(&ep, user_name, basic, "%").await?;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(
+        v[0][0],
+        serde_json::Value::String(format!("'{}'@'%'", user_name))
+    );
     Ok(())
 }
