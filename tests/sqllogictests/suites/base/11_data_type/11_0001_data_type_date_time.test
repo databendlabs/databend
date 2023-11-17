@@ -1,6 +1,9 @@
 statement ok
 set timezone = 'UTC'
 
+statement error 1078
+set timezone = 'Asia/Test'
+
 query TTTT
 select to_uint64(a), to_int64(a), to_uint64(b),  to_int64(b) from (select '2200-01-01 00:00:00.868894'::TIMESTAMP a , '2200-01-01'::DATE b)
 ----

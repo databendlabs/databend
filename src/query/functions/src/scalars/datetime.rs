@@ -97,9 +97,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // [date | timestamp] +/- number
     register_timestamp_add_sub(registry);
-
-    // timestamp functions
-    register_timestamp_functions(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -855,6 +852,12 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
         |_| Value::Scalar(Utc::now().timestamp_micros()),
     );
 
+    registry.register_0_arg_core::<TimestampType, _, _>(
+        "current_timestamp",
+        |_| FunctionDomain::Full,
+        |_ctx| Value::Scalar(Local::now().timestamp_micros()),
+    );
+
     registry.register_0_arg_core::<DateType, _, _>(
         "today",
         |_| FunctionDomain::Full,
@@ -1412,5 +1415,3 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         }),
     );
 }
-
-fn register_timestamp_functions(registry: &mut FunctionRegistry) {}

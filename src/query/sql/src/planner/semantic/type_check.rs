@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
+use chrono::Local;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
@@ -2650,9 +2651,7 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
-            Literal::CurrentTimestamp => Err(ErrorCode::SemanticError(format!(
-                "Unsupported literal value: {literal}"
-            )))?,
+            Literal::CurrentTimestamp => Scalar::Timestamp(Local::now().timestamp_micros()),
         };
         let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
