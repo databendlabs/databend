@@ -66,7 +66,7 @@ pub fn make_kill_uri(query_id: &str) -> String {
     format!("/v1/query/{}/kill", query_id)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct QueryError {
     pub code: u16,
     pub message: String,
@@ -83,14 +83,14 @@ impl QueryError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct QueryStats {
     #[serde(flatten)]
     pub progresses: Progresses,
     pub running_time_ms: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct QueryResponseField {
     name: String,
     r#type: String,
@@ -109,7 +109,7 @@ impl QueryResponseField {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
