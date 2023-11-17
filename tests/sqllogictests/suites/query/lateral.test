@@ -95,16 +95,16 @@ FROM (
 query TI
 SELECT f.value::string AS activity, COUNT(DISTINCT u.user_id) AS user_count
 FROM user_activities u, LATERAL FLATTEN(input => u.activities) f
-GROUP BY f.value
+GROUP BY f.value ORDER BY activity
 ----
+climbing 1
+cooking 1
+cycling 1
+painting 1
 reading 1
 running 1
-cooking 1
 swimming 1
-painting 1
-cycling 1
 writing 1
-climbing 1
 
 statement ok
 CREATE TABLE persons(id int, c variant)
@@ -130,7 +130,7 @@ SELECT p.id, COUNT(DISTINCT f1.value:type) AS contact_type_count
 FROM persons p
 , LATERAL FLATTEN(input => p.c:contact) f
 , LATERAL FLATTEN(input => f.value:business) f1
-GROUP BY p.id;
+GROUP BY p.id ORDER BY p.id
 ----
 12712555 2
 98127771 2
