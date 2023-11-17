@@ -41,11 +41,17 @@ pub struct ProbeState {
     pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
     // The `markers` is used for right mark join.
     pub(crate) markers: Option<Vec<u8>>,
+
     // Early filtering.
+    // 1.The `selection` is used to store the indexes of input which matched by hash.
     pub(crate) selection: Vec<u32>,
+    // 2.The indexes of [0, selection_count) in `selection` are valid.
     pub(crate) selection_count: usize,
+    // 3.Statistics for **adaptive** early filtering, the `num_keys` indicates the number of valid keys in probe side,
+    // the `num_keys_hash_matched` indicates the number of keys which matched by hash.
     pub(crate) num_keys: u64,
     pub(crate) num_keys_hash_matched: u64,
+    // 4.Whether to probe with selection.
     pub(crate) probe_with_selection: bool,
 }
 
