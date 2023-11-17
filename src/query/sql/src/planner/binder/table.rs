@@ -102,6 +102,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::CteScan;
 use crate::plans::EvalScalar;
+use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
