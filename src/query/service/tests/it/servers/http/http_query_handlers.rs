@@ -118,42 +118,46 @@ impl TestHttpQueryRequest {
     //    self
     // }
 
-    async fn fetch_single(&mut self) -> Result<(StatusCode, QueryResponse)> {
+    async fn fetch_begin(&mut self) -> Result<(StatusCode, QueryResponse)> {
         let (status, resp) = self
             .do_request(Method::POST, "/v1/query")
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        self.next_uri = resp.next_uri.clone();
-        Ok((status, resp))
+        self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+        Ok((status, resp.unwrap()))
     }
 
-    async fn fetch_next(&mut self) -> Result<(StatusCode, QueryResponse)> {
+    async fn fetch_next(&mut self) -> Result<(StatusCode, Option<QueryResponse>)> {
         let (status, resp) = self
             .do_request(Method::GET, self.next_uri.as_ref().unwrap())
             .await?;
-        self.next_uri = resp.next_uri.clone();
+        self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
         Ok((status, resp))
     }
 
-    async fn fetch(&mut self) -> Result<TestHttpQueryFetchReply> {
+    async fn fetch_total(&mut self) -> Result<TestHttpQueryFetchReply> {
         let mut resps = vec![];
 
         let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
-        self.next_uri = resp.next_uri.clone();
-        resps.push((status, resp.clone()));
+        self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+        resps.push((status, resp.clone().unwrap()));
 
         while self.next_uri.is_some() {
             let (status, resp) = self
                 .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
-            self.next_uri = resp.next_uri.clone();
-            resps.push((status, resp));
+            self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+            resps.push((status, resp.clone().unwrap()));
         }
 
         Ok(TestHttpQueryFetchReply { resps })
     }
 
-    async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+    async fn do_request(
+        &self,
+        method: Method,
+        uri: &str,
+    ) -> Result<(StatusCode, Option<QueryResponse>)> {
         let content_type = "application/json";
         let body = serde_json::to_vec(&self.json).unwrap();
 
@@ -174,7 +178,9 @@ impl TestHttpQueryRequest {
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
-        let query_resp = serde_json::from_str::<QueryResponse>(&body).unwrap();
+        let query_resp = serde_json::from_str::<QueryResponse>(&body)
+            .map(|r| Some(r))
+            .unwrap_or_default();
 
         Ok((status_code, query_resp))
     }
@@ -360,7 +366,7 @@ async fn test_return_when_finish() -> Result<()> {
     ] {
         let start_time = std::time::Instant::now();
         let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
-        let (status, result) = TestHttpQueryRequest::new(json).fetch().await?.last();
+        let (status, result) = TestHttpQueryRequest::new(json).fetch_total().await?.last();
         let duration = start_time.elapsed().as_secs_f64();
         let msg = || format!("{}: {:?}", sql, result);
         assert_eq!(status, StatusCode::OK, "{}", msg());
@@ -493,7 +499,7 @@ async fn test_buffer_size() -> Result<()> {
 
     for buf_size in [0, 99, 100, 101] {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_in_buffer": buf_size}});
-        let reply = TestHttpQueryRequest::new(json).fetch().await?;
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
         assert_eq!(
             reply.data().len(),
             rows,
@@ -599,24 +605,17 @@ async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
+    let mut req = TestHttpQueryRequest::new(json);
+    let (status, result) = req.fetch_begin().await?;
 
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
-
-    let (status, result) =
-        post_sql_to_endpoint_with_result_timeout(&ep, "select 1", 1, 1u64).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
-    let next_uri = make_page_uri(&query_id, 0);
-    let response = get_uri(&ep, &next_uri).await;
-    assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
+    assert!(query_id.len() > 0);
 
     sleep(std::time::Duration::from_secs(2)).await;
-    let response = get_uri(&ep, &next_uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    let (status, result) = req.fetch_next().await?;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", result);
     Ok(())
 }
 
@@ -888,16 +887,6 @@ async fn post_sql_to_endpoint_new_session(
 ) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
     post_json_to_endpoint(ep, &json, headers).await
-}
-
-async fn post_sql_to_endpoint_with_result_timeout(
-    ep: &EndpointType,
-    sql: &str,
-    wait_time_secs: u64,
-    result_timeout_secs: u64,
-) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"http_handler_result_timeout_secs": result_timeout_secs.to_string()}}});
-    post_json_to_endpoint(ep, &json, HeaderMap::default()).await
 }
 
 async fn post_json_to_endpoint(
@@ -1313,7 +1302,7 @@ async fn test_func_object_keys() -> Result<()> {
 
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
-        let reply = TestHttpQueryRequest::new(json).fetch().await?;
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
         let (status, result) = reply.last();
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -1337,7 +1326,7 @@ async fn test_multi_partition() -> Result<()> {
     let wait_time_secs = 5;
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
-        let reply = TestHttpQueryRequest::new(json).fetch().await?;
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
         assert!(reply.error().is_none(), "{:?}", reply.error());
         assert_eq!(
             reply.state(),
@@ -1421,7 +1410,7 @@ async fn test_affect() -> Result<()> {
 
     for (json, affect, session_conf) in sqls {
         let result = TestHttpQueryRequest::new(json.clone())
-            .fetch()
+            .fetch_total()
             .await?
             .last();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
@@ -1451,7 +1440,7 @@ async fn test_auth_configured_user() -> Result<()> {
 
     let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);
-    let v = req.fetch().await?.data();
+    let v = req.fetch_total().await?.data();
 
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
