@@ -375,7 +375,7 @@ impl Binder {
                     args.extend(params.clone());
                 }
 
-                // convert lateral join to srf flatten function
+                // convert lateral join flatten to srf flatten function
                 let srf = Expr::FunctionCall {
                     span: *span,
                     distinct: false,

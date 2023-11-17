@@ -434,6 +434,60 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
+pub(crate) fn unnest_variant_array(
+    val: &[u8],
+    row: usize,
+    max_nums_per_row: &mut [usize],
+) -> (Value<AnyType>, usize) {
+    match array_values(val) {
+        Some(vals) if !vals.is_empty() => {
+            let len = vals.len();
+            let mut builder = StringColumnBuilder::with_capacity(0, 0);
+
+            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
+
+            for val in vals {
+                builder.put_slice(&val);
+                builder.commit_row();
+            }
+
+            let col = Column::Variant(builder.build()).wrap_nullable(None);
+            (Value::Column(Column::Tuple(vec![col])), len)
+        }
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
+    }
+}
+
+fn unnest_variant_obj(
+    val: &[u8],
+    row: usize,
+    max_nums_per_row: &mut [usize],
+) -> (Value<AnyType>, usize) {
+    match object_each(val) {
+        Some(vals) if !vals.is_empty() => {
+            let len = vals.len();
+            let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+
+            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
+
+            for (key, val) in vals {
+                key_builder.put_slice(&key);
+                key_builder.commit_row();
+                val_builder.put_slice(&val);
+                val_builder.commit_row();
+            }
+
+            let key_col = Column::String(key_builder.build());
+            let val_col = Column::Variant(val_builder.build());
+            let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
+
+            (Value::Column(Column::Tuple(vec![tuple_col])), len)
+        }
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum FlattenMode {
     Both,
@@ -586,59 +640,5 @@ impl FlattenGenerator {
             VariantType::from_opt_data(thises),
         ];
         columns
-    }
-}
-
-pub(crate) fn unnest_variant_array(
-    val: &[u8],
-    row: usize,
-    max_nums_per_row: &mut [usize],
-) -> (Value<AnyType>, usize) {
-    match array_values(val) {
-        Some(vals) if !vals.is_empty() => {
-            let len = vals.len();
-            let mut builder = StringColumnBuilder::with_capacity(0, 0);
-
-            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
-
-            for val in vals {
-                builder.put_slice(&val);
-                builder.commit_row();
-            }
-
-            let col = Column::Variant(builder.build()).wrap_nullable(None);
-            (Value::Column(Column::Tuple(vec![col])), len)
-        }
-        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
-    }
-}
-
-fn unnest_variant_obj(
-    val: &[u8],
-    row: usize,
-    max_nums_per_row: &mut [usize],
-) -> (Value<AnyType>, usize) {
-    match object_each(val) {
-        Some(vals) if !vals.is_empty() => {
-            let len = vals.len();
-            let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
-            let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
-
-            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
-
-            for (key, val) in vals {
-                key_builder.put_slice(&key);
-                key_builder.commit_row();
-                val_builder.put_slice(&val);
-                val_builder.commit_row();
-            }
-
-            let key_col = Column::String(key_builder.build());
-            let val_col = Column::Variant(val_builder.build());
-            let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
-
-            (Value::Column(Column::Tuple(vec![tuple_col])), len)
-        }
-        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
     }
 }
