@@ -65,5 +65,5 @@ echo '-- test 9: set default role as testrole1, secondary roles as NONE, current
 echo "SET DEFAULT ROLE testrole1;" | $TEST_USER_CONNECT
 echo "SELECT current_role();" | $TEST_USER_CONNECT
 
-echo '-- test 9: set default role as nonexisting_role, will fail'
-echo "SET DEFAULT ROLE nonexistedrole;" | $TEST_USER_CONNECT
+echo '-- test 10: set default role as nonexisting_role, will fail'
+echo "SET DEFAULT ROLE nonexistedrole;" | $TEST_USER_CONNECT || true
