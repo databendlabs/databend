@@ -36,7 +36,6 @@ use common_meta_app::storage::StorageMokaConfig;
 use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
 use log::warn;
@@ -72,7 +71,6 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?)?,
         StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?)?,
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
-        StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
         StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
         v => {
@@ -334,26 +332,6 @@ fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
     builder.max_capacity(v.max_capacity);
     builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
     builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
-
-    Ok(builder)
-}
-
-/// init_redis_operator will init a reids operator.
-fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Builder> {
-    let mut builder = services::Redis::default();
-
-    builder.endpoint(&v.endpoint_url);
-    builder.root(&v.root);
-    builder.db(v.db);
-    if let Some(v) = v.default_ttl {
-        builder.default_ttl(Duration::from_secs(v as u64));
-    }
-    if let Some(v) = &v.username {
-        builder.username(v);
-    }
-    if let Some(v) = &v.password {
-        builder.password(v);
-    }
 
     Ok(builder)
 }
