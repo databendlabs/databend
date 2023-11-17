@@ -128,6 +128,9 @@ pub fn optimize(
         }
         Plan::MergeInto(plan) => {
             // optimize source :fix issue #13733
+            // reason: if there is subquery,windowfunc exprs etc. see
+            // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
+            // get dummy index. So we need to use optimizer to solve this.
             let right_source = optimize_query(
                 ctx.clone(),
                 opt_ctx.clone(),
