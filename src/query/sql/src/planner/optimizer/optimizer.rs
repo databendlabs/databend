@@ -140,7 +140,7 @@ pub fn optimize(
                 Arc::new(join_sexpr.child(0)?.clone()),
                 Arc::new(right_source),
             ]));
-            // Box::new(optimize_query(ctx, opt_ctx, metadata.clone(), *s_expr)?),
+
             // try to optimize distributed join
             if opt_ctx.config.enable_distributed_optimization
                 && ctx.get_settings().get_enable_distributed_merge_into()?
