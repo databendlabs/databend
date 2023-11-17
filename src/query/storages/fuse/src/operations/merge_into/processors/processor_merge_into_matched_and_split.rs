@@ -335,7 +335,7 @@ impl Processor for MatchedSplitProcessor {
 }
 
 impl MatchedSplitProcessor {
-    fn cast_data_type_for_merge(&self,current_block:DataBlock) -> Result<DataBlock> {
+    fn cast_data_type_for_merge(&self, current_block: DataBlock) -> Result<DataBlock> {
         // cornor case: for merge into update, if the target table's column is not null,
         // for example, target table has three columns like (a,b,c), and we use update set target_table.a = xxx,
         // it's fine because we have cast the xxx'data_type into a's data_type in `generate_update_list()`,
