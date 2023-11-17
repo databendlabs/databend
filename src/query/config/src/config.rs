@@ -38,7 +38,6 @@ use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
 use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use common_meta_app::tenant::TenantQuota;
@@ -237,9 +236,6 @@ impl Config {
 ///
 /// [storage.data]
 /// type = "s3"
-///
-/// [storage.cache]
-/// type = "redis"
 ///
 /// [storage.temporary]
 /// type = "s3"
@@ -1167,64 +1163,6 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
             max_capacity: self.max_capacity,
             time_to_live: self.time_to_live,
             time_to_idle: self.time_to_idle,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct RedisStorageConfig {
-    pub endpoint_url: String,
-    pub username: String,
-    pub password: String,
-    pub root: String,
-    pub db: i64,
-    /// TTL in seconds
-    pub default_ttl: i64,
-}
-
-impl Default for RedisStorageConfig {
-    fn default() -> Self {
-        InnerStorageRedisConfig::default().into()
-    }
-}
-
-impl From<InnerStorageRedisConfig> for RedisStorageConfig {
-    fn from(v: InnerStorageRedisConfig) -> Self {
-        Self {
-            endpoint_url: v.endpoint_url.clone(),
-            username: v.username.unwrap_or_default(),
-            password: v.password.unwrap_or_default(),
-            root: v.root.clone(),
-            db: v.db,
-            default_ttl: v.default_ttl.unwrap_or_default(),
-        }
-    }
-}
-
-impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageRedisConfig> {
-        Ok(InnerStorageRedisConfig {
-            endpoint_url: self.endpoint_url.clone(),
-            username: if self.username.is_empty() {
-                None
-            } else {
-                Some(self.username.clone())
-            },
-            password: if self.password.is_empty() {
-                None
-            } else {
-                Some(self.password.clone())
-            },
-            root: self.root.clone(),
-            db: self.db,
-            default_ttl: if self.default_ttl == 0 {
-                None
-            } else {
-                Some(self.default_ttl)
-            },
         })
     }
 }
