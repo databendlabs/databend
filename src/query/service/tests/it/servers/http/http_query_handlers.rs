@@ -36,6 +36,7 @@ use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
+use databend_query::servers::http::v1::QueryError;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -116,7 +117,7 @@ impl TestHttpQueryRequest {
     //    self
     // }
 
-    async fn fetch(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
+    async fn fetch(&self) -> Result<TestHttpQueryFetchReply> {
         let mut resps = vec![];
 
         let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
@@ -131,21 +132,7 @@ impl TestHttpQueryRequest {
             resps.push((status, resp));
         }
 
-        Ok(resps)
-    }
-
-    async fn fetch_data(&self) -> Result<Vec<Vec<Value>>> {
-        let mut result = vec![];
-        let resps = self.fetch().await?;
-        for (_, resp) in resps {
-            result.extend(resp.data);
-        }
-        Ok(result)
-    }
-
-    async fn fetch_last(&self) -> Result<(StatusCode, QueryResponse)> {
-        let resps = self.fetch().await?;
-        Ok(resps.last().unwrap().clone())
+        Ok(TestHttpQueryFetchReply { resps })
     }
 
     async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -172,6 +159,37 @@ impl TestHttpQueryRequest {
         let query_resp = serde_json::from_str::<QueryResponse>(&body).unwrap();
 
         Ok((status_code, query_resp))
+    }
+}
+
+struct TestHttpQueryFetchReply {
+    resps: Vec<(StatusCode, QueryResponse)>,
+}
+
+impl TestHttpQueryFetchReply {
+    fn last(&self) -> (StatusCode, QueryResponse) {
+        self.resps.last().unwrap().clone()
+    }
+
+    fn data(&self) -> Vec<Vec<Value>> {
+        let mut result = vec![];
+        for (_, resp) in &self.resps {
+            result.extend(resp.data.clone());
+        }
+        result
+    }
+
+    fn state(&self) -> ExecuteStateKind {
+        self.last().1.state
+    }
+
+    fn error(&self) -> Option<QueryError> {
+        for (_, resp) in &self.resps {
+            if let Some(e) = &resp.error {
+                return Some(e.clone());
+            }
+        }
+        None
     }
 }
 
@@ -1294,8 +1312,6 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
 async fn test_func_object_keys() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let route = create_endpoint().await?;
-
     let sqls = vec![
         (
             "CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj JSON, var VARIANT) Engine=Fuse;",
@@ -1313,11 +1329,11 @@ async fn test_func_object_keys() -> Result<()> {
 
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
+        let reply = TestHttpQueryRequest::new(json).fetch().await?;
+        let (status, result) = reply.last();
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
-        assert_eq!(result.data.len(), data_len);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(reply.data().len(), data_len);
     }
     Ok(())
 }
@@ -1339,15 +1355,14 @@ async fn test_multi_partition() -> Result<()> {
     let wait_time_secs = 5;
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-        assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none(), "{:?}", result.error);
+        let reply = TestHttpQueryRequest::new(json).fetch().await?;
+        assert!(reply.error().is_none(), "{:?}", reply.error());
         assert_eq!(
-            result.state,
+            reply.state(),
             ExecuteStateKind::Succeeded,
             "SQL '{sql}' not finish after {wait_time_secs} secs"
         );
-        assert_eq!(result.data.len(), data_len);
+        assert_eq!(reply.data().len(), data_len);
     }
     Ok(())
 }
@@ -1423,7 +1438,10 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let result = TestHttpQueryRequest::new(json.clone()).fetch_last().await?;
+        let result = TestHttpQueryRequest::new(json.clone())
+            .fetch()
+            .await?
+            .last();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
         assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
@@ -1451,7 +1469,7 @@ async fn test_auth_configured_user() -> Result<()> {
 
     let req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);
-    let v = req.fetch_data().await?;
+    let v = req.fetch().await?.data();
 
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
