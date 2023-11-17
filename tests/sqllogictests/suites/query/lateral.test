@@ -43,6 +43,47 @@ select * from t left join lateral(select * from t1 where t1.a = t.a) t2 on t.a =
 2 2
 3 3
 
+statement ok
+create table user_activities(user_id int, activities variant)
+
+statement ok
+insert into user_activities (user_id, activities) values
+    (1, parse_json('["reading", "swimming", "cycling"]')),
+    (2, parse_json('["painting", "running"]')),
+    (3, parse_json('["cooking", "climbing", "writing"]'))
+
+query IT
+select u.user_id, f.value::string as activity from
+    user_activities u,
+    lateral flatten(input => u.activities) f
+----
+1 reading
+1 swimming
+1 cycling
+2 painting
+2 running
+3 cooking
+3 climbing
+3 writing
+
+statement ok
+create table persons(id int, c variant)
+
+statement ok
+insert into persons (id, c) values
+    (12712555, '{"name":{"first":"John","last":"Smith"},"contact":[{"business":[{"type":"phone","content":"555-1234"},{"type":"email","content":"j.smith@company.com"}]}]}'),
+    (98127771, '{"name":{"first":"Jane","last":"Doe"},"contact":[{"business":[{"type":"phone","content":"555-1236"},{"type":"email","content":"j.doe@company.com"}]}]}')
+
+query ITTT
+select id as "ID", f.value as "Contact", f1.value:type as "Type", f1.value:content as "Details" from
+    persons p,
+    lateral flatten(input => p.c, path => 'contact') f,
+    lateral flatten(input => f.value:business) f1
+----
+12712555 {"business":[{"content":"555-1234","type":"phone"},{"content":"j.smith@company.com","type":"email"}]} "phone" "555-1234"
+12712555 {"business":[{"content":"555-1234","type":"phone"},{"content":"j.smith@company.com","type":"email"}]} "email" "j.smith@company.com"
+98127771 {"business":[{"content":"555-1236","type":"phone"},{"content":"j.doe@company.com","type":"email"}]} "phone" "555-1236"
+98127771 {"business":[{"content":"555-1236","type":"phone"},{"content":"j.doe@company.com","type":"email"}]} "email" "j.doe@company.com"
 
 statement ok
 drop database test_lateral
