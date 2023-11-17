@@ -217,6 +217,7 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 None,
+                None,
                 snapshot_gen.clone(),
                 input,
                 None,

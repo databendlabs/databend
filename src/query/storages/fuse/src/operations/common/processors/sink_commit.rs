@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_metrics::storage::*;
 use common_pipeline_core::processors::Event;
@@ -97,6 +98,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     prev_snapshot_id: Option<SnapshotId>,
 
     change_tracking: bool,
+    update_stream_meta: Option<UpdateStreamMetaReq>,
 }
 
 impl<F> CommitSink<F>
@@ -107,6 +109,7 @@ where F: SnapshotGenerator + Send + 'static
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Option<UpdateStreamMetaReq>,
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
@@ -132,6 +135,7 @@ where F: SnapshotGenerator + Send + 'static
             start_time: Instant::now(),
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
+            update_stream_meta,
         })))
     }
 
@@ -333,6 +337,7 @@ where F: SnapshotGenerator + Send + 'static
                     snapshot,
                     location,
                     &self.copied_files,
+                    &self.update_stream_meta,
                     &self.dal,
                 )
                 .await

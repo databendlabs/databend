@@ -37,6 +37,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
@@ -247,6 +248,7 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
+        _update_stream_meta: Option<UpdateStreamMetaReq>,
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {

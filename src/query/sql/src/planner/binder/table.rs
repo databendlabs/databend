@@ -980,7 +980,7 @@ impl Binder {
             let options = table.options();
             let table_version = options
                 .get("table_version")
-                .ok_or(ErrorCode::Internal("table version must be set"))?
+                .ok_or(ErrorCode::Internal("table version must be set in stream"))?
                 .parse::<u64>()?;
             Some(table_version)
         } else {
@@ -1019,6 +1019,8 @@ impl Binder {
                     .column_position(*column_position)
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
+
+                    // For select stream.
                     if let Some(table_version) = table_version {
                         match column_name.to_lowercase().as_str() {
                             ORIGIN_BLOCK_ID_COL_NAME => {
@@ -1085,6 +1087,7 @@ impl Binder {
             .into(),
         ));
 
+        // not(is_not_null(_origin_block_id) and _origin_version<base_table_version)
         let s_expr = if !predicates.is_empty() {
             assert!(predicates.len() == 2);
             let filter_plan = Filter {

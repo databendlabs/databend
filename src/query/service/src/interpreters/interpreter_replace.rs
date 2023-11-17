@@ -365,7 +365,7 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, files) =
+                    let (physical_plan, files, _) =
                         interpreter.build_physical_plan(&copy_plan).await?;
                     *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
                     Ok((Box::new(physical_plan), None, None))

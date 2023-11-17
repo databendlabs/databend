@@ -665,6 +665,7 @@ impl TestFixture {
                 ctx.clone(),
                 &mut build_res.main_pipeline,
                 None,
+                None,
                 overwrite,
                 None,
             )?;

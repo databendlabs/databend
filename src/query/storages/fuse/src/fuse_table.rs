@@ -39,6 +39,7 @@ use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_sharing::create_share_table_operator;
@@ -629,10 +630,18 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Option<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
+        self.do_commit(
+            ctx,
+            pipeline,
+            copied_files,
+            update_stream_meta,
+            overwrite,
+            prev_snapshot_id,
+        )
     }
 
     #[minitrace::trace]

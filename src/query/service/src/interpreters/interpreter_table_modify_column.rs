@@ -341,6 +341,7 @@ impl ModifyTableColumnInterpreter {
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             None,
+            None,
             true,
             prev_snapshot_id,
         )?;
@@ -397,6 +398,7 @@ impl ModifyTableColumnInterpreter {
             new_table_meta,
             copied_files: None,
             deduplicated_label: None,
+            update_stream_meta: None,
         };
 
         let res = catalog.update_table_meta(table_info, req).await?;

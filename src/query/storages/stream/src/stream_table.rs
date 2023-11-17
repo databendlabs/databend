@@ -109,6 +109,15 @@ impl StreamTable {
         })
     }
 
+    pub async fn inner_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        ctx.get_table(
+            self.stream_info.catalog(),
+            &self.table_database,
+            &self.table_name,
+        )
+        .await
+    }
+
     pub fn offset(&self) -> u64 {
         self.table_version
     }

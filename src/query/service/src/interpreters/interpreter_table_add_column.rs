@@ -115,6 +115,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 new_table_meta,
                 copied_files: None,
                 deduplicated_label: None,
+                update_stream_meta: None,
             };
 
             let res = catalog.update_table_meta(table_info, req).await?;
