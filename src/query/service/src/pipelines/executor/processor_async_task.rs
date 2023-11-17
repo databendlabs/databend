@@ -15,6 +15,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
@@ -33,6 +34,7 @@ use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::CompletedAsyncTask;
 use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub struct ProcessorAsyncTask {
@@ -50,6 +52,7 @@ impl ProcessorAsyncTask {
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
+        weak_executor: Weak<PipelineExecutor>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
@@ -77,14 +80,25 @@ impl ProcessorAsyncTask {
                 match futures::future::select(interval, inner).await {
                     Either::Left((_, right)) => {
                         inner = right;
+                        let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
+                        let running_graph_format =
+                            match elapsed >= Duration::from_secs(200) && active_workers == 0 {
+                                false => String::new(),
+                                true => match weak_executor.upgrade() {
+                                    None => String::new(),
+                                    Some(executor) => executor.graph.format_graph_nodes(),
+                                },
+                            };
+
                         warn!(
-                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
+                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
                             query_id,
                             processor_id,
                             processor_name,
-                            start.elapsed(),
+                            elapsed,
                             active_workers,
+                            running_graph_format
                         );
                     }
                     Either::Right((res, _)) => {

@@ -62,7 +62,7 @@ impl Interpreter for ExplainInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
             ExplainKind::Raw => self.explain_plan(&self.plan)?,
-
+            ExplainKind::Optimized => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
                     s_expr,

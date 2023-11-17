@@ -158,7 +158,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 1"}}"#
+        r#"{"error":{"code":"404","message":"expect /final from client, got /page/1."}}"#
     );
 
     // final

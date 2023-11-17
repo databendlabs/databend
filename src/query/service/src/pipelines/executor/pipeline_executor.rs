@@ -55,7 +55,7 @@ pub type FinishedCallback =
 
 pub struct PipelineExecutor {
     threads_num: usize,
-    graph: RunningGraph,
+    pub(crate) graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
@@ -394,7 +394,7 @@ impl PipelineExecutor {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread<const ENABLE_PROFILING: bool>(
-        &self,
+        self: &Arc<Self>,
         thread_num: usize,
     ) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();

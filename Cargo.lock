@@ -1667,20 +1667,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
-name = "combine"
-version = "4.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ed6e9d84f0b51a7f52daf1c7d71dd136fd7a3f41a8462b8cdb8c78d920fad4"
-dependencies = [
- "bytes",
- "futures-core",
- "memchr",
- "pin-project-lite",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "comfy-table"
 version = "6.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1770,7 +1756,7 @@ dependencies = [
  "goldenfile",
  "itertools 0.10.5",
  "logos",
- "minitrace 0.6.2",
+ "minitrace",
  "nom",
  "nom-rule",
  "ordered-float 3.7.0",
@@ -1812,7 +1798,7 @@ dependencies = [
  "libc",
  "log",
  "logcall",
- "minitrace 0.6.2",
+ "minitrace",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -2005,7 +1991,6 @@ dependencies = [
  "comfy-table 6.1.4",
  "common-arrow",
  "common-ast",
- "common-base",
  "common-datavalues",
  "common-exception",
  "common-hashtable",
@@ -2018,7 +2003,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "lexical-core",
  "log",
  "match-template",
@@ -2052,7 +2037,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -2099,7 +2084,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "lexical-core",
  "libm",
  "match-template",
@@ -2217,7 +2202,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-storage",
- "minitrace 0.6.2",
+ "minitrace",
  "mockall",
  "serde_json",
 ]
@@ -2241,7 +2226,7 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "minitrace 0.6.2",
+ "minitrace",
  "serde",
  "serde_json",
  "thiserror",
@@ -2299,7 +2284,7 @@ dependencies = [
  "lazy_static",
  "log",
  "logcall",
- "minitrace 0.6.2",
+ "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "prost 0.12.1",
@@ -2324,7 +2309,7 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "once_cell",
  "tempfile",
 ]
@@ -2338,7 +2323,7 @@ dependencies = [
  "common-meta-types",
  "futures-util",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "serde",
  "thiserror",
  "tokio",
@@ -2388,7 +2373,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
- "minitrace 0.6.2",
+ "minitrace",
  "num",
  "once_cell",
  "openraft 0.8.4",
@@ -2415,7 +2400,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "once_cell",
  "openraft 0.8.4",
  "pretty_assertions",
@@ -2514,7 +2499,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "futures",
- "minitrace 0.6.2",
+ "minitrace",
  "petgraph",
  "serde",
  "serde_json",
@@ -2562,7 +2547,7 @@ dependencies = [
  "futures",
  "futures-util",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
@@ -2582,7 +2567,7 @@ dependencies = [
  "common-expression",
  "common-pipeline-core",
  "common-profile",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "match-template",
 ]
 
@@ -2607,7 +2592,7 @@ dependencies = [
  "convert_case 0.6.0",
  "enumflags2",
  "maplit",
- "minitrace 0.6.2",
+ "minitrace",
  "num",
  "pretty_assertions",
  "thiserror",
@@ -2717,7 +2702,7 @@ dependencies = [
  "indexmap 2.0.0",
  "itertools 0.10.5",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2731,7 +2716,6 @@ dependencies = [
  "simsearch",
  "storages-common-table-meta",
  "time",
- "url",
 ]
 
 [[package]]
@@ -2815,10 +2799,10 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "log",
  "metrics",
- "minitrace 0.6.2",
+ "minitrace",
  "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
@@ -2862,7 +2846,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "opendal",
  "ordered-float 3.7.0",
  "serde",
@@ -2896,7 +2880,7 @@ dependencies = [
  "futures",
  "icelake",
  "match-template",
- "minitrace 0.6.2",
+ "minitrace",
  "opendal",
  "parquet",
  "serde",
@@ -3111,7 +3095,7 @@ dependencies = [
  "common-users",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "log",
  "once_cell",
  "opendal",
@@ -3148,7 +3132,7 @@ dependencies = [
  "fern",
  "humantime",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "minitrace-opentelemetry",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -3350,12 +3334,6 @@ checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "crc16"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32fast"
@@ -3774,7 +3752,7 @@ dependencies = [
  "futures",
  "limits-rs",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "opendal",
  "poem",
  "sentry",
@@ -3872,7 +3850,7 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "minitrace 0.6.2",
+ "minitrace",
  "once_cell",
  "poem",
  "pretty_assertions",
@@ -3981,7 +3959,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "jwt-simple",
  "lazy_static",
  "log",
@@ -3989,7 +3967,7 @@ dependencies = [
  "maplit",
  "match-template",
  "metrics",
- "minitrace 0.6.2",
+ "minitrace",
  "mysql_async",
  "naive-cityhash",
  "num",
@@ -4101,7 +4079,7 @@ dependencies = [
  "databend-sql",
  "ethnum",
  "itertools 0.11.0",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -4477,7 +4455,7 @@ dependencies = [
  "databend-query",
  "futures",
  "futures-util",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=d11c9a9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
  "jwt-simple",
  "log",
  "opendal",
@@ -7264,7 +7242,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.3.0"
-source = "git+https://github.com/datafuselabs/jsonb?rev=d11c9a9#d11c9a9442ea0efbdb98321479c5c50d34e5f606"
+source = "git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9#1d7a3e94e45271086510ed4c8b71acc5bf2104bc"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -7936,45 +7914,18 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "823c2c0be9db5d4a0497700a405a231c9db19e67a24f5fe1ef4e3fdaca6a9b7e"
-dependencies = [
- "futures",
- "minitrace-macro 0.5.1",
- "minstant",
- "once_cell",
- "parking_lot 0.12.1",
- "pin-project",
- "rand 0.8.5",
-]
-
-[[package]]
-name = "minitrace"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9c20b20fba7e39214dbe7c5766d2d74da2fa795d4a1c66487df20a0d9657c67"
 dependencies = [
  "futures",
- "minitrace-macro 0.6.2",
+ "minitrace-macro",
  "minstant",
  "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "rand 0.8.5",
  "rtrb",
-]
-
-[[package]]
-name = "minitrace-macro"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db3a906b1d9cacfe2174ad7c4139fccb441af566940559822103b79e5ea25f31"
-dependencies = [
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -7997,7 +7948,7 @@ checksum = "6a7ebd135c6b6e20a4594c7965f592c087de2705384628c9e986379568789495"
 dependencies = [
  "futures",
  "log",
- "minitrace 0.6.2",
+ "minitrace",
  "opentelemetry",
 ]
 
@@ -8482,9 +8433,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.41.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e31b48f0af6de5b3b344c1acc1e06c4581dca3e13cd5ba05269927fc2abf953a"
+checksum = "ec1f653f28f2ced5ab8214ebb456674a234ee3379f3e493ab46dd7964eca43f9"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8497,10 +8448,9 @@ dependencies = [
  "futures",
  "hdrs",
  "http",
- "hyper",
  "log",
  "md-5",
- "minitrace 0.5.1",
+ "minitrace",
  "moka",
  "once_cell",
  "parking_lot 0.12.1",
@@ -8510,7 +8460,6 @@ dependencies = [
  "prometheus-client",
  "prost 0.11.9",
  "quick-xml 0.30.0",
- "redis",
  "reqsign",
  "reqwest",
  "serde",
@@ -9977,33 +9926,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redis"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff5d95dd18a4d76650f0c2607ed8ebdbf63baf9cb934e1c233cd220c694db1d7"
-dependencies = [
- "arc-swap",
- "async-trait",
- "bytes",
- "combine",
- "crc16",
- "futures",
- "futures-util",
- "itoa",
- "log",
- "percent-encoding",
- "pin-project-lite",
- "rand 0.8.5",
- "ryu",
- "sha1_smol",
- "socket2 0.4.9",
- "tokio",
- "tokio-retry",
- "tokio-util",
- "url",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11352,7 +11274,7 @@ dependencies = [
  "common-functions",
  "criterion",
  "match-template",
- "minitrace 0.6.2",
+ "minitrace",
  "rand 0.8.5",
  "serde",
  "storages-common-table-meta",
