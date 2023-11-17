@@ -16,6 +16,7 @@ echo "CREATE USER 'testuser1' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CL
 echo 'CREATE ROLE `testrole1`' | $BENDSQL_CLIENT_CONNECT
 echo 'CREATE ROLE `testrole2`' | $BENDSQL_CLIENT_CONNECT
 echo 'CREATE ROLE `testrole3`' | $BENDSQL_CLIENT_CONNECT
+echo 'CREATE ROLE `testrole4`' | $BENDSQL_CLIENT_CONNECT # not granted to testuser1
 echo 'GRANT ROLE testrole2 to ROLE testrole3' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ROLE testrole1 to testuser1' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ROLE testrole2 to testuser1' | $BENDSQL_CLIENT_CONNECT
@@ -30,8 +31,9 @@ echo 'GRANT SELECT, INSERT ON default.t20_0015_table2 TO ROLE testrole2' | $BEND
 echo '-- test 1: set role as testrole1, then SELECT current_role()'
 echo "SET ROLE testrole1; SELECT current_role();" | $TEST_USER_CONNECT
 
-echo '-- test 2: set a nonexistent role'
+echo '-- test 2: set a nonexistent role, a existed but not granted role, will fail'
 echo "SET ROLE nonexisting_role;" | $TEST_USER_CONNECT || true
+echo "SET ROLE testrole4;" | $TEST_USER_CONNECT || true
 
 echo '-- test 3: set role as testrole1, secondary roles as NONE, can access table1, can not access table2'
 echo "SET ROLE testrole1; SET SECONDARY ROLES NONE; INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT
@@ -58,3 +60,10 @@ echo "SET ROLE testrole3; INSERT INTO t20_0015_table2 VALUES (1);" | $TEST_USER_
 echo '-- test 8: not change role, secondary roles defaults as ALL, can both table1 and table2'
 echo "INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT
 echo "INSERT INTO t20_0015_table2 VALUES (1);" | $TEST_USER_CONNECT
+
+echo '-- test 9: set default role as testrole1, secondary roles as NONE, current role will still be testrole1 in another session'
+echo "SET DEFAULT ROLE testrole1;" | $TEST_USER_CONNECT
+echo "SELECT current_role();" | $TEST_USER_CONNECT
+
+echo '-- test 9: set default role as nonexisting_role, will fail'
+echo "SET DEFAULT ROLE nonexistedrole;" | $TEST_USER_CONNECT
