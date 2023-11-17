@@ -69,14 +69,21 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
-struct TestHttpQueryRequest<'a> {
-    ep: &'a EndpointType,
+struct TestHttpQueryRequest {
+    ep: EndpointType,
     json: serde_json::Value,
     headers: HeaderMap,
 }
 
-impl<'a> TestHttpQueryRequest<'a> {
-    fn new(ep: &'a EndpointType, json: serde_json::Value) -> Self {
+impl TestHttpQueryRequest {
+    fn new(json: serde_json::Value) -> Self {
+        let session_middleware =
+            HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+
+        let ep = Route::new()
+            .nest("/v1/query", query_route())
+            .with(session_middleware);
+
         Self {
             ep,
             json,
@@ -105,6 +112,11 @@ impl<'a> TestHttpQueryRequest<'a> {
         }
 
         Ok(resps)
+    }
+
+    async fn fetch_last(&self) -> Result<(StatusCode, QueryResponse)> {
+        let resps = self.fetch().await?;
+        Ok(resps.last().unwrap().clone())
     }
 
     async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -1385,9 +1397,7 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let request = TestHttpQueryRequest::new(&ep, json.clone());
-        let paged_resps = request.fetch().await?;
-        let result = paged_resps.last().unwrap();
+        let result = TestHttpQueryRequest::new(json.clone()).fetch_last().await?;
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
         assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
