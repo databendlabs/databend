@@ -78,6 +78,7 @@ struct TestHttpQueryRequest {
     json: serde_json::Value,
     auth_header: HeaderValue,
     headers: HeaderMap,
+    next_uri: Option<String>,
 }
 
 impl TestHttpQueryRequest {
@@ -100,6 +101,7 @@ impl TestHttpQueryRequest {
             json,
             auth_header: root_auth_header,
             headers: HeaderMap::new(),
+            next_uri: None,
         };
         req
     }
@@ -116,18 +118,35 @@ impl TestHttpQueryRequest {
     //    self
     // }
 
-    async fn fetch(&self) -> Result<TestHttpQueryFetchReply> {
+    async fn fetch_single(&mut self) -> Result<(StatusCode, QueryResponse)> {
+        let (status, resp) = self
+            .do_request(Method::POST, "/v1/query")
+            .await
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        self.next_uri = resp.next_uri.clone();
+        Ok((status, resp))
+    }
+
+    async fn fetch_next(&mut self) -> Result<(StatusCode, QueryResponse)> {
+        let (status, resp) = self
+            .do_request(Method::GET, self.next_uri.as_ref().unwrap())
+            .await?;
+        self.next_uri = resp.next_uri.clone();
+        Ok((status, resp))
+    }
+
+    async fn fetch(&mut self) -> Result<TestHttpQueryFetchReply> {
         let mut resps = vec![];
 
         let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
-        let mut next_uri = resp.next_uri.clone();
+        self.next_uri = resp.next_uri.clone();
         resps.push((status, resp.clone()));
 
-        while next_uri.is_some() {
+        while self.next_uri.is_some() {
             let (status, resp) = self
-                .do_request(Method::GET, next_uri.as_ref().unwrap())
+                .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
-            next_uri = resp.next_uri.clone();
+            self.next_uri = resp.next_uri.clone();
             resps.push((status, resp));
         }
 
@@ -1430,7 +1449,7 @@ async fn test_auth_configured_user() -> Result<()> {
         .build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
+    let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);
     let v = req.fetch().await?.data();
 
