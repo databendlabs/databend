@@ -321,7 +321,7 @@ impl Processor for MatchedSplitProcessor {
                 metrics_inc_merge_into_append_blocks_rows_counter(current_block.num_rows() as u32);
 
                 // cornor case: for merge into update, if the target table's column is not null,
-                // if target table has three columns like (a,b,c), if we use update set target_table.a = xxx,
+                // for example, target table has three columns like (a,b,c), and we use update set target_table.a = xxx,
                 // it's fine because we have cast the xxx'data_type into a's data_type in `generate_update_list()`,
                 // but for b,c, the hash table will transform the origin data_type (b_type,c_type) into
                 // (nullable(b_type),nullable(c_type)), so we will get datatype not match error, let's transform
