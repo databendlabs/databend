@@ -8,6 +8,7 @@ bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
 ceiling -> ceil
 character_length -> char_length
+current_timestamp -> now
 date_format -> to_string
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
