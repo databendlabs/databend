@@ -254,6 +254,8 @@ impl HashJoinProbeState {
         }
 
         // Adaptive early filtering.
+        // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
+        // when all keys have matches. This allows us to achieve the same performance as before.
         probe_state.num_keys += if let Some(valids) = &valids {
             (valids.len() - valids.unset_bits()) as u64
         } else {
@@ -262,6 +264,13 @@ impl HashJoinProbeState {
         let prefer_early_filtering =
             (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
 
+        // Probe:
+        // (1) INNER / RIGHT / RIGHT SINGLE / RIGHT SEMI / RIGHT ANTI / RIGHT MARK / LEFT SEMI / LEFT MARK
+        //        prefer_early_filtering is true  => early_filtering_probe_with_selection
+        //        prefer_early_filtering is false => probe
+        // (2) LEFT / LEFT SINGLE / LEFT ANTI / FULL
+        //        prefer_early_filtering is true  => early_filtering_probe
+        //        prefer_early_filtering is false => probe
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
