@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_sql::plans::OptimizeTableAction;
@@ -84,8 +83,7 @@ async fn do_hook_compact(
                     compact_table(ctx, compact_target, need_lock)
                 }) {
                     Ok(_) => {
-                        return Err(ErrorCode::BadArguments("compact bug"));
-                        // info!("execute {op_name} finished successfully. table optimization job finished.");
+                        info!("execute {op_name} finished successfully. table optimization job finished.");
                     }
                     Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e)}
                 }
