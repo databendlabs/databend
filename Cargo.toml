@@ -256,4 +256,4 @@ arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "588d37
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "f06cdf3" }
-sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" } 
+sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
