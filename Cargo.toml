@@ -205,7 +205,7 @@ minitrace = { version = "0.6", features = ["enable"] }
 prometheus-client = "0.21.2"
 
 # test
-mysql_async = { version = "0.32", default-features = false, features = ["rustls-tls"] }
+mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
 
 [profile.release]
 debug = 1
@@ -255,4 +255,3 @@ parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545"
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "f06cdf3" }
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
-mysql_async = { git = "https://github.com/datafuse-extras/mysql_async", rev = "1adbbcf" }

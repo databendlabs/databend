@@ -69,6 +69,72 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
+struct TestHttpQueryRequest<'a> {
+    ep: &'a EndpointType,
+    json: serde_json::Value,
+    headers: HeaderMap,
+}
+
+impl<'a> TestHttpQueryRequest<'a> {
+    fn new(ep: &'a EndpointType, json: serde_json::Value) -> Self {
+        Self {
+            ep,
+            json,
+            headers: HeaderMap::new(),
+        }
+    }
+
+    // fn with_headers(mut self, headers: HeaderMap) -> Self {
+    //    self.headers = headers;
+    //    self
+    // }
+
+    async fn fetch(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
+        let mut resps = vec![];
+
+        let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
+        let mut next_uri = resp.next_uri.clone();
+        resps.push((status, resp.clone()));
+
+        while next_uri.is_some() {
+            let (status, resp) = self
+                .do_request(Method::GET, next_uri.as_ref().unwrap())
+                .await?;
+            next_uri = resp.next_uri.clone();
+            resps.push((status, resp));
+        }
+
+        Ok(resps)
+    }
+
+    async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+        let content_type = "application/json";
+        let basic = headers::Authorization::basic("root", "");
+        let body = serde_json::to_vec(&self.json).unwrap();
+
+        let mut req = Request::builder()
+            .uri(uri.parse().unwrap())
+            .method(method)
+            .header(header::CONTENT_TYPE, content_type)
+            .typed_header(basic)
+            .body(body);
+        req.headers_mut().extend(self.headers.clone().into_iter());
+
+        let resp = self
+            .ep
+            .call(req)
+            .await
+            .map_err(|e| ErrorCode::Internal(e.to_string()))
+            .unwrap();
+
+        let status_code = resp.status();
+        let body = resp.into_body().into_string().await.unwrap();
+        let query_resp = serde_json::from_str::<QueryResponse>(&body).unwrap();
+
+        Ok((status_code, query_resp))
+    }
+}
+
 // TODO(youngsofun): add test for
 // 1. query fail after started
 
@@ -1250,7 +1316,7 @@ async fn test_multi_partition() -> Result<()> {
 async fn test_affect() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let route = create_endpoint().await?;
+    let ep = create_endpoint().await?;
 
     let sqls = vec![
         (
@@ -1319,12 +1385,14 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-        assert_eq!(status, StatusCode::OK, "{} {:?}", json, result.error);
-        assert!(result.error.is_none(), "{} {:?}", json, result.error);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.affect, affect);
-        assert_eq!(result.session, session_conf);
+        let request = TestHttpQueryRequest::new(&ep, json.clone());
+        let paged_resps = request.fetch().await?;
+        let result = paged_resps.last().unwrap();
+        assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
+        assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
+        assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.1.affect, affect);
+        assert_eq!(result.1.session, session_conf);
     }
     Ok(())
 }
