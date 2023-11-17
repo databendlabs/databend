@@ -36,9 +36,6 @@ use serde::Serialize;
 /// [storage.data]
 /// type = "s3"
 ///
-/// [storage.cache]
-/// type = "redis"
-///
 /// [storage.temporary]
 /// type = "s3"
 /// ```
