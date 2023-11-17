@@ -326,25 +326,30 @@ impl Processor for MatchedSplitProcessor {
                 // but for b,c, the hash table will transform the origin data_type (b_type,c_type) into
                 // (nullable(b_type),nullable(c_type)), so we will get datatype not match error, let's transform
                 // them back here.
-                let res_entries = current_block.columns();
-                let mut cast_exprs = Vec::with_capacity(res_entries.len());
-                assert_eq!(self.target_table_schema.fields.len(), res_entries.len());
-                for (idx, field) in self.target_table_schema.fields.iter().enumerate() {
-                    cast_exprs.push(Expr::Cast {
+                let current_columns = current_block.columns();
+                assert_eq!(
+                    self.target_table_schema.fields.len(),
+                    current_columns.len(),
+                    "target table columns and current columns length mismatch"
+                );
+                let cast_exprs = current_columns
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, col)| Expr::Cast {
                         span: None,
                         is_try: false,
                         expr: Box::new(Expr::ColumnRef {
                             span: None,
                             id: idx,
-                            data_type: res_entries[idx].data_type.clone(),
+                            data_type: col.data_type.clone(),
                             display_name: "".to_string(),
                         }),
-                        dest_type: field.data_type().clone(),
+                        dest_type: self.target_table_schema.fields[idx].data_type().clone(),
                     })
-                }
+                    .collect::<Vec<_>>();
                 let cast_operator = BlockOperator::Map {
                     exprs: cast_exprs,
-                    projections: Some((res_entries.len()..res_entries.len() * 2).collect()),
+                    projections: Some((current_columns.len()..current_columns.len() * 2).collect()),
                 };
                 current_block =
                     cast_operator.execute(&self.ctx.get_function_context()?, current_block)?;
