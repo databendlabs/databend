@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::mem;
 use std::sync::Arc;
 
 use common_ast::ast::AlterUDFStmt;
@@ -64,14 +65,82 @@ pub struct UdfInfo {
     pub udf_functions_index_map: HashMap<String, IndexType>,
 }
 
-pub(super) struct UdfRewriter {
-    pub udf_info: UdfInfo,
-    pub metadata: MetadataRef,
+pub(crate) struct UdfRewriter {
+    udf_info: UdfInfo,
+    metadata: MetadataRef,
 }
 
 impl UdfRewriter {
-    pub fn new(udf_info: UdfInfo, metadata: MetadataRef) -> Self {
-        Self { udf_info, metadata }
+    pub(crate) fn new(metadata: MetadataRef) -> Self {
+        Self {
+            udf_info: Default::default(),
+            metadata,
+        }
+    }
+
+    pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut s_expr = s_expr.clone();
+        if !s_expr.children.is_empty() {
+            let mut children = Vec::with_capacity(s_expr.children.len());
+            for child in s_expr.children.iter() {
+                children.push(Arc::new(self.rewrite(child)?));
+            }
+            s_expr.children = children;
+        }
+
+        // Rewrite Udf and its arguments as derived column.
+        match (*s_expr.plan).clone() {
+            RelOperator::EvalScalar(mut plan) => {
+                for item in &plan.items {
+                    // The index of Udf item can be reused.
+                    if let ScalarExpr::UDFServerCall(udf) = &item.scalar {
+                        self.udf_info
+                            .udf_functions_index_map
+                            .insert(udf.display_name.clone(), item.index);
+                    }
+                }
+                for item in &mut plan.items {
+                    self.visit(&mut item.scalar)?;
+                }
+                let child_expr = self.create_udf_expr(s_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                Ok(new_expr)
+            }
+            RelOperator::Filter(mut plan) => {
+                for scalar in &mut plan.predicates {
+                    self.visit(scalar)?;
+                }
+                let child_expr = self.create_udf_expr(s_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                Ok(new_expr)
+            }
+            _ => Ok(s_expr),
+        }
+    }
+
+    fn create_udf_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
+        let udf_info = &mut self.udf_info;
+        if !udf_info.udf_functions.is_empty() {
+            if !udf_info.udf_arguments.is_empty() {
+                // Add an EvalScalar for the arguments of Udf.
+                let mut scalar_items = mem::take(&mut udf_info.udf_arguments);
+                scalar_items.sort_by_key(|item| item.index);
+                let eval_scalar = EvalScalar {
+                    items: scalar_items,
+                };
+                child_expr = Arc::new(SExpr::create_unary(
+                    Arc::new(eval_scalar.into()),
+                    child_expr,
+                ));
+            }
+
+            let udf_plan = Udf {
+                items: mem::take(&mut udf_info.udf_functions),
+            };
+            Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr))
+        } else {
+            child_expr
+        }
     }
 }
 
@@ -92,6 +161,14 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
     fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) -> Result<()> {
         for (i, arg) in udf.arguments.iter_mut().enumerate() {
             self.visit(arg)?;
+
+            if self
+                .udf_info
+                .udf_functions_map
+                .contains_key(&udf.display_name)
+            {
+                return Ok(());
+            }
 
             let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
                 column_ref.clone()
@@ -265,60 +342,5 @@ impl Binder {
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
         Ok(Plan::AlterUDF(Box::new(AlterUDFPlan { udf })))
-    }
-
-    pub(crate) fn rewrite_udf(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut s_expr = s_expr.clone();
-        if !s_expr.children.is_empty() {
-            let mut children = Vec::with_capacity(s_expr.children.len());
-            for child in s_expr.children.iter() {
-                children.push(Arc::new(self.rewrite_udf(child)?));
-            }
-            s_expr.children = children;
-        }
-
-        if let RelOperator::EvalScalar(mut plan) = (*s_expr.plan).clone() {
-            let mut udf_info = UdfInfo::default();
-            for item in &plan.items {
-                // The index of Udf item can be reused.
-                if let ScalarExpr::UDFServerCall(udf) = &item.scalar {
-                    udf_info
-                        .udf_functions_index_map
-                        .insert(udf.display_name.clone(), item.index);
-                }
-            }
-
-            // Rewrite Udf and its arguments as derived column.
-            let mut rewriter = UdfRewriter::new(udf_info, self.metadata.clone());
-            for item in &mut plan.items {
-                rewriter.visit(&mut item.scalar)?;
-            }
-
-            let udf_info = &rewriter.udf_info;
-            if !udf_info.udf_functions.is_empty() {
-                let mut child_expr = s_expr.children[0].clone();
-                if !udf_info.udf_arguments.is_empty() {
-                    // Add an EvalScalar for the arguments of Udf.
-                    let mut scalar_items = udf_info.udf_arguments.clone();
-                    scalar_items.sort_by_key(|item| item.index);
-                    let eval_scalar = EvalScalar {
-                        items: scalar_items,
-                    };
-                    child_expr = Arc::new(SExpr::create_unary(
-                        Arc::new(eval_scalar.into()),
-                        child_expr,
-                    ));
-                }
-
-                let udf_plan = Udf {
-                    items: udf_info.udf_functions.clone(),
-                };
-                let udf_expr = SExpr::create_unary(Arc::new(udf_plan.into()), child_expr);
-
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), Arc::new(udf_expr));
-                return Ok(new_expr);
-            }
-        }
-        Ok(s_expr)
     }
 }

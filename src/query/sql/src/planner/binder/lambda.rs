@@ -13,22 +13,24 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::mem;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::select::SelectList;
-use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
+use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Lambda;
 use crate::plans::LambdaFunc;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
-use crate::BindContext;
-use crate::Binder;
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
 
@@ -39,30 +41,123 @@ pub struct LambdaInfo {
     /// Lambda functions
     pub lambda_functions: Vec<ScalarItem>,
     /// Mapping: (lambda function display name) -> (derived column ref)
-    /// This is used to generate column in projection.
+    /// This is used to replace lambda with a derived column.
     pub lambda_functions_map: HashMap<String, BoundColumnRef>,
+    /// Mapping: (lambda function display name) -> (derived index)
+    /// This is used to reuse already generated derived columns
+    pub lambda_functions_index_map: HashMap<String, IndexType>,
 }
 
-pub(super) struct LambdaRewriter<'a> {
-    pub bind_context: &'a mut BindContext,
-    pub metadata: MetadataRef,
+pub(crate) struct LambdaRewriter {
+    lambda_info: LambdaInfo,
+    metadata: MetadataRef,
 }
 
-impl<'a> LambdaRewriter<'a> {
-    pub fn new(bind_context: &'a mut BindContext, metadata: MetadataRef) -> Self {
+impl LambdaRewriter {
+    pub(crate) fn new(metadata: MetadataRef) -> Self {
         Self {
-            bind_context,
+            lambda_info: Default::default(),
             metadata,
+        }
+    }
+
+    pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut s_expr = s_expr.clone();
+        if !s_expr.children.is_empty() {
+            let mut children = Vec::with_capacity(s_expr.children.len());
+            for child in s_expr.children.iter() {
+                children.push(Arc::new(self.rewrite(child)?));
+            }
+            s_expr.children = children;
+        }
+
+        // Rewrite Lambda and its arguments as derived column.
+        match (*s_expr.plan).clone() {
+            RelOperator::EvalScalar(mut plan) => {
+                for item in &plan.items {
+                    // The index of Lambda item can be reused.
+                    if let ScalarExpr::LambdaFunction(lambda) = &item.scalar {
+                        self.lambda_info
+                            .lambda_functions_index_map
+                            .insert(lambda.display_name.clone(), item.index);
+                    }
+                }
+                for item in &mut plan.items {
+                    self.visit(&mut item.scalar)?;
+                }
+                let child_expr = self.create_lambda_expr(s_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                Ok(new_expr)
+            }
+            RelOperator::Filter(mut plan) => {
+                for scalar in &mut plan.predicates {
+                    self.visit(scalar)?;
+                }
+                let child_expr = self.create_lambda_expr(s_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                Ok(new_expr)
+            }
+            _ => Ok(s_expr),
+        }
+    }
+
+    fn create_lambda_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
+        let lambda_info = &mut self.lambda_info;
+        if !lambda_info.lambda_functions.is_empty() {
+            if !lambda_info.lambda_arguments.is_empty() {
+                // Add an EvalScalar for the arguments of Lambda.
+                let mut scalar_items = mem::take(&mut lambda_info.lambda_arguments);
+                scalar_items.sort_by_key(|item| item.index);
+                let eval_scalar = EvalScalar {
+                    items: scalar_items,
+                };
+                child_expr = Arc::new(SExpr::create_unary(
+                    Arc::new(eval_scalar.into()),
+                    child_expr,
+                ));
+            }
+
+            let lambda_plan = Lambda {
+                items: mem::take(&mut lambda_info.lambda_functions),
+            };
+            Arc::new(SExpr::create_unary(
+                Arc::new(lambda_plan.into()),
+                child_expr,
+            ))
+        } else {
+            child_expr
         }
     }
 }
 
-impl<'a, 'b> VisitorMut<'a> for LambdaRewriter<'b> {
+impl<'a> VisitorMut<'a> for LambdaRewriter {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        walk_expr_mut(self, expr)?;
+        // replace lambda with derived column
+        if let ScalarExpr::LambdaFunction(lambda) = expr {
+            if let Some(column_ref) = self
+                .lambda_info
+                .lambda_functions_map
+                .get(&lambda.display_name)
+            {
+                *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
+            } else {
+                return Err(ErrorCode::Internal("Rewrite lambda function failed"));
+            }
+        }
+        Ok(())
+    }
+
     fn visit_lambda_function(&mut self, lambda_func: &'a mut LambdaFunc) -> Result<()> {
         for (i, arg) in lambda_func.args.iter_mut().enumerate() {
             self.visit(arg)?;
-            if let ScalarExpr::LambdaFunction(_) = arg {
-                continue;
+
+            if self
+                .lambda_info
+                .lambda_functions_map
+                .contains_key(&lambda_func.display_name)
+            {
+                return Ok(());
             }
 
             let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
@@ -89,22 +184,27 @@ impl<'a, 'b> VisitorMut<'a> for LambdaRewriter<'b> {
                 }
             };
 
-            self.bind_context
-                .lambda_info
-                .lambda_arguments
-                .push(ScalarItem {
-                    index: new_column_ref.column.index,
-                    scalar: arg.clone(),
-                });
+            self.lambda_info.lambda_arguments.push(ScalarItem {
+                index: new_column_ref.column.index,
+                scalar: arg.clone(),
+            });
 
             *arg = new_column_ref.into();
         }
 
-        let index = self.metadata.write().add_derived_column(
-            lambda_func.display_name.clone(),
-            (*lambda_func.return_type).clone(),
-        );
+        let index = match self
+            .lambda_info
+            .lambda_functions_index_map
+            .get(&lambda_func.display_name)
+        {
+            Some(index) => *index,
+            None => self.metadata.write().add_derived_column(
+                lambda_func.display_name.clone(),
+                (*lambda_func.return_type).clone(),
+            ),
+        };
 
+        // Generate a ColumnBinding for the lambda function
         let column = ColumnBindingBuilder::new(
             lambda_func.display_name.clone(),
             index,
@@ -118,64 +218,14 @@ impl<'a, 'b> VisitorMut<'a> for LambdaRewriter<'b> {
             column,
         };
 
-        self.bind_context
-            .lambda_info
+        self.lambda_info
             .lambda_functions_map
             .insert(lambda_func.display_name.clone(), replaced_column);
-        self.bind_context
-            .lambda_info
-            .lambda_functions
-            .push(ScalarItem {
-                index,
-                scalar: lambda_func.clone().into(),
-            });
+        self.lambda_info.lambda_functions.push(ScalarItem {
+            index,
+            scalar: lambda_func.clone().into(),
+        });
 
         Ok(())
-    }
-}
-
-impl Binder {
-    /// Analyze lambda functions in select clause, this will rewrite lambda functions.
-    /// See [`LambdaRewriter`] for more details.
-    pub(crate) fn analyze_lambda(
-        &mut self,
-        bind_context: &mut BindContext,
-        select_list: &mut SelectList,
-    ) -> Result<()> {
-        for item in select_list.items.iter_mut() {
-            let mut rewriter = LambdaRewriter::new(bind_context, self.metadata.clone());
-            rewriter.visit(&mut item.scalar)?;
-        }
-
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    pub async fn bind_lambda(
-        &mut self,
-        bind_context: &mut BindContext,
-        child: SExpr,
-    ) -> Result<SExpr> {
-        let lambda_info = &bind_context.lambda_info;
-        if lambda_info.lambda_functions.is_empty() {
-            return Ok(child);
-        }
-
-        let mut new_expr = child;
-        if !lambda_info.lambda_arguments.is_empty() {
-            let mut scalar_items = lambda_info.lambda_arguments.clone();
-            scalar_items.sort_by_key(|item| item.index);
-            let eval_scalar = EvalScalar {
-                items: scalar_items,
-            };
-            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
-        }
-
-        let lambda_plan = Lambda {
-            items: lambda_info.lambda_functions.clone(),
-        };
-        new_expr = SExpr::create_unary(Arc::new(lambda_plan.into()), Arc::new(new_expr));
-
-        Ok(new_expr)
     }
 }

@@ -105,6 +105,22 @@ select array_distinct(col1), array_distinct(col2), array_distinct(col3) from t
 [1,2,3] ['x','y','z'] ['2022-02-02']
 
 query T
+select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
+----
+[1,2,3,3]
+
+query T
+select array_transform(col1, x -> x + 1) from t group by array_transform(col1, x -> x + 1)
+----
+[2,3,4,4]
+
+statement error 1065
+update t set col2 = [] where get(array_transform(col1, x -> x + 1), 1) = 2
+
+statement error 1065
+delete from t where get(array_transform(col1, x -> x + 1), 1) = 2
+
+query T
 select array_distinct([array_distinct([NULL, NULL])])
 ----
 [[]]

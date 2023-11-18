@@ -99,6 +99,15 @@ impl<'a> Binder {
             .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
 
+        if let Some(selection) = &selection {
+            if !self.check_allowed_scalar_expr(selection)? {
+                return Err(ErrorCode::SemanticError(
+                    "selection in delete statement can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
+                )
+                .set_span(selection.span()));
+            }
+        }
+
         let plan = DeletePlan {
             catalog_name,
             database_name,
