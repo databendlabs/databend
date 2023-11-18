@@ -4949,6 +4949,7 @@ Query {
                     span: Some(
                         14..25,
                     ),
+                    lateral: false,
                     name: Identifier {
                         name: "range",
                         quote: None,
@@ -6056,6 +6057,123 @@ Query {
                         ignore_result: false,
                     },
                     alias: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t, lateral flatten(input => u.col) f
+---------- Output ---------
+SELECT * FROM t, LATERAL flatten(input=>u.col) AS f
+---------- AST ------------
+Query {
+    span: Some(
+        0..50,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..50,
+            ),
+            hints: None,
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..15,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t",
+                        quote: None,
+                        span: Some(
+                            14..15,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+                TableFunction {
+                    span: Some(
+                        17..50,
+                    ),
+                    lateral: true,
+                    name: Identifier {
+                        name: "flatten",
+                        quote: None,
+                        span: Some(
+                            25..32,
+                        ),
+                    },
+                    params: [],
+                    named_params: [
+                        (
+                            "input",
+                            ColumnRef {
+                                span: Some(
+                                    42..47,
+                                ),
+                                database: None,
+                                table: Some(
+                                    Identifier {
+                                        name: "u",
+                                        quote: None,
+                                        span: Some(
+                                            42..43,
+                                        ),
+                                    },
+                                ),
+                                column: Name(
+                                    Identifier {
+                                        name: "col",
+                                        quote: None,
+                                        span: Some(
+                                            44..47,
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                    ],
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "f",
+                                quote: None,
+                                span: Some(
+                                    49..50,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
                 },
             ],
             selection: None,

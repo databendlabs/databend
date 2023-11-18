@@ -88,6 +88,9 @@ fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
         OperatorAttribute::Exchange(exchange_attr) => {
             (&serde_json::json!({ "exchange_mode": exchange_attr.exchange_mode })).into()
         }
+        OperatorAttribute::Udf(udf_attr) => {
+            (&serde_json::json!({ "scalars": udf_attr.scalars })).into()
+        }
         OperatorAttribute::Empty => jsonb::Value::Null,
     }
 }

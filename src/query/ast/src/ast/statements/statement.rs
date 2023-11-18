@@ -290,6 +290,11 @@ impl Statement {
                 }
                 format!("{}", Statement::CreateStage(stage_clone))
             }
+            Statement::AttachTable(attach) => {
+                let mut attach_clone = attach.clone();
+                attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
+                format!("{}", Statement::AttachTable(attach_clone))
+            }
             _ => format!("{}", self),
         }
     }
