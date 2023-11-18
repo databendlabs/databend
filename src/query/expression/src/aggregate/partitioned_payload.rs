@@ -39,7 +39,7 @@ pub struct PartitionedPayload {
     pub state_addr_offsets: Vec<usize>,
     pub state_layout: Option<Layout>,
 
-    arenas: Vec<Arc<Bump>>,
+    pub arenas: Vec<Arc<Bump>>,
 
     partition_count: u64,
     mask_v: u64,
@@ -166,7 +166,7 @@ impl PartitionedPayload {
         self.arenas.append(&mut other.arenas);
     }
 
-    fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
+    pub fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
         if other.len() == 0 {
             return;
         }

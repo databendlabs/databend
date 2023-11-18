@@ -443,17 +443,27 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             let aggrs = payloads[0].aggrs.clone();
 
             let mut payload_map = (0..self.max_partition_count).map(|_| vec![]).collect_vec();
-            for payload in payloads.into_iter() {
+
+            // All arenas should be kept in the bucket partition payload
+            let mut arenas = vec![];
+
+            for mut payload in payloads.into_iter() {
                 for (bucket, p) in payload.payloads.into_iter().enumerate() {
                     payload_map[bucket].push(p);
                 }
+                arenas.append(&mut payload.arenas);
             }
 
             for (bucket, mut payloads) in payload_map.into_iter().enumerate() {
                 let mut partition_payload =
                     PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1);
 
-                partition_payload.payloads.append(payloads.as_mut());
+                for payload in payloads.drain(0..) {
+                    partition_payload.combine_single(payload, &mut self.flush_state);
+                }
+
+                partition_payload.arenas.extend_from_slice(&arenas);
+
                 self.buckets_blocks
                     .insert(bucket as isize, vec![DataBlock::empty_with_meta(
                         AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),

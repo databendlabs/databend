@@ -303,6 +303,7 @@ impl Payload {
         let mut page = self.writable_page();
         for i in 0..row_count {
             let index = select_vector[i];
+
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     address[index],
@@ -335,9 +336,13 @@ impl Drop for Payload {
                     for page in self.pages.iter() {
                         for row in 0..page.rows {
                             unsafe {
-                                let state_addr = self.data_ptr(page, row).add(self.state_offset);
-                                aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
-                            };
+                                let state_place = StateAddr::new(core::ptr::read::<u64>(
+                                    self.data_ptr(page, row).add(self.state_offset) as _,
+                                )
+                                    as usize);
+
+                                aggr.drop_state(state_place.next(*addr_offset));
+                            }
                         }
                     }
                 }

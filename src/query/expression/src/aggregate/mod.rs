@@ -25,7 +25,6 @@ mod payload_flush;
 mod payload_row;
 mod probe_state;
 
-use std::hash::Hasher;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
@@ -90,70 +89,5 @@ impl HashTableConfig {
     pub fn with_partial(mut self, partial_agg: bool) -> Self {
         self.partial_agg = partial_agg;
         self
-    }
-}
-
-pub struct PerfectHashBuilder;
-
-// NOTE: This is a dummy hasher that just returns the value passed to it.
-// This is only used for i8-i64, u8-u64, isize and usize keys.
-pub struct PerfectHash {
-    val: u64,
-}
-
-impl std::hash::BuildHasher for PerfectHashBuilder {
-    type Hasher = PerfectHash;
-    fn build_hasher(&self) -> PerfectHash {
-        PerfectHash { val: 0 }
-    }
-}
-
-impl Hasher for PerfectHash {
-    fn finish(&self) -> u64 {
-        self.val
-    }
-
-    fn write(&mut self, _bytes: &[u8]) {
-        unreachable!()
-    }
-
-    fn write_u8(&mut self, i: u8) {
-        self.val = i as u64;
-    }
-
-    fn write_u16(&mut self, i: u16) {
-        self.val = i as u64;
-    }
-
-    fn write_u32(&mut self, i: u32) {
-        self.val = i as u64;
-    }
-
-    fn write_u64(&mut self, i: u64) {
-        self.val = i;
-    }
-
-    fn write_usize(&mut self, i: usize) {
-        self.val = i as u64;
-    }
-
-    fn write_i8(&mut self, i: i8) {
-        self.val = i as u64;
-    }
-
-    fn write_i16(&mut self, i: i16) {
-        self.val = i as u64;
-    }
-
-    fn write_i32(&mut self, i: i32) {
-        self.val = i as u64;
-    }
-
-    fn write_i64(&mut self, i: i64) {
-        self.val = i as u64;
-    }
-
-    fn write_isize(&mut self, i: isize) {
-        self.val = i as u64;
     }
 }
