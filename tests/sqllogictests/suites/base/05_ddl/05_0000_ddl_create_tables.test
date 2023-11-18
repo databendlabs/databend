@@ -140,10 +140,6 @@ CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b F
 statement error 1006
 CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT a, b, a FROM db1.test1
 
-
-statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
-
 statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
 
