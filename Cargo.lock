@@ -7716,7 +7716,7 @@ dependencies = [
 [[package]]
 name = "macros"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.9#872ef379319242007dc359eb0316d2e1fb511fa5"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.10#7d469c3da769de5e8886cb1af95008c930b98147"
 
 [[package]]
 name = "maplit"
@@ -8492,7 +8492,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.9#872ef379319242007dc359eb0316d2e1fb511fa5"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.10#7d469c3da769de5e8886cb1af95008c930b98147"
 dependencies = [
  "anyerror",
  "anyhow",
