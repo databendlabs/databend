@@ -88,6 +88,7 @@ build_exceptions! {
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownTableId(1020),
+    UnknownStreamId(1021),
     UnknownTable(1025),
     UnknownView(1026),
     UnknownAggregateFunction(1027),
@@ -229,7 +230,6 @@ build_exceptions! {
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
-    IllegalStream(2305),
     ViewAlreadyExists(2306),
     CreateTableWithDropTime(2307),
     UndropTableAlreadyExists(2308),
@@ -315,6 +315,10 @@ build_exceptions! {
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
+
+    // Stream error codes.
+    IllegalStream(2730),
+    StreamVersionMismatched(2731),
 
     // Variable error codes.
     UnknownVariable(2801),

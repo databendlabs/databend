@@ -113,7 +113,7 @@ impl AccessChecker for ManagementModeAccess {
                     let database = &plan.database;
                     let table = &plan.table;
                     let table = ctx.get_table(catalog, database, table).await?;
-                    matches!(table.get_table_info().engine(), VIEW_ENGINE|STREAM_ENGINE)
+                    !matches!(table.get_table_info().engine(), VIEW_ENGINE|STREAM_ENGINE)
                 },
                 _ => false,
             };

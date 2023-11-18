@@ -31,6 +31,7 @@ use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::GetIndexWithDropTime;
 use common_meta_app::app_error::IndexAlreadyExists;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
+use common_meta_app::app_error::StreamVersionMismatched;
 use common_meta_app::app_error::TableAlreadyExists;
 use common_meta_app::app_error::TableLockExpired;
 use common_meta_app::app_error::TableVersionMismatched;
@@ -42,6 +43,7 @@ use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownCatalog;
 use common_meta_app::app_error::UnknownIndex;
+use common_meta_app::app_error::UnknownStreamId;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
@@ -2789,14 +2791,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     get_pb_value(self, &stream_id).await?;
 
                 if stream_meta_seq == 0 || stream_meta.is_none() {
-                    return Err(KVAppError::AppError(AppError::UnknownTableId(
-                        UnknownTableId::new(req.stream_id, "update_table_meta"),
+                    return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                        UnknownStreamId::new(req.stream_id, "update_table_meta"),
                     )));
                 }
 
                 if req.seq.match_seq(stream_meta_seq).is_err() {
                     return Err(KVAppError::AppError(AppError::from(
-                        TableVersionMismatched::new(
+                        StreamVersionMismatched::new(
                             req.stream_id,
                             req.seq,
                             stream_meta_seq,

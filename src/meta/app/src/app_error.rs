@@ -253,6 +253,42 @@ impl TableVersionMismatched {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("StreamVersionMismatched: {stream_id} expect `{expect}` but `{curr}`  while `{context}`")]
+pub struct StreamVersionMismatched {
+    stream_id: u64,
+    expect: MatchSeq,
+    curr: u64,
+    context: String,
+}
+
+impl StreamVersionMismatched {
+    pub fn new(stream_id: u64, expect: MatchSeq, curr: u64, context: impl Into<String>) -> Self {
+        Self {
+            stream_id,
+            expect,
+            curr,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownStreamId: `{stream_id}` while `{context}`")]
+pub struct UnknownStreamId {
+    stream_id: u64,
+    context: String,
+}
+
+impl UnknownStreamId {
+    pub fn new(stream_id: u64, context: impl Into<String>) -> UnknownStreamId {
+        Self {
+            stream_id,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
     table_id: u64,
@@ -952,6 +988,12 @@ pub enum AppError {
 
     #[error(transparent)]
     VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
+
+    #[error(transparent)]
+    StreamVersionMismatched(#[from] StreamVersionMismatched),
+
+    #[error(transparent)]
+    UnknownStreamId(#[from] UnknownStreamId),
 }
 
 impl AppErrorMessage for UnknownBackgroundJob {
@@ -1013,6 +1055,10 @@ impl AppErrorMessage for UnknownTableId {}
 impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
+
+impl AppErrorMessage for StreamVersionMismatched {}
+
+impl AppErrorMessage for UnknownStreamId {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
@@ -1297,6 +1343,10 @@ impl From<AppError> for ErrorCode {
             AppError::TableVersionMismatched(err) => {
                 ErrorCode::TableVersionMismatched(err.message())
             }
+            AppError::StreamVersionMismatched(err) => {
+                ErrorCode::StreamVersionMismatched(err.message())
+            }
+            AppError::UnknownStreamId(err) => ErrorCode::UnknownStreamId(err.message()),
             AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
             AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
             AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
