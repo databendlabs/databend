@@ -1,0 +1,129 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists integers;
+
+statement ok
+drop table if exists integers2;
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM numbers(10) tbl(i)
+
+statement ok
+CREATE TABLE integers2 AS SELECT i FROM numbers(10) tbl(i)
+
+statement ok
+drop view if exists integers_empty
+
+statement ok
+drop view if exists integers2_empty
+
+statement ok
+drop view if exists empty_join
+
+statement ok
+CREATE VIEW integers_empty AS SELECT * FROM integers WHERE i>100
+
+statement ok
+CREATE VIEW integers2_empty AS SELECT * FROM integers WHERE i>100
+
+statement ok
+CREATE VIEW empty_join AS SELECT * FROM integers JOIN integers2_empty USING (i)
+
+# empty LHS
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 USING (i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 ON (integers_empty.i>integers2.i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 ON (integers_empty.i<>integers2.i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 ON (integers_empty.i<>integers2.i OR integers_empty.i+1<>integers2.i)
+----
+0
+
+query I
+SELECT * FROM integers_empty JOIN integers2 USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers_empty LEFT JOIN integers2 USING (i)
+----
+0
+
+query I
+SELECT * FROM integers_empty LEFT JOIN integers2 USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers_empty RIGHT JOIN integers2 USING (i)
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers_empty FULL OUTER JOIN integers2 USING (i)
+----
+10
+
+# empty RHS
+query I
+SELECT COUNT(*) FROM integers JOIN integers2_empty USING (i)
+----
+0
+
+query I
+SELECT * FROM integers JOIN integers2_empty USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers LEFT JOIN integers2_empty USING (i)
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers RIGHT JOIN integers2_empty USING (i)
+----
+0
+
+query I
+SELECT * FROM integers RIGHT JOIN integers2_empty USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2_empty USING (i)
+----
+10
+
+# nested empty
+query I
+SELECT COUNT(*) FROM integers JOIN empty_join USING (i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers LEFT JOIN empty_join USING (i)
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers RIGHT JOIN empty_join USING (i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN empty_join USING (i)
+----
+10
+
+statement ok
+set max_block_size = 65536;

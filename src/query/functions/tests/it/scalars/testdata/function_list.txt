@@ -1638,6 +1638,7 @@ Functions overloads:
 13 factorial(Int32 NULL) :: Int64 NULL
 14 factorial(Int64) :: Int64
 15 factorial(Int64 NULL) :: Int64 NULL
+0 flatten FACTORY
 0 floor(Float64) :: Float64
 1 floor(Float64 NULL) :: Float64 NULL
 0 from_base64(String) :: String
