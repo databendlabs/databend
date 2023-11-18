@@ -781,6 +781,10 @@ pub enum TokenKind {
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
     MATCHED,
+    #[token("MISSING_FIELD_AS", ignore(ascii_case))]
+    MISSING_FIELD_AS,
+    #[token("NULL_FIELD_AS", ignore(ascii_case))]
+    NULL_FIELD_AS,
     #[token("UNMATCHED", ignore(ascii_case))]
     UNMATCHED,
     #[token("ROW", ignore(ascii_case))]

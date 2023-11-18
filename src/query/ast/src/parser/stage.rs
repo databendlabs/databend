@@ -94,6 +94,8 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | NAN_DISPLAY
                 | NULL_DISPLAY
                 | ESCAPE
+                | NULL_FIELD_AS
+                | MISSING_FIELD_AS
                 | ROW_TAG) ~ ^"=" ~ ^#literal_string
         },
         |(k, _, v)| (k.text().to_string(), v),
