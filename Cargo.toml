@@ -122,9 +122,11 @@ jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "1d7a3e9" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.9", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.10", features = [
     "compat-07",
     "tracing-log",
+    # allows to remove all data from a follower and restore from the leader.
+    "loosen-follower-log-revert",
 ] }
 
 # type helper
