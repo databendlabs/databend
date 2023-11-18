@@ -143,6 +143,7 @@ impl UpdateByExprMutator {
             .iter()
             .map(|item| item.1.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
+
         // get filter and updated columns
         let op = BlockOperator::Map {
             exprs,
@@ -153,7 +154,9 @@ impl UpdateByExprMutator {
             ),
         };
         let data_block = op.execute(&self.func_ctx, data_block)?;
+        // input_schema column position -> field_index
         let mut updated_column_position = HashMap::new();
+        // field_index -> position_in_block (this block is arrived by op.execute above)
         let mut field_index2position = HashMap::new();
         for (idx, (field_index, _)) in self.update_lists.iter().enumerate() {
             updated_column_position.insert(
@@ -179,6 +182,7 @@ impl UpdateByExprMutator {
             data_type: DataType::Boolean,
             value: last_filter,
         });
+
         Ok(DataBlock::new(block_entries, data_block.num_rows()))
     }
 }
