@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
+use common_ast::ast::JoinOperator;
+use common_ast::ast::JoinOperator::RightAnti;
 use common_ast::ast::JoinOperator::RightOuter;
 use common_ast::ast::MatchOperation;
 use common_ast::ast::MatchedClause;
@@ -33,6 +35,7 @@ use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
 use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
+use parking_lot::RwLock;
 
 use super::wrap_cast_scalar;
 use super::Finder;
@@ -51,6 +54,7 @@ use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::Metadata;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -64,11 +68,9 @@ pub enum MergeIntoType {
 
 // Optimize Rule:
 // for now we think right source table is small table in default.
-// 1. matched only:
-//      right semi join
-// 2. unmatched only:
+// 1. unmatched only:
 //      right anti join
-// 3. macthed and unmatched:
+// 2. macthed and unmatched/matched only:
 //      right outer
 // we will improt optimizer for these join type in the future.
 
@@ -89,7 +91,29 @@ impl Binder {
             return Err(ErrorCode::Unimplemented(
                 "merge into is experimental for now, you can use 'set enable_experimental_merge_into = 1' to set it up",
             ));
+        };
+
+        let mut plan = self
+            .bind_merge_into_with_join_type(bind_context, stmt, RightOuter)
+            .await?;
+
+        // optimize insert-only
+        if let MergeIntoType::InsertOnly = &plan.merge_type && insert_only(&plan){
+            // init bind_context and metadata
+            *bind_context = BindContext::new();
+            self.metadata = Arc::new(RwLock::new(Metadata::default()));
+            plan = self.bind_merge_into_with_join_type(bind_context, stmt, RightAnti).await?;
         }
+
+        Ok(Plan::MergeInto(Box::new(plan)))
+    }
+
+    async fn bind_merge_into_with_join_type(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &MergeIntoStmt,
+        join_type: JoinOperator,
+    ) -> Result<MergeInto> {
         let MergeIntoStmt {
             catalog,
             database,
@@ -108,7 +132,6 @@ impl Binder {
         }
 
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
-
 
         let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
 
@@ -243,9 +266,9 @@ impl Binder {
         // add row_id_idx
         columns_set.insert(column_binding.index);
 
-        // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
+        // add join, we use _row_id to check_duplicate join row.
         let join = Join {
-            op: RightOuter,
+            op: join_type,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
             left: Box::new(target_table),
             // use source as build table
@@ -328,7 +351,7 @@ impl Binder {
             );
         }
 
-        Ok(Plan::MergeInto(Box::new(MergeInto {
+        Ok(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
@@ -342,8 +365,8 @@ impl Binder {
             unmatched_evaluators,
             target_table_idx: table_index,
             field_index_map,
-            merge_type
-        })))
+            merge_type,
+        })
     }
 
     async fn bind_matched_clause<'a>(
@@ -599,4 +622,24 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
             "we must have macthed or unmatched clause at least one",
         ))
     }
+}
+
+fn insert_only(merge_plan: &MergeInto) -> bool {
+    let meta_data = merge_plan.meta_data.read();
+    let target_table_columns: HashSet<usize> = meta_data
+        .columns_by_table_index(merge_plan.target_table_idx)
+        .iter()
+        .map(|column| column.index())
+        .collect();
+
+    for evaluator in &merge_plan.unmatched_evaluators {
+        for value in &evaluator.condition {
+            for column in value.used_columns() {
+                if target_table_columns.contains(&column) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }

@@ -377,7 +377,6 @@ impl PipelineBuilder {
             pipe_items.clone(),
         ));
 
-
         // row_id port0_1
         // matched update data port0_2
         // not macthed insert data port0_3
@@ -658,5 +657,3 @@ impl PipelineBuilder {
         Ok(())
     }
 }
-
-
