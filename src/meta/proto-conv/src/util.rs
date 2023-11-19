@@ -93,6 +93,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (61, "2023-10-19: Add: config.proto/OssStorageConfig add SSE options", ),
     (62, "2023-10-30: Add: lock.proto"),
     (63, "2023-10-30: Add: connection.proto"),
+    (64, "2023-11-16: Add: user.proto/NDJsonFileFormatParams add field `missing_field_as` and `null_field_as`", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

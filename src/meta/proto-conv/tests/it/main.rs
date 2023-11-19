@@ -68,3 +68,4 @@ mod v060_copy_options;
 mod v061_oss_sse_options;
 mod v062_table_lock_meta;
 mod v063_connection;
+mod v064_ndjson_format_params;
