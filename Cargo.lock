@@ -2972,6 +2972,8 @@ dependencies = [
  "opendal",
  "parquet",
  "serde",
+ "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",

@@ -29,13 +29,13 @@ use common_exception::Result;
 use common_meta_app::principal::StageInfo;
 use common_storage::infer_schema_with_extension;
 use common_storage::init_stage_operator;
-use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
 use super::Parquet2Table;
+use crate::parquet2::parquet_table::read_metas_in_parallel;
 use crate::parquet2::parquet_table::table::create_parquet2_statistics_provider;
 
 impl Parquet2Table {
@@ -118,7 +118,7 @@ pub(super) async fn get_parquet2_file_meta(
     operator: &Operator,
     expect_schema: &SchemaDescriptor,
     schema_from: &str,
-) -> Result<Vec<FileMetaData>> {
+) -> Result<Vec<Arc<FileMetaData>>> {
     let locations = match files_to_read {
         Some(files) => files
             .iter()
@@ -135,13 +135,8 @@ pub(super) async fn get_parquet2_file_meta(
     // Read parquet meta data, async reading.
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_memory_usage = ctx.get_settings().get_max_memory_usage()?;
-    let file_metas = read_parquet_metas_in_parallel(
-        operator.clone(),
-        locations.clone(),
-        max_threads,
-        max_memory_usage,
-    )
-    .await?;
+    let file_metas =
+        read_metas_in_parallel(operator, &locations, max_threads, max_memory_usage).await?;
     for (idx, file_meta) in file_metas.iter().enumerate() {
         check_parquet_schema(
             expect_schema,

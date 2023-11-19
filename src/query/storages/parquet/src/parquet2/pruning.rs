@@ -40,7 +40,6 @@ use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
@@ -49,6 +48,7 @@ use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::parquet_table::read_metas_in_parallel;
 use super::partition::ColumnMeta;
 use super::Parquet2RowGroupPart;
 use crate::parquet2::statistics::collect_row_group_stats;
@@ -97,7 +97,7 @@ impl PartitionPruner {
         let file_meta = read_metadata_with_size(&mut reader, file_size).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
-        let (_, parts) = self.read_and_prune_file_meta(path, file_meta, op.clone())?;
+        let (_, parts) = self.read_and_prune_file_meta(path, Arc::new(file_meta), op.clone())?;
         Ok(parts)
     }
 
@@ -105,7 +105,7 @@ impl PartitionPruner {
     pub fn read_and_prune_file_meta(
         &self,
         path: &str,
-        file_meta: FileMetaData,
+        file_meta: Arc<FileMetaData>,
         operator: Operator,
     ) -> Result<(PartStatistics, Vec<Parquet2RowGroupPart>)> {
         let mut stats = PartStatistics::default();
@@ -236,13 +236,9 @@ impl PartitionPruner {
         let mut partitions = Vec::with_capacity(locations.len());
 
         // 1. Read parquet meta data. Distinguish between sync and async reading.
-        let file_metas = read_parquet_metas_in_parallel(
-            operator.clone(),
-            large_files.clone(),
-            num_threads,
-            self.max_memory_usage,
-        )
-        .await?;
+        let file_metas =
+            read_metas_in_parallel(&operator, &large_files, num_threads, self.max_memory_usage)
+                .await?;
 
         // 2. Use file meta to prune row groups or pages.
         let mut max_compression_ratio = self.compression_ratio;

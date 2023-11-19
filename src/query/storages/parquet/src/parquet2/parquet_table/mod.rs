@@ -13,10 +13,14 @@
 // limitations under the License.
 
 mod create;
+mod meta;
 mod partition;
 mod read;
 mod table;
 
+pub use meta::read_meta_data;
+pub use meta::read_metas_in_parallel;
+pub use meta::read_parquet_metas_batch;
 pub use read::Parquet2PrewhereInfo;
 pub(crate) use table::arrow_to_table_schema;
 pub use table::Parquet2Table;

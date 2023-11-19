@@ -20,5 +20,6 @@ mod projection;
 mod pruning;
 mod statistics;
 
+pub use parquet_reader::MetaDataReader;
 pub use parquet_table::Parquet2Table;
 pub use partition::Parquet2RowGroupPart;

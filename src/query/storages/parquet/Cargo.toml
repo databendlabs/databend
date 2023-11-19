@@ -23,8 +23,10 @@ common-metrics = { path = "../../../common/metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
+storages-common-cache = { path = "../common/cache" }
 storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
+storages-common-cache-manager = { path = "../common/cache_manager" }
 storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-array = { workspace = true }
