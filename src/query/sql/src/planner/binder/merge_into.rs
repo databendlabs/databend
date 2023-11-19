@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
+use common_ast::ast::JoinOperator::Inner;
 use common_ast::ast::JoinOperator::RightAnti;
 use common_ast::ast::JoinOperator::RightOuter;
 use common_ast::ast::MatchOperation;
@@ -70,9 +71,11 @@ pub enum MergeIntoType {
 // for now we think right source table is small table in default.
 // 1. unmatched only:
 //      right anti join
-// 2. macthed and unmatched/matched only:
+// 2. macthed and unmatched:
 //      right outer
-// we will improt optimizer for these join type in the future.
+// 3. matched only:
+//      inner join
+// we will import optimizer for these join type in the future.
 
 impl Binder {
     #[allow(warnings)]
@@ -93,16 +96,29 @@ impl Binder {
             ));
         };
 
+        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
+        let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
+
         let mut plan = self
-            .bind_merge_into_with_join_type(bind_context, stmt, RightOuter)
+            .bind_merge_into_with_join_type(
+                bind_context,
+                stmt,
+                match merge_type {
+                    MergeIntoType::MatechedOnly => Inner,
+                    _ => RightOuter,
+                },
+                matched_clauses.clone(),
+                unmatched_clauses.clone(),
+                merge_type.clone(),
+            )
             .await?;
 
         // optimize insert-only
-        if let MergeIntoType::InsertOnly = &plan.merge_type && insert_only(&plan){
+        if let MergeIntoType::InsertOnly = merge_type && insert_only(&plan){
             // init bind_context and metadata
             *bind_context = BindContext::new();
             self.metadata = Arc::new(RwLock::new(Metadata::default()));
-            plan = self.bind_merge_into_with_join_type(bind_context, stmt, RightAnti).await?;
+            plan = self.bind_merge_into_with_join_type(bind_context, stmt, RightAnti,matched_clauses,unmatched_clauses,merge_type).await?;
         }
 
         Ok(Plan::MergeInto(Box::new(plan)))
@@ -113,6 +129,9 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &MergeIntoStmt,
         join_type: JoinOperator,
+        matched_clauses: Vec<MatchedClause>,
+        unmatched_clauses: Vec<UnmatchedClause>,
+        merge_type: MergeIntoType,
     ) -> Result<MergeInto> {
         let MergeIntoStmt {
             catalog,
@@ -130,10 +149,6 @@ impl Binder {
                 "at least one matched or unmatched clause for merge into",
             ));
         }
-
-        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
-
-        let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
 
         let mut unmatched_evaluators =
             Vec::<UnmatchedEvaluator>::with_capacity(unmatched_clauses.len());
@@ -189,7 +204,7 @@ impl Binder {
             for column in source_output_columns {
                 name_map
                     .entry(column.column_name.clone())
-                    .or_insert_with(|| vec![])
+                    .or_default()
                     .push(column.clone());
             }
 
@@ -308,7 +323,7 @@ impl Binder {
         let has_update = self.has_update(&matched_clauses);
         if has_update {
             for (idx, field) in table_schema.fields().iter().enumerate() {
-                let used_idx = self.find_column_index(&column_entries, &field.name())?;
+                let used_idx = self.find_column_index(&column_entries, field.name())?;
                 columns_set.insert(used_idx);
                 field_index_map.insert(idx, used_idx.to_string());
             }
