@@ -15,8 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_sql::plans::SetRolePlan;
-use common_users::UserApiProvider;
+use common_sql::plans::SetSecondaryRolesPlan;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -25,47 +24,36 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct SetRoleInterpreter {
+pub struct SetSecondaryRolesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: SetRolePlan,
+    plan: SetSecondaryRolesPlan,
 }
 
-impl SetRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: SetRolePlan) -> Result<Self> {
-        Ok(SetRoleInterpreter { ctx, plan })
+impl SetSecondaryRolesInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: SetSecondaryRolesPlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SetRoleInterpreter {
+impl Interpreter for SetSecondaryRolesInterpreter {
     fn name(&self) -> &str {
-        "SetRoleInterpreter"
+        "SetSecondaryRolesInterpreter"
     }
 
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "set_role_execute");
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "set_secondary_roles_execute");
 
         let session = self.ctx.get_current_session();
 
-        if self.plan.is_default {
-            let role = session
-                .validate_available_role(&self.plan.role_name)
-                .await?;
-            let current_user = self.ctx.get_current_user()?;
-            UserApiProvider::instance()
-                .update_user_default_role(
-                    &self.ctx.get_tenant(),
-                    current_user.identity(),
-                    Some(role.name.clone()),
-                )
-                .await?;
-        } else {
-            session
-                .set_current_role_checked(&self.plan.role_name)
-                .await?;
-        }
+        let secondary_roles = match self.plan {
+            SetSecondaryRolesPlan::None => Some(vec![]),
+            SetSecondaryRolesPlan::All => None,
+        };
+        session.set_secondary_roles_checked(secondary_roles).await?;
+
         Ok(PipelineBuildResult::create())
     }
 }
