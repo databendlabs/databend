@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Filters;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
@@ -116,6 +117,7 @@ impl Table for FuseEncodingTable {
                     output,
                     self.arg_database_name.to_owned(),
                     plan.push_downs.as_ref().and_then(|x| x.limit),
+                    plan.push_downs.as_ref().and_then(|x| x.filters.clone()),
                 )
             },
             1,
@@ -130,6 +132,7 @@ struct FuseEncodingSource {
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     limit: Option<usize>,
+    filters: Option<Filters>,
 }
 
 impl FuseEncodingSource {
@@ -138,12 +141,14 @@ impl FuseEncodingSource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         limit: Option<usize>,
+        filters: Option<Filters>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, Self {
             ctx,
             finish: false,
             arg_database_name,
             limit,
+            filters,
         })
     }
 }
@@ -178,9 +183,14 @@ impl AsyncSource for FuseEncodingSource {
             })
             .collect::<Vec<_>>();
         Ok(Some(
-            FuseEncoding::new(self.ctx.clone(), fuse_tables, self.limit)
-                .get_blocks()
-                .await?,
+            FuseEncoding::new(
+                self.ctx.clone(),
+                fuse_tables,
+                self.limit,
+                self.filters.clone(),
+            )
+            .get_blocks()
+            .await?,
         ))
     }
 }
