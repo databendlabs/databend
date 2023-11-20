@@ -64,6 +64,14 @@ impl ValueType for AnyType {
         Some(builder)
     }
 
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        Some(builder)
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(builder)
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         scalar
     }

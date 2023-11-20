@@ -75,9 +75,20 @@ impl ValueType for NullType {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::Null { len } => Some(len),
+            ColumnBuilder::Null { len } => Some(len),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Null { len } => Some(len),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(len: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Null { len })
     }
 
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
