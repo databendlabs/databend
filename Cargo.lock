@@ -2737,6 +2737,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "common-metrics",
  "dashmap",
  "flagset",
  "futures",

@@ -16,6 +16,7 @@ common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
+common-metrics = { path = "../metrics"}
 storage-encryption = { path = "../../query/ee_features/storage_encryption" }
 
 anyhow = { workspace = true }
