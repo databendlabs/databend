@@ -1459,7 +1459,7 @@ impl SchemaApiTestSuite {
 
         info!("--- test lvt");
         {
-            let time = 1024;
+            let time = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
             let req = SetLVTReq { table_id, time };
             let get_req = GetLVTReq { table_id };
 
@@ -1467,26 +1467,35 @@ impl SchemaApiTestSuite {
             assert!(res.time.is_none());
 
             let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, 1024);
+            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
             let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(res.time.unwrap(), 1024);
+            assert_eq!(
+                res.time.unwrap(),
+                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
+            );
 
             // test lvt never fall back
-            let time = 102;
+            let time = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, 1024);
+            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
             let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(res.time.unwrap(), 1024);
+            assert_eq!(
+                res.time.unwrap(),
+                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
+            );
 
-            let time = 1025;
+            let time = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, 1025);
+            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1025, 0).unwrap());
             let res = mt.get_table_lvt(get_req).await?;
-            assert_eq!(res.time.unwrap(), 1025);
+            assert_eq!(
+                res.time.unwrap(),
+                DateTime::<Utc>::from_timestamp(1025, 0).unwrap()
+            );
         }
 
         Ok(())

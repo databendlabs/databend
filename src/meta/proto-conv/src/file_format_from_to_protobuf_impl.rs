@@ -319,7 +319,15 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
         )?;
-        Ok(mt::principal::NdJsonFileFormatParams { compression })
+
+        mt::principal::NdJsonFileFormatParams::try_create(
+            compression,
+            p.missing_field_as.as_deref(),
+            p.null_field_as.as_deref(),
+        )
+        .map_err(|e| Incompatible {
+            reason: format!("{e}"),
+        })
     }
 
     fn to_pb(&self) -> Result<pb::NdJsonFileFormatParams, Incompatible> {
@@ -328,6 +336,8 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
+            missing_field_as: Some(self.missing_field_as.to_string()),
+            null_field_as: Some(self.null_field_as.to_string()),
         })
     }
 }

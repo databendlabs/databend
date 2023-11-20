@@ -118,6 +118,12 @@ pub enum FileParseError {
         decode_error: String,
         column_data: String,
     },
+    #[error("Missing value for column {column_index} ({column_name} {column_type})")]
+    ColumnMissingError {
+        column_index: usize,
+        column_name: String,
+        column_type: String,
+    },
     #[error(
         "Invalid value '{column_data}' for column {column_index} ({column_name} {column_type}): {size_remained} bytes remained, next_char at {error_pos} is {next_char}"
     )]

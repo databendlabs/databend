@@ -163,9 +163,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => {
-                unreachable!()
-            }
+            | PhysicalPlan::UpdateSource(_) => u32::MAX,
         }
     }
 

@@ -89,8 +89,6 @@ impl<T> SeqValue<T> for Marked<T> {
     }
 }
 
-// FIXME: do we need to remove function like max_ref?
-#[allow(dead_code)]
 impl<T> Marked<T> {
     pub const fn empty() -> Self {
         Marked::TombStone { internal_seq: 0 }
@@ -138,6 +136,8 @@ impl<T> Marked<T> {
     }
 
     /// Return the one with the larger sequence number.
+    // Not used, may be useful.
+    #[allow(dead_code)]
     pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
         if a.internal_seq() > b.internal_seq() {
             a
@@ -150,6 +150,7 @@ impl<T> Marked<T> {
         Marked::TombStone { internal_seq }
     }
 
+    #[allow(dead_code)]
     pub fn new_normal(seq: u64, value: T) -> Self {
         Marked::Normal {
             internal_seq: seq,
@@ -166,6 +167,7 @@ impl<T> Marked<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_meta(self, meta: Option<KVMeta>) -> Self {
         match self {
             Marked::TombStone { .. } => {

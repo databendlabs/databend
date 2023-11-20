@@ -24,6 +24,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::SetSecondaryRolesPlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
@@ -248,6 +249,7 @@ pub enum Plan {
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
+    SetSecondaryRoles(Box<SetSecondaryRolesPlan>),
 
     // FileFormat
     CreateFileFormat(Box<CreateFileFormatPlan>),

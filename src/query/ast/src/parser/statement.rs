@@ -396,6 +396,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let set_secondary_roles = map(
+        rule! {
+            SET ~ SECONDARY ~ ROLES ~ (ALL | NONE)
+        },
+        |(_, _, _, token)| {
+            let option = match token.kind {
+                TokenKind::ALL => SecondaryRolesOption::All,
+                TokenKind::NONE => SecondaryRolesOption::None,
+                _ => unreachable!(),
+            };
+            Statement::SetSecondaryRoles { option }
+        },
+    );
+
     // catalogs
     let show_catalogs = map(
         rule! {
@@ -1646,7 +1660,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #show_indexes : "`SHOW INDEXES`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
@@ -1722,6 +1735,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
+            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
         ),
         rule!(
             #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
