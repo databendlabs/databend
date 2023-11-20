@@ -152,7 +152,7 @@ impl Pipeline {
     }
 
     pub fn add_pipe(&mut self, mut pipe: Pipe) {
-        let scope_idx = self.scope_size.load(Ordering::SeqCst) - 1;
+        let (scope_idx, _) = self.scope_size.load(Ordering::SeqCst).overflowing_sub(1);
 
         if let Some(scope) = self.plans_scope.get_mut(scope_idx) {
             // stack, new plan is always the parent node of previous node.
@@ -485,10 +485,10 @@ impl PlanScopeGuard {
 
 impl Drop for PlanScopeGuard {
     fn drop(&mut self) {
-        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1 {
-            if !std::thread::panicking() {
-                panic!("Broken pipeline scope stack.");
-            }
+        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
+            && !std::thread::panicking()
+        {
+            panic!("Broken pipeline scope stack.");
         }
     }
 }
