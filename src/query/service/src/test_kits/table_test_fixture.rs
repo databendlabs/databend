@@ -793,7 +793,7 @@ pub async fn append_sample_data_of_v4(num_blocks: usize, fixture: &TestFixture) 
             continue;
         }
 
-        let new_file_name = generator.gen_segment_info_location_of_version4();
+        let new_file_name = generator.gen_segment_info_location_of_v4();
         let data = operator.read(file_name).await?;
         let segment: SegmentInfo = SegmentInfo::from_slice(&data)?;
 
@@ -802,12 +802,11 @@ pub async fn append_sample_data_of_v4(num_blocks: usize, fixture: &TestFixture) 
             let mut new_block = block.as_ref().to_owned().clone();
 
             let (block_location, _) = &block.location;
-            let ((new_block_location, version), block_uuid) =
-                generator.gen_block_location_of_version4();
+            let ((new_block_location, version), block_uuid) = generator.gen_block_location_of_v4();
 
             if let Some((block_index_location, _)) = &block.bloom_filter_index_location {
                 let (new_block_index_location, version) =
-                    generator.block_bloom_index_location_of_version4(&block_uuid);
+                    generator.block_bloom_index_location_of_v4(&block_uuid);
 
                 operator
                     .rename(block_index_location, &new_block_index_location)
@@ -852,7 +851,7 @@ pub async fn append_sample_data_of_v4(num_blocks: usize, fixture: &TestFixture) 
         table_statistics_location: snapshot.table_statistics_location.clone(),
     };
 
-    let new_snapshot_loc = generator.gen_snapshot_location_of_version4(&snapshot_id, 4)?;
+    let new_snapshot_loc = generator.gen_snapshot_location_of_v4(&snapshot_id, 4)?;
     operator.delete(&snapshot_loc).await?;
 
     let bytes = snapshot_v4.to_bytes()?;

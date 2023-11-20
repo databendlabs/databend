@@ -118,6 +118,7 @@ impl FuseTable {
         let catalog = table_info.catalog();
         let catalog = ctx.get_catalog(catalog).await?;
         let lvt = catalog.get_table_lvt(table_info.ident.table_id).await?;
+
         if let Some(lvt) = lvt.time {
             let prev_snapshot_opt = {
                 let prev_snapshot_opt = self.prev_snapshot.read().await;
@@ -181,8 +182,6 @@ impl FuseTable {
         table_statistics: Option<TableSnapshotStatistics>,
         copied_files: &Option<UpsertTableCopiedFileReq>,
     ) -> Result<()> {
-        self.check_lvt_conflict(ctx, table_info, &snapshot).await?;
-
         let location_generator = &self.meta_location_generator;
         let snapshot_location = location_generator.gen_snapshot_location(
             &snapshot.snapshot_id,
@@ -208,16 +207,17 @@ impl FuseTable {
 
         let table_statistics_location = snapshot.table_statistics_location.clone();
         // 2. update table meta
-        let res = Self::update_table_meta(
-            ctx,
-            table_info,
-            location_generator,
-            snapshot,
-            snapshot_location,
-            copied_files,
-            operator,
-        )
-        .await;
+        let res = self
+            .update_table_meta(
+                ctx,
+                table_info,
+                location_generator,
+                snapshot,
+                snapshot_location,
+                copied_files,
+                operator,
+            )
+            .await;
         if need_to_save_statistics {
             let table_statistics_location = table_statistics_location.unwrap();
             match &res {
@@ -237,6 +237,7 @@ impl FuseTable {
 
     #[async_backtrace::framed]
     pub async fn update_table_meta(
+        &self,
         ctx: &dyn TableContext,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
@@ -245,6 +246,8 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
+        self.check_lvt_conflict(ctx, table_info, &snapshot).await?;
+
         // 1. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
         // 1.1 set new snapshot location

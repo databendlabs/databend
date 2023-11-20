@@ -317,16 +317,18 @@ where F: SnapshotGenerator + Send + 'static
 
                 self.dal.write(&location, data).await?;
 
-                match FuseTable::update_table_meta(
-                    self.ctx.as_ref(),
-                    &table_info,
-                    &self.location_gen,
-                    snapshot,
-                    location,
-                    &self.copied_files,
-                    &self.dal,
-                )
-                .await
+                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
+                match fuse_table
+                    .update_table_meta(
+                        self.ctx.as_ref(),
+                        &table_info,
+                        &self.location_gen,
+                        snapshot,
+                        location,
+                        &self.copied_files,
+                        &self.dal,
+                    )
+                    .await
                 {
                     Ok(_) => {
                         if self.transient {

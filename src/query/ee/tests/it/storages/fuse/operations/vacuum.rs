@@ -22,10 +22,20 @@ use common_base::base::tokio;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::NumberColumn;
+use common_expression::types::NumberScalar;
+use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::SendableDataBlockStream;
+use common_expression::Value;
+use common_meta_app::storage::StorageParams;
 use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::append_sample_data;
 use databend_query::test_kits::table_test_fixture::append_sample_data_of_v4;
@@ -41,6 +51,7 @@ use futures::TryStreamExt;
 use storages_common_table_meta::meta::new_snapshot_id;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
+use walkdir::WalkDir;
 
 // return generate orphan files and snapshot file(optional).
 async fn generate_test_orphan_files(
@@ -179,6 +190,83 @@ async fn check_vacuum(
     .await
 }
 
+async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
+    let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
+    match &blocks[0].get_by_offset(0).value {
+        Value::Scalar(Scalar::Number(NumberScalar::UInt64(s))) => Ok(*s),
+        Value::Column(Column::Number(NumberColumn::UInt64(c))) => Ok(c[0]),
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "Expected UInt64, but got {:?}",
+            blocks[0].get_by_offset(0).value
+        ))),
+    }
+}
+
+// check when vacuum with now retention time, there will be only one snapshot left
+// add append new table data will success.
+async fn check_vacuum_with_retention_time_now(
+    fixture: &TestFixture,
+    case_name: &str,
+) -> Result<()> {
+    let ctx = fixture.new_query_ctx().await?;
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+
+    let count_qry = format!(
+        "select count(*) from {}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    let stream = fixture.execute_query(&count_qry).await?;
+    ctx.evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+    let before_count = check_count(stream).await?;
+
+    let retention_time = chrono::Utc::now();
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
+
+    // check there is only one snapshot left
+    let data_path = match &GlobalConfig::instance().storage.params {
+        StorageParams::Fs(v) => v.root.clone(),
+        _ => panic!("storage type is not fs"),
+    };
+    let root = data_path.as_str();
+    let mut ss_count = 0;
+    let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
+
+    for entry in WalkDir::new(root) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+            let path = entry_path.split('/').skip(3).collect::<Vec<_>>();
+            let path = path[0];
+            if path.starts_with(prefix_snapshot) {
+                ss_count += 1;
+            }
+        }
+    }
+    assert_eq!(ss_count, 1, "case {}", case_name);
+
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+
+    ctx.evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+    let stream = fixture.execute_query(&count_qry).await?;
+    let after_count = check_count(stream).await?;
+    assert!(before_count < after_count, "case {}", case_name);
+
+    Ok(())
+}
+
 // after purge out of retention time snapshot, test if navigate will fail
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_vacuum_navigate_after_purge() -> Result<()> {
@@ -231,6 +319,7 @@ async fn test_fuse_vacuum_navigate_after_purge() -> Result<()> {
     assert!(fuse_table.navigate_to(&point).await.is_err());
     assert!(fuse_table.navigate_to(&point2).await.is_err());
 
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_navigate_after_purge").await?;
     Ok(())
 }
 
@@ -309,6 +398,12 @@ async fn test_fuse_vacuum_committed_different_snapshot_format_files() -> Result<
         )
         .await?;
         check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+        check_vacuum_with_retention_time_now(
+            &fixture,
+            "test_fuse_vacuum_committed_different_snapshot_format_files case 1",
+        )
+        .await?;
     }
 
     // case 2: if a new snapshot format file committed, then the old snapshot will be purged
@@ -360,6 +455,12 @@ async fn test_fuse_vacuum_committed_different_snapshot_format_files() -> Result<
         )
         .await?;
         check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+        check_vacuum_with_retention_time_now(
+            &fixture,
+            "test_fuse_vacuum_committed_different_snapshot_format_files case 2",
+        )
+        .await?;
     }
 
     Ok(())
@@ -423,6 +524,16 @@ async fn test_fuse_vacuum_different_snapshot_format_orphan_files() -> Result<()>
         )
         .await?;
         check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+        if let Some(flag) = genetate_snapshot_with_table_version {
+            if flag {
+                check_vacuum_with_retention_time_now(
+                    &fixture,
+                    "test_fuse_vacuum_different_snapshot_format_orphan_files",
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -571,6 +682,8 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
 
     check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
 
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_orphan_files").await?;
+
     Ok(())
 }
 
@@ -680,6 +793,8 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
     .await?;
     check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
 
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_truncate_files").await?;
+
     Ok(())
 }
 
@@ -762,6 +877,10 @@ async fn test_fuse_vacuum_old_format_files_case2() -> Result<()> {
     .await?;
 
     check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_old_format_files_case2")
+        .await?;
+
     Ok(())
 }
 
@@ -840,6 +959,9 @@ async fn test_fuse_vacuum_files_case2() -> Result<()> {
     .await?;
 
     check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_files_case2").await?;
+
     Ok(())
 }
 
@@ -917,6 +1039,10 @@ async fn test_fuse_vacuum_files_with_old_format() -> Result<()> {
     .await?;
 
     check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_files_with_old_format")
+        .await?;
+
     Ok(())
 }
 
@@ -1036,6 +1162,9 @@ async fn test_fuse_vacuum_files_check_commit_success() -> Result<()> {
     )
     .await?;
     check_query_data(&fixture, ctx.clone(), &data_qry, &orig_data_blocks).await?;
+
+    check_vacuum_with_retention_time_now(&fixture, "test_fuse_vacuum_files_check_commit_success")
+        .await?;
 
     Ok(())
 }
