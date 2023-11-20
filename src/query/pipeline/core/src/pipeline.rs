@@ -487,7 +487,7 @@ impl Drop for PlanScopeGuard {
     fn drop(&mut self) {
         if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1 {
             if !std::thread::panicking() {
-                panic!("");
+                panic!("Broken pipeline scope stack.");
             }
         }
     }

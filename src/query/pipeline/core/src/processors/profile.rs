@@ -41,9 +41,9 @@ impl Profile {
             p_name,
             cpu_time: AtomicU64::new(0),
             wait_time: AtomicU64::new(0),
+            plan_id: scope.as_ref().map(|x| x.id),
             plan_name: scope.as_ref().map(|x| x.name.clone()),
-            plan_id: scope.as_ref().map(|x| x.id.clone()),
-            plan_parent_id: scope.as_ref().map(|x| x.parent_id.clone()),
+            plan_parent_id: scope.as_ref().map(|x| x.parent_id),
         }
     }
 }
