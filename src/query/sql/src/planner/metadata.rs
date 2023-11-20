@@ -155,6 +155,9 @@ impl Metadata {
                 ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
                     index == *table_index
                 }
+                ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => {
+                    index == *table_index
+                }
                 _ => false,
             })
             .cloned()
