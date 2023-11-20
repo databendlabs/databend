@@ -345,21 +345,5 @@ pub fn as_expr(
                 return_type: return_type.clone(),
             }
         }
-        RemoteExpr::UDFServerCall {
-            span,
-            func_name,
-            server_addr,
-            return_type,
-            args,
-        } => Expr::UDFServerCall {
-            span: *span,
-            func_name: func_name.clone(),
-            server_addr: server_addr.clone(),
-            return_type: return_type.clone(),
-            args: args
-                .iter()
-                .map(|arg| as_expr(arg, fn_registry, schema))
-                .collect(),
-        },
     }
 }
