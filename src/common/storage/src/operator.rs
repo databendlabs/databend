@@ -121,6 +121,9 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     Ok(op)
 }
 
+/// build_operator() can be called multiple times, it would be dangerous to register the opendal metrics
+/// multiple times. PrometheusClientLayer is not a singleton itself, but the metrics in it are singletons
+/// behind Arc, so we can safely clone it.
 fn load_prometheus_client_layer() -> PrometheusClientLayer {
     PROMETHEUS_CLIENT_LAYER_INSTANCE
         .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
