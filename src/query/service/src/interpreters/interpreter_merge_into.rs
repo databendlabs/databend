@@ -389,6 +389,7 @@ impl MergeIntoInterpreter {
                 catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
                 input_schema: merge_into_source.output_schema()?,
+                merge_type: merge_type.clone(),
             }))
         };
 

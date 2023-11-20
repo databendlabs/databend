@@ -61,4 +61,5 @@ pub struct MergeIntoAppendNotMatched {
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub input_schema: DataSchemaRef,
+    pub merge_type: MergeIntoType,
 }
