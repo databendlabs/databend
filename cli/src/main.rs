@@ -177,6 +177,9 @@ struct Args {
 
     #[clap(short = 'l', default_value = "info", long)]
     log_level: String,
+
+    #[clap(short = 'r', long, help = "Downgrade role name")]
+    role: Option<String>,
 }
 
 /// Parse a single key-value pair
@@ -266,6 +269,9 @@ pub async fn main() -> Result<()> {
             if args.database.is_some() {
                 eprintln!("warning: --database is ignored when --dsn is set");
             }
+            if args.role.is_some() {
+                eprintln!("warning: --role is ignored when --dsn is set");
+            }
             if !args.set.is_empty() {
                 eprintln!("warning: --set is ignored when --dsn is set");
             }
@@ -292,6 +298,9 @@ pub async fn main() -> Result<()> {
             }
             for (k, v) in args.set {
                 config.connection.args.insert(k, v);
+            }
+            if let Some(role) = args.role {
+                config.connection.args.insert("role".to_string(), role);
             }
             let conn_args = ConnectionArgs {
                 host: config.connection.host.clone(),

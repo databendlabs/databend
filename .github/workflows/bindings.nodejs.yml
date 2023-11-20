@@ -27,11 +27,9 @@ jobs:
         with:
           cache-key: bindings-nodejs
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: yarn
-          cache-dependency-path: "bindings/nodejs/yarn.lock"
       - name: Corepack
         working-directory: bindings/nodejs
         run: corepack enable
@@ -72,8 +70,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: yarn
-          cache-dependency-path: "bindings/nodejs/yarn.lock"
       - name: Install ziglang
         uses: goto-bus-stop/setup-zig@v2
         with:
@@ -124,11 +120,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: yarn
-          cache-dependency-path: "bindings/nodejs/yarn.lock"
       - name: Corepack
         working-directory: bindings/nodejs
         run: corepack enable

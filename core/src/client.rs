@@ -58,7 +58,6 @@ pub struct APIClient {
 
     tenant: Option<String>,
     warehouse: Arc<Mutex<Option<String>>>,
-    database: Arc<Mutex<Option<String>>>,
     session_state: Arc<Mutex<SessionState>>,
 
     wait_time_secs: Option<i64>,
@@ -87,7 +86,7 @@ impl APIClient {
             "" => None,
             s => Some(s.to_string()),
         };
-        client.database = Arc::new(Mutex::new(database.clone()));
+        let mut role = None;
         let mut scheme = "https";
         let mut session_settings = BTreeMap::new();
         for (k, v) in u.query_pairs() {
@@ -125,6 +124,7 @@ impl APIClient {
                 "warehouse" => {
                     client.warehouse = Arc::new(Mutex::new(Some(v.to_string())));
                 }
+                "role" => role = Some(v.to_string()),
                 "sslmode" => match v.as_ref() {
                     "disable" => scheme = "http",
                     "require" | "enable" => scheme = "https",
@@ -169,6 +169,7 @@ impl APIClient {
         client.session_state = Arc::new(Mutex::new(
             SessionState::default()
                 .with_settings(Some(session_settings))
+                .with_role(role)
                 .with_database(database),
         ));
         Ok(client)
@@ -180,8 +181,13 @@ impl APIClient {
     }
 
     pub async fn current_database(&self) -> Option<String> {
-        let guard = self.database.lock().await;
-        guard.clone()
+        let guard = self.session_state.lock().await;
+        guard.database.clone()
+    }
+
+    pub async fn current_role(&self) -> Option<String> {
+        let guard = self.session_state.lock().await;
+        guard.role.clone()
     }
 
     fn gen_query_id(&self) -> String {
@@ -198,12 +204,6 @@ impl APIClient {
         {
             let mut session_state = self.session_state.lock().await;
             *session_state = session.clone();
-        }
-
-        // process database changed via session.db
-        if session.database.is_some() {
-            let mut database = self.database.lock().await;
-            *database = session.database.clone();
         }
 
         // process warehouse changed via session settings
@@ -533,7 +533,6 @@ impl Default for APIClient {
             port: 8000,
             tenant: None,
             warehouse: Arc::new(Mutex::new(None)),
-            database: Arc::new(Mutex::new(None)),
             user: "root".to_string(),
             password: None,
             session_state: Arc::new(Mutex::new(SessionState::default())),
@@ -559,10 +558,6 @@ mod test {
         assert_eq!(client.endpoint, Url::parse("http://app.databend.com:80")?);
         assert_eq!(client.user, "username");
         assert_eq!(client.password, Some("password".to_string()));
-        assert_eq!(
-            *client.database.try_lock().unwrap(),
-            Some("test".to_string())
-        );
         assert_eq!(client.wait_time_secs, Some(10));
         assert_eq!(client.max_rows_in_buffer, Some(5000000));
         assert_eq!(client.max_rows_per_page, Some(10000));
