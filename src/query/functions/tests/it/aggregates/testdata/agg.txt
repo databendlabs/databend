@@ -720,7 +720,7 @@ evaluation (internal):
 | Column | Data                                                                    |
 +--------+-------------------------------------------------------------------------+
 | x_null | NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0011] } |
-| Output | NullableColumn { column: Float64([0]), validity: [0b_______0] }         |
+| Output | NullableColumn { column: Float64([0]), validity: [0b_______1] }         |
 +--------+-------------------------------------------------------------------------+
 
 
