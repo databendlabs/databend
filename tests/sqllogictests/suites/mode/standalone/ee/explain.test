@@ -413,7 +413,7 @@ EvalScalar
 ├── expressions: [get(get(t2.v (#1), 'a'), 0)]
 ├── estimated rows: 1.00
 └── TableScan
-    ├── table: default.tpcds.t2
+    ├── table: default.test_virtual_db.t2
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read bytes: 130
