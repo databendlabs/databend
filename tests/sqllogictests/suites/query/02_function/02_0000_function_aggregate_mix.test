@@ -313,7 +313,7 @@ NULL
 query I
 select skewness (10) from numbers(5)
 ----
-NULL
+0.0
 
 query III
 select skewness(k), skewness(v), skewness(v2) from aggr
@@ -324,7 +324,7 @@ query I
 select skewness(v2) from aggr group by v order by v
 ----
 -0.4232731602681443
-NULL
+0.0
 NULL
 -0.3301409513655613
 

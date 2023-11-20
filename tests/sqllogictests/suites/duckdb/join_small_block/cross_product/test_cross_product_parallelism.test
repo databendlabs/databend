@@ -1,0 +1,30 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists integers;
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM numbers(5000) tbl(i);
+
+# test if order remains the same
+query I
+SELECT count(*) FROM integers i1, integers i2
+----
+25000000
+
+query II
+SELECT MIN(i1.i), MAX(i2.i) FROM integers i1, integers i2
+----
+0	4999
+
+query II
+SELECT MAX(i1.i), MIN(i2.i) FROM integers i1, integers i2
+----
+4999	0
+
+statement ok
+drop table if exists integers;
+
+statement ok
+set max_block_size = 65536;

@@ -3639,3 +3639,363 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : NULL @> NULL
+raw expr       : json_contains_in_left(NULL, NULL)
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') @> NULL
+raw expr       : json_contains_in_left(parse_json('[1,2,3]'), NULL)
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : NULL @> parse_json('1')
+raw expr       : json_contains_in_left(NULL, parse_json('1'))
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(parse_json<String>("1") AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') @> parse_json('true')
+raw expr       : json_contains_in_left(parse_json('true'), parse_json('true'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("true"), parse_json<String>("true"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('true') @> parse_json('false')
+raw expr       : json_contains_in_left(parse_json('true'), parse_json('false'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("true"), parse_json<String>("false"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('"asd"') @> parse_json('"asd"')
+raw expr       : json_contains_in_left(parse_json('"asd"'), parse_json('"asd"'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asd\""))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('"asd"') @> parse_json('"asdd"')
+raw expr       : json_contains_in_left(parse_json('"asd"'), parse_json('"asdd"'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asdd\""))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[1,2,3]') @> parse_json('1')
+raw expr       : json_contains_in_left(parse_json('[1,2,3]'), parse_json('1'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("1"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,3]') @> parse_json('4')
+raw expr       : json_contains_in_left(parse_json('[1,2,3]'), parse_json('4'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("4"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[1,2,3,4]') @> parse_json('[2,1,3]')
+raw expr       : json_contains_in_left(parse_json('[1,2,3,4]'), parse_json('[2,1,3]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3,4]"), parse_json<String>("[2,1,3]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,3,4]') @> parse_json('[2,1,1]')
+raw expr       : json_contains_in_left(parse_json('[1,2,3,4]'), parse_json('[2,1,1]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3,4]"), parse_json<String>("[2,1,1]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,[1,3]]') @> parse_json('[1,3]')
+raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[1,3]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[1,3]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[1,2,[1,3]]') @> parse_json('[[1,3]]')
+raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[[1,3]]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[[1,3]]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,[1,3]]') @> parse_json('[[[1,3]]]')
+raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[[[1,3]]]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[[[1,3]]]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[{"a":1}]') @> parse_json('{"a":1}')
+raw expr       : json_contains_in_left(parse_json('[{"a":1}]'), parse_json('{"a":1}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[{\"a\":1}]"), parse_json<String>("{\"a\":1}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[{"a":1},{"b":2}]') @> parse_json('[{"a":1}]')
+raw expr       : json_contains_in_left(parse_json('[{"a":1},{"b":2}]'), parse_json('[{"a":1}]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[{\"a\":1},{\"b\":2}]"), parse_json<String>("[{\"a\":1}]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2}') @> parse_json('{"a":1}')
+raw expr       : json_contains_in_left(parse_json('{"a":1,"b":2}'), parse_json('{"a":1}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"a\":1}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2}') @> parse_json('{"a":2}')
+raw expr       : json_contains_in_left(parse_json('{"a":1,"b":2}'), parse_json('{"a":2}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"a\":2}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"z":2,"b":{"a":1}}') @> parse_json('{"a":1}')
+raw expr       : json_contains_in_left(parse_json('{"z":2,"b":{"a":1}}'), parse_json('{"a":1}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"z\":2,\"b\":{\"a\":1}}"), parse_json<String>("{\"a\":1}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":{"c":100,"d":200},"b":2}') @> parse_json('{"a":{}}')
+raw expr       : json_contains_in_left(parse_json('{"a":{"c":100,"d":200},"b":2}'), parse_json('{"a":{}}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}"), parse_json<String>("{\"a\":{}}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : NULL <@ NULL
+raw expr       : json_contains_in_right(NULL, NULL)
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') <@ NULL
+raw expr       : json_contains_in_right(parse_json('[1,2,3]'), NULL)
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : NULL <@ parse_json('1')
+raw expr       : json_contains_in_right(NULL, parse_json('1'))
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(parse_json<String>("1") AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') <@ parse_json('true')
+raw expr       : json_contains_in_right(parse_json('true'), parse_json('true'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("true"), parse_json<String>("true"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('true') <@ parse_json('false')
+raw expr       : json_contains_in_right(parse_json('true'), parse_json('false'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("true"), parse_json<String>("false"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('"asd"') <@ parse_json('"asd"')
+raw expr       : json_contains_in_right(parse_json('"asd"'), parse_json('"asd"'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asd\""))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('"asd"') <@ parse_json('"asdd"')
+raw expr       : json_contains_in_right(parse_json('"asd"'), parse_json('"asdd"'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asdd\""))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('1') <@ parse_json('[1,2,3]')
+raw expr       : json_contains_in_right(parse_json('1'), parse_json('[1,2,3]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("1"), parse_json<String>("[1,2,3]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('4') <@ parse_json('[1,2,3]')
+raw expr       : json_contains_in_right(parse_json('4'), parse_json('[1,2,3]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("4"), parse_json<String>("[1,2,3]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[2,1,3]') <@ parse_json('[1,2,3,4]')
+raw expr       : json_contains_in_right(parse_json('[2,1,3]'), parse_json('[1,2,3,4]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[2,1,3]"), parse_json<String>("[1,2,3,4]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[2,1,1]') <@ parse_json('[1,2,3,4]')
+raw expr       : json_contains_in_right(parse_json('[2,1,1]'), parse_json('[1,2,3,4]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[2,1,1]"), parse_json<String>("[1,2,3,4]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,3]') <@ parse_json('[1,2,[1,3]]')
+raw expr       : json_contains_in_right(parse_json('[1,3]'), parse_json('[1,2,[1,3]]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[1,3]"), parse_json<String>("[1,2,[1,3]]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[[1,3]]') <@ parse_json('[1,2,[1,3]]')
+raw expr       : json_contains_in_right(parse_json('[[1,3]]'), parse_json('[1,2,[1,3]]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[[1,3]]"), parse_json<String>("[1,2,[1,3]]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[[[1,3]]]') <@ parse_json('[1,2,[1,3]]')
+raw expr       : json_contains_in_right(parse_json('[[[1,3]]]'), parse_json('[1,2,[1,3]]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[[[1,3]]]"), parse_json<String>("[1,2,[1,3]]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1}') <@ parse_json('[{"a":1}]')
+raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('[{"a":1}]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("[{\"a\":1}]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[{"a":1}]') <@ parse_json('[{"a":1},{"b":2}]')
+raw expr       : json_contains_in_right(parse_json('[{"a":1}]'), parse_json('[{"a":1},{"b":2}]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[{\"a\":1}]"), parse_json<String>("[{\"a\":1},{\"b\":2}]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1}') <@ parse_json('{"a":1,"b":2}')
+raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('{"a":1,"b":2}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("{\"a\":1,\"b\":2}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":2}') <@ parse_json('{"a":1,"b":2}')
+raw expr       : json_contains_in_right(parse_json('{"a":2}'), parse_json('{"a":1,"b":2}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":2}"), parse_json<String>("{\"a\":1,\"b\":2}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1}') <@ parse_json('{"z":2,"b":{"a":1}}')
+raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('{"z":2,"b":{"a":1}}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("{\"z\":2,\"b\":{\"a\":1}}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}')
+raw expr       : json_contains_in_right(parse_json('{"a":{}}'), parse_json('{"a":{"c":100,"d":200},"b":2}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":{}}"), parse_json<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+

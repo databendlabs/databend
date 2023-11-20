@@ -373,6 +373,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             is_default,
             role_name,
         } => visitor.visit_set_role(*is_default, role_name),
+        Statement::SetSecondaryRoles { option } => visitor.visit_set_secondary_roles(option),
         Statement::ShowCatalogs(stmt) => visitor.visit_show_catalogs(stmt),
         Statement::ShowCreateCatalog(stmt) => visitor.visit_show_create_catalog(stmt),
         Statement::CreateCatalog(stmt) => visitor.visit_create_catalog(stmt),
@@ -488,5 +489,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DropConnection(stmt) => visitor.visit_drop_connection(stmt),
         Statement::DescribeConnection(stmt) => visitor.visit_describe_connection(stmt),
         Statement::ShowConnections(stmt) => visitor.visit_show_connections(stmt),
+        Statement::CreatePipe(_) => todo!(),
+        Statement::AlterPipe(_) => todo!(),
+        Statement::DropPipe(_) => todo!(),
+        Statement::DescribePipe(_) => todo!(),
     }
 }

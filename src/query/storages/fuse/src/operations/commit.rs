@@ -154,9 +154,9 @@ impl FuseTable {
 
             if let Some(prev_snapshot) = prev_snapshot {
                 let now_ms = if let Some(snapshot_time) = prev_snapshot.timestamp {
-                    snapshot_time.timestamp_micros() as u64
+                    snapshot_time
                 } else {
-                    chrono::Utc::now().timestamp_micros() as u64
+                    chrono::Utc::now()
                 };
                 if lvt > now_ms {
                     info!(
@@ -236,6 +236,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_table_meta(
         &self,
         ctx: &dyn TableContext,

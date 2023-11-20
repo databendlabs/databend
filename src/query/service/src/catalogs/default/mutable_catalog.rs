@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -541,7 +543,7 @@ impl Catalog for MutableCatalog {
         self.ctx.storage_factory.get_storage_descriptors()
     }
 
-    async fn set_table_lvt(&self, table_id: u64, time: u64) -> Result<SetLVTReply> {
+    async fn set_table_lvt(&self, table_id: u64, time: DateTime<Utc>) -> Result<SetLVTReply> {
         let req = SetLVTReq { table_id, time };
         let res = self.ctx.meta.set_table_lvt(req).await?;
         Ok(res)

@@ -1170,6 +1170,35 @@ async fn test_fuse_vacuum_files_check_commit_success() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_append_data_when_lvt_conflict() -> Result<()> {
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture.create_default_table().await?;
+
+    // first append some data
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+
+    // set a big lvt
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let table_info = fuse_table.get_table_info();
+    let catalog = table_info.catalog();
+    let catalog = ctx.get_catalog(catalog).await?;
+
+    let retention_time = Utc::now() + Duration::minutes(1);
+    let table_id = table_info.ident.table_id;
+    let lvt = catalog.set_table_lvt(table_id, retention_time).await?;
+    assert_eq!(lvt.time, retention_time);
+
+    // append will fail cause lvt conflict
+    let ret = append_sample_data(number_of_block, &fixture).await;
+    assert!(ret.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
     let fixture = TestFixture::new().await?;
     fixture

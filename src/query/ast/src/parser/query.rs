@@ -555,12 +555,16 @@ pub enum TableReferenceElement {
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
+        /// If the table function is a lateral table function
+        lateral: bool,
         name: Identifier,
         params: Vec<TableFunctionParam>,
         alias: Option<TableAlias>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
+        /// If the subquery is a lateral subquery
+        lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
@@ -641,9 +645,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let table_function = map(
         rule! {
-            #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+            LATERAL? ~ #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
         },
-        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
+        |(lateral, name, _, params, _, alias)| TableReferenceElement::TableFunction {
+            lateral: lateral.is_some(),
             name,
             params,
             alias,
@@ -651,9 +656,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            "(" ~ #query ~ ")" ~ #table_alias?
+            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias?
         },
-        |(_, subquery, _, alias)| TableReferenceElement::Subquery {
+        |(lateral, _, subquery, _, alias)| TableReferenceElement::Subquery {
+            lateral: lateral.is_some(),
             subquery: Box::new(subquery),
             alias,
         },
@@ -734,6 +740,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 unpivot,
             },
             TableReferenceElement::TableFunction {
+                lateral,
                 name,
                 params,
                 alias,
@@ -754,14 +761,20 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     .collect();
                 TableReference::TableFunction {
                     span: transform_span(input.span.0),
+                    lateral,
                     name,
                     params: normal_params,
                     named_params,
                     alias,
                 }
             }
-            TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
+            TableReferenceElement::Subquery {
+                lateral,
+                subquery,
+                alias,
+            } => TableReference::Subquery {
                 span: transform_span(input.span.0),
+                lateral,
                 subquery,
                 alias,
             },

@@ -16,6 +16,8 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;
@@ -303,7 +305,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    async fn set_table_lvt(&self, _table_id: u64, _time: u64) -> Result<SetLVTReply> {
+    async fn set_table_lvt(&self, _table_id: u64, _time: DateTime<Utc>) -> Result<SetLVTReply> {
         Err(ErrorCode::Unimplemented("'set_table_lvt' not implemented"))
     }
 

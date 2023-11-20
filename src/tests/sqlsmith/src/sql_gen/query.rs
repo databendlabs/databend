@@ -509,6 +509,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 self.bound_table(table);
                 TableReference::TableFunction {
                     span: None,
+                    lateral: false,
                     name: Identifier::from_name(name),
                     params: vec![Expr::Literal {
                         span: None,
@@ -573,6 +574,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
                 TableReference::TableFunction {
                     span: None,
+                    lateral: false,
                     name: Identifier::from_name(name),
                     params: if self.rng.gen_bool(0.5) {
                         vec![param1, param2]
@@ -674,6 +676,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         TableReference::Subquery {
             span: None,
+            lateral: false,
             subquery: Box::new(subquery),
             alias: Some(alias),
         }

@@ -757,7 +757,6 @@ pub async fn do_vacuum(
         debug_assert!(timestamp >= retention_time);
     }
 
-    let retention_msec = retention_time.timestamp_micros() as u64;
     let vacuum_operator = VacuumOperator {
         fuse_table: fuse_table.clone(),
         current_snapshot,
@@ -769,10 +768,10 @@ pub async fn do_vacuum(
     if dry_run {
         let lvt = catalog.get_table_lvt(table_id).await?;
         if let Some(lvt) = lvt.time {
-            if lvt > retention_msec {
+            if lvt > retention_time {
                 info!(
-                    "when dry run vacuum table {:?}, lvt {:?} > retention_msec {:?}",
-                    table_info.name, lvt, retention_msec
+                    "when dry run vacuum table {:?}, lvt {:?} > retention_time {:?}",
+                    table_info.name, lvt, retention_time
                 );
                 return Ok(Some(vec![]));
             }
@@ -783,11 +782,11 @@ pub async fn do_vacuum(
         vacuum_operator.gc(&mut purge_files_opt).await?;
         Ok(Some(purge_files))
     } else {
-        let lvt = catalog.set_table_lvt(table_id, retention_msec).await?;
-        if lvt.time > retention_msec {
+        let lvt = catalog.set_table_lvt(table_id, retention_time).await?;
+        if lvt.time > retention_time {
             info!(
-                "when vacuum table {:?}, lvt {:?} > retention_msec {:?}",
-                table_info.name, lvt.time, retention_msec
+                "when vacuum table {:?}, lvt {:?} > retention_time {:?}",
+                table_info.name, lvt.time, retention_time
             );
             return Ok(None);
         }

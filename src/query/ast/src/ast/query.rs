@@ -248,6 +248,8 @@ pub enum TableReference {
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
         span: Span,
+        /// Whether the table function is a lateral table function
+        lateral: bool,
         name: Identifier,
         params: Vec<Expr>,
         named_params: Vec<(String, Expr)>,
@@ -256,6 +258,8 @@ pub enum TableReference {
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
         span: Span,
+        /// Whether the subquery is a lateral subquery
+        lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
@@ -283,6 +287,13 @@ impl TableReference {
         match self {
             TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
             _ => None,
+        }
+    }
+
+    pub fn is_lateral_table_function(&self) -> bool {
+        match self {
+            TableReference::TableFunction { lateral, .. } => *lateral,
+            _ => false,
         }
     }
 }
@@ -444,11 +455,15 @@ impl Display for TableReference {
             }
             TableReference::TableFunction {
                 span: _,
+                lateral,
                 name,
                 params,
                 named_params,
                 alias,
             } => {
+                if *lateral {
+                    write!(f, "LATERAL ")?;
+                }
                 write!(f, "{name}(")?;
                 write_comma_separated_list(f, params)?;
                 if !params.is_empty() && !named_params.is_empty() {
@@ -467,9 +482,13 @@ impl Display for TableReference {
             }
             TableReference::Subquery {
                 span: _,
+                lateral,
                 subquery,
                 alias,
             } => {
+                if *lateral {
+                    write!(f, "LATERAL ")?;
+                }
                 write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;

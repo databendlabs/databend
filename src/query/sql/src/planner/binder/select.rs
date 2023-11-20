@@ -285,6 +285,9 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
+        // rewrite udf
+        s_expr = self.rewrite_udf(&s_expr)?;
+
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
 
@@ -800,6 +803,7 @@ impl Binder {
             || stmt.distinct
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.windows.window_functions.is_empty()
         {
             return Ok(());
         }

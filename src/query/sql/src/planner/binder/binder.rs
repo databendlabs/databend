@@ -481,6 +481,9 @@ impl<'a> Binder {
             } => {
                 self.bind_set_role(bind_context, *is_default, role_name).await?
             }
+            Statement::SetSecondaryRoles { option } => {
+                self.bind_set_secondary_roles(bind_context, option).await?
+            }
 
             Statement::KillStmt { kill_target, object_id } => {
                 self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
@@ -565,6 +568,18 @@ impl<'a> Binder {
             }
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
+            }
+            Statement::CreatePipe(_) => {
+                todo!()
+            }
+            Statement::DescribePipe(_) => {
+                todo!()
+            }
+            Statement::AlterPipe(_) => {
+                todo!()
+            }
+            Statement::DropPipe(_) => {
+                todo!()
             }
         };
         Ok(plan)

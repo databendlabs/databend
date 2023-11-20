@@ -147,27 +147,11 @@ pub fn try_push_down_filter_join(
         }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
-            JoinPredicate::ALL(_) => match join.join_type {
-                JoinType::Cross
-                | JoinType::Inner
-                | JoinType::LeftSemi
-                | JoinType::LeftAnti
-                | JoinType::RightSemi
-                | JoinType::RightAnti => {
-                    need_push = true;
-                    left_push_down.push(predicate.clone());
-                    right_push_down.push(predicate.clone());
-                }
-                JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
-                    need_push = true;
-                    right_push_down.push(predicate.clone());
-                }
-                JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
-                    need_push = true;
-                    left_push_down.push(predicate.clone());
-                }
-                JoinType::Full => original_predicates.push(predicate),
-            },
+            JoinPredicate::ALL(_) => {
+                need_push = true;
+                left_push_down.push(predicate.clone());
+                right_push_down.push(predicate.clone());
+            }
             JoinPredicate::Left(_) => {
                 if matches!(join.join_type, JoinType::Right) {
                     original_predicates.push(predicate);

@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_catalog::catalog::Catalog;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
@@ -646,7 +648,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.gc_drop_tables(req).await
     }
 
-    async fn set_table_lvt(&self, table_id: u64, time: u64) -> Result<SetLVTReply> {
+    async fn set_table_lvt(&self, table_id: u64, time: DateTime<Utc>) -> Result<SetLVTReply> {
         self.mutable_catalog.set_table_lvt(table_id, time).await
     }
 

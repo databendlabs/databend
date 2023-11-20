@@ -2751,6 +2751,7 @@ Query {
                     span: Some(
                         125..518,
                     ),
+                    lateral: false,
                     subquery: Query {
                         span: Some(
                             147..488,
@@ -4233,6 +4234,7 @@ Query {
                     span: Some(
                         14..48,
                     ),
+                    lateral: false,
                     subquery: Query {
                         span: Some(
                             26..32,
@@ -4365,6 +4367,7 @@ Query {
                     span: Some(
                         14..50,
                     ),
+                    lateral: false,
                     subquery: Query {
                         span: Some(
                             27..33,
@@ -4497,6 +4500,7 @@ Query {
                     span: Some(
                         14..54,
                     ),
+                    lateral: false,
                     subquery: Query {
                         span: Some(
                             15..32,
@@ -4945,6 +4949,7 @@ Query {
                     span: Some(
                         14..25,
                     ),
+                    lateral: false,
                     name: Identifier {
                         name: "range",
                         quote: None,
@@ -5525,6 +5530,7 @@ Query {
                     span: Some(
                         14..56,
                     ),
+                    lateral: false,
                     subquery: Query {
                         span: Some(
                             16..33,
@@ -5682,6 +5688,7 @@ Query {
                     span: Some(
                         14..55,
                     ),
+                    lateral: false,
                     subquery: Query {
                         span: Some(
                             15..44,
@@ -5892,6 +5899,291 @@ Query {
             ),
         },
     ],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t left join lateral(select 1) on true, lateral(select 2)
+---------- Output ---------
+SELECT * FROM t LEFT OUTER JOIN LATERAL (SELECT 1) ON TRUE, LATERAL (SELECT 2)
+---------- AST ------------
+Query {
+    span: Some(
+        0..70,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..70,
+            ),
+            hints: None,
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Join {
+                    span: Some(
+                        16..25,
+                    ),
+                    join: Join {
+                        op: LeftOuter,
+                        condition: On(
+                            Literal {
+                                span: Some(
+                                    47..51,
+                                ),
+                                lit: Boolean(
+                                    true,
+                                ),
+                            },
+                        ),
+                        left: Table {
+                            span: Some(
+                                14..15,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t",
+                                quote: None,
+                                span: Some(
+                                    14..15,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                        right: Subquery {
+                            span: Some(
+                                26..43,
+                            ),
+                            lateral: true,
+                            subquery: Query {
+                                span: Some(
+                                    34..42,
+                                ),
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            34..42,
+                                        ),
+                                        hints: None,
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: Literal {
+                                                    span: Some(
+                                                        41..42,
+                                                    ),
+                                                    lit: UInt64(
+                                                        1,
+                                                    ),
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                ignore_result: false,
+                            },
+                            alias: None,
+                        },
+                    },
+                },
+                Subquery {
+                    span: Some(
+                        53..70,
+                    ),
+                    lateral: true,
+                    subquery: Query {
+                        span: Some(
+                            61..69,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    61..69,
+                                ),
+                                hints: None,
+                                distinct: false,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: Literal {
+                                            span: Some(
+                                                68..69,
+                                            ),
+                                            lit: UInt64(
+                                                2,
+                                            ),
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t, lateral flatten(input => u.col) f
+---------- Output ---------
+SELECT * FROM t, LATERAL flatten(input=>u.col) AS f
+---------- AST ------------
+Query {
+    span: Some(
+        0..50,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..50,
+            ),
+            hints: None,
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..15,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t",
+                        quote: None,
+                        span: Some(
+                            14..15,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+                TableFunction {
+                    span: Some(
+                        17..50,
+                    ),
+                    lateral: true,
+                    name: Identifier {
+                        name: "flatten",
+                        quote: None,
+                        span: Some(
+                            25..32,
+                        ),
+                    },
+                    params: [],
+                    named_params: [
+                        (
+                            "input",
+                            ColumnRef {
+                                span: Some(
+                                    42..47,
+                                ),
+                                database: None,
+                                table: Some(
+                                    Identifier {
+                                        name: "u",
+                                        quote: None,
+                                        span: Some(
+                                            42..43,
+                                        ),
+                                    },
+                                ),
+                                column: Name(
+                                    Identifier {
+                                        name: "col",
+                                        quote: None,
+                                        span: Some(
+                                            44..47,
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                    ],
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "f",
+                                quote: None,
+                                span: Some(
+                                    49..50,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
     offset: None,
     ignore_result: false,
 }

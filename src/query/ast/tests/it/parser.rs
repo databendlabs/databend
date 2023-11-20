@@ -503,6 +503,15 @@ fn test_statement() {
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
+        // pipes
+        r#"CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')"#,
+        r#"CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv"#,
+        r#"ALTER PIPE mypipe REFRESH"#,
+        r#"ALTER PIPE mypipe REFRESH PREFIX='d1/'"#,
+        r#"ALTER PIPE mypipe REFRESH PREFIX='d1/' MODIFIED_AFTER='2018-07-30T13:56:46-07:00'"#,
+        r#"ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true"#,
+        r#"DROP PIPE mypipe"#,
+        r#"DESC PIPE mypipe"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
@@ -660,6 +669,8 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
+        r#"select * from t, lateral flatten(input => u.col) f"#,
     ];
 
     for case in cases {

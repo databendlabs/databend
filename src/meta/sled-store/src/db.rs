@@ -37,7 +37,7 @@ impl GlobalSledDb {
             temp_dir: Some(temp_dir),
             path: temp_path.clone(),
             db: sled::open(temp_path.clone())
-                .unwrap_or_else(|_| panic!("open global sled::Db(path: {})", temp_path)),
+                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", temp_path, e)),
         }
     }
 
@@ -46,7 +46,7 @@ impl GlobalSledDb {
             temp_dir: None,
             path: path.clone(),
             db: sled::open(path.clone())
-                .unwrap_or_else(|_| panic!("open global sled::Db(path: {})", path)),
+                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", path, e)),
         }
     }
 }
