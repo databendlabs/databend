@@ -127,6 +127,7 @@ pub struct Executor {
 pub struct ExecutorSessionState {
     pub current_database: String,
     pub current_role: Option<String>,
+    pub secondary_roles: Option<Vec<String>>,
     pub settings: HashMap<String, ChangeValue>,
 }
 
@@ -135,6 +136,7 @@ impl ExecutorSessionState {
         Self {
             current_database: session.get_current_database(),
             current_role: session.get_current_role().map(|r| r.name),
+            secondary_roles: session.get_secondary_roles(),
             settings: session.get_changed_settings(),
         }
     }

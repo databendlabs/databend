@@ -53,9 +53,10 @@ impl Interpreter for CreateViewInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let table_function = catalog.list_table_functions();
-        if catalog
-            .exists_table(tenant.as_str(), &self.plan.database, &self.plan.view_name)
-            .await?
+        if !self.plan.if_not_exists
+            && catalog
+                .exists_table(tenant.as_str(), &self.plan.database, &self.plan.view_name)
+                .await?
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{}.{} as view Already Exists",
