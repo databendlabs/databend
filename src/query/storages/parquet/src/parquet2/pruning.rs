@@ -27,7 +27,6 @@ use common_arrow::parquet::indexes::Interval;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::parquet::read::read_metadata_with_size;
 use common_arrow::parquet::read::read_pages_locations;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
@@ -43,11 +42,13 @@ use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
+use futures::executor::block_on;
 use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::parquet_table::read_meta_data;
 use super::parquet_table::read_metas_in_parallel;
 use super::partition::ColumnMeta;
 use super::Parquet2RowGroupPart;
@@ -92,12 +93,10 @@ impl PartitionPruner {
         op: &Operator,
         file_size: u64,
     ) -> Result<Vec<Parquet2RowGroupPart>> {
-        let blocking_op = op.blocking();
-        let mut reader = blocking_op.reader(path)?;
-        let file_meta = read_metadata_with_size(&mut reader, file_size).map_err(|e| {
+        let file_meta = block_on(read_meta_data(op.clone(), path, file_size)).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
-        let (_, parts) = self.read_and_prune_file_meta(path, Arc::new(file_meta), op.clone())?;
+        let (_, parts) = self.read_and_prune_file_meta(path, file_meta, op.clone())?;
         Ok(parts)
     }
 
