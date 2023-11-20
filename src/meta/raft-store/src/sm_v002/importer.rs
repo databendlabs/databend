@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::io;
 
-use common_meta_stoerr::MetaBytesError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::LogId;
 use common_meta_types::StoredMembership;

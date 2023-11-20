@@ -23,7 +23,6 @@ use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_stoerr::MetaBytesError;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::Entry;
