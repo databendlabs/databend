@@ -21,10 +21,11 @@ runs:
       shell: bash
       run: |
         cargo install cargo-quickinstall
-        cargo quickinstall cargo-machete
-        cargo quickinstall cargo-deny
-        cargo quickinstall cargo-xwin
-        cargo quickinstall sccache
+        cargo quickinstall cargo-binstall
+        cargo binstall -y cargo-machete
+        cargo binstall -y cargo-deny
+        cargo binstall -y cargo-xwin
+        cargo binstall -y sccache
 
     - name: Machete
       shell: bash
