@@ -56,6 +56,8 @@ use crate::storage::StorageParams;
 // ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
 // SIZE_LIMIT = <num>
 
+pub const COPIED_FILES_MAX_COMMIT_NUM: usize = 15000;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
     /// LegacyInternal will be deprecated.

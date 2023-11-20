@@ -9576,7 +9576,7 @@ COPY INTO mytable
                 max_files=3000;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 2000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9618,7 +9618,7 @@ CopyIntoTable(
         force: false,
         validation_mode: "",
         size_limit: 10,
-        max_files: 2000,
+        max_files: 3000,
         split_size: 0,
         purge: false,
         disable_variant_check: false,

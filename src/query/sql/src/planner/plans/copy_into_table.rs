@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -28,6 +29,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
+use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
 use common_meta_app::schema::CatalogInfo;
 use common_metrics::storage::*;
 use common_storage::init_stage_operator;
@@ -150,6 +152,13 @@ impl CopyIntoTablePlan {
         ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
         let need_copy_file_infos = if self.force {
+            if !self.stage_table_info.stage_info.copy_options.purge
+                && all_source_file_infos.len() > COPIED_FILES_MAX_COMMIT_NUM
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "copy into table can commit at most {COPIED_FILES_MAX_COMMIT_NUM} paths once. Please use CopyOption max_files to limit the number of files or use 'force=true, purge=true' to avoid committing paths if acceptable."
+                )));
+            }
             info!(
                 "force mode, ignore file filtering. ({}.{})",
                 &self.database_name, &self.table_name
