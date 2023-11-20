@@ -167,9 +167,7 @@ impl SMV002 {
             let ent: RaftStoreEntry = serde_json::from_str(&l)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            importer
-                .import(ent)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            importer.import(ent)?;
         }
 
         let level_data = importer.commit();
@@ -215,7 +213,7 @@ impl SMV002 {
         Ok(())
     }
 
-    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, MetaBytesError> {
+    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, io::Error> {
         let mut importer = Self::new_importer();
 
         for ent in data {
