@@ -848,6 +848,7 @@ impl FragmentCoordinator {
                 pipeline_ctx,
                 enable_profiling,
                 SharedProcessorProfiles::default(),
+                vec![],
             );
 
             let res = pipeline_builder.finalize(&self.physical_plan)?;
