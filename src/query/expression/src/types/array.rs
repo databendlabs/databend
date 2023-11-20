@@ -81,6 +81,27 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         None
     }
 
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Array(inner) => {
+                let builder = T::try_downcast_owned_builder(inner.builder);
+                if let Some(builder) = builder {
+                    Some(ArrayColumnBuilder {
+                        builder,
+                        offsets: inner.offsets,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Array(Box::new(builder.upcast())))
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Array(T::upcast_column(scalar))
     }
@@ -365,6 +386,13 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
             &T::build_column(self.builder),
             (self.offsets[0] as usize)..(self.offsets[1] as usize),
         )
+    }
+
+    pub fn upcast(self) -> ArrayColumnBuilder<AnyType> {
+        ArrayColumnBuilder {
+            builder: T::try_upcast_column_builder(self.builder).unwrap(),
+            offsets: self.offsets,
+        }
     }
 }
 

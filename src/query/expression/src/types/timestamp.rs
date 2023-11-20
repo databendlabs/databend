@@ -58,6 +58,7 @@ pub fn check_timestamp(micros: i64) -> Result<i64, String> {
         Err("timestamp is out of range".to_string())
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;
 
@@ -107,6 +108,17 @@ impl ValueType for TimestampType {
             ColumnBuilder::Timestamp(builder) => Some(builder),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Timestamp(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Timestamp(builder))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

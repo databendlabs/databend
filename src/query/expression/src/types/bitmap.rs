@@ -63,9 +63,20 @@ impl ValueType for BitmapType {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::Bitmap(builder) => Some(builder),
+            ColumnBuilder::Bitmap(builder) => Some(builder),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Bitmap(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Bitmap(builder))
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {

@@ -89,6 +89,14 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_builder(builder)
     }
 
+    fn try_downcast_owned_builder<'a>(_builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        todo!()
+    }
+
+    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        todo!()
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Num::upcast_scalar(scalar, Num::default_decimal_size())
     }

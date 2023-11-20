@@ -95,6 +95,27 @@ impl<T: ValueType> ValueType for NullableType<T> {
         None
     }
 
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Nullable(inner) => {
+                let builder = T::try_downcast_owned_builder(inner.builder);
+                if let Some(builder) = builder {
+                    Some(NullableColumnBuilder {
+                        builder,
+                        validity: inner.validity,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Nullable(Box::new(builder.upcast())))
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         match scalar {
             Some(scalar) => T::upcast_scalar(scalar),
@@ -344,6 +365,13 @@ impl<T: ValueType> NullableColumnBuilder<T> {
             Some(T::build_scalar(self.builder))
         } else {
             None
+        }
+    }
+
+    pub fn upcast(self) -> NullableColumnBuilder<AnyType> {
+        NullableColumnBuilder {
+            builder: T::try_upcast_column_builder(self.builder).unwrap(),
+            validity: self.validity,
         }
     }
 }

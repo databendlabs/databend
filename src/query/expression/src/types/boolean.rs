@@ -70,9 +70,20 @@ impl ValueType for BooleanType {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::Boolean(builder) => Some(builder),
+            ColumnBuilder::Boolean(builder) => Some(builder),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Boolean(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Boolean(builder))
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
