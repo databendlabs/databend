@@ -139,6 +139,8 @@ pub enum Statement {
     // Streams
     CreateStream(CreateStreamStmt),
     DropStream(DropStreamStmt),
+    ShowStreams(ShowStreamsStmt),
+    DescribeStream(DescribeStreamStmt),
 
     // Indexes
     CreateIndex(CreateIndexStmt),
@@ -445,6 +447,8 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,

@@ -15,10 +15,13 @@
 use nom::combinator::map;
 
 use crate::ast::CreateStreamStmt;
+use crate::ast::DescribeStreamStmt;
 use crate::ast::DropStreamStmt;
+use crate::ast::ShowStreamsStmt;
 use crate::ast::Statement;
 use crate::ast::StreamPoint;
 use crate::parser::expr::literal_string;
+use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
 use crate::rule;
 use crate::util::dot_separated_idents_1_to_2;
@@ -30,6 +33,8 @@ pub fn stream_table(i: Input) -> IResult<Statement> {
     rule!(
          #create_stream: "`CREATE STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<stream_point>] [COMMENT = '<string_literal>']`"
          | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
+         | #show_streams: "`SHOW STREAMS [FROM <database>] [<show_limit>]`"
+         | #describe_stream: "`DESCRIBE STREAM [<database>.]<stream>`"
     )(i)
 }
 
@@ -90,5 +95,41 @@ fn stream_point(i: Input) -> IResult<StreamPoint> {
     );
     rule!(
         #at_stream
+    )(i)
+}
+
+fn show_streams(i: Input) -> IResult<Statement> {
+    map(
+        rule! {
+            SHOW ~ FULL? ~ STREAMS ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, opt_full, _, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowStreams(ShowStreamsStmt {
+                catalog,
+                database,
+                full: opt_full.is_some(),
+                limit,
+            })
+        },
+    )(i)
+}
+
+fn describe_stream(i: Input) -> IResult<Statement> {
+    map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ STREAM ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, stream))| {
+            Statement::DescribeStream(DescribeStreamStmt {
+                catalog,
+                database,
+                stream,
+            })
+        },
     )(i)
 }

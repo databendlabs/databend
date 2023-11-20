@@ -13,16 +13,23 @@
 // limitations under the License.
 
 use common_ast::ast::CreateStreamStmt;
+use common_ast::ast::DescribeStreamStmt;
 use common_ast::ast::DropStreamStmt;
+use common_ast::ast::ShowLimit;
+use common_ast::ast::ShowStreamsStmt;
 use common_ast::ast::StreamPoint;
 use common_exception::Result;
+use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::Plan;
+use crate::plans::RewriteKind;
 use crate::plans::StreamNavigation;
+use crate::BindContext;
+use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -99,5 +106,106 @@ impl Binder {
             stream_name,
         };
         Ok(Plan::DropStream(plan.into()))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_streams(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowStreamsStmt,
+    ) -> Result<Plan> {
+        let ShowStreamsStmt {
+            catalog,
+            database,
+            full,
+            limit,
+        } = stmt;
+
+        let database = self.check_database_exist(catalog, database).await?;
+
+        let mut select_builder = SelectBuilder::from("system.streams");
+        select_builder
+            .with_column("created_on")
+            .with_column("name")
+            .with_column("database")
+            .with_column("catalog")
+            .with_column("table_name As table_on");
+
+        if *full {
+            select_builder
+                .with_column("owner")
+                .with_column("comment")
+                .with_column("mode")
+                .with_column("invalid_reason");
+        }
+
+        select_builder
+            .with_order_by("catalog")
+            .with_order_by("database")
+            .with_order_by("name");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+
+        if let Some(catalog) = catalog {
+            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("catalog = '{catalog}'"));
+        }
+
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+        debug!("show streams rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowStreams(database),
+        )
+        .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_describe_stream(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &DescribeStreamStmt,
+    ) -> Result<Plan> {
+        let DescribeStreamStmt {
+            catalog,
+            database,
+            stream,
+        } = stmt;
+
+        let (catalog, database, stream) =
+            self.normalize_object_identifier_triple(catalog, database, stream);
+
+        let mut select_builder = SelectBuilder::from("system.streams");
+        select_builder
+            .with_column("created_on")
+            .with_column("name")
+            .with_column("database")
+            .with_column("catalog")
+            .with_column("table_name As table_on")
+            .with_column("owner")
+            .with_column("comment")
+            .with_column("mode")
+            .with_column("invalid_reason");
+        select_builder.with_filter(format!("catalog = '{catalog}'"));
+        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("name = '{stream}'"));
+        let query = select_builder.build();
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowStreams(database),
+        )
+        .await
     }
 }

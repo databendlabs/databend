@@ -36,8 +36,8 @@ pub async fn build_update_stream_meta_seq(
     if let Some(table) = table {
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
-        let inner_table = stream.inner_table(ctx).await?;
-        let inner_fuse = FuseTable::try_from_table(inner_table.as_ref())?;
+        let source_table = stream.source_table(ctx).await?;
+        let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
 
         let table_version = inner_fuse.get_table_info().ident.seq;
         let mut options = stream.options().clone();

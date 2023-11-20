@@ -322,6 +322,8 @@ pub enum RewriteKind {
     ShowColumns(String, String),
     ShowTablesStatus,
 
+    ShowStreams(String),
+
     ShowFunctions,
     ShowTableFunctions,
 

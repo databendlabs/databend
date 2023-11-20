@@ -494,6 +494,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_drop_stream(&mut self, _stmt: &'ast DropStreamStmt) {}
 
+    fn visit_show_streams(&mut self, _stmt: &'ast ShowStreamsStmt) {}
+
+    fn visit_describe_stream(&mut self, _stmt: &'ast DescribeStreamStmt) {}
+
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}

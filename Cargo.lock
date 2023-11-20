@@ -3119,6 +3119,7 @@ dependencies = [
  "common-storage",
  "common-storages-fuse",
  "common-storages-result-cache",
+ "common-storages-stream",
  "common-storages-view",
  "common-users",
  "futures",

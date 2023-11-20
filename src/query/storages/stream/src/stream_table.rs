@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -52,13 +53,39 @@ pub const OPT_KEY_MODE: &str = "mode";
 
 pub const MODE_APPEND_ONLY: &str = "append_only";
 
+#[derive(Clone)]
+pub enum StreamMode {
+    AppendOnly,
+}
+
+impl FromStr for StreamMode {
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            MODE_APPEND_ONLY => Ok(StreamMode::AppendOnly),
+            _ => Err(ErrorCode::IllegalStream(format!(
+                "invalid stream mode: {}",
+                s
+            ))),
+        }
+    }
+}
+
+impl ToString for StreamMode {
+    fn to_string(&self) -> String {
+        match self {
+            StreamMode::AppendOnly => MODE_APPEND_ONLY.to_string(),
+        }
+    }
+}
+
 pub struct StreamTable {
     stream_info: TableInfo,
 
     table_name: String,
     table_database: String,
     table_version: u64,
-    append_only: bool,
+    mode: StreamMode,
     snapshot_location: Option<String>,
 }
 
@@ -77,17 +104,17 @@ impl StreamTable {
             .get(OPT_KEY_TABLE_VER)
             .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
             .parse::<u64>()?;
-        let append_only = options
+        let mode = options
             .get(OPT_KEY_MODE)
-            .map(|v| v == MODE_APPEND_ONLY)
-            .unwrap_or(false);
+            .and_then(|s| s.parse::<StreamMode>().ok())
+            .unwrap_or(StreamMode::AppendOnly);
         let snapshot_location = options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
         Ok(Box::new(StreamTable {
             stream_info: table_info,
             table_name,
             table_database,
             table_version,
-            append_only,
+            mode,
             snapshot_location,
         }))
     }
@@ -109,7 +136,7 @@ impl StreamTable {
         })
     }
 
-    pub async fn inner_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
         ctx.get_table(
             self.stream_info.catalog(),
             &self.table_database,
@@ -122,8 +149,20 @@ impl StreamTable {
         self.table_version
     }
 
-    pub fn append_only(&self) -> bool {
-        self.append_only
+    pub fn mode(&self) -> StreamMode {
+        self.mode.clone()
+    }
+
+    pub fn snapshot_loc(&self) -> Option<String> {
+        self.snapshot_location.clone()
+    }
+
+    pub fn source_table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn source_table_database(&self) -> &str {
+        &self.table_database
     }
 
     #[async_backtrace::framed]

@@ -566,9 +566,13 @@ impl<'a> Binder {
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
             }
+
             // Streams
             Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
             Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
+            Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
+            Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
+
             Statement::CreatePipe(_) => {
                 todo!()
             }

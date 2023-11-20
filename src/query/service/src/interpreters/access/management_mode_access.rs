@@ -56,7 +56,8 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::DescribeStage
                             | RewriteKind::ListStage
                             | RewriteKind::Call
-                            | RewriteKind::ShowRoles),
+                            | RewriteKind::ShowRoles
+                            | RewriteKind::ShowStreams(_)),
                             _ => false
                         }
                 },

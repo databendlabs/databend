@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
+use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamPoint {
@@ -95,6 +96,55 @@ impl Display for DropStreamStmt {
                 .iter()
                 .chain(self.database.iter())
                 .chain(Some(&self.stream)),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowStreamsStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub full: bool,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowStreamsStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW ")?;
+        if self.full {
+            write!(f, "FULL ")?;
+        }
+        write!(f, "STREAMS")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.",)?;
+            }
+            write!(f, "{database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescribeStreamStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub stream: Identifier,
+}
+
+impl Display for DescribeStreamStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DESCRIBE STREAM ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(self.database.iter().chain(Some(&self.stream))),
         )
     }
 }
