@@ -33,7 +33,7 @@ pub fn stream_table(i: Input) -> IResult<Statement> {
     rule!(
          #create_stream: "`CREATE STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<stream_point>] [COMMENT = '<string_literal>']`"
          | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
-         | #show_streams: "`SHOW STREAMS [FROM <database>] [<show_limit>]`"
+         | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
          | #describe_stream: "`DESCRIBE STREAM [<database>.]<stream>`"
     )(i)
 }

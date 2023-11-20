@@ -179,6 +179,12 @@ impl StreamTable {
                 &self.table_name,
             )
             .await?;
+        if !table.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled for table '{}.{}'",
+                self.table_database, self.table_name
+            )));
+        }
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let latest_snapshot = fuse_table.read_table_snapshot().await?;
         if latest_snapshot.is_none() {

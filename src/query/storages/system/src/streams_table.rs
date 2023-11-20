@@ -83,7 +83,6 @@ impl AsyncSystemTable for StreamsTable {
         let mut stream_id = vec![];
         let mut created_on = vec![];
         let mut updated_on = vec![];
-        let mut dropped_on = vec![];
         let mut table_version = vec![];
         let mut snapshot_location = vec![];
 
@@ -153,7 +152,6 @@ impl AsyncSystemTable for StreamsTable {
                         names.push(table.name().as_bytes().to_vec());
                         stream_id.push(stream_info.ident.table_id);
                         created_on.push(stream_info.meta.created_on.timestamp_micros());
-                        dropped_on.push(stream_info.meta.drop_on.map(|v| v.timestamp_micros()));
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
                         owner.push(
                             stream_info
@@ -182,21 +180,30 @@ impl AsyncSystemTable for StreamsTable {
                         let mut reason = None;
                         match stream_table.source_table(ctx.clone()).await {
                             Ok(source) => {
-                                let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-                                if let Some(location) = stream_table.snapshot_loc() {
-                                    reason = SnapshotsIO::read_snapshot(
-                                        location,
-                                        fuse_table.get_operator(),
-                                    )
-                                    .await
-                                    .err();
+                                if !source.change_tracking_enabled() {
+                                    reason = Some(format!(
+                                        "Change tracking is not enabled for table '{}.{}'",
+                                        stream_table.source_table_database(),
+                                        stream_table.source_table_name()
+                                    ));
+                                } else {
+                                    let fuse_table = FuseTable::try_from_table(source.as_ref())?;
+                                    if let Some(location) = stream_table.snapshot_loc() {
+                                        reason = SnapshotsIO::read_snapshot(
+                                            location,
+                                            fuse_table.get_operator(),
+                                        )
+                                        .await
+                                        .err()
+                                        .map(|e| e.display_text());
+                                    }
                                 }
                             }
                             Err(e) => {
-                                reason = Some(e);
+                                reason = Some(e.display_text());
                             }
                         }
-                        invalid_reason.push(reason.map(|e| e.to_string().as_bytes().to_vec()));
+                        invalid_reason.push(reason.map(|e| e.as_bytes().to_vec()));
                     }
                 }
             }
@@ -208,7 +215,6 @@ impl AsyncSystemTable for StreamsTable {
             StringType::from_data(names),
             UInt64Type::from_data(stream_id),
             TimestampType::from_data(created_on),
-            TimestampType::from_opt_data(dropped_on),
             TimestampType::from_data(updated_on),
             StringType::from_data(mode),
             StringType::from_data(comment),
@@ -229,10 +235,6 @@ impl StreamsTable {
             TableField::new("name", TableDataType::String),
             TableField::new("stream_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new(
-                "dropped_on",
-                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
-            ),
             TableField::new("updated_on", TableDataType::Timestamp),
             TableField::new("mode", TableDataType::String),
             TableField::new("comment", TableDataType::String),
