@@ -16,7 +16,7 @@ use minitrace::func_name;
 use crate::common;
 
 #[test]
-fn test_decode_v56_least_visible_time() -> anyhow::Result<()> {
+fn test_decode_v65_least_visible_time() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
         10, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 50, 58, 53, 49, 58, 48, 55, 32, 85,
         84, 67, 160, 6, 64, 168, 6, 24,
