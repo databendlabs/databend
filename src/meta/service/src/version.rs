@@ -64,7 +64,7 @@ pub static MIN_METACLI_SEMVER: Version = Version {
 ///   Add append_v0
 ///   Add install_snapshot_v0
 ///
-/// - 2023-11-16: since TODO
+/// - 2023-11-16: since 1.2.212:
 ///   Add install_snapshot_v1
 pub static MIN_META_SEMVER: Version = Version::new(0, 9, 41);
 
@@ -81,7 +81,7 @@ pub const RAFT_SERVER_PROVIDES: &[(&str, u8, &str)] = &[
     ("vote_v0",             PROVIDE,     "2023-02-16 0.9.41"),
     ("append_v0",           PROVIDE,     "2023-02-16 0.9.41"),
     ("install_snapshot_v0", PROVIDE,     "2023-02-16 0.9.41"),
-    ("install_snapshot_v1", PROVIDE,     "2023-11-16 TODO"),
+    ("install_snapshot_v1", PROVIDE,     "2023-11-16 1.2.212"),
 ];
 
 /// The server features that raft client depends on.
@@ -90,7 +90,7 @@ pub const RAFT_CLIENT_REQUIRES: &[(&str, u8, &str)] = &[
     ("vote_v0",             REQUIRE,     "2023-02-16 0.9.41"),
     ("append_v0",           REQUIRE,     "2023-02-16 0.9.41"),
     ("install_snapshot_v0", REQUIRE,     "2023-02-16 0.9.41"),
-    ("install_snapshot_v1", OPTIONAL,    "2023-11-16 TODO"),
+    ("install_snapshot_v1", OPTIONAL,    "2023-11-16 1.2.212"),
 ];
 
 /// Feature set provided by raft client.
@@ -154,6 +154,5 @@ pub fn to_digit_ver(v: &Version) -> u64 {
 }
 
 pub fn from_digit_ver(u: u64) -> Version {
-    println!("{}", u);
     Version::new(u / 1_000_000, u / 1_000 % 1_000, u % 1_000)
 }
