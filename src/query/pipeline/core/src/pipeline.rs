@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -60,8 +59,7 @@ pub struct Pipeline {
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
 
-    scope_id: Arc<AtomicU32>,
-    plans_scope: Vec<PlanScope>,
+    pub plans_scope: Vec<PlanScope>,
     scope_size: Arc<AtomicUsize>,
 }
 
@@ -84,9 +82,21 @@ impl Pipeline {
             on_init: None,
             on_finished: None,
             lock_guards: vec![],
-            scope_size: Arc::new(AtomicUsize::new(1)),
-            plans_scope: vec![PlanScope::create(String::from("Result"))],
-            scope_id: Arc::new(AtomicU32::new(1)),
+            plans_scope: vec![],
+            scope_size: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    pub fn with_scopes(scope: Vec<PlanScope>) -> Pipeline {
+        let scope_size = Arc::new(AtomicUsize::new(scope.len()));
+        Pipeline {
+            scope_size,
+            max_threads: 0,
+            pipes: Vec::new(),
+            on_init: None,
+            on_finished: None,
+            lock_guards: vec![],
+            plans_scope: scope,
         }
     }
 
@@ -123,19 +133,34 @@ impl Pipeline {
         )
     }
 
+    pub fn finalize(mut self) -> Pipeline {
+        for pipe in &mut self.pipes {
+            if let Some(uninitialized_scope) = &mut pipe.scope {
+                if uninitialized_scope.parent_id == 0 {
+                    for (index, scope) in self.plans_scope.iter().enumerate() {
+                        if scope.id == uninitialized_scope.id && index != 0 {
+                            if let Some(parent_scope) = self.plans_scope.get(index - 1) {
+                                uninitialized_scope.parent_id = parent_scope.id;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        self
+    }
+
     pub fn add_pipe(&mut self, mut pipe: Pipe) {
         let scope_idx = self.scope_size.load(Ordering::SeqCst) - 1;
 
         if let Some(scope) = self.plans_scope.get_mut(scope_idx) {
-            /// stack, new plan is always the parent node of previous node.
-            /// set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
-            if scope.id == 0 {
-                scope.id = self.scope_id.fetch_add(1, Ordering::SeqCst);
-                for pipe in &mut self.pipes {
-                    if let Some(children) = &mut pipe.scope {
-                        if children.parent_id == 0 && children.id != scope.id {
-                            children.parent_id = scope.id;
-                        }
+            // stack, new plan is always the parent node of previous node.
+            // set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
+            for pipe in &mut self.pipes {
+                if let Some(children) = &mut pipe.scope {
+                    if children.parent_id == 0 && children.id != scope.id {
+                        children.parent_id = scope.id;
                     }
                 }
             }
@@ -468,7 +493,7 @@ impl Drop for PlanScopeGuard {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PlanScope {
     pub id: u32,
     pub name: String,
@@ -476,9 +501,9 @@ pub struct PlanScope {
 }
 
 impl PlanScope {
-    pub fn create(name: String) -> PlanScope {
+    pub fn create(id: u32, name: String) -> PlanScope {
         PlanScope {
-            id: 0,
+            id,
             parent_id: 0,
             name,
         }
