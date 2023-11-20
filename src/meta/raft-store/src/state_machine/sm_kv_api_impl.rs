@@ -62,10 +62,7 @@ impl kvapi::KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
-            // TODO(xp): unwrap???
-            let r = self
-                .apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())
-                .unwrap();
+            let r = self.apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())?;
             Ok(r)
         })?;
 
