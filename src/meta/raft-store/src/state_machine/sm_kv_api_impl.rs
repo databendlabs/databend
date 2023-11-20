@@ -75,7 +75,6 @@ impl kvapi::KVApi for StateMachine {
     }
 
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         debug!("get_kv sv:{:?}", sv);
 
