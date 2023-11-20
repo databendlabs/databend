@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use arrow_array::Array;
 use arrow_schema::ArrowError;
-use arrow_schema::Field;
 
 use crate::Column;
 use crate::DataField;
@@ -28,8 +27,7 @@ impl Column {
         Ok(arrow_array)
     }
 
-    pub fn from_arrow_rs(array: Arc<dyn Array>, field: &Field) -> Result<Self, ArrowError> {
-        let field = DataField::try_from(field)?;
+    pub fn from_arrow_rs(array: Arc<dyn Array>, field: &DataField) -> Result<Self, ArrowError> {
         let arrow2_array: Box<dyn common_arrow::arrow::array::Array> = array.into();
 
         Ok(Column::from_arrow(arrow2_array.as_ref(), field.data_type()))

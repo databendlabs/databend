@@ -1260,8 +1260,16 @@ impl Column {
         let is_nullable = data_type.is_nullable();
         let data_type = data_type.remove_nullable();
         let column = match arrow_col.data_type() {
-            ArrowDataType::Null => Column::Null {
-                len: arrow_col.len(),
+            ArrowDataType::Null => match data_type {
+                DataType::EmptyArray => Column::EmptyArray {
+                    len: arrow_col.len(),
+                },
+                DataType::EmptyMap => Column::EmptyMap {
+                    len: arrow_col.len(),
+                },
+                _ => Column::Null {
+                    len: arrow_col.len(),
+                },
             },
             ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_ARRAY => {
                 Column::EmptyArray {
@@ -1373,11 +1381,15 @@ impl Column {
                 let offsets = arrow_col.offsets().clone().into_inner();
 
                 let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                if data_type.is_variant() {
-                    // Variant column from udf server is converted to LargeBinary, we restore it back here.
-                    Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                } else {
-                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                // LargeBinary may be Extension data type variant and bitmap
+                match data_type {
+                    DataType::Variant => {
+                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    DataType::Bitmap => {
+                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    _ => Column::String(StringColumn::new(arrow_col.values().clone(), offsets)),
                 }
             }
             // TODO: deprecate it and use LargeBinary instead
@@ -1392,11 +1404,21 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
+                // Binary may be Extension data type variant and bitmap
+                match data_type {
+                    DataType::Variant => Column::Variant(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    )),
+                    DataType::Bitmap => Column::Bitmap(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    )),
+                    _ => Column::String(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    )),
+                }
             }
 
             ArrowDataType::FixedSizeBinary(size) => {
