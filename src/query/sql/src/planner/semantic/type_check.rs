@@ -576,7 +576,7 @@ impl<'a> TypeChecker<'a> {
                     return Ok(constant);
                 }
                 // if the source type is nullable, cast target type should also be nullable.
-                let target_type = if data_type.is_nullable() {
+                let target_type = if data_type.is_nullable_or_null() {
                     checked_expr.data_type().wrap_nullable()
                 } else {
                     checked_expr.data_type().clone()

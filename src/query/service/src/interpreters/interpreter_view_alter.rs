@@ -104,7 +104,7 @@ impl Interpreter for AlterViewInterpreter {
             Ok(PipelineBuildResult::create())
         } else {
             return Err(ErrorCode::UnknownView(format!(
-                "{}.{} as view Already Exists",
+                "Unknown view '{}'.'{}'",
                 self.plan.database, self.plan.view_name
             )));
         }

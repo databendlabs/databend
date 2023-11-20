@@ -2837,6 +2837,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             TableReference::TableFunction {
                 span: _,
+                lateral,
                 name,
                 params,
                 named_params,
@@ -2856,7 +2857,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     );
                     children.push(node);
                 }
-                let func_name = format!("TableFunction {}", name);
+                let func_name = if *lateral {
+                    format!("Lateral TableFunction {}", name)
+                } else {
+                    format!("TableFunction {}", name)
+                };
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(
                         func_name,

@@ -69,6 +69,72 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
+struct TestHttpQueryRequest<'a> {
+    ep: &'a EndpointType,
+    json: serde_json::Value,
+    headers: HeaderMap,
+}
+
+impl<'a> TestHttpQueryRequest<'a> {
+    fn new(ep: &'a EndpointType, json: serde_json::Value) -> Self {
+        Self {
+            ep,
+            json,
+            headers: HeaderMap::new(),
+        }
+    }
+
+    // fn with_headers(mut self, headers: HeaderMap) -> Self {
+    //    self.headers = headers;
+    //    self
+    // }
+
+    async fn fetch(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
+        let mut resps = vec![];
+
+        let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
+        let mut next_uri = resp.next_uri.clone();
+        resps.push((status, resp.clone()));
+
+        while next_uri.is_some() {
+            let (status, resp) = self
+                .do_request(Method::GET, next_uri.as_ref().unwrap())
+                .await?;
+            next_uri = resp.next_uri.clone();
+            resps.push((status, resp));
+        }
+
+        Ok(resps)
+    }
+
+    async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+        let content_type = "application/json";
+        let basic = headers::Authorization::basic("root", "");
+        let body = serde_json::to_vec(&self.json).unwrap();
+
+        let mut req = Request::builder()
+            .uri(uri.parse().unwrap())
+            .method(method)
+            .header(header::CONTENT_TYPE, content_type)
+            .typed_header(basic)
+            .body(body);
+        req.headers_mut().extend(self.headers.clone().into_iter());
+
+        let resp = self
+            .ep
+            .call(req)
+            .await
+            .map_err(|e| ErrorCode::Internal(e.to_string()))
+            .unwrap();
+
+        let status_code = resp.status();
+        let body = resp.into_body().into_string().await.unwrap();
+        let query_resp = serde_json::from_str::<QueryResponse>(&body).unwrap();
+
+        Ok((status_code, query_resp))
+    }
+}
+
 // TODO(youngsofun): add test for
 // 1. query fail after started
 
@@ -212,7 +278,7 @@ async fn test_return_when_finish() -> Result<()> {
     for (sql, state) in [
         ("select * from numbers(1)", ExecuteStateKind::Succeeded),
         ("bad sql", ExecuteStateKind::Failed), // parse fail
-        ("select cast(null as boolean)", ExecuteStateKind::Failed), // execute fail at once
+        ("select cast(null as boolean)", ExecuteStateKind::Succeeded),
         ("create table t1(a int)", ExecuteStateKind::Failed),
     ] {
         let start_time = std::time::Instant::now();
@@ -774,11 +840,11 @@ async fn post_json_to_endpoint(
         .typed_header(basic)
         .body(body);
     req.headers_mut().extend(headers.into_iter());
+
     let response = ep
         .call(req)
         .await
         .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-
     check_response(response).await
 }
 
@@ -937,15 +1003,15 @@ async fn assert_auth_current_role(
     Ok(())
 }
 
-async fn assert_auth_current_role_with_restricted_role(
+async fn assert_auth_current_role_with_role(
     ep: &EndpointType,
     role_name: &str,
-    restricted_role: &str,
+    role: &str,
     header: impl Header,
 ) -> Result<()> {
     let sql = "select current_role()";
 
-    let json = serde_json::json!({"sql": sql.to_string(), "session": {"role": restricted_role.to_string()}});
+    let json = serde_json::json!({"sql": sql.to_string(), "session": {"role": role.to_string()}});
 
     let path = "/v1/query";
     let uri = format!("{}?wait_time_secs={}", path, 3);
@@ -1029,7 +1095,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let bearer = headers::Authorization::bearer(&token).unwrap();
     assert_auth_current_user(&ep, user_name, bearer.clone(), "%").await?;
     assert_auth_current_role(&ep, "account_admin", bearer.clone()).await?;
-    assert_auth_current_role_with_restricted_role(&ep, "public", "public", bearer).await?;
+    assert_auth_current_role_with_role(&ep, "public", "public", bearer).await?;
     Ok(())
 }
 
@@ -1250,7 +1316,7 @@ async fn test_multi_partition() -> Result<()> {
 async fn test_affect() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let route = create_endpoint().await?;
+    let ep = create_endpoint().await?;
 
     let sqls = vec![
         (
@@ -1262,7 +1328,8 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
+                secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1280,7 +1347,8 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
+                secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1293,7 +1361,8 @@ async fn test_affect() -> Result<()> {
             None,
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
+                secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1308,7 +1377,8 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
-                role: None,
+                role: Some("account_admin".to_string()),
+                secondary_roles: None,
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1319,13 +1389,49 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-        assert_eq!(status, StatusCode::OK, "{} {:?}", json, result.error);
-        assert!(result.error.is_none(), "{} {:?}", json, result.error);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.affect, affect);
-        assert_eq!(result.session, session_conf);
+        let request = TestHttpQueryRequest::new(&ep, json.clone());
+        let paged_resps = request.fetch().await?;
+        let result = paged_resps.last().unwrap();
+        assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
+        assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
+        assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.1.affect, affect);
+        assert_eq!(result.1.session, session_conf);
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_session_secondary_roles() -> Result<()> {
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+
+    let route = create_endpoint().await?;
+
+    // failed input: only ALL or NONE is allowed
+    let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
+    let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
+    assert!(result.error.is_some());
+    assert!(
+        result
+            .error
+            .unwrap()
+            .message
+            .contains("only ALL or NONE is allowed on setting secondary roles")
+    );
+    assert_eq!(result.state, ExecuteStateKind::Failed);
+
+    let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public", "secondary_roles": Vec::<String>::new()}});
+    let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
+    assert!(result.error.is_none());
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    assert_eq!(result.session.unwrap().secondary_roles, Some(vec![]));
+
+    let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public"}});
+    let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
+    assert!(result.error.is_none());
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    assert_eq!(result.session.unwrap().secondary_roles, None);
+
     Ok(())
 }
 

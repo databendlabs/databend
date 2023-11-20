@@ -22,6 +22,7 @@ use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType::Ownership;
 use common_sql::plans::GrantPrivilegePlan;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use log::debug;
 use log::info;
@@ -183,6 +184,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     user_mgr
                         .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
                         .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
                 }
             }
         }
