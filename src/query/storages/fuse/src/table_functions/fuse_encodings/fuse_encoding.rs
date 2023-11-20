@@ -19,10 +19,12 @@ use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::stat::stat_simple;
 use common_arrow::native::stat::ColumnInfo;
 use common_arrow::native::stat::PageBody;
+use common_catalog::plan::Filters;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
@@ -30,12 +32,18 @@ use common_expression::types::UInt32Type;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::FromData;
+use common_expression::FunctionContext;
+use common_expression::FunctionRegistry;
+use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
+use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::BlockReader;
@@ -49,6 +57,7 @@ pub struct FuseEncoding<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub tables: Vec<&'a FuseTable>,
     pub limit: Option<usize>,
+    pub filters: Option<Filters>,
 }
 
 impl<'a> FuseEncoding<'a> {
@@ -56,8 +65,14 @@ impl<'a> FuseEncoding<'a> {
         ctx: Arc<dyn TableContext>,
         tables: Vec<&'a FuseTable>,
         limit: Option<usize>,
+        filters: Option<Filters>,
     ) -> Self {
-        Self { ctx, tables, limit }
+        Self {
+            ctx,
+            tables,
+            limit,
+            filters,
+        }
     }
 
     #[async_backtrace::framed]
@@ -125,7 +140,24 @@ impl<'a> FuseEncoding<'a> {
             }
             info.push((table.name(), columns_info));
         }
-        self.to_block(&info).await
+        let data_block = self.to_block(&info).await?;
+        let result = if let Some(filter) = self.filters.as_ref().map(|f| &f.filter) {
+            let func_ctx = FunctionContext::default();
+            let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+            let filter = evaluator
+                .run(&as_expr(
+                    filter,
+                    &BUILTIN_FUNCTIONS,
+                    &FuseEncoding::schema(),
+                ))?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+            data_block.filter_boolean_value(&filter)?
+        } else {
+            data_block
+        };
+
+        Ok(result)
     }
 
     #[async_backtrace::framed]
@@ -250,5 +282,84 @@ fn encoding_to_string(page_body: &PageBody) -> String {
         PageBody::Bitpack => "Bitpack".to_string(),
         PageBody::DeltaBitpack => "DeltaBitpack".to_string(),
         PageBody::Common(c) => format!("Common({:?})", c),
+    }
+}
+
+pub fn as_expr(
+    remote_expr: &RemoteExpr<String>,
+    fn_registry: &FunctionRegistry,
+    schema: &Arc<TableSchema>,
+) -> Expr {
+    match remote_expr {
+        RemoteExpr::Constant {
+            span,
+            scalar,
+            data_type,
+        } => Expr::Constant {
+            span: *span,
+            scalar: scalar.clone(),
+            data_type: data_type.clone(),
+        },
+        RemoteExpr::ColumnRef {
+            span,
+            id,
+            data_type,
+            display_name,
+        } => {
+            let id = schema.index_of(id).unwrap();
+            Expr::ColumnRef {
+                span: *span,
+                id,
+                data_type: data_type.clone(),
+                display_name: display_name.clone(),
+            }
+        }
+        RemoteExpr::Cast {
+            span,
+            is_try,
+            expr,
+            dest_type,
+        } => Expr::Cast {
+            span: *span,
+            is_try: *is_try,
+            expr: Box::new(as_expr(expr, fn_registry, schema)),
+            dest_type: dest_type.clone(),
+        },
+        RemoteExpr::FunctionCall {
+            span,
+            id,
+            generics,
+            args,
+            return_type,
+        } => {
+            let function = fn_registry.get(id).expect("function id not found");
+            Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function,
+                generics: generics.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| as_expr(arg, fn_registry, schema))
+                    .collect(),
+                return_type: return_type.clone(),
+            }
+        }
+        RemoteExpr::UDFServerCall {
+            span,
+            func_name,
+            server_addr,
+            return_type,
+            args,
+        } => Expr::UDFServerCall {
+            span: *span,
+            func_name: func_name.clone(),
+            server_addr: server_addr.clone(),
+            return_type: return_type.clone(),
+            args: args
+                .iter()
+                .map(|arg| as_expr(arg, fn_registry, schema))
+                .collect(),
+        },
     }
 }
