@@ -150,6 +150,7 @@ impl<T> Marked<T> {
         Marked::TombStone { internal_seq }
     }
 
+    #[allow(dead_code)]
     pub fn new_normal(seq: u64, value: T) -> Self {
         Marked::Normal {
             internal_seq: seq,
@@ -166,6 +167,7 @@ impl<T> Marked<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_meta(self, meta: Option<KVMeta>) -> Self {
         match self {
             Marked::TombStone { .. } => {

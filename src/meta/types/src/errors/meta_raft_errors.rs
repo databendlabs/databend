@@ -16,11 +16,8 @@ pub use openraft::error::ChangeMembershipError;
 pub use openraft::error::EmptyMembership;
 pub use openraft::error::InProgress;
 pub use openraft::error::InitializeError;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::raft_types::ClientWriteError;
-use crate::raft_types::ForwardToLeader;
 use crate::MetaDataError;
 use crate::MetaOperationError;
 use crate::RaftError;
