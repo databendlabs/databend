@@ -19,8 +19,13 @@ use std::fmt::Formatter;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::str::FromStr;
 
 use common_base::base::mask_string;
+use common_exception::ErrorCode;
+use common_meta_app::principal::CopyOptions;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
 use itertools::Itertools;
 use url::Url;
 
@@ -116,6 +121,37 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::ReturnFailedOnly(v) => self.return_failed_only = v,
             CopyIntoTableOption::OnError(v) => self.on_error = v,
         }
+    }
+
+    pub fn apply_to_copy_option(
+        &self,
+        copy_options: &mut CopyOptions,
+    ) -> common_exception::Result<()> {
+        copy_options.on_error =
+            OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
+
+        if self.size_limit != 0 {
+            copy_options.size_limit = self.size_limit;
+        }
+
+        copy_options.split_size = self.split_size;
+        copy_options.purge = self.purge;
+        copy_options.disable_variant_check = self.disable_variant_check;
+        copy_options.return_failed_only = self.return_failed_only;
+
+        if self.max_files != 0 {
+            copy_options.max_files = self.max_files;
+        }
+
+        if !(copy_options.purge && self.force)
+            && copy_options.max_files > COPIED_FILES_MAX_COMMIT_NUM
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "max_files {} is too large, max_files should be less than {COPIED_FILES_MAX_COMMIT_NUM}",
+                copy_options.max_files
+            )));
+        }
+        Ok(())
     }
 }
 
