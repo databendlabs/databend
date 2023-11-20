@@ -14,8 +14,8 @@
 
 use common_exception::Result;
 use common_expression::TopKSorter;
-use common_storage::metrics::common::metrics_inc_omit_filter_rowgroups;
-use common_storage::metrics::common::metrics_inc_omit_filter_rows;
+use common_metrics::storage::metrics_inc_omit_filter_rowgroups;
+use common_metrics::storage::metrics_inc_omit_filter_rows;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;

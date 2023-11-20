@@ -24,10 +24,11 @@ use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::*;
 use common_expression::Column;
-use common_expression::FromOptData;
+use common_expression::FromData;
 use common_expression::RowConverter;
 use common_expression::SortField;
 use ethnum::i256;
+use itertools::Itertools;
 use jsonb::convert_to_comparable;
 use jsonb::parse_value;
 use ordered_float::OrderedFloat;
@@ -385,12 +386,12 @@ fn generate_number_column<K>(len: usize, valid_percent: f64) -> Column
 where
     K: Number,
     Standard: Distribution<K>,
-    NumberType<K>: FromOptData<Vec<Option<K>>, i8>,
+    NumberType<K>: FromData<K>,
 {
     let mut rng = thread_rng();
     let data = (0..len)
         .map(|_| rng.gen_bool(valid_percent).then(|| rng.gen()))
-        .collect::<Vec<_>>();
+        .collect_vec();
     NumberType::<K>::from_opt_data(data)
 }
 
@@ -400,7 +401,7 @@ fn generate_string_column(len: usize, valid_percent: f64) -> Column {
         .map(|_| {
             rng.gen_bool(valid_percent).then(|| {
                 let len = rng.gen_range(0..100);
-                (0..len).map(|_| rng.gen_range(0..128)).collect()
+                (0..len).map(|_| rng.gen_range(0..128)).collect_vec()
             })
         })
         .collect::<Vec<_>>();

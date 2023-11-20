@@ -38,7 +38,7 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
-fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
+pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
     move |i| {
         let string_options = map(
             rule! {
@@ -94,6 +94,8 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | NAN_DISPLAY
                 | NULL_DISPLAY
                 | ESCAPE
+                | NULL_FIELD_AS
+                | MISSING_FIELD_AS
                 | ROW_TAG) ~ ^"=" ~ ^#literal_string
         },
         |(k, _, v)| (k.text().to_string(), v),

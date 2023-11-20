@@ -89,6 +89,8 @@ impl<T> SeqValue<T> for Marked<T> {
     }
 }
 
+// FIXME: do we need to remove function like max_ref?
+#[allow(dead_code)]
 impl<T> Marked<T> {
     pub const fn empty() -> Self {
         Marked::TombStone { internal_seq: 0 }
@@ -144,7 +146,7 @@ impl<T> Marked<T> {
         }
     }
 
-    pub fn new_tomb_stone(internal_seq: u64) -> Self {
+    pub fn new_tombstone(internal_seq: u64) -> Self {
         Marked::TombStone { internal_seq }
     }
 
@@ -189,7 +191,7 @@ impl<T> Marked<T> {
         })
     }
 
-    pub fn is_tomb_stone(&self) -> bool {
+    pub fn is_tombstone(&self) -> bool {
         matches!(self, Marked::TombStone { .. })
     }
 
@@ -286,7 +288,7 @@ mod tests {
             m
         );
 
-        let m: Marked<u32> = Marked::new_tomb_stone(3);
+        let m: Marked<u32> = Marked::new_tombstone(3);
         assert_eq!(Marked::TombStone { internal_seq: 3 }, m);
     }
 }

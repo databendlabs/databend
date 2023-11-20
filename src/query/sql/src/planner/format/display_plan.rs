@@ -155,6 +155,7 @@ impl Plan {
             Plan::SetVariable(p) => Ok(format!("{:?}", p)),
             Plan::UnSetVariable(p) => Ok(format!("{:?}", p)),
             Plan::SetRole(p) => Ok(format!("{:?}", p)),
+            Plan::SetSecondaryRoles(p) => Ok(format!("{:?}", p)),
             Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
             Plan::Kill(p) => Ok(format!("{:?}", p)),
 
@@ -192,6 +193,12 @@ impl Plan {
             Plan::DescribeTask(p) => Ok(format!("{:?}", p)),
             Plan::ExecuteTask(p) => Ok(format!("{:?}", p)),
             Plan::ShowTasks(p) => Ok(format!("{:?}", p)),
+
+            // task
+            Plan::CreateConnection(p) => Ok(format!("{:?}", p)),
+            Plan::DescConnection(p) => Ok(format!("{:?}", p)),
+            Plan::DropConnection(p) => Ok(format!("{:?}", p)),
+            Plan::ShowConnections(p) => Ok(format!("{:?}", p)),
         }
     }
 }

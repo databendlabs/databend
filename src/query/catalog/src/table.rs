@@ -44,7 +44,6 @@ use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
 use crate::statistics::BasicColumnStatistics;
-use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
 
@@ -460,19 +459,15 @@ pub trait ColumnStatisticsProvider: Send {
     fn num_rows(&self) -> Option<u64>;
 }
 
-pub mod column_stats_provider_impls {
-    use super::*;
+pub struct DummyColumnStatisticsProvider;
 
-    pub struct DummyColumnStatisticsProvider;
+impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
+    fn column_statistics(&self, _column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+        None
+    }
 
-    impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
-        fn column_statistics(&self, _column_id: ColumnId) -> Option<&BasicColumnStatistics> {
-            None
-        }
-
-        fn num_rows(&self) -> Option<u64> {
-            None
-        }
+    fn num_rows(&self) -> Option<u64> {
+        None
     }
 }
 

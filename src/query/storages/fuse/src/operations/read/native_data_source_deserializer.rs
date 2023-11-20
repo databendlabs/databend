@@ -51,11 +51,12 @@ use common_expression::Scalar;
 use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
@@ -63,7 +64,6 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
@@ -302,7 +302,7 @@ impl NativeDeserializeDataTransform {
                     // If the source column is the default value, num_rows may be zero
                     if block.num_columns() > 0 && block.num_rows() == 0 {
                         let num_rows = array.len();
-                        let mut columns = block.columns().clone().to_vec();
+                        let mut columns = block.columns().to_vec();
                         columns.push(column);
                         *block = DataBlock::new(columns, num_rows);
                     } else {

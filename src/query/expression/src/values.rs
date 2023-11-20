@@ -28,6 +28,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
@@ -1220,6 +1221,36 @@ impl Column {
         }
     }
 
+    pub fn check_valid(&self) -> Result<()> {
+        match self {
+            Column::String(x) => x.check_valid(),
+            Column::Variant(x) => x.check_valid(),
+            Column::Bitmap(x) => x.check_valid(),
+            Column::Map(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
+                }
+                Ok(())
+            }
+            Column::Array(x) => x.check_valid(),
+            Column::Nullable(x) => {
+                if x.column.len() != x.validity.len() {
+                    return Err(ErrorCode::Internal(
+                        "column and validity length mismatch".to_string(),
+                    ));
+                }
+                x.column.check_valid()
+            }
+            Column::Tuple(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub fn from_arrow(
         arrow_col: &dyn common_arrow::arrow::array::Array,
         data_type: &DataType,
@@ -1652,22 +1683,30 @@ impl Column {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
             DataType::EmptyMap => Column::EmptyMap { len },
-            DataType::Boolean => {
-                BooleanType::from_data((0..len).map(|_| SmallRng::from_entropy().gen_bool(0.5)))
-            }
-            DataType::String => StringType::from_data((0..len).map(|_| {
-                let rng = SmallRng::from_entropy();
-                rng.sample_iter(&Alphanumeric)
-                    // randomly generate 5 characters.
-                    .take(5)
-                    .map(u8::from)
-                    .collect::<Vec<_>>()
-            })),
+            DataType::Boolean => BooleanType::from_data(
+                (0..len)
+                    .map(|_| SmallRng::from_entropy().gen_bool(0.5))
+                    .collect_vec(),
+            ),
+            DataType::String => StringType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let rng = SmallRng::from_entropy();
+                        rng.sample_iter(&Alphanumeric)
+                            // randomly generate 5 characters.
+                            .take(5)
+                            .map(u8::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect_vec(),
+            ),
             DataType::Number(num_ty) => {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
                         NumberType::<NUM_TYPE>::from_data(
-                            (0..len).map(|_| SmallRng::from_entropy().gen()),
+                            (0..len)
+                                .map(|_| SmallRng::from_entropy().gen::<NUM_TYPE>())
+                                .collect_vec(),
                         )
                     }
                 })
@@ -1730,14 +1769,18 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
-            DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
-                let data: [u64; 4] = SmallRng::from_entropy().gen();
-                let rb = RoaringTreemap::from_iter(data.iter());
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed serialize roaring treemap");
-                buf
-            })),
+            DataType::Bitmap => BitmapType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let data: [u64; 4] = SmallRng::from_entropy().gen();
+                        let rb = RoaringTreemap::from_iter(data.iter());
+                        let mut buf = vec![];
+                        rb.serialize_into(&mut buf)
+                            .expect("failed serialize roaring treemap");
+                        buf
+                    })
+                    .collect_vec(),
+            ),
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()

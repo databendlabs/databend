@@ -85,13 +85,16 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (53, "2023-08-17: Add: user.proto/CsvFileFormatParams add field `null_display`", ),
     (54, "2023-08-17: Add: index.proto/IndexMeta::sync_creation", ),
     (55, "2023-07-31: Add: TableMeta and DatabaseMeta add Ownership", ),
-    (56, "2023-08-31: Add: Least Visible Time", ),
+    (56, "2023-08-31: (Depressed, see 65 below)Add: Least Visible Time", ),
     (57, "2023-09-05: Add: catalog.proto add hdfs config", ),
     (58, "2023-09-06: Add: udf.proto/UserDefinedFunction", ),
     (59, "2023-08-17: Add: user.proto/CsvFileFormatParams add field `allow_column_count_mismatch`", ),
     (60, "2023-08-17: Add: user.proto/CopyOptions add field `return_failed_only`", ),
     (61, "2023-10-19: Add: config.proto/OssStorageConfig add SSE options", ),
     (62, "2023-10-30: Add: lock.proto"),
+    (63, "2023-10-30: Add: connection.proto"),
+    (64, "2023-11-16: Add: user.proto/NDJsonFileFormatParams add field `missing_field_as` and `null_field_as`", ),
+    (65, "2023-11-16: Retype: use Datetime<Utc> instead of u64 to in lvt.time", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

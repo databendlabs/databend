@@ -12,13 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod copy;
-mod table;
+mod builder_aggregate;
+mod builder_append_table;
+mod builder_commit;
+mod builder_compact;
+mod builder_copy_into;
+mod builder_delete;
+mod builder_distributed_insert_select;
+mod builder_exchange;
+mod builder_fill_missing_columns;
+mod builder_filter;
+mod builder_join;
+mod builder_lambda;
+mod builder_limit;
+mod builder_merge_into;
+mod builder_on_finished;
+mod builder_project;
+mod builder_recluster;
+mod builder_replace_into;
+mod builder_row_fetch;
+mod builder_scalar;
+mod builder_scan;
+mod builder_sort;
+mod builder_udf;
+mod builder_union_all;
+mod builder_window;
 
-pub use copy::build_append_data_pipeline;
-pub use copy::build_commit_data_pipeline;
-pub use copy::build_upsert_copied_files_to_meta_req;
-pub use copy::set_copy_on_finished;
-pub use table::build_append2table_with_commit_pipeline;
-pub use table::build_append2table_without_commit_pipeline;
-pub use table::build_fill_missing_columns_pipeline;
+pub use builder_replace_into::ValueSource;

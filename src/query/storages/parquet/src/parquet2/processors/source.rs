@@ -22,13 +22,13 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
-use common_storage::metrics::copy::metrics_inc_copy_read_part_counter;
 use serde::Deserializer;
 use serde::Serializer;
 

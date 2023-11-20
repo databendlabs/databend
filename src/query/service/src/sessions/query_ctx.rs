@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::min;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -54,15 +55,17 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
-use common_storage::metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
@@ -541,6 +544,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
+        let external_server_connect_timeout_secs = self
+            .get_settings()
+            .get_external_server_connect_timeout_secs()?;
+        let external_server_request_timeout_secs = self
+            .get_settings()
+            .get_external_server_request_timeout_secs()?;
+
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
@@ -558,6 +568,9 @@ impl TableContext for QueryContext {
             openai_api_embedding_base_url: query_config.openai_api_embedding_base_url.clone(),
             openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
             openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+
+            external_server_connect_timeout_secs,
+            external_server_request_timeout_secs,
         })
     }
 
@@ -681,6 +694,11 @@ impl TableContext for QueryContext {
             }
         }
     }
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let user_mgr = UserApiProvider::instance();
+        let tenant = self.get_tenant();
+        user_mgr.get_connection(&tenant, name).await
+    }
 
     /// Fetch a Table by db and table name.
     ///
@@ -730,7 +748,7 @@ impl TableContext for QueryContext {
                 .await?
                 .file_info;
 
-            metrics_inc_filter_out_copied_files_request_milliseconds(
+            metrics_inc_copy_filter_out_copied_files_request_milliseconds(
                 Instant::now().duration_since(start_request).as_millis() as u64,
             );
             // Colored
@@ -799,6 +817,25 @@ impl TableContext for QueryContext {
         self.get_settings()
             .get_enterprise_license()
             .unwrap_or_default()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let mut queries_profile = SessionManager::instance().get_queries_profile();
+
+        let exchange_profiles = DataExchangeManager::instance().get_queries_profile();
+
+        for (query_id, profiles) in exchange_profiles {
+            match queries_profile.entry(query_id) {
+                Entry::Vacant(v) => {
+                    v.insert(profiles);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(profiles);
+                }
+            }
+        }
+
+        queries_profile
     }
 }
 

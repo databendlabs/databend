@@ -28,6 +28,7 @@ common-functions = { path = "../functions" }
 common-license = { path = "../../common/license" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
+common-metrics = { path = "../../common/metrics" }
 
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sources = { path = "../pipeline/sources" }
@@ -77,4 +78,3 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-url = { version = "2.3" }

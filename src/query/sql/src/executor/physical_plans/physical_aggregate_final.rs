@@ -23,11 +23,11 @@ use common_expression::DataSchemaRefExt;
 use common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plans::common::AggregateFunctionDesc;
-use crate::executor::physical_plans::common::AggregateFunctionSignature;
-use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
-use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
-use crate::executor::physical_plans::physical_exchange::Exchange;
+use crate::executor::physical_plans::AggregateExpand;
+use crate::executor::physical_plans::AggregateFunctionDesc;
+use crate::executor::physical_plans::AggregateFunctionSignature;
+use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::Exchange;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;

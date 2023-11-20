@@ -21,8 +21,8 @@ use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
 
-use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_block;
-use crate::pipelines::processors::transforms::RangeJoinState;
+use crate::pipelines::processors::transforms::range_join::filter_block;
+use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 
 impl RangeJoinState {
     pub fn merge_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {

@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
 
 pub trait Sink: Send {

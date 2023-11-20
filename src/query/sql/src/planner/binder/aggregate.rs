@@ -51,6 +51,7 @@ use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UDFServerCall;
+use crate::plans::Visitor;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
@@ -286,6 +287,7 @@ impl<'a> AggregateRewriter<'a> {
                 Ok(UDFServerCall {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
@@ -691,8 +693,8 @@ impl Binder {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
         let mut groups = Vec::new();
         for (idx, select_item) in select_list.items.iter().enumerate() {
-            let finder = Finder::new(&f);
-            let finder = select_item.scalar.accept(finder)?;
+            let mut finder = Finder::new(&f);
+            finder.visit(&select_item.scalar)?;
             if finder.scalars().is_empty() {
                 groups.push(Expr::Literal {
                     span: None,
@@ -811,9 +813,8 @@ impl Binder {
             )
         };
         for item in bind_context.aggregate_info.group_items.iter() {
-            let finder = Finder::new(&f);
-            let finder = item.scalar.accept(finder)?;
-
+            let mut finder = Finder::new(&f);
+            finder.visit(&item.scalar)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "GROUP BY items can't contain aggregate functions or window functions"

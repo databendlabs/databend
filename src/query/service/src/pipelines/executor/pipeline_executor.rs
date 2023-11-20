@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::intrinsics::assume;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -26,7 +28,9 @@ use common_base::runtime::TrySpawn;
 use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::LockGuard;
+use common_pipeline_core::Pipeline;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -37,13 +41,12 @@ use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_graph::RunningGraph;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::pipeline::Pipeline;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
@@ -52,7 +55,7 @@ pub type FinishedCallback =
 
 pub struct PipelineExecutor {
     threads_num: usize,
-    graph: RunningGraph,
+    pub(crate) graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
@@ -239,19 +242,19 @@ impl PipelineExecutor {
             {
                 let finished_error_guard = self.finished_error.lock();
                 if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = Some(error.clone());
+                    let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    self.on_finished(&may_error)?;
-                    return Err(may_error.unwrap());
+                    self.on_finished(&Some(may_error.clone()))?;
+                    return Err(may_error);
                 }
             }
 
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = Some(thread_res.unwrap_err());
-                self.on_finished(&may_error)?;
-                return Err(may_error.unwrap());
+                let may_error = thread_res.unwrap_err();
+                self.on_finished(&Some(may_error.clone()))?;
+                return Err(may_error);
             }
         }
 
@@ -354,8 +357,14 @@ impl PipelineExecutor {
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
+                let enable_profiling = this.settings.enable_profiling;
                 let try_result = catch_unwind(move || -> Result<()> {
-                    match this_clone.execute_single_thread(thread_num) {
+                    let res = match enable_profiling {
+                        true => this_clone.execute_single_thread::<true>(thread_num),
+                        false => this_clone.execute_single_thread::<false>(thread_num),
+                    };
+
+                    match res {
                         Ok(_) => Ok(()),
                         Err(cause) => {
                             if log::max_level() == LevelFilter::Trace {
@@ -384,7 +393,10 @@ impl PipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_single_thread(&self, thread_num: usize) -> Result<()> {
+    pub unsafe fn execute_single_thread<const ENABLE_PROFILING: bool>(
+        self: &Arc<Self>,
+        thread_num: usize,
+    ) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(
             thread_num,
@@ -399,13 +411,34 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                if let Some(executed_pid) = context.execute_task()? {
-                    // Not scheduled graph if pipeline is finished.
-                    if !self.global_tasks_queue.is_finished() {
-                        // We immediately schedule the processor again.
-                        let schedule_queue = self.graph.schedule_queue(executed_pid)?;
-                        schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                let (executed_pid, is_async, elapsed) =
+                    context.execute_task::<ENABLE_PROFILING>()?;
+
+                if ENABLE_PROFILING {
+                    let node = self.graph.get_node(executed_pid);
+                    if let Some(elapsed) = elapsed {
+                        let nanos = elapsed.as_nanos();
+                        assume(nanos < 18446744073709551615_u128);
+
+                        if is_async {
+                            node.profile
+                                .wait_time
+                                .fetch_add(nanos as u64, Ordering::Relaxed);
+                        } else {
+                            node.profile
+                                .cpu_time
+                                .fetch_add(nanos as u64, Ordering::Relaxed);
+                        }
                     }
+
+                    node.processor.record_profile(&node.profile);
+                }
+
+                // Not scheduled graph if pipeline is finished.
+                if !self.global_tasks_queue.is_finished() {
+                    // We immediately schedule the processor again.
+                    let schedule_queue = self.graph.schedule_queue(executed_pid)?;
+                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
                 }
             }
         }
@@ -415,6 +448,10 @@ impl PipelineExecutor {
 
     pub fn format_graph_nodes(&self) -> String {
         self.graph.format_graph_nodes()
+    }
+
+    pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
+        self.graph.get_proc_profiles()
     }
 }
 

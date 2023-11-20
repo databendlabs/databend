@@ -19,6 +19,8 @@ use common_ast::ast::ScheduleOptions;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::WarehouseOptions;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType::Int32;
+use common_expression::types::NumberDataType::Int64;
 use common_expression::types::NumberDataType::UInt64;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -43,6 +45,26 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("last_committed_on", DataType::Timestamp),
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
+    ]))
+}
+
+pub fn task_run_schema() -> DataSchemaRef {
+    Arc::new(DataSchema::new(vec![
+        DataField::new("name", DataType::String),
+        DataField::new("id", DataType::Number(UInt64)),
+        DataField::new("owner", DataType::String),
+        DataField::new("comment", DataType::String.wrap_nullable()),
+        DataField::new("schedule", DataType::String.wrap_nullable()),
+        DataField::new("warehouse", DataType::String.wrap_nullable()),
+        DataField::new("state", DataType::String),
+        DataField::new("definition", DataType::String),
+        DataField::new("run_id", DataType::String),
+        DataField::new("query_id", DataType::String),
+        DataField::new("exception_code", DataType::Number(Int64)),
+        DataField::new("exception_text", DataType::String.wrap_nullable()),
+        DataField::new("attempt_number", DataType::Number(Int32)),
+        DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
+        DataField::new("scheduled_time", DataType::Timestamp),
     ]))
 }
 

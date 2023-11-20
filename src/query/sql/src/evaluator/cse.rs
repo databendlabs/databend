@@ -143,14 +143,6 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
         }
         // ignore constant and column ref
         Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
-        Expr::UDFServerCall { args, .. } => {
-            let entry = counter.entry(expr.clone()).or_insert(0);
-            *entry += 1;
-
-            for arg in args {
-                count_expressions(arg, counter);
-            }
-        }
     }
 }
 
@@ -176,10 +168,5 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, E
         }
         // ignore constant and column ref
         Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
-        Expr::UDFServerCall { args, .. } => {
-            for arg in args.iter_mut() {
-                perform_cse_replacement(arg, cse_replacements);
-            }
-        }
     }
 }

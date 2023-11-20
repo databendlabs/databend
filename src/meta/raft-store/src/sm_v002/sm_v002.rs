@@ -197,7 +197,14 @@ impl SMV002 {
                 return Ok(());
             }
 
-            sm.replace(LeveledMap::new(level_data));
+            let mut levels = LeveledMap::new(level_data);
+            // Push all data down to frozen level, create a new empty writable level.
+            // So that the top writable level is small enough.
+            // Writable level can not return a static stream for `range()`. It has to copy all data in the range.
+            // See the MapApiRO::range() implementation for Level.
+            levels.freeze_writable();
+
+            sm.replace(levels);
         }
 
         info!(
@@ -306,11 +313,8 @@ impl SMV002 {
     pub(crate) async fn list_expire_index(
         &self,
     ) -> Result<impl Stream<Item = Result<(ExpireKey, String), io::Error>> + '_, io::Error> {
-        let strm = self
-            .levels
-            .expire_map()
-            .range(&self.expire_cursor..)
-            .await?;
+        let start = self.expire_cursor;
+        let strm = self.levels.expire_map().range(start..).await?;
 
         let strm = strm
             // Return only non-deleted records

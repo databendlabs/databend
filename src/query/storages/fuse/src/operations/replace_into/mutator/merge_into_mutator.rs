@@ -32,8 +32,9 @@ use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchema;
+use common_metrics::storage::*;
 use common_sql::evaluator::BlockOperator;
-use common_sql::executor::OnConflictField;
+use common_sql::executor::physical_plans::OnConflictField;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -55,22 +56,6 @@ use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::WriteSettings;
-use crate::metrics::metrics_inc_replace_accumulated_merge_action_time_ms;
-use crate::metrics::metrics_inc_replace_apply_deletion_time_ms;
-use crate::metrics::metrics_inc_replace_block_number_after_pruning;
-use crate::metrics::metrics_inc_replace_block_number_bloom_pruned;
-use crate::metrics::metrics_inc_replace_block_number_totally_loaded;
-use crate::metrics::metrics_inc_replace_block_number_write;
-use crate::metrics::metrics_inc_replace_block_of_zero_row_deleted;
-use crate::metrics::metrics_inc_replace_deleted_blocks_rows;
-use crate::metrics::metrics_inc_replace_number_accumulated_merge_action;
-use crate::metrics::metrics_inc_replace_number_apply_deletion;
-use crate::metrics::metrics_inc_replace_replaced_blocks_rows;
-use crate::metrics::metrics_inc_replace_row_number_after_pruning;
-use crate::metrics::metrics_inc_replace_row_number_totally_loaded;
-use crate::metrics::metrics_inc_replace_row_number_write;
-use crate::metrics::metrics_inc_replace_segment_number_after_pruning;
-use crate::metrics::metrics_inc_replace_whole_block_deletion;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -78,11 +63,11 @@ use crate::operations::common::MutationLogs;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
-use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
-use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
-use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
-use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
+use crate::operations::replace_into::meta::DeletionByColumn;
+use crate::operations::replace_into::meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::UniqueKeyDigest;
+use crate::operations::replace_into::mutator::row_hash_of_columns;
+use crate::operations::replace_into::mutator::DeletionAccumulator;
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -184,7 +169,7 @@ impl MergeIntoOperationAggregator {
             ctx,
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
-                segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+                segment_locations: AHashMap::from_iter(segment_locations),
                 block_slots_in_charge: block_slots,
                 on_conflict_fields,
                 bloom_filter_column_indexes,

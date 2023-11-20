@@ -29,6 +29,10 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
+use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
+use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
+use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
+use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
@@ -302,6 +306,10 @@ impl InterpreterFactory {
                 ctx,
                 *set_role.clone(),
             )?)),
+            Plan::SetSecondaryRoles(set_secondary_roles) => Ok(Arc::new(
+                SetSecondaryRolesInterpreter::try_create(ctx, *set_secondary_roles.clone())?,
+            )),
+
             Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages
@@ -467,6 +475,20 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::ShowTasks(p) => Ok(Arc::new(ShowTasksInterpreter::try_create(ctx, *p.clone())?)),
+
+            Plan::CreateConnection(p) => Ok(Arc::new(CreateConnectionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropConnection(p) => Ok(Arc::new(DropConnectionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescConnection(p) => Ok(Arc::new(DescConnectionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowConnections(_) => Ok(Arc::new(ShowConnectionsInterpreter::try_create(ctx)?)),
         }
     }
 }

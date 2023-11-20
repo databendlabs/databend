@@ -426,6 +426,7 @@ pub trait VisitorMut: Sized {
     fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt) {}
 
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
+    fn visit_set_secondary_roles(&mut self, _option: &mut SecondaryRolesOption) {}
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
     fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
@@ -710,4 +711,9 @@ pub trait VisitorMut: Sized {
 
         walk_join_condition_mut(self, condition);
     }
+
+    fn visit_create_connection(&mut self, _stmt: &mut CreateConnectionStmt) {}
+    fn visit_drop_connection(&mut self, _stmt: &mut DropConnectionStmt) {}
+    fn visit_describe_connection(&mut self, _stmt: &mut DescribeConnectionStmt) {}
+    fn visit_show_connections(&mut self, _stmt: &mut ShowConnectionsStmt) {}
 }

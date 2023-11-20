@@ -41,7 +41,7 @@ pub async fn do_purge_test(
     block_count: u32,
     index_count: u32,
 ) -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
 
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
     do_insertions(&fixture).await?;
@@ -53,7 +53,7 @@ pub async fn do_purge_test(
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let snapshot_files = fuse_table.list_snapshot_files().await?;
-    let table_ctx: Arc<dyn TableContext> = fixture.ctx();
+    let table_ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
     fuse_table
         .do_purge(&table_ctx, snapshot_files, None, true, false)
         .await?;

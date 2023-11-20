@@ -15,7 +15,10 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -35,7 +38,6 @@ pub enum StorageParams {
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
-    Redis(StorageRedisConfig),
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
 
@@ -69,7 +71,6 @@ impl StorageParams {
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
-            StorageParams::Redis(_) => false,
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::None => false,
@@ -91,7 +92,6 @@ impl StorageParams {
             StorageParams::Oss(v) => v.root = f(&v.root),
             StorageParams::S3(v) => v.root = f(&v.root),
             StorageParams::Gcs(v) => v.root = f(&v.root),
-            StorageParams::Redis(v) => v.root = f(&v.root),
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
             StorageParams::None => {}
@@ -117,17 +117,46 @@ impl StorageParams {
     /// auto_detect is used to do auto detect for some storage params under async context.
     ///
     /// - This action should be taken before storage params been passed out.
-    /// - This action should not return errors, we will return it as is if any error happened.
-    pub async fn auto_detect(self) -> Self {
-        match self {
+    pub async fn auto_detect(self) -> Result<Self> {
+        let sp = match self {
             StorageParams::S3(mut s3) if s3.region.is_empty() => {
+                // TODO: endpoint related logic should be moved out from opendal as a new API.
+                // Remove the possible trailing `/` in endpoint.
+                let endpoint = s3.endpoint_url.trim_end_matches('/');
+
+                // Make sure the endpoint contains the scheme.
+                let endpoint = if endpoint.starts_with("http") {
+                    endpoint.to_string()
+                } else {
+                    // Prefix https if endpoint doesn't start with scheme.
+                    format!("https://{}", endpoint)
+                };
+
+                // We should not return error if client create failed, just ignore it.
+                if let Ok(client) = opendal::raw::HttpClient::new() {
+                    // The response itself doesn't important.
+                    let _ = client
+                        .client()
+                        .get(&endpoint)
+                        .timeout(Duration::from_secs(10))
+                        .send()
+                        .await
+                        .map_err(|err| {
+                            ErrorCode::InvalidConfig(format!(
+                                "s3 endpoint_url {} is invalid or incomplete: {err:?}",
+                                s3.endpoint_url
+                            ))
+                        })?;
+                }
                 s3.region = opendal::services::S3::detect_region(&s3.endpoint_url, &s3.bucket)
                     .await
                     .unwrap_or_default();
                 StorageParams::S3(s3)
             }
             v => v,
-        }
+        };
+
+        Ok(sp)
     }
 }
 
@@ -180,13 +209,6 @@ impl Display for StorageParams {
                     f,
                     "s3 | bucket={},root={},endpoint={}",
                     v.bucket, v.root, v.endpoint_url
-                )
-            }
-            StorageParams::Redis(v) => {
-                write!(
-                    f,
-                    "redis | db={},root={},endpoint={}",
-                    v.db, v.root, v.endpoint_url
                 )
             }
             StorageParams::Webhdfs(v) => {
@@ -493,38 +515,6 @@ impl Default for StorageMokaConfig {
             // Use 10 minutes as default time to idle.
             time_to_idle: 600,
         }
-    }
-}
-
-/// config for Redis Storage Service
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageRedisConfig {
-    pub endpoint_url: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub root: String,
-    pub db: i64,
-    /// TTL in seconds
-    pub default_ttl: Option<i64>,
-}
-
-impl Debug for StorageRedisConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut d = f.debug_struct("StorageRedisConfig");
-
-        d.field("endpoint_url", &self.endpoint_url)
-            .field("db", &self.db)
-            .field("root", &self.root)
-            .field("default_ttl", &self.default_ttl);
-
-        if let Some(username) = &self.username {
-            d.field("username", &mask_string(username, 3));
-        }
-        if let Some(password) = &self.password {
-            d.field("password", &mask_string(password, 3));
-        }
-
-        d.finish()
     }
 }
 

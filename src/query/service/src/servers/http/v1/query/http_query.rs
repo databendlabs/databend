@@ -40,7 +40,6 @@ use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
-use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
@@ -137,6 +136,8 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
@@ -167,6 +168,7 @@ pub struct HttpQueryResponseInternal {
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
     pub state: ResponseState,
+    pub node_id: String,
 }
 
 pub enum ExpireState {
@@ -184,11 +186,15 @@ pub enum ExpireResult {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
+    pub(crate) node_id: String,
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    config: HttpQueryConfig,
     expire_state: Arc<TokioMutex<ExpireState>>,
+    /// The timeout for the query result polling. In the normal case, the client driver
+    /// should fetch the paginated result in a timely manner, and the interval should not
+    /// exceed this result_timeout_secs.
+    pub(crate) result_timeout_secs: u64,
 }
 
 impl HttpQuery {
@@ -197,7 +203,6 @@ impl HttpQuery {
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = HttpQueryManager::instance();
 
@@ -234,14 +239,19 @@ impl HttpQuery {
         // the session variables includes:
         // - the current database
         // - the current role
-        // - the session-level settings, like max_threads
+        // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
             }
             if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role, true).await?;
+                session.set_current_role_checked(role).await?;
             }
+            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+            session
+                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
+                .await?;
+            // TODO(liyz): pass secondary roles here
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {
@@ -269,6 +279,8 @@ impl HttpQuery {
             }
         };
 
+        let settings = session.get_settings();
+        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
@@ -287,8 +299,9 @@ impl HttpQuery {
         ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
+        let node_id = ctx.get_cluster().local_id.clone();
         let sql = &request.sql;
-        info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
+        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
@@ -366,13 +379,15 @@ impl HttpQuery {
             schema,
             format_settings,
         )));
+
         let query = HttpQuery {
             id: query_id,
             session_id,
+            node_id,
             request,
             state,
             page_manager: data,
-            config,
+            result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
         };
 
@@ -390,6 +405,7 @@ impl HttpQuery {
             data,
             state,
             session: Some(session),
+            node_id: self.node_id.clone(),
             session_id: self.session_id.clone(),
         })
     }
@@ -402,6 +418,7 @@ impl HttpQuery {
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
+            node_id: self.node_id.clone(),
             state,
             session: Some(session),
         }
@@ -422,13 +439,6 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     async fn get_response_session(&self) -> HttpSessionConf {
-        let executor = self.state.read().await;
-        let session_state = executor.get_session_state();
-        let settings = session_state
-            .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
-            .collect::<BTreeMap<_, _>>();
         let keep_server_session_secs = self
             .request
             .session
@@ -436,10 +446,27 @@ impl HttpQuery {
             .map(|v| v.keep_server_session_secs)
             .unwrap_or(None);
 
-        // TODO: add current role here
+        // reply the updated session state, includes:
+        // - current_database: updated by USE XXX;
+        // - role: updated by SET ROLE;
+        // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
+        // - settings: updated by SET XXX = YYY;
+        let executor = self.state.read().await;
+        let session_state = executor.get_session_state();
+
+        let settings = session_state
+            .settings
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let database = session_state.current_database.clone();
+        let role = session_state.current_role.clone();
+        let secondary_roles = session_state.secondary_roles.clone();
+
         HttpSessionConf {
-            database: Some(session_state.current_database),
-            role: session_state.current_role,
+            database: Some(database),
+            role,
+            secondary_roles,
             keep_server_session_secs,
             settings: Some(settings),
         }
@@ -460,6 +487,9 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn kill(&self) {
+        // the query will be removed from the query manager before the session is dropped.
+        self.detach().await;
+
         Executor::stop(
             &self.state,
             Err(ErrorCode::AbortedQuery("killed by http")),
@@ -469,14 +499,16 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&self) {
+    async fn detach(&self) {
+        info!("{}: http query detached", &self.id);
+
         let data = self.page_manager.lock().await;
         data.detach().await
     }
 
     #[async_backtrace::framed]
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_secs(self.config.result_timeout_secs)
+        let duration = Duration::from_secs(self.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
@@ -508,7 +540,7 @@ impl HttpQuery {
             }
             ExpireState::Removed => ExpireResult::Removed,
             ExpireState::Working => {
-                ExpireResult::Sleep(Duration::from_secs(self.config.result_timeout_secs))
+                ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
         }
     }

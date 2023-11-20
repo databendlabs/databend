@@ -38,7 +38,6 @@ use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
 use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use common_meta_app::tenant::TenantQuota;
@@ -47,7 +46,7 @@ use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
 use common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_tracing::TracingConfig;
+use common_tracing::TracingConfig as InnerTracingConfig;
 use common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -237,9 +236,6 @@ impl Config {
 ///
 /// [storage.data]
 /// type = "s3"
-///
-/// [storage.cache]
-/// type = "redis"
 ///
 /// [storage.temporary]
 /// type = "s3"
@@ -1171,64 +1167,6 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct RedisStorageConfig {
-    pub endpoint_url: String,
-    pub username: String,
-    pub password: String,
-    pub root: String,
-    pub db: i64,
-    /// TTL in seconds
-    pub default_ttl: i64,
-}
-
-impl Default for RedisStorageConfig {
-    fn default() -> Self {
-        InnerStorageRedisConfig::default().into()
-    }
-}
-
-impl From<InnerStorageRedisConfig> for RedisStorageConfig {
-    fn from(v: InnerStorageRedisConfig) -> Self {
-        Self {
-            endpoint_url: v.endpoint_url.clone(),
-            username: v.username.unwrap_or_default(),
-            password: v.password.unwrap_or_default(),
-            root: v.root.clone(),
-            db: v.db,
-            default_ttl: v.default_ttl.unwrap_or_default(),
-        }
-    }
-}
-
-impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageRedisConfig> {
-        Ok(InnerStorageRedisConfig {
-            endpoint_url: self.endpoint_url.clone(),
-            username: if self.username.is_empty() {
-                None
-            } else {
-                Some(self.username.clone())
-            },
-            password: if self.password.is_empty() {
-                None
-            } else {
-                Some(self.password.clone())
-            },
-            root: self.root.clone(),
-            db: self.db,
-            default_ttl: if self.default_ttl == 0 {
-                None
-            } else {
-                Some(self.default_ttl)
-            },
-        })
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct WebhdfsStorageConfig {
@@ -1856,6 +1794,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub query: QueryLogConfig,
+
+    #[clap(flatten)]
+    pub tracing: TracingConfig,
 }
 
 impl Default for LogConfig {
@@ -1907,7 +1848,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             query.dir = format!("{}/query-details", &file.dir);
         }
 
-        let tracing = TracingConfig::from_env();
+        let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
         Ok(InnerLogConfig {
             file,
@@ -1926,6 +1867,7 @@ impl From<InnerLogConfig> for LogConfig {
             file: inner.file.into(),
             stderr: inner.stderr.into(),
             query: inner.query.into(),
+            tracing: inner.tracing.into(),
 
             // Deprecated fields
             log_dir: None,
@@ -2086,6 +2028,60 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
         Self {
             log_query_on: inner.on,
             log_query_dir: inner.dir,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct TracingConfig {
+    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "false")]
+    #[serde(rename = "on")]
+    pub tracing_on: bool,
+
+    /// Tracing log level <DEBUG|TRACE|INFO|WARN|ERROR>
+    #[clap(
+        long = "log-tracing-level",
+        value_name = "VALUE",
+        default_value = "INFO"
+    )]
+    #[serde(rename = "capture_log_level")]
+    pub tracing_capture_log_level: String,
+
+    /// Tracing otlp endpoint
+    #[clap(
+        long = "log-tracing-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = "http://localhost:4317"
+    )]
+    #[serde(rename = "otlp_endpoint")]
+    pub tracing_otlp_endpoint: String,
+}
+
+impl Default for TracingConfig {
+    fn default() -> Self {
+        InnerTracingConfig::default().into()
+    }
+}
+
+impl TryInto<InnerTracingConfig> for TracingConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerTracingConfig> {
+        Ok(InnerTracingConfig {
+            on: self.tracing_on,
+            capture_log_level: self.tracing_capture_log_level,
+            otlp_endpoint: self.tracing_otlp_endpoint,
+        })
+    }
+}
+
+impl From<InnerTracingConfig> for TracingConfig {
+    fn from(inner: InnerTracingConfig) -> Self {
+        Self {
+            tracing_on: inner.on,
+            tracing_capture_log_level: inner.capture_log_level,
+            tracing_otlp_endpoint: inner.otlp_endpoint,
         }
     }
 }

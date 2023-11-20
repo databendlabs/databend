@@ -102,6 +102,9 @@ pub struct FunctionContext {
     pub openai_api_version: String,
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
+
+    pub external_server_connect_timeout_secs: u64,
+    pub external_server_request_timeout_secs: u64,
 }
 
 #[derive(Clone)]
@@ -404,7 +407,7 @@ impl FunctionRegistry {
         let id = self.next_function_id(&name);
         self.funcs
             .entry(name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((Arc::new(func), id));
     }
 
@@ -412,7 +415,7 @@ impl FunctionRegistry {
         let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((Box::new(factory), id));
     }
 
@@ -437,7 +440,7 @@ impl FunctionRegistry {
     ) {
         self.additional_cast_rules
             .entry(fn_name.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(additional_cast_rules.into_iter());
     }
 

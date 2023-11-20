@@ -43,11 +43,18 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("parquet_max_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "Max block size for parquet reader",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -92,6 +99,16 @@ impl DefaultSettings {
                 ("flight_client_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum time in seconds that a flight client request can be processed.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("http_handler_result_timeout_secs", DefaultSettingValue {
+                    value: {
+                        let result_timeout_secs = global_conf.map(|conf| conf.query.http_handler_result_timeout_secs)
+                            .unwrap_or(60);
+                        UserSettingValue::UInt64(result_timeout_secs)
+                    },
+                    desc: "Set the timeout in seconds that a http query session expires without any polls.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -321,13 +338,13 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(5),
+                    value: UserSettingValue::UInt64(10),
                     desc: "Sets the seconds that the table lock will expire in.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
+                    value: UserSettingValue::UInt64(15),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -353,6 +370,12 @@ impl DefaultSettings {
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed merge into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("merge_into_static_filter_partition_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1500),
+                    desc: "Max number of partitions allowed for static filtering of merge into statement",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -458,6 +481,21 @@ impl DefaultSettings {
                         possible_values: None,
                         display_in_show_settings: true,
                 }),
+
+                ("external_server_connect_timeout_secs", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(10),
+                        desc: "Connection timeout to external server",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+
+                ("external_server_request_timeout_secs", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(180),
+                        desc: "Request timeout to external server",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+
                 ("enable_parquet_prewhere", DefaultSettingValue {
                         value: UserSettingValue::UInt64(0),
                         desc: "Enables parquet prewhere",

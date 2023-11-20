@@ -1637,6 +1637,7 @@ Functions overloads:
 13 factorial(Int32 NULL) :: Int64 NULL
 14 factorial(Int64) :: Int64
 15 factorial(Int64 NULL) :: Int64 NULL
+0 flatten FACTORY
 0 floor(Float64) :: Float64
 1 floor(Float64 NULL) :: Float64 NULL
 0 from_base64(String) :: String
@@ -1848,6 +1849,10 @@ Functions overloads:
 1 is_true(Boolean NULL) :: Boolean
 0 json_array FACTORY
 0 json_array_elements FACTORY
+0 json_contains_in_left(Variant, Variant) :: Boolean
+1 json_contains_in_left(Variant NULL, Variant NULL) :: Boolean NULL
+0 json_contains_in_right(Variant, Variant) :: Boolean
+1 json_contains_in_right(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_each FACTORY
 0 json_exists_all_keys(Variant, Array(String)) :: Boolean
 1 json_exists_all_keys(Variant NULL, Array(String) NULL) :: Boolean NULL
@@ -3625,6 +3630,8 @@ Functions overloads:
 3 to_yyyymmddhhmmss(Timestamp NULL) :: UInt64 NULL
 0 today() :: Date
 0 tomorrow() :: Date
+0 translate(String, String, String) :: String
+1 translate(String NULL, String NULL, String NULL) :: String NULL
 0 trim(String) :: String
 1 trim(String NULL) :: String NULL
 0 trim_both(String, String) :: String

@@ -308,6 +308,7 @@ impl MetaNode {
             install_snapshot_timeout: config.install_snapshot_timeout,
             snapshot_policy: SnapshotPolicy::LogsSinceLast(config.snapshot_logs_since_last),
             max_in_snapshot_log_to_keep: config.max_applied_log_to_keep,
+            snapshot_max_chunk_size: config.snapshot_chunk_size,
             ..Default::default()
         }
         .validate()

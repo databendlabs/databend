@@ -709,6 +709,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             ExplainKind::Pipeline => "Pipeline",
             ExplainKind::Fragments => "Fragments",
             ExplainKind::Raw => "Raw",
+            ExplainKind::Optimized => "Optimized",
             ExplainKind::Plan => "Plan",
             ExplainKind::Memo(_) => "Memo",
             ExplainKind::JOIN => "JOIN",
@@ -1297,6 +1298,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let database_format_ctx = AstFormatContext::new(database_name);
             let database_node = FormatTreeNode::new(database_format_ctx);
             children.push(database_node);
+        }
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
         }
         let name = "ShowDropTables".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -2810,12 +2815,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             TableReference::Subquery {
                 span: _,
+                lateral,
                 subquery,
                 alias,
             } => {
                 self.visit_query(subquery);
                 let child = self.children.pop().unwrap();
-                let name = "Subquery".to_string();
+                let name = if *lateral {
+                    "LateralSubquery"
+                } else {
+                    "Subquery"
+                }
+                .to_string();
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(name, 1, Some(format!("{}", alias)))
                 } else {
@@ -2826,6 +2837,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             TableReference::TableFunction {
                 span: _,
+                lateral,
                 name,
                 params,
                 named_params,
@@ -2845,7 +2857,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     );
                     children.push(node);
                 }
-                let func_name = format!("TableFunction {}", name);
+                let func_name = if *lateral {
+                    format!("Lateral TableFunction {}", name)
+                } else {
+                    format!("TableFunction {}", name)
+                };
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(
                         func_name,
