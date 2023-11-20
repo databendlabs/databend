@@ -21,6 +21,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::Location;
 
+use crate::binder::MergeIntoType;
 use crate::executor::physical_plan::PhysicalPlan;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
@@ -30,6 +31,7 @@ pub struct MergeIntoSource {
     // join result:  source_columns, target_columns, target_table._row_id
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
+    pub merge_type: MergeIntoType,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -48,6 +50,7 @@ pub struct MergeInto {
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
     pub distributed: bool,
+    pub merge_type: MergeIntoType,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -29,6 +29,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 use common_pipeline_transforms::processors::create_dummy_item;
+use common_sql::binder::MergeIntoType;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::MergeInto;
@@ -234,19 +235,34 @@ impl PipelineBuilder {
         &mut self,
         merge_into_source: &MergeIntoSource,
     ) -> Result<()> {
-        let MergeIntoSource { input, row_id_idx } = merge_into_source;
+        let MergeIntoSource {
+            input,
+            row_id_idx,
+            merge_type,
+        } = merge_into_source;
 
         self.build_pipeline(input)?;
+        // 1. if matchedOnly, we will use inner join
+        // 2. if insert Only, we will use right anti join
+        // 3. other cases, we use right outer join
+        // an optimiztion later: for unmatched only, we can reverse
+        // `on conditions` and use inner join.
         // merge into's parallism depends on the join probe number.
-        let mut items = Vec::with_capacity(self.main_pipeline.output_len());
-        let output_len = self.main_pipeline.output_len();
-        for _ in 0..output_len {
-            let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
-            items.push(merge_into_split_processor.into_pipe_item());
-        }
+        match merge_type {
+            MergeIntoType::FullOperation | MergeIntoType::UnmatechedOnly => {
+                let mut items = Vec::with_capacity(self.main_pipeline.output_len());
+                let output_len = self.main_pipeline.output_len();
+                for _ in 0..output_len {
+                    let merge_into_split_processor =
+                        MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+                    items.push(merge_into_split_processor.into_pipe_item());
+                }
 
-        self.main_pipeline
-            .add_pipe(Pipe::create(output_len, output_len * 2, items));
+                self.main_pipeline
+                    .add_pipe(Pipe::create(output_len, output_len * 2, items));
+            }
+            _ => {}
+        };
 
         Ok(())
     }
@@ -304,7 +320,7 @@ impl PipelineBuilder {
             output_len
         };
         // Handle matched and unmatched data separately.
-
+        // This is a complete pipeline with matched and not matched clauses.
         //                                                                                 +-----------------------------+-+
         //                                    +-----------------------+     Matched        |                             +-+
         //                                    |                       +---+--------------->|    MatchedSplitProcessor    |

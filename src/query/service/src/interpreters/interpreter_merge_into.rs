@@ -135,6 +135,7 @@ impl MergeIntoInterpreter {
             unmatched_evaluators,
             target_table_idx,
             field_index_map,
+            merge_type,
             ..
         } = &self.plan;
 
@@ -220,6 +221,7 @@ impl MergeIntoInterpreter {
         let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
             input: Box::new(join_input),
             row_id_idx: row_id_idx as u32,
+            merge_type: merge_type.clone(),
         });
 
         // transform unmatched for insert
@@ -356,6 +358,7 @@ impl MergeIntoInterpreter {
                 segments,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
+                merge_type: merge_type.clone(),
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -371,6 +374,7 @@ impl MergeIntoInterpreter {
                 output_schema: DataSchemaRef::new(DataSchema::new(vec![
                     join_output_schema.fields[row_number_idx.unwrap()].clone(),
                 ])),
+                merge_type: merge_type.clone(),
             }));
 
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {

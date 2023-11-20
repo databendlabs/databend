@@ -60,18 +60,19 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
     MatechedOnly,
-    InsertOnly,
+    UnmatechedOnly,
     FullOperation,
+    InsertOnly,
 }
 
 // Optimize Rule:
 // for now we think right source table is small table in default.
-// 1. unmatched only:
+// 1. insert only:
 //      right anti join
-// 2. macthed and unmatched:
+// 2. (macthed and unmatched)/(unmatched only and not insert only):
 //      right outer
 // 3. matched only:
 //      inner join
@@ -114,11 +115,11 @@ impl Binder {
             .await?;
 
         // optimize insert-only
-        if let MergeIntoType::InsertOnly = merge_type && insert_only(&plan){
+        if let MergeIntoType::UnmatechedOnly = merge_type && insert_only(&plan){
             // init bind_context and metadata
             *bind_context = BindContext::new();
             self.metadata = Arc::new(RwLock::new(Metadata::default()));
-            plan = self.bind_merge_into_with_join_type(bind_context, stmt, RightAnti,matched_clauses,unmatched_clauses,merge_type).await?;
+            plan = self.bind_merge_into_with_join_type(bind_context, stmt, RightAnti,matched_clauses,unmatched_clauses,MergeIntoType::InsertOnly).await?;
         }
 
         Ok(Plan::MergeInto(Box::new(plan)))
@@ -627,7 +628,7 @@ impl Binder {
 
 fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoType> {
     if matched_len == 0 && unmatched_len > 0 {
-        Ok(MergeIntoType::InsertOnly)
+        Ok(MergeIntoType::UnmatechedOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
         Ok(MergeIntoType::MatechedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
