@@ -9,6 +9,34 @@ maturin develop
 
 ## Usage
 
+
+### Blocking
+
+```python
+from databend_driver import BlockingDatabendClient
+
+client = BlockingDatabendClient('databend+http://root:root@localhost:8000/?sslmode=disable')
+conn = client.get_conn()
+conn.exec(
+    """
+    CREATE TABLE test (
+        i64 Int64,
+        u64 UInt64,
+        f64 Float64,
+        s   String,
+        s2  String,
+        d   Date,
+        t   DateTime
+    )
+    """
+)
+rows = conn.query_iter("SELECT * FROM test")
+for row in rows:
+    print(row.values())
+```
+
+### Asyncio
+
 ```python
 import asyncio
 from databend_driver import AsyncDatabendClient
@@ -58,6 +86,27 @@ class AsyncDatabendConnection:
     async def stream_load(self, sql: str, data: list[list[str]]) -> ServerStats: ...
 ```
 
+### BlockingDatabendClient
+
+```python
+class BlockingDatabendClient:
+    def __init__(self, dsn: str): ...
+    def get_conn(self) -> BlockingDatabendConnection: ...
+```
+
+### BlockingDatabendConnection
+
+```python
+class BlockingDatabendConnection:
+    def info(self) -> ConnectionInfo: ...
+    def version(self) -> str: ...
+    def exec(self, sql: str) -> int: ...
+    def query_row(self, sql: str) -> Row: ...
+    def query_iter(self, sql: str) -> RowIterator: ...
+    def stream_load(self, sql: str, data: list[list[str]]) -> ServerStats: ...
+```
+
+
 ### Row
 
 ```python
@@ -69,9 +118,13 @@ class Row:
 
 ```python
 class RowIterator:
+    def schema(self) -> Schema: ...
+
+    def __iter__(self) -> RowIterator: ...
+    def __next__(self) -> Row: ...
+
     def __aiter__(self) -> RowIterator: ...
     async def __anext__(self) -> Row: ...
-    def schema(self) -> Schema: ...
 ```
 
 ### Field
@@ -131,8 +184,14 @@ class ConnectionInfo:
 
 ## Development
 
+```
+cd tests
+make up
+```
+
 ```shell
+cd bindings/python
 pipenv install --dev
-maturin develop
-pipenv run behave tests
+pipenv run maturin develop
+pipenv run behave tests/*
 ```
