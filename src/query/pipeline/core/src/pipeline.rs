@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
+use crate::processors::profile::PlanScope;
 use crate::processors::DuplicateProcessor;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
@@ -30,6 +31,7 @@ use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;
+use crate::PlanScopeGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -468,44 +470,6 @@ impl Drop for Pipeline {
             ));
 
             let _ = (on_finished)(&cause);
-        }
-    }
-}
-
-pub struct PlanScopeGuard {
-    idx: usize,
-    scope_size: Arc<AtomicUsize>,
-}
-
-impl PlanScopeGuard {
-    pub fn create(scope_size: Arc<AtomicUsize>, idx: usize) -> PlanScopeGuard {
-        PlanScopeGuard { idx, scope_size }
-    }
-}
-
-impl Drop for PlanScopeGuard {
-    fn drop(&mut self) {
-        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
-            && !std::thread::panicking()
-        {
-            panic!("Broken pipeline scope stack.");
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PlanScope {
-    pub id: u32,
-    pub name: String,
-    pub parent_id: u32,
-}
-
-impl PlanScope {
-    pub fn create(id: u32, name: String) -> PlanScope {
-        PlanScope {
-            id,
-            parent_id: 0,
-            name,
         }
     }
 }

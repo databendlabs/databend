@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::sync::atomic::AtomicU64;
-
-use crate::PlanScope;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Profile {
@@ -44,6 +45,44 @@ impl Profile {
             plan_id: scope.as_ref().map(|x| x.id),
             plan_name: scope.as_ref().map(|x| x.name.clone()),
             plan_parent_id: scope.as_ref().map(|x| x.parent_id),
+        }
+    }
+}
+
+pub struct PlanScopeGuard {
+    idx: usize,
+    scope_size: Arc<AtomicUsize>,
+}
+
+impl PlanScopeGuard {
+    pub fn create(scope_size: Arc<AtomicUsize>, idx: usize) -> PlanScopeGuard {
+        PlanScopeGuard { idx, scope_size }
+    }
+}
+
+impl Drop for PlanScopeGuard {
+    fn drop(&mut self) {
+        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
+            && !std::thread::panicking()
+        {
+            panic!("Broken pipeline scope stack.");
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PlanScope {
+    pub id: u32,
+    pub name: String,
+    pub parent_id: u32,
+}
+
+impl PlanScope {
+    pub fn create(id: u32, name: String) -> PlanScope {
+        PlanScope {
+            id,
+            parent_id: 0,
+            name,
         }
     }
 }
