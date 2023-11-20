@@ -57,6 +57,7 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
@@ -99,7 +100,7 @@ use crate::storages::Table;
 
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
-const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
+const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -733,9 +734,9 @@ impl TableContext for QueryContext {
             .await?;
         let table_id = table.get_id();
 
-        let mut limit: usize = 0;
+        let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
-        let batch_size = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
+        let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
 
         let mut results = Vec::with_capacity(files.len());
 
@@ -755,9 +756,14 @@ impl TableContext for QueryContext {
             for file in chunk {
                 if !copied_files.contains_key(&file.path) {
                     results.push(file.clone());
-                    limit += 1;
-                    if limit == max_files {
+                    result_size += 1;
+                    if result_size == max_files {
                         return Ok(results);
+                    }
+                    if result_size > COPIED_FILES_MAX_COMMIT_NUM {
+                        return Err(ErrorCode::Internal(format!(
+                            "copy into table can commit at most {COPIED_FILES_MAX_COMMIT_NUM} paths once. Please use CopyOption max_files to limit the number of files or use 'force=true, purge=true' to avoid committing paths if acceptable."
+                        )));
                     }
                 }
             }
