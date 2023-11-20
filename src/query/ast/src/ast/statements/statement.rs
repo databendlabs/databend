@@ -86,6 +86,10 @@ pub enum Statement {
         role_name: String,
     },
 
+    SetSecondaryRoles {
+        option: SecondaryRolesOption,
+    },
+
     Insert(InsertStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
@@ -405,6 +409,13 @@ impl Display for Statement {
                     write!(f, "DEFAULT")?;
                 } else {
                     write!(f, "{role_name}")?;
+                }
+            }
+            Statement::SetSecondaryRoles { option } => {
+                write!(f, "SET SECONDARY ROLES ")?;
+                match option {
+                    SecondaryRolesOption::None => write!(f, "NONE")?,
+                    SecondaryRolesOption::All => write!(f, "ALL")?,
                 }
             }
             Statement::ShowCatalogs(stmt) => write!(f, "{stmt}")?,

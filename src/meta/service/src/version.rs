@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::fmt;
+use std::fmt::Formatter;
 
 use once_cell::sync::Lazy;
 use semver::BuildMetadata;
@@ -101,7 +103,29 @@ pub const RAFT_CLIENT_PROVIDES: &[(&str, u8, &str)] = &[
 pub const RAFT_SERVER_DEPENDS: &[(&str, u8, &str)] = &[
 ];
 
-pub fn raft_server_provides() -> BTreeSet<String> {
+pub struct FeatureSet {
+    features: BTreeSet<String>,
+}
+
+impl FeatureSet {
+    pub fn new(fs: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            features: fs.into_iter().collect(),
+        }
+    }
+}
+
+impl fmt::Display for FeatureSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.features.iter().cloned().collect::<Vec<_>>().join(", ")
+        )
+    }
+}
+
+pub fn raft_server_provides() -> FeatureSet {
     let mut set = BTreeSet::new();
 
     for (name, state, _) in RAFT_SERVER_PROVIDES {
@@ -110,10 +134,10 @@ pub fn raft_server_provides() -> BTreeSet<String> {
         }
     }
 
-    set
+    FeatureSet::new(set)
 }
 
-pub fn raft_client_requires() -> BTreeSet<String> {
+pub fn raft_client_requires() -> FeatureSet {
     let mut set = BTreeSet::new();
 
     for (name, state, _) in RAFT_CLIENT_REQUIRES {
@@ -122,7 +146,7 @@ pub fn raft_client_requires() -> BTreeSet<String> {
         }
     }
 
-    set
+    FeatureSet::new(set)
 }
 
 pub fn to_digit_ver(v: &Version) -> u64 {

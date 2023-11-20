@@ -64,15 +64,15 @@ SELECT CAST(CAST(1 + 1 + 1, String) AS Int8)
 3
 
 
-statement error 1006
+statement ok
 SELECT CAST(Null as Int64)
 
 
-statement error 1006
+statement ok
 SELECT CAST(Null as Varchar)
 
 
-statement error 1006
+statement ok
 SELECT CAST(Null as Boolean)
 
 query B

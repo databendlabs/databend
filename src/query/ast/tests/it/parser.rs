@@ -670,6 +670,7 @@ fn test_query() {
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
         r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
+        r#"select * from t, lateral flatten(input => u.col) f"#,
     ];
 
     for case in cases {

@@ -1,0 +1,21 @@
+-- reset user, roles, and tables
+-- prepare user, roles, and tables for tests
+-- grant privilege to roles
+-- test 1: set role as testrole1, then SELECT current_role()
+testrole1
+-- test 2: set a nonexistent role, a existed but not granted role, will fail
+Error: APIError: ResponseError with 2206: Invalid role nonexisting_role for current session, available: public,testrole1,testrole2,testrole3
+Error: APIError: ResponseError with 2206: Invalid role testrole4 for current session, available: public,testrole1,testrole2,testrole3
+-- test 3: set role as testrole1, secondary roles as NONE, can access table1, can not access table2
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0015_table2' for user 'testuser1'@'%' with roles [testrole1,public]
+-- test 4: set role as testrole2, secondary roles as NONE, can access table2, can not access table1
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0015_table1' for user 'testuser1'@'%' with roles [testrole2,public]
+-- test 5: set role as testrole3, secondary roles as NONE, can access table2, can not access table1, because role3 inherited from role2
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0015_table1' for user 'testuser1'@'%' with roles [testrole3,public,testrole2]
+-- test 6: set role as testrole1, secondary roles as ALL, can access both table1 and table2
+-- test 7: set role as testrole1, testrole2, secondary roles defaults as ALL, can both table1 and table2
+-- test 8: not change role, secondary roles defaults as ALL, can both table1 and table2
+-- test 9: set default role as testrole1, secondary roles as NONE, current role will still be testrole1 in another session
+testrole1
+-- test 10: set default role as nonexisting_role, will fail
+Error: APIError: ResponseError with 2206: Invalid role nonexistedrole for current session, available: public,testrole1,testrole2,testrole3
