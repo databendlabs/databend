@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use unicode_segmentation::UnicodeSegmentation;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use comfy_table::{Cell, CellAlignment, Table};
 use terminal_size::{terminal_size, Width};
 
@@ -122,7 +122,11 @@ impl<'a> FormatDisplay<'a> {
             pb.finish_and_clear();
         }
         if let Some(err) = error {
-            eprintln!("error happens after fetched {} rows: {}", rows.len(), err);
+            return Err(anyhow!(
+                "error happens after fetched {} rows: {}",
+                rows.len(),
+                err
+            ));
         }
         if rows.is_empty() {
             return Ok(());
@@ -194,8 +198,7 @@ impl<'a> FormatDisplay<'a> {
                     self.stats = Some(ss);
                 }
                 Err(err) => {
-                    eprintln!("error: {}", err);
-                    break;
+                    return Err(err.into());
                 }
             }
         }
@@ -225,8 +228,7 @@ impl<'a> FormatDisplay<'a> {
                     self.stats = Some(ss);
                 }
                 Err(err) => {
-                    eprintln!("error: {}", err);
-                    break;
+                    return Err(err.into());
                 }
             }
         }
@@ -234,6 +236,7 @@ impl<'a> FormatDisplay<'a> {
     }
 
     async fn display_null(&mut self) -> Result<()> {
+        let mut error = None;
         while let Some(line) = self.data.next().await {
             match line {
                 Ok(RowWithStats::Row(_)) => {
@@ -244,13 +247,20 @@ impl<'a> FormatDisplay<'a> {
                     self.stats = Some(ss);
                 }
                 Err(err) => {
-                    eprintln!("error: {}", err);
+                    error = Some(err);
                     break;
                 }
             }
         }
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
+        }
+        if let Some(err) = error {
+            return Err(anyhow!(
+                "error happens after fetched {} rows: {}",
+                self.rows,
+                err
+            ));
         }
         Ok(())
     }
