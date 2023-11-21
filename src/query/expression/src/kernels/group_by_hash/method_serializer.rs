@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_hashtable::FastHash;
+use common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
+use crate::KeyAccessor;
 use crate::KeysState;
+use crate::StringKeyAccessor;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
@@ -60,15 +62,16 @@ impl HashMethod for HashMethodSerializer {
         }
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Column(Column::String(col)) => {
-                let mut hashes = Vec::with_capacity(col.len());
-                hashes.extend(col.iter().map(|key| key.fast_hash()));
-                Ok((col.iter(), hashes))
+                hashes.extend(col.iter().map(hash_join_fast_string_hash));
+                let (data, offsets) = col.into_buffer();
+                Ok(Box::new(StringKeyAccessor::new(data, offsets)))
             }
             _ => unreachable!(),
         }

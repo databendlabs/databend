@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft::MessageSummary;
@@ -67,7 +66,6 @@ use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
-use log::warn;
 use num::FromPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
@@ -82,7 +80,6 @@ use crate::key_spaces::StateMachineMeta;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
-use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
@@ -191,55 +188,6 @@ impl StateMachine {
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
         self.subscriber = Some(subscriber);
-    }
-
-    /// Create a snapshot.
-    ///
-    /// Returns:
-    /// - all key values in state machine;
-    /// - the last applied log id
-    /// - and a snapshot id that uniquely identifies this snapshot.
-    // TODO: remove it
-    pub fn build_snapshot(
-        &self,
-    ) -> Result<
-        (
-            SerializableSnapshot,
-            Option<LogId>,
-            StoredMembership,
-            MetaSnapshotId,
-        ),
-        MetaStorageError,
-    > {
-        let last_applied = self.get_last_applied()?;
-        let last_membership = self.get_membership()?.unwrap_or_default();
-
-        let snapshot_idx = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let snapshot_id = MetaSnapshotId::new(last_applied, snapshot_idx);
-
-        let view = self.sm_tree.tree.iter();
-
-        let mut kvs = Vec::new();
-        for rkv in view {
-            let (k, v) = rkv?;
-            kvs.push(vec![k.to_vec(), v.to_vec()]);
-        }
-        let snap = SerializableSnapshot { kvs };
-
-        if cfg!(debug_assertions) {
-            let sl = self.blocking_config().write_snapshot;
-            if !sl.is_zero() {
-                warn!("start    build snapshot sleep 1000s");
-                std::thread::sleep(sl);
-                warn!("finished build snapshot sleep 1000s");
-            }
-        }
-
-        Ok((snap, last_applied, last_membership, snapshot_id))
     }
 
     fn scan_prefix_if_needed(

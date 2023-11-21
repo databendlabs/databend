@@ -80,16 +80,16 @@ impl Operator for EvalScalar {
         }
 
         // Derive outer columns
-        let mut outer_columns = input_prop.outer_columns.clone();
+        let mut outer_columns = input_prop
+            .outer_columns
+            .difference(&input_prop.output_columns)
+            .cloned()
+            .collect::<ColumnSet>();
         for item in self.items.iter() {
             let used_columns = item.scalar.used_columns();
-            let outer = used_columns
-                .difference(&output_columns)
-                .cloned()
-                .collect::<ColumnSet>();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+            let outer = used_columns.difference(&input_prop.output_columns).cloned();
+            outer_columns.extend(outer);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
