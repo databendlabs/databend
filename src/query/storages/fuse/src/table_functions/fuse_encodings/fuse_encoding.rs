@@ -85,9 +85,7 @@ impl<'a> FuseEncoding<'a> {
             let mut columns_info = vec![];
             let snapshot = table.read_table_snapshot().await?;
             if snapshot.is_none() {
-                return Ok(DataBlock::empty_with_schema(Arc::new(
-                    Self::schema().into(),
-                )));
+                continue;
             }
             let snapshot = snapshot.unwrap();
 
