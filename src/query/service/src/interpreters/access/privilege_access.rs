@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourceInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -167,7 +168,42 @@ impl AccessChecker for PrivilegeAccess {
                     _ => {}
                 };
                 let metadata = metadata.read().clone();
+
                 for table in metadata.tables() {
+                    if table.is_source_of_stage() {
+                        match table.table().get_data_source_info() {
+                            DataSourceInfo::StageSource(stage_info) => {
+                                self
+                                    .validate_access(
+                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
+                                        vec![UserPrivilegeType::Read],
+                                        false,
+                                    )
+                                    .await?;
+                            }
+                            DataSourceInfo::Parquet2Source(stage_info) => {
+                                self
+                                    .validate_access(
+                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
+                                        vec![UserPrivilegeType::Read],
+                                        false,
+                                    )
+                                    .await?;
+                            }
+                            DataSourceInfo::ParquetSource(stage_info) => {
+                                self
+                                    .validate_access(
+                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
+                                        vec![UserPrivilegeType::Read],
+                                        false,
+                                    )
+                                    .await?;
+                            }
+                            DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
+                        }
+                    }
+
+
                     if table.is_source_of_view() {
                         continue;
                     }
@@ -675,7 +711,16 @@ impl AccessChecker for PrivilegeAccess {
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
-
+            Plan::RemoveStage(plan) => {
+                let stage_name = &plan.stage.stage_name;
+                self
+                    .validate_access(
+                        &GrantObject::Stage(stage_name.clone()),
+                        vec![UserPrivilegeType::Write],
+                        false,
+                    )
+                    .await?;
+            }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
             | Plan::DropShareEndpoint(_)
@@ -688,7 +733,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropCatalog(_)
             | Plan::CreateStage(_)
             | Plan::DropStage(_)
-            | Plan::RemoveStage(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)

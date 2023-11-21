@@ -12,3 +12,12 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege [Write] i
 000
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE presign_stage for user 'u1'@'%' with roles [public]
 000
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Write] is required on STAGE s3 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied, privilege READ is required on stage s3 for user 'u1'@'%'
+Error: APIError: ResponseError with 1063: Permission denied, privilege READ is required on stage s3 for user 'u1'@'%'
+Error: APIError: ResponseError with 1063: Permission denied, privilege READ is required on stage s3 for user 'u1'@'%'
+2
+2	TINYINT UNSIGNED	false	0
+a b/data_c4549f19-167d-4cb4-849d-e7baf13c773f_0000_00000000.parquet	261	NULL	2023-11-23 06:19:01.144 +0000	NULL
+  with Arrow2 1 1 1 261 35 26

@@ -51,7 +51,7 @@ echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) f
 echo "grant Read on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT
 
-echo "remove @s2;" | $BENDSQL_CLIENT_CONNECT
+echo "remove @s2;" | $TEST_USER_CONNECT
 echo "remove @s1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop STAGE s2;" | $BENDSQL_CLIENT_CONNECT
 echo "drop STAGE s1;" | $BENDSQL_CLIENT_CONNECT
@@ -71,6 +71,31 @@ curl -s -w "%{http_code}\n" -X PUT -o /dev/null -H Content-Type:application/octe
 echo "revoke Read on stage presign_stage from 'u1'" | $BENDSQL_CLIENT_CONNECT
 curl -s -w "%{http_code}\n" -o /dev/null "`echo "PRESIGN @presign_stage/hello_word.txt" | $TEST_USER_CONNECT`"
 
+echo "drop stage if exists s3" | $BENDSQL_CLIENT_CONNECT
+
+echo "create stage s3;"  | $BENDSQL_CLIENT_CONNECT
+echo "remove @s3;"  | $TEST_USER_CONNECT
+echo "grant write on stage s3 to u1" | $BENDSQL_CLIENT_CONNECT
+echo "remove @s3;"  | $TEST_USER_CONNECT
+echo "copy into '@s3/a b' from (select 2);"  | $TEST_USER_CONNECT
+
+echo "grant select on system.* to u1" | $BENDSQL_CLIENT_CONNECT
+
+echo "select * from @s3"  | $TEST_USER_CONNECT
+echo "select * from infer_schema(location => '@s3')" | $TEST_USER_CONNECT
+echo "select * from list_stage(location => '@s3')" | $TEST_USER_CONNECT
+echo "select * from inspect_parquet('@s3')" | $TEST_USER_CONNECT
+
+echo "grant read on stage s3 to u1" | $BENDSQL_CLIENT_CONNECT
+
+echo "select * from @s3"  | $TEST_USER_CONNECT
+echo "select * from infer_schema(location => '@s3')" | $TEST_USER_CONNECT
+echo "select * from list_stage(location => '@s3')" | $TEST_USER_CONNECT
+echo "select * from inspect_parquet('@s3')" | $TEST_USER_CONNECT | awk '{$1=$2="";print$0}'
+
 ## Drop table.
 echo "drop stage if exists presign_stage" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists s3" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
+
+
