@@ -306,6 +306,10 @@ impl InterpreterFactory {
                 ctx,
                 *set_role.clone(),
             )?)),
+            Plan::SetSecondaryRoles(set_secondary_roles) => Ok(Arc::new(
+                SetSecondaryRolesInterpreter::try_create(ctx, *set_secondary_roles.clone())?,
+            )),
+
             Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages

@@ -1,0 +1,132 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1 (id string);
+
+statement ok
+create table t2 (id string);
+
+statement ok
+insert into t1 values
+(NULL);
+
+statement ok
+insert into t2 values (1), (1);
+
+query II
+select * from t1 left join t2 on t1.id = t2.id;
+----
+NULL	NULL
+
+query II
+select * from t1 left join t2 on t1.id > t2.id;
+----
+NULL	NULL
+
+query II
+select * from t1 left join t2 on t1.id <> t2.id;
+----
+NULL	NULL
+
+statement ok
+insert into t2 values (1);
+
+query II
+select * from t1 left join t2 on t1.id = t2.id;
+----
+NULL	NULL
+
+query II
+select * from t1 left join t2 on t1.id > t2.id;
+----
+NULL	NULL
+
+query II
+select * from t1 left join t2 on t1.id <> t2.id;
+----
+NULL	NULL
+
+statement ok
+insert into t2 values (NULL), (NULL);
+
+query II
+select * from t1 left join t2 on t1.id = t2.id;
+----
+NULL	NULL
+
+query II
+select * from t1 left join t2 on t1.id > t2.id;
+----
+NULL	NULL
+
+query II
+select * from t1 left join t2 on t1.id <> t2.id;
+----
+NULL	NULL
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1 (id string);
+
+statement ok
+create table t2 (id string);
+
+statement ok
+insert into t1 (id) values (1), (1), (NULL);
+
+statement ok
+insert into t2 (id) values (1), (1), (1), (1), (1), (1);
+
+query II
+select * from t1 left join t2 on t1.id = t2.id order by 1, 2;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+NULL	NULL
+
+statement ok
+insert into t2 (id) values (1);
+
+query II
+select * from t1 left join t2 on t1.id = t2.id order by 1, 2;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+NULL	NULL
+
+statement ok
+set max_block_size = 65536;

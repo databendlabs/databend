@@ -413,6 +413,7 @@ pub trait Visitor<'ast>: Sized {
     }
 
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &'ast str) {}
+    fn visit_set_secondary_roles(&mut self, _option: &SecondaryRolesOption) {}
 
     fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
     fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}

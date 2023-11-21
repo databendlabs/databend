@@ -44,10 +44,6 @@ use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::native::read::read_basic::read_compress_header;
 use crate::native::read::NativeReadBuf;
-use crate::native::util::env::check_bitpack_env;
-use crate::native::util::env::check_dict_env;
-use crate::native::util::env::check_freq_env;
-use crate::native::util::env::check_rle_env;
 use crate::native::write::WriteOptions;
 
 pub fn compress_integer<T: IntegerType>(
@@ -253,28 +249,28 @@ fn choose_compressor<T: IntegerType>(
 ) -> IntCompressor<T> {
     #[cfg(debug_assertions)]
     {
-        if check_freq_env()
+        if crate::native::util::env::check_freq_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Freq)
         {
             return IntCompressor::Extend(Box::new(Freq {}));
         }
-        if check_dict_env()
+        if crate::native::util::env::check_dict_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Dict)
         {
             return IntCompressor::Extend(Box::new(Dict {}));
         }
-        if check_rle_env()
+        if crate::native::util::env::check_rle_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Rle)
         {
             return IntCompressor::Extend(Box::new(Rle {}));
         }
-        if check_bitpack_env()
+        if crate::native::util::env::check_bitpack_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Bitpacking)

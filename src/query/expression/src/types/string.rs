@@ -233,6 +233,10 @@ impl StringColumn {
         }
     }
 
+    pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {
+        (self.data, self.offsets)
+    }
+
     pub fn check_valid(&self) -> Result<()> {
         let offsets = self.offsets.as_slice();
         let len = offsets.len();

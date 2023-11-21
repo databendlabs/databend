@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -26,6 +27,7 @@ use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
 use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 
 pub fn read_all(
+    data_schema: &DataSchema,
     rg: &InMemoryRowGroup,
     field_levels: &FieldLevels,
     selection: Option<RowSelection>,
@@ -36,7 +38,7 @@ pub fn read_all(
         ParquetRecordBatchReader::try_new_with_row_groups(field_levels, rg, num_rows, selection)?;
     let batch = reader.next().transpose()?.unwrap();
     debug_assert!(reader.next().is_none());
-    transform_record_batch(&batch, field_paths)
+    transform_record_batch(data_schema, &batch, field_paths)
 }
 
 #[inline]

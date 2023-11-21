@@ -365,6 +365,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         }),
         TableReference::TableFunction {
             span: _,
+            lateral,
             name,
             params,
             named_params,
@@ -375,21 +376,26 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             } else {
                 RcDoc::nil()
             };
-            RcDoc::text(name.to_string())
-                .append(RcDoc::text("("))
-                .append(inline_comma(params.into_iter().map(pretty_expr)))
-                .append(separator)
-                .append(inline_comma(named_params.into_iter().map(|(k, v)| {
-                    RcDoc::text(k)
-                        .append(RcDoc::text("=>"))
-                        .append(pretty_expr(v))
-                })))
-                .append(RcDoc::text(")"))
-                .append(if let Some(alias) = alias {
-                    RcDoc::text(format!(" AS {alias}"))
-                } else {
-                    RcDoc::nil()
-                })
+            if lateral {
+                RcDoc::text("LATERAL ")
+            } else {
+                RcDoc::nil()
+            }
+            .append(RcDoc::text(name.to_string()))
+            .append(RcDoc::text("("))
+            .append(inline_comma(params.into_iter().map(pretty_expr)))
+            .append(separator)
+            .append(inline_comma(named_params.into_iter().map(|(k, v)| {
+                RcDoc::text(k)
+                    .append(RcDoc::text("=>"))
+                    .append(pretty_expr(v))
+            })))
+            .append(RcDoc::text(")"))
+            .append(if let Some(alias) = alias {
+                RcDoc::text(format!(" AS {alias}"))
+            } else {
+                RcDoc::nil()
+            })
         }
         TableReference::Join { span: _, join } => pretty_table(*join.left)
             .append(RcDoc::line())

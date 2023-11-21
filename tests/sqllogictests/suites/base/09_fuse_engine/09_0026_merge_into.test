@@ -535,7 +535,7 @@ statement ok
 insert into target_test values(1,'a'),(2,'b'),(3,'c');
 
 statement ok
-create table source_test(a int,b string,is_databend_deleted bool);
+create table source_test(a int,b string,delete_flag bool);
 
 statement ok
 insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
@@ -550,8 +550,8 @@ statement ok
 copy into @source_parquet from (select * from source_test);
 
 statement ok
-merge into `target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
-when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
+merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
+when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;
 
 query TT
 select * from target_test order by a;
@@ -775,6 +775,102 @@ query T
 select count(*) from t11;
 ----
 0
+
+## test issue #13732
+statement ok
+CREATE TABLE orders CLUSTER BY (to_yyyymmddhh(created_at), user_id) AS SELECT
+    number % 5000 AS order_id,
+    number % 10000 AS user_id,
+    CASE WHEN (rand() * 10)::int % 2 = 0 THEN 'buy'
+         ELSE 'sell'
+    END AS order_type,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+         WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+         ELSE 'XRP'
+    END AS asset_type,
+    (rand() * 100)::decimal(18, 8) AS quantity,
+    (rand() * 1000)::decimal(18, 8) AS price,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'completed'
+         WHEN (rand() * 10)::int % 3 = 1 THEN 'pending'
+         ELSE 'cancelled'
+    END AS status,
+    date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS created_at,
+    date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
+FROM numbers(5000);
+
+statement ok
+MERGE INTO orders USING
+(
+    SELECT
+        number % 5000 AS order_id,
+        number % 100000 AS user_id,
+        CASE WHEN (rand() * 10)::int % 2 = 0 THEN 'buy'
+             ELSE 'sell'
+        END AS order_type,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+             ELSE 'XRP'
+        END AS asset_type,
+        (rand() * 100)::decimal(18, 8) AS quantity,
+        (rand() * 1000)::decimal(18, 8) AS price,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'completed'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'pending'
+             ELSE 'cancelled'
+        END AS status,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS created_at,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
+    FROM numbers(5000)
+) AS source
+ON orders.order_id = source.order_id
+WHEN MATCHED THEN 
+    UPDATE SET
+        orders.user_id = source.user_id,
+        orders.order_type = source.order_type,
+        orders.asset_type = source.asset_type,
+        orders.quantity = source.quantity,
+        orders.price = source.price,
+        orders.status = source.status,
+        orders.created_at = source.created_at,
+        orders.updated_at = source.updated_at
+WHEN NOT MATCHED THEN 
+    INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
+    VALUES (source.order_id, source.user_id, source.order_type, source.asset_type, source.quantity, source.price, source.status, source.created_at, source.updated_at);
+
+## test issue #13733
+statement ok
+MERGE INTO orders AS tt USING
+(
+    SELECT
+        CASE 
+            WHEN number % 2 = 0 THEN (number / 2) % 250000
+            ELSE (SELECT MAX(order_id) FROM orders) + number + 1
+        END AS order_id,
+        number % 100000 AS user_id,
+        CASE WHEN (rand() * 10)::int % 2 = 0 THEN 'buy'
+             ELSE 'sell'
+        END AS order_type,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+             ELSE 'XRP'
+        END AS asset_type,
+        (rand() * 100)::decimal(18, 8) AS quantity,
+        (rand() * 1000)::decimal(18, 8) AS price,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'completed'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'pending'
+             ELSE 'cancelled'
+        END AS status,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS created_at,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at,
+        CASE WHEN number % 2 = 0 THEN false ELSE true END AS is_delete
+    FROM numbers(5000)
+) AS ss
+ON (tt.user_id = ss.user_id AND tt.asset_type = ss.asset_type)
+WHEN MATCHED AND ss.is_delete = true THEN 
+    DELETE
+WHEN MATCHED AND ss.is_delete = false THEN 
+    UPDATE  * WHEN NOT MATCHED THEN 
+    INSERT *;
+
 
 statement ok
 set enable_distributed_merge_into = 0;
