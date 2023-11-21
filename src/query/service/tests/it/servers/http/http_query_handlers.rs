@@ -96,14 +96,13 @@ impl TestHttpQueryRequest {
             headers["authorization"].clone()
         };
 
-        let req = Self {
+        Self {
             ep,
             json,
             auth_header: root_auth_header,
             headers: HeaderMap::new(),
             next_uri: None,
-        };
-        req
+        }
     }
 
     fn with_basic_auth(mut self, username: &str, password: &str) -> Self {
@@ -123,7 +122,7 @@ impl TestHttpQueryRequest {
             .do_request(Method::POST, "/v1/query")
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+        self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
         Ok((status, resp.unwrap()))
     }
 
@@ -131,7 +130,7 @@ impl TestHttpQueryRequest {
         let (status, resp) = self
             .do_request(Method::GET, self.next_uri.as_ref().unwrap())
             .await?;
-        self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+        self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
         Ok((status, resp))
     }
 
@@ -139,14 +138,14 @@ impl TestHttpQueryRequest {
         let mut resps = vec![];
 
         let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
-        self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+        self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
         resps.push((status, resp.clone().unwrap()));
 
         while self.next_uri.is_some() {
             let (status, resp) = self
                 .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
-            self.next_uri = resp.as_ref().map(|r| r.next_uri.clone()).flatten();
+            self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
             resps.push((status, resp.clone().unwrap()));
         }
 
@@ -179,7 +178,7 @@ impl TestHttpQueryRequest {
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
         let query_resp = serde_json::from_str::<QueryResponse>(&body)
-            .map(|r| Some(r))
+            .map(Some)
             .unwrap_or_default();
 
         Ok((status_code, query_resp))
@@ -611,7 +610,7 @@ async fn test_result_timeout() -> Result<()> {
 
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
-    assert!(query_id.len() > 0);
+    assert!(!query_id.is_empty());
 
     sleep(std::time::Duration::from_secs(2)).await;
     let (status, result) = req.fetch_next().await?;
