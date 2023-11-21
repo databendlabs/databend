@@ -8,18 +8,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app::schema as mt;
 use minitrace::func_name;
 
 use crate::common;
 
 #[test]
-fn test_decode_v56_least_visible_time() -> anyhow::Result<()> {
-    let bytes: Vec<u8> = vec![8, 155, 80, 160, 6, 55, 168, 6, 24];
+fn test_decode_v65_least_visible_time() -> anyhow::Result<()> {
+    let bytes: Vec<u8> = vec![
+        10, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 50, 58, 53, 49, 58, 48, 55, 32, 85,
+        84, 67, 160, 6, 64, 168, 6, 24,
+    ];
 
-    let want = || mt::LeastVisibleTime { time: 10267 };
+    let want = || mt::LeastVisibleTime {
+        time: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+    };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 55, want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 64, want())?;
 
     Ok(())
 }

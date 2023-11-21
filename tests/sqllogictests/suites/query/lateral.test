@@ -43,6 +43,13 @@ select * from t left join lateral(select * from t1 where t1.a = t.a) t2 on t.a =
 2 2
 3 3
 
+query II
+select * from t, lateral(select a) t1
+----
+1 1
+2 2
+3 3
+
 statement ok
 CREATE TABLE user_activities(user_id int, activities variant)
 

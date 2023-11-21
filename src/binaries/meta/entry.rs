@@ -119,22 +119,11 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
     println!("Working DataVersion: {:?}", DATA_VERSION);
     println!();
-    println!(
-        "Raft Server Provides features: {}",
-        raft_server_provides()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    println!(
-        "Raft Client Requires features: {}",
-        raft_client_requires()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
+
+    println!("Raft Feature set:");
+    println!("    Server Provide: {{ {} }}", raft_server_provides());
+    println!("    Client Require: {{ {} }}", raft_client_requires());
+    println!();
 
     info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
 
@@ -206,7 +195,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     register_node(&meta_node, &conf).await?;
 
-    println!("Databend Metasrv starting...");
+    println!("Databend Metasrv started");
 
     stop_handler.wait_to_terminate(stop_tx).await;
     info!("Databend-meta is done shutting down");

@@ -14,6 +14,8 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -21,6 +23,7 @@ use common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
+use crate::processors::profile::PlanScope;
 use crate::processors::DuplicateProcessor;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
@@ -28,6 +31,7 @@ use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;
+use crate::PlanScopeGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -56,6 +60,9 @@ pub struct Pipeline {
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
+
+    pub plans_scope: Vec<PlanScope>,
+    scope_size: Arc<AtomicUsize>,
 }
 
 impl Debug for Pipeline {
@@ -77,6 +84,21 @@ impl Pipeline {
             on_init: None,
             on_finished: None,
             lock_guards: vec![],
+            plans_scope: vec![],
+            scope_size: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    pub fn with_scopes(scope: Vec<PlanScope>) -> Pipeline {
+        let scope_size = Arc::new(AtomicUsize::new(scope.len()));
+        Pipeline {
+            scope_size,
+            max_threads: 0,
+            pipes: Vec::new(),
+            on_init: None,
+            on_finished: None,
+            lock_guards: vec![],
+            plans_scope: scope,
         }
     }
 
@@ -113,7 +135,41 @@ impl Pipeline {
         )
     }
 
-    pub fn add_pipe(&mut self, pipe: Pipe) {
+    pub fn finalize(mut self) -> Pipeline {
+        for pipe in &mut self.pipes {
+            if let Some(uninitialized_scope) = &mut pipe.scope {
+                if uninitialized_scope.parent_id == 0 {
+                    for (index, scope) in self.plans_scope.iter().enumerate() {
+                        if scope.id == uninitialized_scope.id && index != 0 {
+                            if let Some(parent_scope) = self.plans_scope.get(index - 1) {
+                                uninitialized_scope.parent_id = parent_scope.id;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        self
+    }
+
+    pub fn add_pipe(&mut self, mut pipe: Pipe) {
+        let (scope_idx, _) = self.scope_size.load(Ordering::SeqCst).overflowing_sub(1);
+
+        if let Some(scope) = self.plans_scope.get_mut(scope_idx) {
+            // stack, new plan is always the parent node of previous node.
+            // set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
+            for pipe in &mut self.pipes {
+                if let Some(children) = &mut pipe.scope {
+                    if children.parent_id == 0 && children.id != scope.id {
+                        children.parent_id = scope.id;
+                    }
+                }
+            }
+
+            pipe.scope = Some(scope.clone());
+        }
+
         self.pipes.push(pipe);
     }
 
@@ -235,14 +291,13 @@ impl Pipeline {
                 let processor = ResizeProcessor::create(pipe.output_length, new_size);
                 let inputs_port = processor.get_inputs();
                 let outputs_port = processor.get_outputs();
-                self.pipes
-                    .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
-                        PipeItem::create(
-                            ProcessorPtr::create(Box::new(processor)),
-                            inputs_port,
-                            outputs_port,
-                        ),
-                    ]));
+                self.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+                    PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        inputs_port,
+                        outputs_port,
+                    ),
+                ]));
                 Ok(())
             }
         }
@@ -280,8 +335,7 @@ impl Pipeline {
                         outputs_port,
                     ));
                 }
-                self.pipes
-                    .push(Pipe::create(input_len, output_len, pipe_items));
+                self.add_pipe(Pipe::create(input_len, output_len, pipe_items));
                 Ok(())
             }
         }
@@ -310,7 +364,7 @@ impl Pipeline {
                         vec![output1, output2],
                     ));
                 }
-                self.pipes.push(Pipe::create(
+                self.add_pipe(Pipe::create(
                     pipe.output_length,
                     pipe.output_length * 2,
                     items,
@@ -341,14 +395,9 @@ impl Pipeline {
                     outputs.push(OutputPort::create());
                 }
                 let processor = ShuffleProcessor::create(inputs.clone(), outputs.clone(), rule);
-                self.pipes
-                    .push(Pipe::create(inputs.len(), outputs.len(), vec![
-                        PipeItem::create(
-                            ProcessorPtr::create(Box::new(processor)),
-                            inputs,
-                            outputs,
-                        ),
-                    ]));
+                self.add_pipe(Pipe::create(inputs.len(), outputs.len(), vec![
+                    PipeItem::create(ProcessorPtr::create(Box::new(processor)), inputs, outputs),
+                ]));
             }
             _ => {}
         }
@@ -395,6 +444,20 @@ impl Pipeline {
             None => Box::new(|_may_error| Ok(())),
             Some(on_finished) => on_finished,
         }
+    }
+
+    pub fn add_plan_scope(&mut self, scope: PlanScope) -> PlanScopeGuard {
+        let scope_idx = self.scope_size.fetch_add(1, Ordering::SeqCst);
+
+        if self.plans_scope.len() > scope_idx {
+            self.plans_scope[scope_idx] = scope;
+            self.plans_scope.shrink_to(scope_idx + 1);
+            return PlanScopeGuard::create(self.scope_size.clone(), scope_idx);
+        }
+
+        assert_eq!(self.plans_scope.len(), scope_idx);
+        self.plans_scope.push(scope);
+        PlanScopeGuard::create(self.scope_size.clone(), scope_idx)
     }
 }
 
