@@ -136,6 +136,8 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
@@ -243,8 +245,13 @@ impl HttpQuery {
                 session.set_current_database(db.clone());
             }
             if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role, true).await?;
+                session.set_current_role_checked(role).await?;
             }
+            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+            session
+                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
+                .await?;
+            // TODO(liyz): pass secondary roles here
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {
@@ -432,13 +439,6 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     async fn get_response_session(&self) -> HttpSessionConf {
-        let executor = self.state.read().await;
-        let session_state = executor.get_session_state();
-        let settings = session_state
-            .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
-            .collect::<BTreeMap<_, _>>();
         let keep_server_session_secs = self
             .request
             .session
@@ -446,18 +446,27 @@ impl HttpQuery {
             .map(|v| v.keep_server_session_secs)
             .unwrap_or(None);
 
-        // TODO(liyz): known issue here, this will make SET ROLE statement not work in bendsql, refactor using the secondary role in the short time.
-        // https://github.com/datafuselabs/databend/issues/13544
-        let role = self
-            .request
-            .session
-            .as_ref()
-            .map(|s| s.role.clone())
-            .unwrap_or_default();
+        // reply the updated session state, includes:
+        // - current_database: updated by USE XXX;
+        // - role: updated by SET ROLE;
+        // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
+        // - settings: updated by SET XXX = YYY;
+        let executor = self.state.read().await;
+        let session_state = executor.get_session_state();
+
+        let settings = session_state
+            .settings
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let database = session_state.current_database.clone();
+        let role = session_state.current_role.clone();
+        let secondary_roles = session_state.secondary_roles.clone();
 
         HttpSessionConf {
-            database: Some(session_state.current_database),
+            database: Some(database),
             role,
+            secondary_roles,
             keep_server_session_secs,
             settings: Some(settings),
         }

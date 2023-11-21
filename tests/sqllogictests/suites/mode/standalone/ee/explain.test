@@ -342,30 +342,38 @@ insert into t1 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 query T
 explain select a, v['b'] from t1
 ----
-TableScan
-├── table: default.test_virtual_db.t1
-├── output columns: [a (#0), v:b (#2)]
-├── read rows: 1
-├── read bytes: 137
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v:b]]
-└── estimated rows: 1.00
+EvalScalar
+├── output columns: [t1.a (#0), v['b'] (#2)]
+├── expressions: [get(t1.v (#1), 'b')]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 137
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select a, v['a'][0] from t1
 ----
-TableScan
-├── table: default.test_virtual_db.t1
-├── output columns: [a (#0), v:a[0] (#2)]
-├── read rows: 1
-├── read bytes: 137
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0]]]
-└── estimated rows: 1.00
+EvalScalar
+├── output columns: [t1.a (#0), v['a'][0] (#2)]
+├── expressions: [get(get(t1.v (#1), 'a'), 0)]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 137
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 statement ok
 drop table t1
@@ -382,30 +390,38 @@ insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 query T
 explain select a, v['b'] from t2
 ----
-TableScan
-├── table: default.test_virtual_db.t2
-├── output columns: [a (#0), v:b (#2)]
-├── read rows: 1
-├── read bytes: 130
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v:b]]
-└── estimated rows: 1.00
+EvalScalar
+├── output columns: [t2.a (#0), v['b'] (#2)]
+├── expressions: [get(t2.v (#1), 'b')]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 130
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select a, v['a'][0] from t2
 ----
-TableScan
-├── table: default.test_virtual_db.t2
-├── output columns: [a (#0), v:a[0] (#2)]
-├── read rows: 1
-├── read bytes: 130
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0]]]
-└── estimated rows: 1.00
+EvalScalar
+├── output columns: [t2.a (#0), v['a'][0] (#2)]
+├── expressions: [get(get(t2.v (#1), 'a'), 0)]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 130
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 statement ok
 drop table t2

@@ -28,7 +28,6 @@ pub(in crate::sm_v002) fn by_key_seq<K>(
 where
     K: MapKey + Ord + fmt::Debug,
 {
-    // TODO test Result
     match (r1, r2) {
         (Ok((k1, v1)), Ok((k2, v2))) => {
             assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
@@ -56,7 +55,6 @@ pub(in crate::sm_v002) fn choose_greater<K>(
 where
     K: MapKey + Ord,
 {
-    // TODO test Result
     match (r1, r2) {
         (Ok((k1, v1)), Ok((k2, v2))) if k1 == k2 => Ok(Ok((k1, Marked::max(v1, v2)))),
         // If there is an error,

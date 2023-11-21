@@ -78,7 +78,7 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<RaftRequest>,
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     type ExportStream =
@@ -88,7 +88,7 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     type WatchStream =
@@ -98,35 +98,35 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn transaction(
         &self,
         _request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn member_list(
         &self,
         _request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn get_cluster_status(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ClusterStatus>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn get_client_info(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
-        todo!()
+        unimplemented!()
     }
 }
 

@@ -65,6 +65,7 @@ impl PipelineBuilder {
             union_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
+            self.main_pipeline.plans_scope.clone(),
         );
         pipeline_builder.cte_state = self.cte_state.clone();
         let mut build_res = pipeline_builder.finalize(input)?;
@@ -88,7 +89,7 @@ impl PipelineBuilder {
             }
         })?;
 
-        self.pipelines.push(build_res.main_pipeline);
+        self.pipelines.push(build_res.main_pipeline.finalize());
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(rx)
     }
