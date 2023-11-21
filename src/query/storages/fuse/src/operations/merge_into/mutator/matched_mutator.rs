@@ -364,6 +364,7 @@ pub(crate) fn get_row_id(data_block: &DataBlock, row_id_idx: usize) -> Result<Bu
             Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
             _ => Err(ErrorCode::BadArguments("row id is not uint64")),
         },
+        Some(Column::Number(NumberColumn::UInt64(data))) => Ok(data.clone()),
         _ => Err(ErrorCode::BadArguments("row id is not uint64")),
     }
 }
