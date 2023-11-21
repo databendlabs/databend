@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(clippy::module_inception)]
 mod decorrelate;
 mod flatten_plan;
 mod flatten_scalar;

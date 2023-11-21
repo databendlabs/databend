@@ -12,51 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::sync::Arc;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::Span;
-use common_expression::types::DataType;
 
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::JoinPredicate;
-use crate::binder::Visibility;
-use crate::optimizer::heuristic::subquery_rewriter::FlattenInfo;
-use crate::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
-use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
-use crate::plans::EvalScalar;
-use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::Join;
-use crate::plans::JoinType;
-use crate::plans::PatternPlan;
-use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
-use crate::plans::Scan;
-use crate::plans::SubqueryExpr;
-use crate::plans::SubqueryType;
 use crate::plans::UDFServerCall;
-use crate::BaseTableColumn;
-use crate::ColumnEntry;
-use crate::DerivedColumn;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::TableInternalColumn;
-use crate::VirtualColumn;
 
 impl SubqueryRewriter {
     pub(crate) fn flatten_scalar(
