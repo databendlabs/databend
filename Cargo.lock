@@ -3193,6 +3193,7 @@ dependencies = [
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
+ "enumflags2",
  "jwt-simple",
  "log",
  "p256 0.13.0",
