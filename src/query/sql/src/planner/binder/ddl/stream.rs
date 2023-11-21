@@ -19,6 +19,8 @@ use common_ast::ast::ShowLimit;
 use common_ast::ast::ShowStreamsStmt;
 use common_ast::ast::StreamPoint;
 use common_exception::Result;
+use common_license::license::Feature;
+use common_license::license_manager::get_license_manager;
 use log::debug;
 
 use crate::binder::Binder;
@@ -114,6 +116,11 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowStreamsStmt,
     ) -> Result<Plan> {
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+
         let ShowStreamsStmt {
             catalog,
             database,
@@ -177,6 +184,11 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &DescribeStreamStmt,
     ) -> Result<Plan> {
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+
         let DescribeStreamStmt {
             catalog,
             database,

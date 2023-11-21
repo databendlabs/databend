@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod aggregating_index;
-pub mod background_service;
-pub mod data_mask;
-pub mod enterprise_services;
-pub mod license;
-pub mod storage_encryption;
-pub mod storages;
-pub mod stream;
-pub mod test_kits;
-pub mod virtual_column;
+mod handler;
+
+pub use handler::RealStreamHandler;

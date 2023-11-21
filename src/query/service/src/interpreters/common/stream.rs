@@ -16,11 +16,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license::Feature;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_types::MatchSeq;
 use common_sql::MetadataRef;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::TableContext;
 use common_storages_stream::stream_table::StreamTable;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use common_storages_stream::stream_table::STREAM_ENGINE;
@@ -34,6 +37,11 @@ pub async fn build_update_stream_meta_seq(
 ) -> Result<Option<UpdateStreamMetaReq>> {
     let table = get_stream_table(metadata)?;
     if let Some(table) = table {
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
+
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
         let source_table = stream.source_table(ctx).await?;

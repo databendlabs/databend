@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::DropTableByIdReq;
+use common_license::license::Feature;
+use common_license::license_manager::get_license_manager;
 use common_sql::plans::DropStreamPlan;
-use common_storages_stream::stream_table::STREAM_ENGINE;
+use stream_handler::get_stream_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,44 +44,13 @@ impl Interpreter for DropStreamInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.clone();
-        let db_name = self.plan.database.clone();
-        let stream_name = self.plan.stream_name.clone();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-        let tbl = catalog
-            .get_table(tenant.as_str(), &db_name, &stream_name)
-            .await
-            .ok();
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
-        if tbl.is_none() && !self.plan.if_exists {
-            return Err(ErrorCode::UnknownTable(format!(
-                "unknown stream `{}`.`{}` in catalog '{}'",
-                db_name, stream_name, &catalog_name
-            )));
-        }
-
-        if let Some(table) = &tbl {
-            let engine = table.get_table_info().engine();
-            if engine != STREAM_ENGINE {
-                return Err(ErrorCode::Internal(format!(
-                    "{}.{} is not STREAM, please use `DROP {} {}.{}`",
-                    &self.plan.database,
-                    &self.plan.stream_name,
-                    engine,
-                    &self.plan.database,
-                    &self.plan.stream_name
-                )));
-            }
-
-            catalog
-                .drop_table_by_id(DropTableByIdReq {
-                    if_exists: self.plan.if_exists,
-                    tenant: self.plan.tenant.clone(),
-                    tb_id: table.get_id(),
-                })
-                .await?;
-        };
+        let handler = get_stream_handler();
+        let _ = handler.do_drop_stream(self.ctx.clone(), &self.plan).await?;
 
         Ok(PipelineBuildResult::create())
     }

@@ -1,6 +1,5 @@
 [package]
-name = "vacuum-handler"
-description = "vacuum handler"
+name = "stream-handler"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -16,10 +15,11 @@ test = false
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
-common-storages-fuse = { path = "../../storages/fuse" }
+common-meta-app = { path = "../../../meta/app" }
+common-sql = { path = "../../sql" }
 
+# Github dependencies
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
-chrono = { workspace = true }
 
 [build-dependencies]

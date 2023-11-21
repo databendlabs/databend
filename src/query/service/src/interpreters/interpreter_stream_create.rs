@@ -12,27 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
+use common_license::license::Feature;
+use common_license::license_manager::get_license_manager;
 use common_sql::plans::CreateStreamPlan;
-use common_sql::plans::StreamNavigation;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-use common_storages_stream::stream_table::StreamTable;
-use common_storages_stream::stream_table::MODE_APPEND_ONLY;
-use common_storages_stream::stream_table::OPT_KEY_DATABASE_NAME;
-use common_storages_stream::stream_table::OPT_KEY_MODE;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use stream_handler::get_stream_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -57,77 +44,15 @@ impl Interpreter for CreateStreamInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
-        let table = self
-            .ctx
-            .get_table(&plan.catalog, &plan.table_database, &plan.table_name)
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+
+        let handler = get_stream_handler();
+        let _ = handler
+            .do_create_stream(self.ctx.clone(), &self.plan)
             .await?;
-        if !table.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
-                plan.table_database, plan.table_name
-            )));
-        }
-
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_info = fuse_table.get_table_info();
-        let table_version = table_info.ident.seq;
-        let schema = table_info.schema().clone();
-
-        let mut options = BTreeMap::new();
-        match &plan.navigation {
-            Some(StreamNavigation::AtStream { database, name }) => {
-                let stream = self.ctx.get_table(&plan.catalog, database, name).await?;
-                let stream = StreamTable::try_from_table(stream.as_ref())?;
-                let stream_opts = stream.get_table_info().options();
-                let stream_table_name = stream_opts
-                    .get(OPT_KEY_TABLE_NAME)
-                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
-                let stream_database_name = stream_opts
-                    .get(OPT_KEY_DATABASE_NAME)
-                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
-                if stream_table_name != &plan.table_name
-                    || stream_database_name != &plan.table_database
-                {
-                    return Err(ErrorCode::IllegalStream(format!(
-                        "The stream '{name}' is not match the table '{}.{}'",
-                        plan.table_database, plan.table_name
-                    )));
-                }
-                options = stream.get_table_info().options().clone();
-            }
-            None => {
-                options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
-                options.insert(
-                    OPT_KEY_DATABASE_NAME.to_string(),
-                    plan.table_database.clone(),
-                );
-                options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-                options.insert(OPT_KEY_MODE.to_string(), MODE_APPEND_ONLY.to_string());
-                if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
-                    options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
-                }
-            }
-        }
-
-        let plan = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name: self.plan.database.clone(),
-                table_name: self.plan.stream_name.clone(),
-            },
-            table_meta: TableMeta {
-                engine: STREAM_ENGINE.to_string(),
-                options,
-                comment: plan.comment.clone().unwrap_or("".to_string()),
-                schema,
-                ..Default::default()
-            },
-        };
-
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        catalog.create_table(plan).await?;
 
         Ok(PipelineBuildResult::create())
     }

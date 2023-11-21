@@ -136,7 +136,13 @@ async fn test_license_features() -> common_exception::Result<()> {
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(token, Feature::Vacuum)
+            .check_enterprise_enabled(token.clone(), Feature::Vacuum)
+            .is_ok()
+    );
+
+    assert!(
+        license_mgr
+            .check_enterprise_enabled(token, Feature::Stream)
             .is_ok()
     );
 

@@ -23,6 +23,7 @@ use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::license::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
+use crate::stream::RealStreamHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct MockServices;
@@ -38,6 +39,7 @@ impl MockServices {
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
         RealVirtualColumnHandler::init()?;
+        RealStreamHandler::init()?;
         Ok(())
     }
 }
