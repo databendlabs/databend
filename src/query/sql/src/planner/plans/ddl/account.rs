@@ -88,6 +88,12 @@ pub struct SetRolePlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetSecondaryRolesPlan {
+    All,
+    None,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowRolesPlan {}
 
 impl ShowRolesPlan {

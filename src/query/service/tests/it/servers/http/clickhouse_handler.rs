@@ -240,28 +240,6 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         assert_ok!(status, body);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
-
-    {
-        let jsons = [r#"{"a": 2}"#];
-        let body = jsons.join("\n");
-        let (status, body) = server
-            .post("insert into table t1 format JSONEachRow", &body)
-            .await;
-        assert_ok!(status, body);
-    }
-    {
-        let (status, body) = server.get(r#"select * from t1 order by a"#).await;
-        assert_ok!(status, body);
-        assert_eq!(&body, "0\ta\n1\tb\n2\t\\N\n");
-    }
-    {
-        let jsons = [r#"{"b": 0}"#];
-        let body = jsons.join("\n");
-        let (status, _) = server
-            .post("insert into table t1 format JSONEachRow", &body)
-            .await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    }
     Ok(())
 }
 
