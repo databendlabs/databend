@@ -32,6 +32,7 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStageOptions;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::SetExpr;
 use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
@@ -98,6 +99,7 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Statistics;
@@ -321,148 +323,165 @@ impl Binder {
         }
     }
 
+    /// Extract the srf inner tuple fields as columns.
     #[async_backtrace::framed]
-    async fn bind_lateral_table_function(
+    async fn extract_srf_table_function_columns(
         &mut self,
-        parent_context: &mut BindContext,
-        child: SExpr,
-        table_ref: &TableReference,
+        bind_context: &mut BindContext,
+        span: &Span,
+        func_name: &Identifier,
+        srf_expr: SExpr,
+        alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        match table_ref {
-            TableReference::TableFunction {
-                span,
-                name,
-                params,
-                named_params,
-                alias,
-                ..
-            } => {
-                let func_name = normalize_identifier(name, &self.name_resolution_ctx);
-                if !func_name.name.eq_ignore_ascii_case("flatten") {
-                    return Err(ErrorCode::InvalidArgument(
-                        "lateral join only support `FLATTEN` function",
+        let fields = if func_name.name.eq_ignore_ascii_case("flatten") {
+            Some(vec![
+                "seq".to_string(),
+                "key".to_string(),
+                "path".to_string(),
+                "index".to_string(),
+                "value".to_string(),
+                "this".to_string(),
+            ])
+        } else if func_name.name.eq_ignore_ascii_case("json_each") {
+            Some(vec!["key".to_string(), "value".to_string()])
+        } else {
+            None
+        };
+
+        if let Some(fields) = fields {
+            // Delete result tuple column
+            let _ = bind_context.columns.pop();
+
+            if let RelOperator::EvalScalar(plan) = (*srf_expr.plan).clone() {
+                if plan.items.len() != 1 {
+                    return Err(ErrorCode::Internal(format!(
+                        "Invalid table function subquery EvalScalar items, expect 1, but got {}",
+                        plan.items.len()
+                    )));
+                }
+                let scalar = &plan.items[0].scalar;
+
+                // Add tuple inner columns
+                let mut items = Vec::with_capacity(fields.len());
+                for (i, field) in fields.into_iter().enumerate() {
+                    let field_expr = ScalarExpr::FunctionCall(FunctionCall {
+                        span: *span,
+                        func_name: "get".to_string(),
+                        params: vec![i + 1],
+                        arguments: vec![scalar.clone()],
+                    });
+                    let data_type = field_expr.data_type()?;
+                    let index = self
+                        .metadata
+                        .write()
+                        .add_derived_column(field.clone(), data_type.clone());
+
+                    let column_binding = ColumnBindingBuilder::new(
+                        field,
+                        index,
+                        Box::new(data_type),
+                        Visibility::Visible,
                     )
-                    .set_span(*span));
-                }
+                    .build();
+                    bind_context.add_column_binding(column_binding);
 
-                let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
-
-                // build flatten function arguments.
-                let mut named_args: HashMap<String, Expr> = named_params
-                    .iter()
-                    .map(|(name, value)| (name.to_lowercase(), value.clone()))
-                    .collect::<HashMap<_, _>>();
-
-                let mut args = Vec::with_capacity(named_args.len());
-                let names = vec!["input", "path", "outer", "recursive", "mode"];
-                for name in names {
-                    if named_args.is_empty() {
-                        break;
-                    }
-                    match named_args.remove(name) {
-                        Some(val) => args.push(val),
-                        None => args.push(Expr::Literal {
-                            span: None,
-                            lit: Literal::Null,
-                        }),
-                    }
-                }
-                if !named_args.is_empty() {
-                    return Err(ErrorCode::InvalidArgument("Invalid param names").set_span(*span));
-                }
-
-                if !params.is_empty() {
-                    args.extend(params.clone());
-                }
-
-                // convert lateral join flatten to srf flatten function
-                let srf = Expr::FunctionCall {
-                    span: *span,
-                    distinct: false,
-                    name: Identifier::from_name("flatten".to_string()),
-                    args,
-                    params: vec![],
-                    window: None,
-                    lambda: None,
-                };
-                let srfs = vec![srf.clone()];
-                let srf_expr = self
-                    .bind_project_set(&mut bind_context, &srfs, child)
-                    .await?;
-
-                let mut items = Vec::with_capacity(6);
-                if let Some((_, flatten_scalar)) = bind_context.srfs.remove(&srf.to_string()) {
-                    // extract the tuple fields as columns.
-                    let fields = vec![
-                        "seq".to_string(),
-                        "key".to_string(),
-                        "path".to_string(),
-                        "index".to_string(),
-                        "value".to_string(),
-                        "this".to_string(),
-                    ];
-                    for (i, field) in fields.into_iter().enumerate() {
-                        let field_expr = ScalarExpr::FunctionCall(FunctionCall {
-                            span: srf.span(),
-                            func_name: "get".to_string(),
-                            params: vec![i + 1],
-                            arguments: vec![flatten_scalar.clone()],
-                        });
-                        let data_type = field_expr.data_type()?;
-                        let index = self
-                            .metadata
-                            .write()
-                            .add_derived_column(field.clone(), data_type.clone());
-
-                        let column_binding = ColumnBindingBuilder::new(
-                            field,
-                            index,
-                            Box::new(data_type),
-                            Visibility::Visible,
-                        )
-                        .build();
-                        bind_context.add_column_binding(column_binding);
-
-                        items.push(ScalarItem {
-                            scalar: field_expr,
-                            index,
-                        });
-                    }
-                } else {
-                    return Err(
-                        ErrorCode::Internal("bind `FLATTEN` function failed").set_span(*span)
-                    );
+                    items.push(ScalarItem {
+                        scalar: field_expr,
+                        index,
+                    });
                 }
                 let eval_scalar = EvalScalar { items };
                 let new_expr =
-                    SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
+                    SExpr::create_unary(Arc::new(eval_scalar.into()), srf_expr.children[0].clone());
 
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-
-                // add left table columns.
-                for column in &parent_context.columns {
-                    bind_context.add_column_binding(column.clone());
-                }
-
-                return Ok((new_expr, bind_context));
+                return Ok((new_expr, bind_context.clone()));
+            } else {
+                return Err(ErrorCode::Internal("Invalid table function subquery"));
             }
-            _ => unreachable!(),
         }
+        if let Some(alias) = alias {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+        Ok((srf_expr, bind_context.clone()))
     }
 
     /// Bind a table function.
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn bind_table_function(
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
+        lateral: bool,
         name: &Identifier,
         params: &Vec<Expr>,
         named_params: &Vec<(String, Expr)>,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
+        let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+
+        if BUILTIN_FUNCTIONS
+            .get_property(&func_name.name)
+            .map(|p| p.kind == FunctionKind::SRF)
+            .unwrap_or(false)
+        {
+            // If it is a set-returning function, we bind it as a subquery.
+            let args = parse_table_function_args(span, &func_name, params, named_params)?;
+
+            let select_stmt = SelectStmt {
+                span: *span,
+                hints: None,
+                distinct: false,
+                select_list: vec![SelectTarget::AliasedExpr {
+                    expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                        span: *span,
+                        distinct: false,
+                        name: common_ast::ast::Identifier {
+                            span: *span,
+                            name: func_name.name.clone(),
+                            quote: None,
+                        },
+                        params: vec![],
+                        args,
+                        window: None,
+                        lambda: None,
+                    }),
+                    alias: None,
+                }],
+                from: vec![],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            };
+            let query = Query {
+                span: *span,
+                with: None,
+                body: SetExpr::Select(Box::new(select_stmt)),
+                order_by: vec![],
+                limit: vec![],
+                offset: None,
+                ignore_result: false,
+            };
+
+            let (srf_expr, mut bind_context) = self
+                .bind_subquery(bind_context, lateral, &query, &None)
+                .await?;
+
+            return self
+                .extract_srf_table_function_columns(
+                    &mut bind_context,
+                    span,
+                    &func_name,
+                    srf_expr,
+                    alias,
+                )
+                .await;
+        }
+
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -473,8 +492,6 @@ impl Binder {
             self.ctes_map.clone(),
         );
         let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
-
-        let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 
         if func_name.name.eq_ignore_ascii_case("result_scan") {
             let query_id = parse_result_scan_args(&table_args)?;
@@ -531,45 +548,7 @@ impl Binder {
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             }
-            return Ok((s_expr, bind_context));
-        }
-
-        if BUILTIN_FUNCTIONS
-            .get_property(&func_name.name)
-            .map(|p| p.kind == FunctionKind::SRF)
-            .unwrap_or(false)
-            && !func_name.name.eq_ignore_ascii_case("flatten")
-        {
-            // If it is a set-returning function, we bind it as a subquery.
-            let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-            let stmt = SelectStmt {
-                span: *span,
-                hints: None,
-                distinct: false,
-                select_list: vec![SelectTarget::AliasedExpr {
-                    expr: Box::new(common_ast::ast::Expr::FunctionCall {
-                        span: *span,
-                        distinct: false,
-                        name: common_ast::ast::Identifier {
-                            span: *span,
-                            name: func_name.name.clone(),
-                            quote: None,
-                        },
-                        params: vec![],
-                        args: params.clone(),
-                        window: None,
-                        lambda: None,
-                    }),
-                    alias: None,
-                }],
-                from: vec![],
-                selection: None,
-                group_by: None,
-                having: None,
-                window_list: None,
-            };
-            self.bind_select_stmt(&mut bind_context, &stmt, &[], 0)
-                .await
+            Ok((s_expr, bind_context))
         } else {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
@@ -702,14 +681,22 @@ impl Binder {
             }
             TableReference::TableFunction {
                 span,
+                lateral,
                 name,
                 params,
                 named_params,
                 alias,
-                ..
             } => {
-                self.bind_table_function(bind_context, span, name, params, named_params, alias)
-                    .await
+                self.bind_table_function(
+                    bind_context,
+                    span,
+                    *lateral,
+                    name,
+                    params,
+                    named_params,
+                    alias,
+                )
+                .await
             }
             TableReference::Subquery {
                 span: _,
@@ -927,32 +914,20 @@ impl Binder {
                     result_ctx = ctx;
                 }
                 _ => {
-                    if join.right.is_lateral_table_function() {
-                        let (expr, ctx) = self
-                            .bind_lateral_table_function(
-                                &mut result_ctx,
-                                result_expr.clone(),
-                                &join.right,
-                            )
-                            .await?;
-                        result_expr = expr;
-                        result_ctx = ctx;
-                    } else {
-                        let (right_expr, right_ctx) =
-                            self.bind_single_table(&mut result_ctx, &join.right).await?;
-                        let (join_expr, ctx) = self
-                            .bind_join(
-                                current_ctx,
-                                result_ctx,
-                                right_ctx,
-                                result_expr,
-                                right_expr,
-                                join,
-                            )
-                            .await?;
-                        result_expr = join_expr;
-                        result_ctx = ctx;
-                    }
+                    let (right_expr, right_ctx) =
+                        self.bind_single_table(&mut result_ctx, &join.right).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            result_ctx,
+                            right_ctx,
+                            result_expr,
+                            right_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
                 }
             }
         }
@@ -1277,4 +1252,63 @@ fn string_value(value: &Scalar) -> Result<String> {
 pub fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
     let args = table_args.expect_all_positioned("RESULT_SCAN", Some(1))?;
     string_value(&args[0])
+}
+
+// parse flatten named params to arguments
+fn parse_table_function_args(
+    span: &Span,
+    func_name: &Identifier,
+    params: &Vec<Expr>,
+    named_params: &Vec<(String, Expr)>,
+) -> Result<Vec<Expr>> {
+    if func_name.name.eq_ignore_ascii_case("flatten") {
+        // build flatten function arguments.
+        let mut named_args: HashMap<String, Expr> = named_params
+            .iter()
+            .map(|(name, value)| (name.to_lowercase(), value.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let mut args = Vec::with_capacity(named_args.len() + params.len());
+        let names = vec!["input", "path", "outer", "recursive", "mode"];
+        for name in names {
+            if named_args.is_empty() {
+                break;
+            }
+            match named_args.remove(name) {
+                Some(val) => args.push(val),
+                None => args.push(Expr::Literal {
+                    span: None,
+                    lit: Literal::Null,
+                }),
+            }
+        }
+        if !named_args.is_empty() {
+            let invalid_names = named_args.into_keys().collect::<Vec<String>>().join(", ");
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Invalid named params: {}",
+                invalid_names
+            ))
+            .set_span(*span));
+        }
+
+        if !params.is_empty() {
+            args.extend(params.clone());
+        }
+        Ok(args)
+    } else {
+        if !named_params.is_empty() {
+            let invalid_names = named_params
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect::<Vec<String>>()
+                .join(", ");
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Invalid named params: {}",
+                invalid_names
+            ))
+            .set_span(*span));
+        }
+
+        Ok(params.clone())
+    }
 }
