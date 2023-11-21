@@ -161,11 +161,13 @@ impl Network {
 }
 
 pub struct NetworkConnection {
+    /// This node id
     id: NodeId,
+
+    /// The node id to send message to.
     target: NodeId,
 
-    // TODO: this will be used when learners is upgrade to be stored in Membership
-    #[allow(dead_code)]
+    /// The node info to send message to.
     target_node: MembershipNode,
 
     /// A counter to send snapshot via v0 API.
@@ -177,7 +179,9 @@ pub struct NetworkConnection {
     install_snapshot_via_v0: u64,
 
     sto: RaftStore,
+
     conn_pool: Arc<Pool<ChannelManager>>,
+
     backoff: Backoff,
 }
 
