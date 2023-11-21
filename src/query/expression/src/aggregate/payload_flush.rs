@@ -217,11 +217,16 @@ impl Payload {
             for idx in 0..len {
                 let str_len =
                     core::ptr::read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
-                let data_address =
-                    core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _) as usize
-                        as *const u8;
 
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
+                let scalar = if str_len <= 8 {
+                    std::slice::from_raw_parts(state.addresses[idx].add(col_offset + 4), str_len)
+                } else {
+                    let data_address =
+                        core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                            as usize as *const u8;
+
+                    std::slice::from_raw_parts(data_address, str_len)
+                };
 
                 string_builder.put_slice(scalar);
                 string_builder.commit_row();

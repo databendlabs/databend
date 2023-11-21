@@ -99,13 +99,23 @@ pub unsafe fn serialize_column_to_rowformat(
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for index in select_vector.iter().take(rows).copied() {
-                let data = arena.alloc_slice_copy(v.index_unchecked(index));
-
+                let data = v.index_unchecked(index);
                 store(data.len() as u32, address[index].add(offset) as *mut u8);
-                store(
-                    data.as_ptr() as u64,
-                    address[index].add(offset + 4) as *mut u8,
-                );
+
+                if data.len() <= 8 {
+                    std::ptr::copy_nonoverlapping(
+                        data.as_ptr(),
+                        address[index].add(offset + 4) as *mut u8,
+                        data.len(),
+                    );
+                } else {
+                    let data = arena.alloc_slice_copy(v.index_unchecked(index));
+
+                    store(
+                        data.as_ptr() as u64,
+                        address[index].add(offset + 4) as *mut u8,
+                    );
+                }
             }
         }
         Column::Timestamp(buffer) => {
@@ -344,9 +354,15 @@ unsafe fn row_match_string_column(
                 if len != value.len() {
                     equal = false;
                 } else {
-                    let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
-                    let scalar = std::slice::from_raw_parts(data_address, len);
-                    equal = common_hashtable::fast_memcmp(scalar, value);
+                    if len <= 8 {
+                        let scalar = std::slice::from_raw_parts(address, len);
+                        equal = common_hashtable::fast_memcmp(scalar, value);
+                    } else {
+                        let data_address =
+                            core::ptr::read::<u64>(address as _) as usize as *const u8;
+                        let scalar = std::slice::from_raw_parts(data_address, len);
+                        equal = common_hashtable::fast_memcmp(scalar, value);
+                    }
                 }
             } else {
                 equal = is_set == is_set2;
@@ -372,10 +388,14 @@ unsafe fn row_match_string_column(
             if len != value.len() {
                 equal = false;
             } else {
-                let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
-                let scalar = std::slice::from_raw_parts(data_address, len);
-
-                equal = common_hashtable::fast_memcmp(scalar, value);
+                if len <= 8 {
+                    let scalar = std::slice::from_raw_parts(address, len);
+                    equal = common_hashtable::fast_memcmp(scalar, value);
+                } else {
+                    let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
+                    let scalar = std::slice::from_raw_parts(data_address, len);
+                    equal = common_hashtable::fast_memcmp(scalar, value);
+                }
             }
 
             if equal {
@@ -452,7 +472,9 @@ unsafe fn row_match_column_type<T: ArgType>(
             }
         }
     }
+    if match_count > 0 {
+        select_vector[0..match_count].copy_from_slice(&temp_vector[0..match_count]);
+    }
 
-    std::mem::swap(select_vector, temp_vector);
     *count = match_count;
 }

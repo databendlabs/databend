@@ -14,6 +14,7 @@
 
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
+use std::intrinsics::assume;
 use std::sync::atomic::Ordering;
 
 use common_exception::Result;
@@ -213,10 +214,13 @@ impl AggregateHashTable {
                     state.no_match_vector[i]
                 };
 
+                unsafe { assume(index < state.group_hashes.len()) };
                 let ht_offset =
                     (state.group_hashes[index] as usize + iter_times) & (self.capacity - 1);
 
                 let salt = state.group_hashes[index].get_salt();
+
+                unsafe { assume(ht_offset < entries.len()) };
                 let entry = &mut entries[ht_offset];
 
                 if entry.is_occupied() {
@@ -390,12 +394,14 @@ impl AggregateHashTable {
 
         // 256k
         if bytes_per_partition >= 256 * 1024 {
-            new_radix_bits += self.config.repartition_radix_bits_incr;
+            // direct repartition to max radix bits
+            new_radix_bits = self.config.max_radix_bits;
 
+            // new_radix_bits += self.config.repartition_radix_bits_incr;
             // If reducion is small and input rows will be very large, directly repartition to max radix bits
-            if self.should_disable_expand_hash_table() {
-                new_radix_bits = self.config.max_radix_bits;
-            }
+            // if self.should_disable_expand_hash_table() {
+            //     new_radix_bits = self.config.max_radix_bits;
+            // }
         }
 
         loop {
@@ -445,6 +451,9 @@ impl AggregateHashTable {
 
         let mut entries = vec![0; new_capacity];
 
+        #[cfg(all(target_arch = "x86_64", target_feature = "avx"))]
+        let zeros = unsafe { std::arch::x86_64::_mm256_setzero_si256() };
+
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {
@@ -455,24 +464,47 @@ impl AggregateHashTable {
                     let hash: u64 =
                         unsafe { core::ptr::read(row_ptr.add(payload.hash_offset) as _) };
 
-                    let mut hash_slot = hash & mask;
-                    while entries[hash_slot as usize].is_occupied() {
+                    let mut hash_slot = (hash & mask) as usize;
+                    unsafe { assume(hash_slot < entries.len()) };
+                    while entries[hash_slot].is_occupied() {
                         hash_slot += 1;
-                        if hash_slot >= new_capacity as u64 {
+                        #[cfg(all(target_arch = "x86_64", target_feature = "avx"))]
+                        {
+                            unsafe {
+                                while hash_slot + 4 < new_capacity {
+                                    let read = std::arch::x86_64::_mm256_loadu_si256(
+                                        entries.as_ptr().add(hash_slot) as *const _,
+                                    );
+                                    let result = std::arch::x86_64::_mm256_cmpeq_epi64(read, zeros);
+                                    let mask = std::arch::x86_64::_mm256_movemask_epi8(result);
+
+                                    // Check if the mask is zero, which indicates all values are non-zero.
+                                    if mask == 0 {
+                                        hash_slot += 4;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if hash_slot >= new_capacity {
                             hash_slot = 0;
                         }
+                        unsafe { assume(hash_slot < entries.len()) };
                     }
-                    debug_assert!(!entries[hash_slot as usize].is_occupied());
+                    debug_assert!(!entries[hash_slot].is_occupied());
                     // set value
-                    entries[hash_slot as usize].set_salt(hash.get_salt());
-                    entries[hash_slot as usize].set_pointer(row_ptr);
-                    debug_assert!(entries[hash_slot as usize].is_occupied());
-                    debug_assert_eq!(entries[hash_slot as usize].get_pointer(), row_ptr);
-                    debug_assert_eq!(entries[hash_slot as usize].get_salt(), hash.get_salt());
+
+                    unsafe { assume(hash_slot < entries.len()) };
+                    entries[hash_slot].set_salt(hash.get_salt());
+                    entries[hash_slot].set_pointer(row_ptr);
+                    debug_assert!(entries[hash_slot].is_occupied());
+                    debug_assert_eq!(entries[hash_slot].get_pointer(), row_ptr);
+                    debug_assert_eq!(entries[hash_slot].get_salt(), hash.get_salt());
                 }
             }
         }
-
         self.entries = entries;
         self.capacity = new_capacity;
     }
@@ -498,11 +530,11 @@ impl AggregateHashTable {
             self.disable_expand_ht = ratio <= min_reduction;
             return self.disable_expand_ht;
         }
-        ratio <= min_reduction
+        false
     }
 
     pub fn initial_capacity() -> usize {
-        4096
+        8192
     }
 
     pub fn get_capacity_for_count(count: usize) -> usize {

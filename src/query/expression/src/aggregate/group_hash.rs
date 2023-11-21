@@ -149,6 +149,7 @@ trait AggHash {
 // Rewrite using chatgpt
 
 impl AggHash for [u8] {
+    #[inline]
     fn agg_hash(&self) -> u64 {
         const M: u64 = 0xc6a4a7935bd1e995;
         const SEED: u64 = 0xe17a1465;
@@ -184,7 +185,7 @@ impl AggHash for [u8] {
 macro_rules! impl_agg_hash_for_primitive_types {
     ($t: ty) => {
         impl AggHash for $t {
-            #[inline(always)]
+            #[inline]
             fn agg_hash(&self) -> u64 {
                 let mut x = *self as u64;
                 x ^= x >> 32;
@@ -208,25 +209,28 @@ impl_agg_hash_for_primitive_types!(u64);
 impl_agg_hash_for_primitive_types!(i64);
 
 impl AggHash for bool {
+    #[inline]
     fn agg_hash(&self) -> u64 {
         *self as u64
     }
 }
 
 impl AggHash for i128 {
+    #[inline]
     fn agg_hash(&self) -> u64 {
         self.to_le_bytes().agg_hash()
     }
 }
 
 impl AggHash for i256 {
+    #[inline]
     fn agg_hash(&self) -> u64 {
         self.to_le_bytes().agg_hash()
     }
 }
 
 impl AggHash for OrderedFloat<f32> {
-    #[inline(always)]
+    #[inline]
     fn agg_hash(&self) -> u64 {
         if self.is_nan() {
             f32::NAN.to_bits().agg_hash()
@@ -237,7 +241,7 @@ impl AggHash for OrderedFloat<f32> {
 }
 
 impl AggHash for OrderedFloat<f64> {
-    #[inline(always)]
+    #[inline]
     fn agg_hash(&self) -> u64 {
         if self.is_nan() {
             f64::NAN.to_bits().agg_hash()
