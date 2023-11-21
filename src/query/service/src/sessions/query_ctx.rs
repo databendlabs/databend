@@ -58,6 +58,7 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
+use common_meta_app::principal::COPY_WITH_MAX_FILE_MSG;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
@@ -761,9 +762,7 @@ impl TableContext for QueryContext {
                         return Ok(results);
                     }
                     if result_size > COPIED_FILES_MAX_COMMIT_NUM {
-                        return Err(ErrorCode::Internal(format!(
-                            "copy into table can commit at most {COPIED_FILES_MAX_COMMIT_NUM} paths once. Please use CopyOption max_files to limit the number of files or use 'force=true, purge=true' to avoid committing paths if acceptable."
-                        )));
+                        return Err(ErrorCode::Internal(COPY_WITH_MAX_FILE_MSG));
                     }
                 }
             }

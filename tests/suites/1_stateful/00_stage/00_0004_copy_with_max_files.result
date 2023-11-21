@@ -29,10 +29,10 @@ remain 0 files
 >>>> drop table if exists test_max_files_limit
 >>>> create table test_max_files_limit (a int, b int)
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV)
-Error: APIError: ResponseError with 1001: copy into table can commit at most 15000 paths once. Please use CopyOption max_files to limit the number of files or use 'force=true, purge=true' to avoid committing paths if acceptable.
+Error: APIError: ResponseError with 1001: copy into table can commit at most 15000 paths once. Please use CopyOption 'max_files=<num>' to limit the number of files and run multi times until result is empty or use 'force=true, purge=true' to avoid committing paths if acceptable.
 <<<<
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV) force=true
-Error: APIError: ResponseError with 1001: copy into table can commit at most 15000 paths once. Please use CopyOption max_files to limit the number of files or use 'force=true, purge=true' to avoid committing paths if acceptable.
+Error: APIError: ResponseError with 1001: copy into table can commit at most 15000 paths once. Please use CopyOption 'max_files=<num>' to limit the number of files and run multi times until result is empty or use 'force=true, purge=true' to avoid committing paths if acceptable.
 <<<<
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV) force=true purge=true return_failed_only=true
 <<<<
