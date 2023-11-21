@@ -210,7 +210,7 @@ impl Binder {
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let mut decorrelator = SubqueryRewriter::new(self.metadata.clone());
-            right_child = decorrelator.flatten(
+            right_child = decorrelator.flatten_plan(
                 &right_child,
                 &right_prop.outer_columns,
                 &mut FlattenInfo {
