@@ -215,7 +215,7 @@ pub(super) fn create_parquet_table_info(schema: ArrowSchema, stage_info: &StageI
 }
 
 pub(super) fn create_parquet2_statistics_provider(
-    file_metas: Vec<Arc<FileMetaData>>,
+    file_metas: Vec<FileMetaData>,
     arrow_schema: &ArrowSchema,
 ) -> Result<Parquet2TableColumnStatisticsProvider> {
     // Collect Basic Columns Statistics from file metas.

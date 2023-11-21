@@ -20,7 +20,6 @@ use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
@@ -34,6 +33,7 @@ use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
+use parquet::file::metadata::ParquetMetaData;
 use storages_common_cache::LoadParams;
 
 use crate::hive_partition::HivePartInfo;
@@ -232,7 +232,7 @@ impl HiveBlockReader {
         dal: Operator,
         filename: &str,
         filesize: u64,
-    ) -> Result<Arc<FileMetaData>> {
+    ) -> Result<Arc<ParquetMetaData>> {
         let reader = MetaDataReader::meta_data_reader(dal);
 
         let load_params = LoadParams {

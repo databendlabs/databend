@@ -14,8 +14,10 @@
 
 mod builder;
 mod full_reader;
+mod meta_data_reader;
 mod row_group_reader;
 
 pub use builder::ParquetRSReaderBuilder;
 pub use full_reader::ParquetRSFullReader;
+pub use meta_data_reader::MetaDataReader;
 pub use row_group_reader::ParquetRSRowGroupReader;

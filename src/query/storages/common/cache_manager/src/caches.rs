@@ -16,13 +16,13 @@ use std::borrow::Borrow;
 use std::hash::BuildHasher;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
 use common_cache::Count;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use parquet::file::metadata::ParquetMetaData;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
@@ -51,7 +51,7 @@ pub type BloomIndexFilterCache =
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
+pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<ParquetMetaData>>;
 
 pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
 
@@ -129,7 +129,7 @@ impl CachedObject<Xor8Filter, DefaultHashBuilder, BloomIndexFilterMeter> for Xor
     }
 }
 
-impl CachedObject<FileMetaData> for FileMetaData {
+impl CachedObject<ParquetMetaData> for ParquetMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_file_meta_data_cache()

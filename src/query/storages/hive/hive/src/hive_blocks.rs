@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
 use log::debug;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::RowGroupMetaData;
 
 use crate::HiveBlockFilter;
 use crate::HivePartInfo;
 
 #[derive(Clone)]
 pub struct HiveBlocks {
-    pub file_meta: Arc<FileMetaData>,
+    pub file_meta: Arc<ParquetMetaData>,
     pub part: HivePartInfo,
     pub valid_rowgroups: Vec<usize>,
     pub current_index: usize,
@@ -32,7 +32,7 @@ pub struct HiveBlocks {
 
 impl HiveBlocks {
     pub fn create(
-        file_meta: Arc<FileMetaData>,
+        file_meta: Arc<ParquetMetaData>,
         part: HivePartInfo,
         hive_block_filter: Arc<HiveBlockFilter>,
     ) -> Self {
@@ -50,7 +50,7 @@ impl HiveBlocks {
     // 2. filtered by predict pushdown
     pub fn prune(&mut self) -> bool {
         let mut pruned_rg_cnt = 0;
-        for (idx, row_group) in self.file_meta.row_groups.iter().enumerate() {
+        for (idx, row_group) in self.file_meta.row_groups().iter().enumerate() {
             let start = row_group.columns()[0].byte_range().0;
             let mid = start + row_group.compressed_size() as u64 / 2;
             if !self.part.range.contains(&mid) {
@@ -77,7 +77,7 @@ impl HiveBlocks {
     }
 
     pub fn get_current_row_group_meta_data(&self) -> &RowGroupMetaData {
-        &self.file_meta.row_groups[self.get_current_rowgroup_index()]
+        &self.file_meta.row_group(self.get_current_rowgroup_index())
     }
 
     pub fn advance(&mut self) {

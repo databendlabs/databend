@@ -15,12 +15,10 @@
 mod data;
 mod deserialize;
 mod filter;
-mod meta_data_reader;
 mod reader;
 
 pub use data::BlockIterator;
 pub use data::IndexedChunk;
 pub use data::IndexedReaders;
 pub use data::Parquet2PartData;
-pub use meta_data_reader::MetaDataReader;
 pub use reader::Parquet2Reader;

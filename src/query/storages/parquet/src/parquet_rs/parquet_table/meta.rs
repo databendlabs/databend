@@ -25,7 +25,9 @@ use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
+use storages_common_cache::LoadParams;
 
+use crate::parquet_rs::parquet_reader::MetaDataReader;
 use crate::parquet_rs::statistics::collect_row_group_stats;
 
 #[async_backtrace::framed]
@@ -106,14 +108,32 @@ async fn load_and_check_parquet_meta(
     expect: &SchemaDescriptor,
     schema_from: &str,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata = common_storage::parquet_rs::read_metadata_async(file, &op, Some(size)).await?;
+    let metadata = read_meta_data(op, file, size).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),
         file,
         schema_from,
     )?;
-    Ok(Arc::new(metadata))
+    Ok(metadata)
+}
+
+#[async_backtrace::framed]
+pub async fn read_meta_data(
+    dal: Operator,
+    location: &str,
+    filesize: u64,
+) -> Result<Arc<ParquetMetaData>> {
+    let reader = MetaDataReader::meta_data_reader(dal);
+
+    let load_params = LoadParams {
+        location: location.to_owned(),
+        len_hint: Some(filesize),
+        ver: 0,
+        put_cache: true,
+    };
+
+    reader.read(&load_params).await
 }
 
 pub async fn read_parquet_metas_batch(

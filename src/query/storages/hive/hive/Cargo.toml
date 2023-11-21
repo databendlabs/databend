@@ -38,6 +38,7 @@ futures = "0.3.24"
 hive_metastore = "0.0.1"
 log = { workspace = true }
 minitrace = { workspace = true }
+parquet = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 serde = { workspace = true }
