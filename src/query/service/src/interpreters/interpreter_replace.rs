@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::physical_plans::CommitSink;
 use common_sql::executor::physical_plans::Exchange;
@@ -46,6 +47,7 @@ use common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
@@ -141,6 +143,13 @@ impl ReplaceInterpreter {
 
         // check mutability
         table.check_mutable()?;
+        // check change tracking
+        if table.change_tracking_enabled() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "change tracking is enabled for table '{}', does not support REPLACE",
+                table.name(),
+            )));
+        }
 
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
@@ -184,7 +193,12 @@ impl ReplaceInterpreter {
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
 
-        let (mut root, select_ctx, bind_context) = self
+        let ReplaceSourceCtx {
+            mut root,
+            select_ctx,
+            update_stream_meta,
+            bind_context,
+        } = self
             .connect_input_source(
                 self.ctx.clone(),
                 &self.plan.source,
@@ -326,6 +340,7 @@ impl ReplaceInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
+            update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
             need_lock: false,
         })));
@@ -341,6 +356,7 @@ impl ReplaceInterpreter {
             Ok(())
         }
     }
+
     #[async_backtrace::framed]
     async fn connect_input_source<'a>(
         &'a self,
@@ -348,15 +364,16 @@ impl ReplaceInterpreter {
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
-    ) -> Result<(
-        Box<PhysicalPlan>,
-        Option<ReplaceSelectCtx>,
-        Option<BindContext>,
-    )> {
+    ) -> Result<ReplaceSourceCtx> {
         match source {
             InsertInputSource::Values { data, start } => self
                 .connect_value_source(schema.clone(), data, *start)
-                .map(|x| (x, None, None)),
+                .map(|root| ReplaceSourceCtx {
+                    root,
+                    select_ctx: None,
+                    update_stream_meta: None,
+                    bind_context: None,
+                }),
 
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
@@ -368,7 +385,12 @@ impl ReplaceInterpreter {
                     let (physical_plan, files, _) =
                         interpreter.build_physical_plan(&copy_plan).await?;
                     *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
-                    Ok((Box::new(physical_plan), None, None))
+                    Ok(ReplaceSourceCtx {
+                        root: Box::new(physical_plan),
+                        select_ctx: None,
+                        update_stream_meta: None,
+                        bind_context: None,
+                    })
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
@@ -398,11 +420,7 @@ impl ReplaceInterpreter {
         &'a self,
         ctx: Arc<QueryContext>,
         query_plan: &Plan,
-    ) -> Result<(
-        Box<PhysicalPlan>,
-        Option<ReplaceSelectCtx>,
-        Option<BindContext>,
-    )> {
+    ) -> Result<ReplaceSourceCtx> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -413,6 +431,8 @@ impl ReplaceInterpreter {
             } => (s_expr, metadata, bind_context, formatted_ast),
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
+
+        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),
@@ -431,6 +451,18 @@ impl ReplaceInterpreter {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
         };
-        Ok((physical_plan, Some(select_ctx), Some(*bind_context.clone())))
+        Ok(ReplaceSourceCtx {
+            root: physical_plan,
+            select_ctx: Some(select_ctx),
+            update_stream_meta,
+            bind_context: Some(*bind_context.clone()),
+        })
     }
+}
+
+struct ReplaceSourceCtx {
+    root: Box<PhysicalPlan>,
+    select_ctx: Option<ReplaceSelectCtx>,
+    update_stream_meta: Option<UpdateStreamMetaReq>,
+    bind_context: Option<BindContext>,
 }

@@ -59,16 +59,18 @@ pub async fn build_update_stream_meta_seq(
 fn get_stream_table(metadata: &MetadataRef) -> Result<Option<Arc<dyn Table>>> {
     let r_lock = metadata.read();
     let tables = r_lock.tables();
+    let mut streams = vec![];
     for t in tables {
         if t.table().engine() == STREAM_ENGINE {
-            return if tables.len() > 1 {
-                Err(ErrorCode::Unimplemented(
-                    "The current stream only supports single table queries",
-                ))
-            } else {
-                Ok(Some(t.table()))
-            };
+            streams.push(t);
         }
     }
-    Ok(None)
+
+    match streams.len() {
+        0 => Ok(None),
+        1 => Ok(Some(streams[0].table())),
+        _ => Err(ErrorCode::Unimplemented(
+            "Only support single stream queries",
+        )),
+    }
 }

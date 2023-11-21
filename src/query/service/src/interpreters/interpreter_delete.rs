@@ -282,6 +282,7 @@ impl DeleteInterpreter {
             table_info,
             catalog_info,
             mutation_kind: MutationKind::Delete,
+            update_stream_meta: None,
             merge_meta,
             need_lock: false,
         })))
