@@ -3329,18 +3329,18 @@ impl<'a> TypeChecker<'a> {
         let mut name = String::new();
         name.push_str(&base_column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
-        while let Some((_, path)) = paths.pop_front() {
+        for (_, path) in paths.iter() {
             let json_path = match path {
                 Literal::UInt64(idx) => {
                     name.push('[');
                     name.push_str(&idx.to_string());
                     name.push(']');
-                    Scalar::Number(NumberScalar::UInt64(idx))
+                    Scalar::Number(NumberScalar::UInt64(*idx))
                 }
                 Literal::String(field) => {
                     name.push(':');
                     name.push_str(field.as_ref());
-                    Scalar::String(field.into_bytes())
+                    Scalar::String(field.clone().into_bytes())
                 }
                 _ => unreachable!(),
             };
@@ -3361,16 +3361,10 @@ impl<'a> TypeChecker<'a> {
         }
 
         if index == 0 {
-            let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-            index = self.metadata.write().add_virtual_column(
-                base_column.table_index,
-                base_column.column_name.clone(),
-                base_column.column_index,
-                name.clone(),
-                table_data_type,
-                json_paths,
-            );
+            return None;
         }
+
+        paths.clear();
 
         let data_type = DataType::Nullable(Box::new(DataType::Variant));
         let virtual_column = ColumnBindingBuilder::new(

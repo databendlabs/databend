@@ -32,6 +32,8 @@ pub use processor::Event;
 pub use processor::EventCause;
 pub use processor::Processor;
 pub use processor::ProcessorPtr;
+pub use profile::PlanScope;
+pub use profile::PlanScopeGuard;
 pub use resize_processor::create_resize_item;
 pub use resize_processor::ResizeProcessor;
 pub use shuffle_processor::ShuffleProcessor;
