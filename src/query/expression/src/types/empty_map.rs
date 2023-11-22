@@ -76,6 +76,17 @@ impl ValueType for EmptyMapType {
         }
     }
 
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::EmptyMap { len } => Some(len),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(len: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::EmptyMap { len })
+    }
+
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
         Scalar::EmptyMap
     }
