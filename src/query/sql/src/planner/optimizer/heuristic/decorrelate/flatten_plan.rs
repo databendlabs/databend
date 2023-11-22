@@ -509,7 +509,7 @@ impl SubqueryRewriter {
             let metadata = self.metadata.read();
             let col = metadata.column(item.index);
             if let ColumnEntry::DerivedColumn(derived_col) = col {
-                // A little tricky here, we'll check if sort items if a count aggregation function later.
+                // A little tricky here, we'll check if a sort item is a count aggregation function later.
                 derived_col.alias.to_lowercase().starts_with("count")
             } else {
                 false
