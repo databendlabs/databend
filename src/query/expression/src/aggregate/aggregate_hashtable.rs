@@ -451,9 +451,6 @@ impl AggregateHashTable {
 
         let mut entries = vec![0; new_capacity];
 
-        #[cfg(all(target_arch = "x86_64", target_feature = "avx"))]
-        let zeros = unsafe { std::arch::x86_64::_mm256_setzero_si256() };
-
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {
@@ -468,34 +465,12 @@ impl AggregateHashTable {
                     unsafe { assume(hash_slot < entries.len()) };
                     while entries[hash_slot].is_occupied() {
                         hash_slot += 1;
-                        #[cfg(all(target_arch = "x86_64", target_feature = "avx"))]
-                        {
-                            unsafe {
-                                while hash_slot + 4 < new_capacity {
-                                    let read = std::arch::x86_64::_mm256_loadu_si256(
-                                        entries.as_ptr().add(hash_slot) as *const _,
-                                    );
-                                    let result = std::arch::x86_64::_mm256_cmpeq_epi64(read, zeros);
-                                    let mask = std::arch::x86_64::_mm256_movemask_epi8(result);
-
-                                    // Check if the mask is zero, which indicates all values are non-zero.
-                                    if mask == 0 {
-                                        hash_slot += 4;
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
                         if hash_slot >= new_capacity {
                             hash_slot = 0;
                         }
-                        unsafe { assume(hash_slot < entries.len()) };
                     }
                     debug_assert!(!entries[hash_slot].is_occupied());
                     // set value
-
                     unsafe { assume(hash_slot < entries.len()) };
                     entries[hash_slot].set_salt(hash.get_salt());
                     entries[hash_slot].set_pointer(row_ptr);
