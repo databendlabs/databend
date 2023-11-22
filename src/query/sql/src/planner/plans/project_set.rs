@@ -52,11 +52,36 @@ impl Operator for ProjectSet {
         &self,
         rel_expr: &RelExpr,
     ) -> common_exception::Result<Arc<RelationalProperty>> {
-        let mut child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
+        let child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
+
+        // Derive output columns
+        let mut output_columns = child_prop.output_columns.clone();
         for srf in &self.srfs {
-            child_prop.output_columns.insert(srf.index);
+            output_columns.insert(srf.index);
         }
-        Ok(Arc::new(child_prop))
+
+        // Derive used columns
+        let mut used_columns = child_prop.used_columns.clone();
+        for srf in &self.srfs {
+            used_columns.extend(srf.scalar.used_columns());
+        }
+
+        // Derive outer columns
+        let mut outer_columns = child_prop.outer_columns.clone();
+        for srf in &self.srfs {
+            outer_columns.extend(
+                srf.scalar
+                    .used_columns()
+                    .difference(&child_prop.output_columns)
+                    .cloned(),
+            );
+        }
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+        }))
     }
 
     fn derive_physical_prop(
