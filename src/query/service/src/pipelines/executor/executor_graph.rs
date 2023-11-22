@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::processors::EventCause;
 use common_pipeline_core::Pipeline;
+use common_pipeline_core::PlanScope;
 use log::debug;
 use log::trace;
 use minitrace::prelude::*;
@@ -76,6 +77,7 @@ pub(crate) struct Node {
 impl Node {
     pub fn create(
         pid: usize,
+        scope: Option<PlanScope>,
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
@@ -87,7 +89,7 @@ impl Node {
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
-            profile: Arc::new(Profile::create(pid, p_name)),
+            profile: Arc::new(Profile::create(pid, p_name, scope)),
         })
     }
 
@@ -151,8 +153,13 @@ impl ExecutingGraph {
 
             for item in &pipe.items {
                 let pid = graph.node_count();
-                let node =
-                    Node::create(pid, &item.processor, &item.inputs_port, &item.outputs_port);
+                let node = Node::create(
+                    pid,
+                    pipe.scope.clone(),
+                    &item.processor,
+                    &item.inputs_port,
+                    &item.outputs_port,
+                );
 
                 let graph_node_index = graph.add_node(node.clone());
                 unsafe {

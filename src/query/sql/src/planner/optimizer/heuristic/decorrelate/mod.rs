@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cross_join;
-mod inner_join;
-mod left_anti_join;
-mod left_join;
-mod left_mark_join;
-mod left_semi_join;
-mod right_join;
-mod right_mark_join;
-mod right_semi_anti_join;
+#[allow(clippy::module_inception)]
+mod decorrelate;
+mod flatten_plan;
+mod flatten_scalar;
+
+pub use decorrelate::decorrelate_subquery;

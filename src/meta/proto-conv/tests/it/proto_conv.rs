@@ -20,6 +20,7 @@ use std::vec;
 use ce::types::decimal::DecimalSize;
 use ce::types::DecimalDataType;
 use ce::types::NumberDataType;
+use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_expression as ce;
@@ -143,7 +144,9 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
 }
 
 fn new_lvt() -> mt::LeastVisibleTime {
-    mt::LeastVisibleTime { time: 10267 }
+    mt::LeastVisibleTime {
+        time: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+    }
 }
 
 fn new_table_meta() -> mt::TableMeta {

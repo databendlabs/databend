@@ -62,10 +62,7 @@ impl kvapi::KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
-            // TODO(xp): unwrap???
-            let r = self
-                .apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())
-                .unwrap();
+            let r = self.apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())?;
             Ok(r)
         })?;
 
@@ -78,7 +75,6 @@ impl kvapi::KVApi for StateMachine {
     }
 
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         debug!("get_kv sv:{:?}", sv);
 

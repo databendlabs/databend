@@ -19,6 +19,7 @@ use std::sync::Arc;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
 use crate::processors::ProcessorPtr;
+use crate::PlanScope;
 
 #[derive(Clone)]
 pub struct PipeItem {
@@ -56,6 +57,7 @@ pub struct Pipe {
     pub items: Vec<PipeItem>,
     pub input_length: usize,
     pub output_length: usize,
+    pub scope: Option<PlanScope>,
 }
 
 impl Debug for Pipe {
@@ -70,6 +72,7 @@ impl Pipe {
             items,
             input_length: inputs,
             output_length: outputs,
+            scope: None,
         }
     }
 }

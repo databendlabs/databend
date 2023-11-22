@@ -16,6 +16,9 @@ use std::sync::atomic::Ordering;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::NullableType;
+use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::KeyAccessor;
@@ -23,12 +26,15 @@ use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn left_semi_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn right_mark_join<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -39,23 +45,22 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         // Probe states.
-        let mutable_indexes = &mut probe_state.mutable_indexes;
-        let probe_indexes = &mut mutable_indexes.probe_indexes;
+        let has_null = *self
+            .hash_join_state
+            .hash_join_desc
+            .marker_join_desc
+            .has_null
+            .read();
+        let markers = probe_state.markers.as_mut().unwrap();
         let pointers = probe_state.hashes.as_slice();
 
-        // Results.
-        let mut matched_idx = 0;
-        let mut result_blocks = vec![];
-
-        // Probe hash table and generate data blocks.
         if probe_state.probe_with_selection {
             let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
             for idx in selection.iter() {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
                 if hash_table.next_contains(key, ptr) {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
-                    matched_idx += 1;
+                    unsafe { *markers.get_unchecked_mut(*idx as usize) = MARKER_KIND_TRUE };
                 }
             }
         } else {
@@ -63,30 +68,26 @@ impl HashJoinProbeState {
                 let key = unsafe { keys.key_unchecked(idx) };
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
                 if hash_table.next_contains(key, ptr) {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                    matched_idx += 1;
+                    unsafe { *markers.get_unchecked_mut(idx) = MARKER_KIND_TRUE };
                 }
             }
         }
 
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
+        let probe_block = if probe_state.generation_state.is_probe_projected {
+            Some(input.clone())
+        } else {
+            None
+        };
+        let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
 
-        if matched_idx > 0 {
-            result_blocks.push(DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.generation_state.string_items_buf,
-            )?);
-        }
-
-        Ok(result_blocks)
+        Ok(vec![self.merge_eq_block(
+            probe_block,
+            marker_block,
+            input.num_rows(),
+        )])
     }
 
-    pub(crate) fn left_semi_join_with_conjunct<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -96,19 +97,12 @@ impl HashJoinProbeState {
     where
         H::Key: 'a,
     {
-        // Probe states.
-        let max_block_size = probe_state.max_block_size;
-        let mutable_indexes = &mut probe_state.mutable_indexes;
-        let probe_indexes = &mut mutable_indexes.probe_indexes;
-        let build_indexes = &mut mutable_indexes.build_indexes;
-        let build_indexes_ptr = build_indexes.as_mut_ptr();
-        let pointers = probe_state.hashes.as_slice();
-
-        // Build states.
-        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
-
-        // For semi join, it defaults to false.
-        let mut row_state = vec![false; input.num_rows()];
+        let has_null = *self
+            .hash_join_state
+            .hash_join_desc
+            .marker_join_desc
+            .has_null
+            .read();
         let other_predicate = self
             .hash_join_state
             .hash_join_desc
@@ -116,13 +110,31 @@ impl HashJoinProbeState {
             .as_ref()
             .unwrap();
 
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let probe_indexes = &mut mutable_indexes.probe_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+        let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let pointers = probe_state.hashes.as_slice();
+        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+        let cols = input
+            .columns()
+            .iter()
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
+            .collect::<Vec<_>>();
+        let markers = probe_state.markers.as_mut().unwrap();
+        self.hash_join_state
+            .init_markers(&cols, input.num_rows(), markers);
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+
         // Results.
         let mut matched_idx = 0;
-        let mut result_blocks = vec![];
 
         // Probe hash table and generate data blocks.
         if probe_state.probe_with_selection {
-            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
             for idx in selection.iter() {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
@@ -141,15 +153,15 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.process_left_semi_join_block(
+                    self.process_right_mark_join_block(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
+                        markers,
                         other_predicate,
-                        &mut row_state,
                     )?;
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -184,15 +196,15 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.process_left_semi_join_block(
+                    self.process_right_mark_join_block(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
+                        markers,
                         other_predicate,
-                        &mut row_state,
                     )?;
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -211,40 +223,35 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            self.process_left_semi_join_block(
+            self.process_right_mark_join_block(
                 matched_idx,
                 input,
                 probe_indexes,
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
+                markers,
                 other_predicate,
-                &mut row_state,
             )?;
         }
 
-        // Find all matched indexes and generate the result `DataBlock`.
-        matched_idx = 0;
-        for (i, state) in row_state.iter().enumerate() {
-            if *state {
-                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = i as u32 };
-                matched_idx += 1;
-            }
-        }
-        if matched_idx > 0 {
-            result_blocks.push(DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.generation_state.string_items_buf,
-            )?);
-        }
+        let probe_block = if probe_state.generation_state.is_probe_projected {
+            Some(input.clone())
+        } else {
+            None
+        };
+        let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
 
-        Ok(result_blocks)
+        Ok(vec![self.merge_eq_block(
+            probe_block,
+            marker_block,
+            input.num_rows(),
+        )])
     }
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn process_left_semi_join_block(
+    fn process_right_mark_join_block(
         &self,
         matched_idx: usize,
         input: &DataBlock,
@@ -252,8 +259,8 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
+        markers: &mut [u8],
         other_predicate: &Expr,
-        row_state: &mut [bool],
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -282,40 +289,25 @@ impl HashJoinProbeState {
             None
         };
 
-        let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_idx);
-        self.update_row_state(
-            &result_block,
-            other_predicate,
-            &probe_indexes[0..matched_idx],
-            row_state,
-        )?;
+        let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        Ok(())
-    }
+        let filter =
+            self.get_nullable_filter_column(&result_block, other_predicate, &self.func_ctx)?;
+        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+        let validity = &filter_viewer.validity;
+        let data = &filter_viewer.column;
 
-    #[inline]
-    pub(crate) fn update_row_state(
-        &self,
-        result_block: &DataBlock,
-        other_predicate: &Expr,
-        probe_indexes: &[u32],
-        row_state: &mut [bool],
-    ) -> Result<()> {
-        match self.get_other_filters(result_block, other_predicate, &self.func_ctx)? {
-            (Some(bm), _, _) => {
-                for (row, selected) in probe_indexes.iter().zip(bm.iter()) {
-                    if selected && unsafe { !*row_state.get_unchecked(*row as usize) } {
-                        unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
-                    }
+        for (idx, index) in probe_indexes[0..matched_idx].iter().enumerate() {
+            let marker = unsafe { markers.get_unchecked_mut(*index as usize) };
+            if unsafe { !validity.get_bit_unchecked(idx) } {
+                if *marker == MARKER_KIND_FALSE {
+                    *marker = MARKER_KIND_NULL;
                 }
+            } else if unsafe { data.get_bit_unchecked(idx) } {
+                *marker = MARKER_KIND_TRUE;
             }
-            (_, true, _) => {
-                for row in probe_indexes.iter() {
-                    unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
-                }
-            }
-            _ => (),
-        };
+        }
+
         Ok(())
     }
 }
