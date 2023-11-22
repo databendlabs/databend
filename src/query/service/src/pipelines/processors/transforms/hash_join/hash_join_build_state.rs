@@ -114,9 +114,14 @@ impl HashJoinBuildState {
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
+            .map(|expr| {
+                expr.as_expr(&BUILTIN_FUNCTIONS)
+                    .data_type()
+                    .clone()
+                    .remove_nullable()
+            })
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_join_hash_method_with_types(&hash_key_types)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
