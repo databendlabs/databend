@@ -39,6 +39,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::Sort;
 use crate::plans::UnionAll;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
@@ -165,9 +166,13 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Sort(_) => {
-                self.flatten_sort(plan, correlated_columns, flatten_info, need_cross_join)
-            }
+            RelOperator::Sort(sort) => self.flatten_sort(
+                plan,
+                sort,
+                correlated_columns,
+                flatten_info,
+                need_cross_join,
+            ),
 
             RelOperator::Limit(_) => {
                 self.flatten_limit(plan, correlated_columns, flatten_info, need_cross_join)
@@ -487,6 +492,7 @@ impl SubqueryRewriter {
     fn flatten_sort(
         &mut self,
         plan: &SExpr,
+        sort: &Sort,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         need_cross_join: bool,
@@ -498,6 +504,19 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
+        // Check if sort contains `count() or distinct count()`.
+        if sort.items.iter().any(|item| {
+            let metadata = self.metadata.read();
+            let col = metadata.column(item.index);
+            if let ColumnEntry::DerivedColumn(derived_col) = col {
+                // A little tricky here, we'll check if a sort item is a count aggregation function later.
+                derived_col.alias.to_lowercase().starts_with("count")
+            } else {
+                false
+            }
+        }) {
+            flatten_info.from_count_func = false;
+        }
         Ok(SExpr::create_unary(
             Arc::new(plan.plan().clone()),
             Arc::new(flatten_plan),

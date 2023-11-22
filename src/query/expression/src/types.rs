@@ -313,6 +313,10 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder>;
 
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder>;
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
     fn upcast_domain(domain: Self::Domain) -> Domain;

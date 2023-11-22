@@ -294,7 +294,8 @@ impl SubqueryRewriter {
                         .build(),
                 });
 
-                let scalar = if flatten_info.from_count_func {
+                let scalar = if flatten_info.from_count_func && subquery.typ == SubqueryType::Scalar
+                {
                     // convert count aggregate function to `if(count() is not null, count(), 0)`
                     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
