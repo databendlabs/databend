@@ -22,7 +22,7 @@ use pyo3::prelude::*;
 
 use crate::asyncio::{AsyncDatabendClient, AsyncDatabendConnection};
 use crate::blocking::{BlockingDatabendClient, BlockingDatabendConnection};
-use crate::types::{ConnectionInfo, Row, RowIterator, Schema, ServerStats};
+use crate::types::{ConnectionInfo, Field, Row, RowIterator, Schema, ServerStats};
 
 create_exception!(
     databend_client,
@@ -40,6 +40,7 @@ fn _databend_driver(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<ConnectionInfo>()?;
     m.add_class::<Schema>()?;
     m.add_class::<Row>()?;
+    m.add_class::<Field>()?;
     m.add_class::<RowIterator>()?;
     m.add_class::<ServerStats>()?;
     Ok(())
