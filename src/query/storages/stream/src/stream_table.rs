@@ -26,6 +26,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StreamColumn;
+use common_catalog::table::StreamStatus;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -362,5 +363,16 @@ impl Table for StreamTable {
             ))
         })?;
         table.read_data(ctx, plan, pipeline, put_cache)
+    }
+
+    #[minitrace::trace]
+    async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
+        let base_table = self.source_table(ctx).await?;
+        let status = if base_table.get_table_info().ident.seq == self.table_version {
+            StreamStatus::NoData
+        } else {
+            StreamStatus::MayHaveData
+        };
+        Ok(status)
     }
 }

@@ -37,6 +37,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::table::StreamStatus;
 use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -2208,6 +2209,7 @@ impl<'a> TypeChecker<'a> {
             "try_to_variant",
             "greatest",
             "least",
+            "stream_has_data",
         ]
     }
 
@@ -2592,6 +2594,82 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_scalar_function_call(span, "array_min", vec![], vec![array])
                         .await,
                 )
+            }
+
+            ("stream_has_data", args) => {
+                let r: Result<Box<(ScalarExpr, DataType)>> = try {
+                    if args.len() != 1 {
+                        return Some(Err(ErrorCode::BadArguments(
+                            "stream_has_data needs one string argument",
+                        )
+                        .set_span(span)));
+                    }
+                    let box (scalar, _) = self.resolve(args[0]).await?;
+
+                    let expr = scalar.as_expr()?;
+                    let target = match expr {
+                        // match constant string
+                        EExpr::Constant {
+                            scalar: Scalar::String(ref str_bytes),
+                            ..
+                        } => String::from_utf8(str_bytes.clone())?,
+                        _ => {
+                            return Some(Err(ErrorCode::BadArguments(
+                                "stream_has_data only support constant string argument",
+                            )
+                            .set_span(span)));
+                        }
+                    };
+                    let default_cat_name;
+                    let default_db_name;
+                    let stream_name_vec: Vec<&str> = target.split('.').collect();
+                    let (cat, db, tbl) = {
+                        match stream_name_vec.len() {
+                            1 => {
+                                default_cat_name = self.ctx.get_current_catalog();
+                                default_db_name = self.ctx.get_current_database();
+                                (
+                                    default_cat_name.as_str(),
+                                    default_db_name.as_str(),
+                                    stream_name_vec[0],
+                                )
+                            }
+                            2 => {
+                                default_cat_name = self.ctx.get_current_catalog();
+                                (
+                                    default_cat_name.as_str(),
+                                    stream_name_vec[0],
+                                    stream_name_vec[1],
+                                )
+                            }
+                            3 => (stream_name_vec[0], stream_name_vec[1], stream_name_vec[2]),
+                            _ => {
+                                return Some(Err(ErrorCode::BadArguments(
+                                    "invalid stream name, '[catalog.]database.stream'",
+                                )
+                                .set_span(span)));
+                            }
+                        }
+                    };
+
+                    let table = self.ctx.get_table(cat, db, tbl).await?;
+                    let has_data = match table.check_stream_status(self.ctx.clone()).await? {
+                        StreamStatus::MayHaveData => Ok(true),
+                        StreamStatus::NotApplicable => {
+                            let msg = format!(
+                                "{cat}.{db}.{tbl} is not Stream, function `stream_has_data` is not applicable"
+                            );
+                            Err(ErrorCode::BadArguments(msg))
+                        }
+                        _ => Ok(false),
+                    }?;
+                    self.resolve(&Expr::Literal {
+                        span,
+                        lit: Literal::Boolean(has_data),
+                    })
+                    .await?
+                };
+                Some(r)
             }
             _ => None,
         }
