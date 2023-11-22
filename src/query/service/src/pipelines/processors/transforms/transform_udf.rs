@@ -95,8 +95,9 @@ impl AsyncTransform for TransformUdf {
                     .await?;
             let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
 
-            let (result_block, result_schema) = DataBlock::from_record_batch(&result_batch)
-                .map_err(|err| {
+            let schema = DataSchema::try_from(&(*result_batch.schema()))?;
+            let (result_block, result_schema) =
+                DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Cannot convert arrow record batch to data block: {err}"
                     ))

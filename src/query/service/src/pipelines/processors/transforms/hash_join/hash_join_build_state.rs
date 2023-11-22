@@ -177,18 +177,15 @@ impl HashJoinBuildState {
         {
             // Acquire lock in current scope
             let _lock = self.mutex.lock();
+            let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
             if self.hash_join_state.need_outer_scan() {
-                let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-                outer_scan_map.push(block_outer_scan_map);
+                build_state.outer_scan_map.push(block_outer_scan_map);
             }
             if self.hash_join_state.need_mark_scan() {
-                let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
-                mark_scan_map.push(block_mark_scan_map);
+                build_state.mark_scan_map.push(block_mark_scan_map);
             }
-            let build_num_rows = unsafe { &mut *self.hash_join_state.build_num_rows.get() };
-            *build_num_rows += data_block.num_rows();
-            let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
-            chunks.push(data_block);
+            build_state.generation_state.build_num_rows += data_block.num_rows();
+            build_state.generation_state.chunks.push(data_block);
         }
         Ok(())
     }
@@ -218,7 +215,11 @@ impl HashJoinBuildState {
             }
 
             // Get the number of rows of the build side.
-            let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
+            let build_num_rows = unsafe {
+                (*self.hash_join_state.build_state.get())
+                    .generation_state
+                    .build_num_rows
+            };
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
@@ -322,7 +323,10 @@ impl HashJoinBuildState {
 
     /// Divide the finalize phase into multiple tasks.
     pub fn generate_finalize_task(&self) -> Result<()> {
-        let chunks_len = unsafe { &*self.hash_join_state.chunks.get() }.len();
+        let chunks_len = unsafe { &*self.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks
+            .len();
         if chunks_len == 0 {
             return Ok(());
         }
@@ -350,7 +354,7 @@ impl HashJoinBuildState {
         let entry_size = self.entry_size.load(Ordering::Relaxed);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
-        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
@@ -435,7 +439,6 @@ impl HashJoinBuildState {
             }};
         }
 
-        let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
         let mut has_null = false;
         for chunk_index in task.0..task.1 {
             if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -444,7 +447,7 @@ impl HashJoinBuildState {
                 ));
             }
 
-            let chunk = &mut chunks[chunk_index];
+            let chunk = &mut build_state.generation_state.chunks[chunk_index];
 
             let mut _nullable_chunk = None;
             let evaluator = if matches!(
@@ -491,15 +494,13 @@ impl HashJoinBuildState {
                 block_entries.push(chunk.get_by_offset(index).clone());
             }
             if block_entries.is_empty() {
-                self.hash_join_state
-                    .is_build_projected
-                    .store(false, Ordering::SeqCst);
+                build_state.generation_state.is_build_projected = false;
             }
             *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
             match self.hash_join_state.hash_join_desc.join_type {
                 JoinType::LeftMark => {
-                    let markers = &mut mark_scan_map[chunk_index];
+                    let markers = &mut build_state.mark_scan_map[chunk_index];
                     self.hash_join_state
                         .init_markers(&columns, chunk.num_rows(), markers);
                 }
@@ -575,10 +576,12 @@ impl HashJoinBuildState {
             .hash_table_builders
             .fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
-            info!("finish build hash table with {} rows", unsafe {
-                *self.hash_join_state.build_num_rows.get()
-            });
-            let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+            let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+            info!(
+                "finish build hash table with {} rows",
+                build_state.generation_state.build_num_rows
+            );
+            let data_blocks = &mut build_state.generation_state.chunks;
             if !data_blocks.is_empty()
                 && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
             {
@@ -609,11 +612,8 @@ impl HashJoinBuildState {
                         )
                     })
                     .collect();
-                let build_columns_data_type =
-                    unsafe { &mut *self.hash_join_state.build_columns_data_type.get() };
-                let build_columns = unsafe { &mut *self.hash_join_state.build_columns.get() };
-                *build_columns_data_type = columns_data_type;
-                *build_columns = columns;
+                build_state.generation_state.build_columns_data_type = columns_data_type;
+                build_state.generation_state.build_columns = columns;
             }
             self.hash_join_state
                 .build_done_watcher

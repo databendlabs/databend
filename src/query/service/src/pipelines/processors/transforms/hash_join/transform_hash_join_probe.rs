@@ -219,7 +219,7 @@ impl TransformHashJoinProbe {
 
     async fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
-        // self.probe_state.reset();
+        self.probe_state.reset();
         if (self.join_probe_state.hash_join_state.need_outer_scan()
             || self.join_probe_state.hash_join_state.need_mark_scan())
             && self.join_probe_state.probe_workers.load(Ordering::Relaxed) == 0
@@ -481,8 +481,10 @@ impl Processor for TransformHashJoinProbe {
                         .await?;
                     // Use `non_matched_data` to probe the first round hashtable (if the hashtable isn't empty)
                     if !non_matched_data.is_empty()
-                        && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
-                            != &(0_usize)
+                        && unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
+                            .generation_state
+                            .build_num_rows
+                            != 0
                     {
                         self.input_data.push_back(non_matched_data);
                         self.need_spill = false;
