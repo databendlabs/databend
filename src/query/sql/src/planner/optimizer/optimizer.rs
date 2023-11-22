@@ -138,7 +138,7 @@ pub fn optimize(
                 plan.meta_data.clone(),
                 plan.input.child(1)?.clone(),
             )?;
-            // we nned to remove exchange of right_source, becase it's
+            // we need to remove exchange of right_source, because it's
             // not an end query.
             if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
                 right_source = right_source.child(0)?.clone();
