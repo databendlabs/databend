@@ -163,6 +163,22 @@ impl TableAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("ViewAlreadyExists: {view_name} while {context}")]
+pub struct ViewAlreadyExists {
+    view_name: String,
+    context: String,
+}
+
+impl ViewAlreadyExists {
+    pub fn new(view_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            view_name: view_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateTableWithDropTime: create {table_name} with drop time")]
 pub struct CreateTableWithDropTime {
     table_name: String,
@@ -247,6 +263,22 @@ impl TableVersionMismatched {
             table_id,
             expect,
             curr,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("StreamAlreadyExists: {name} while {context}")]
+pub struct StreamAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl StreamAlreadyExists {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
             context: context.into(),
         }
     }
@@ -854,6 +886,9 @@ pub enum AppError {
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
+    ViewAlreadyExists(#[from] ViewAlreadyExists),
+
+    #[error(transparent)]
     CreateTableWithDropTime(#[from] CreateTableWithDropTime),
 
     #[error(transparent)]
@@ -990,6 +1025,9 @@ pub enum AppError {
     VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
 
     #[error(transparent)]
+    StreamAlreadyExists(#[from] StreamAlreadyExists),
+
+    #[error(transparent)]
     StreamVersionMismatched(#[from] StreamVersionMismatched),
 
     #[error(transparent)]
@@ -1056,6 +1094,12 @@ impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
 
+impl AppErrorMessage for StreamAlreadyExists {
+    fn message(&self) -> String {
+        format!("'{}' as stream Already Exists", self.name)
+    }
+}
+
 impl AppErrorMessage for StreamVersionMismatched {}
 
 impl AppErrorMessage for UnknownStreamId {}
@@ -1065,6 +1109,12 @@ impl AppErrorMessage for DuplicatedUpsertFiles {}
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
+    }
+}
+
+impl AppErrorMessage for ViewAlreadyExists {
+    fn message(&self) -> String {
+        format!("'{}' as view Already Exists", self.view_name)
     }
 }
 
@@ -1331,6 +1381,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
+            AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())
             }
@@ -1343,6 +1394,7 @@ impl From<AppError> for ErrorCode {
             AppError::TableVersionMismatched(err) => {
                 ErrorCode::TableVersionMismatched(err.message())
             }
+            AppError::StreamAlreadyExists(err) => ErrorCode::StreamAlreadyExists(err.message()),
             AppError::StreamVersionMismatched(err) => {
                 ErrorCode::StreamVersionMismatched(err.message())
             }

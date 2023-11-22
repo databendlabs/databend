@@ -88,7 +88,6 @@ build_exceptions! {
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownTableId(1020),
-    UnknownStreamId(1021),
     UnknownTable(1025),
     UnknownView(1026),
     UnknownAggregateFunction(1027),
@@ -317,8 +316,11 @@ build_exceptions! {
     GetIndexWithDropTime(2724),
 
     // Stream error codes.
-    IllegalStream(2730),
-    StreamVersionMismatched(2731),
+    UnknownStream(2730),
+    UnknownStreamId(2731),
+    StreamAlreadyExists(2732),
+    IllegalStream(2733),
+    StreamVersionMismatched(2734),
 
     // Variable error codes.
     UnknownVariable(2801),

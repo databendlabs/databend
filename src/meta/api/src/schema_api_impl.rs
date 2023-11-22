@@ -31,6 +31,7 @@ use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::GetIndexWithDropTime;
 use common_meta_app::app_error::IndexAlreadyExists;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
+use common_meta_app::app_error::StreamAlreadyExists;
 use common_meta_app::app_error::StreamVersionMismatched;
 use common_meta_app::app_error::TableAlreadyExists;
 use common_meta_app::app_error::TableLockExpired;
@@ -46,6 +47,7 @@ use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownStreamId;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
+use common_meta_app::app_error::ViewAlreadyExists;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
@@ -1527,12 +1529,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         new_table: false,
                     })
                 } else {
-                    Err(KVAppError::AppError(AppError::TableAlreadyExists(
-                        TableAlreadyExists::new(
-                            &tenant_dbname_tbname.table_name,
-                            format!("create_table: {}", tenant_dbname_tbname),
-                        ),
-                    )))
+                    match req.table_meta.engine.as_str() {
+                        "STREAM" => {
+                            return Err(KVAppError::AppError(AppError::StreamAlreadyExists(
+                                StreamAlreadyExists::new(
+                                    &tenant_dbname_tbname.table_name,
+                                    format!("create_table: {}", tenant_dbname_tbname),
+                                ),
+                            )));
+                        }
+                        "VIEW" => {
+                            return Err(KVAppError::AppError(AppError::ViewAlreadyExists(
+                                ViewAlreadyExists::new(
+                                    &tenant_dbname_tbname.table_name,
+                                    format!("create_table: {}", tenant_dbname_tbname),
+                                ),
+                            )));
+                        }
+                        _ => Err(KVAppError::AppError(AppError::TableAlreadyExists(
+                            TableAlreadyExists::new(
+                                &tenant_dbname_tbname.table_name,
+                                format!("create_table: {}", tenant_dbname_tbname),
+                            ),
+                        ))),
+                    }
                 };
             }
 

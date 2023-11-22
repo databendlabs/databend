@@ -76,6 +76,7 @@ impl AsyncSystemTable for StreamsTable {
         let mut databases = vec![];
         let mut owner = vec![];
         let mut comment = vec![];
+        let mut table_id = vec![];
         let mut table_name = vec![];
         let mut invalid_reason = vec![];
         let mut mode = vec![];
@@ -174,29 +175,22 @@ impl AsyncSystemTable for StreamsTable {
                         );
                         mode.push(stream_table.mode().to_string().as_bytes().to_vec());
                         table_version.push(stream_table.offset());
+                        table_id.push(stream_table.source_table_id());
                         snapshot_location
                             .push(stream_table.snapshot_loc().map(|v| v.as_bytes().to_vec()));
 
                         let mut reason = "".to_string();
                         match stream_table.source_table(ctx.clone()).await {
                             Ok(source) => {
-                                if !source.change_tracking_enabled() {
-                                    reason = format!(
-                                        "Change tracking is not enabled for table '{}.{}'",
-                                        stream_table.source_table_database(),
-                                        stream_table.source_table_name()
-                                    );
-                                } else {
-                                    let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-                                    if let Some(location) = stream_table.snapshot_loc() {
-                                        reason = SnapshotsIO::read_snapshot(
-                                            location,
-                                            fuse_table.get_operator(),
-                                        )
-                                        .await
-                                        .err()
-                                        .map_or("".to_string(), |e| e.display_text());
-                                    }
+                                let fuse_table = FuseTable::try_from_table(source.as_ref())?;
+                                if let Some(location) = stream_table.snapshot_loc() {
+                                    reason = SnapshotsIO::read_snapshot(
+                                        location,
+                                        fuse_table.get_operator(),
+                                    )
+                                    .await
+                                    .err()
+                                    .map_or("".to_string(), |e| e.display_text());
                                 }
                             }
                             Err(e) => {
@@ -219,6 +213,7 @@ impl AsyncSystemTable for StreamsTable {
             StringType::from_data(mode),
             StringType::from_data(comment),
             StringType::from_data(table_name),
+            UInt64Type::from_data(table_id),
             UInt64Type::from_data(table_version),
             StringType::from_opt_data(snapshot_location),
             StringType::from_data(invalid_reason),
@@ -239,6 +234,7 @@ impl StreamsTable {
             TableField::new("mode", TableDataType::String),
             TableField::new("comment", TableDataType::String),
             TableField::new("table_name", TableDataType::String),
+            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
                 "table_version",
                 TableDataType::Number(NumberDataType::UInt64),

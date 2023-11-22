@@ -48,6 +48,7 @@ pub const STREAM_ENGINE: &str = "STREAM";
 
 pub const OPT_KEY_TABLE_NAME: &str = "table_name";
 pub const OPT_KEY_DATABASE_NAME: &str = "table_database";
+pub const OPT_KEY_TABLE_ID: &str = "table_id";
 pub const OPT_KEY_TABLE_VER: &str = "table_version";
 pub const OPT_KEY_MODE: &str = "mode";
 
@@ -82,6 +83,7 @@ impl ToString for StreamMode {
 pub struct StreamTable {
     stream_info: TableInfo,
 
+    table_id: u64,
     table_name: String,
     table_database: String,
     table_version: u64,
@@ -100,6 +102,10 @@ impl StreamTable {
             .get(OPT_KEY_DATABASE_NAME)
             .ok_or_else(|| ErrorCode::Internal("table database must be set"))?
             .clone();
+        let table_id = options
+            .get(OPT_KEY_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+            .parse::<u64>()?;
         let table_version = options
             .get(OPT_KEY_TABLE_VER)
             .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
@@ -113,6 +119,7 @@ impl StreamTable {
             stream_info: table_info,
             table_name,
             table_database,
+            table_id,
             table_version,
             mode,
             snapshot_location,
@@ -137,12 +144,30 @@ impl StreamTable {
     }
 
     pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
-        ctx.get_table(
-            self.stream_info.catalog(),
-            &self.table_database,
-            &self.table_name,
-        )
-        .await
+        let table = ctx
+            .get_table(
+                self.stream_info.catalog(),
+                &self.table_database,
+                &self.table_name,
+            )
+            .await?;
+
+        if table.get_table_info().ident.table_id != self.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Table id mismatch, expect {}, got {}",
+                self.table_id,
+                table.get_table_info().ident.table_id
+            )));
+        }
+
+        if !table.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled for table '{}.{}'",
+                self.table_database, self.table_name
+            )));
+        }
+
+        Ok(table)
     }
 
     pub fn offset(&self) -> u64 {
@@ -161,6 +186,10 @@ impl StreamTable {
         &self.table_name
     }
 
+    pub fn source_table_id(&self) -> u64 {
+        self.table_id
+    }
+
     pub fn source_table_database(&self) -> &str {
         &self.table_database
     }
@@ -172,19 +201,7 @@ impl StreamTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
-        let table = ctx
-            .get_table(
-                self.stream_info.catalog(),
-                &self.table_database,
-                &self.table_name,
-            )
-            .await?;
-        if !table.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
-                self.table_database, self.table_name
-            )));
-        }
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let latest_snapshot = fuse_table.read_table_snapshot().await?;
         if latest_snapshot.is_none() {

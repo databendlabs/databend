@@ -45,20 +45,22 @@ pub type ColumnId = u32;
 // Index of TableSchema.fields array
 pub type FieldIndex = usize;
 
+// internal column id.
 pub const ROW_ID_COLUMN_ID: u32 = u32::MAX;
 pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
-// stream column id.
-pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 20;
-pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 21;
-pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 22;
-
+// internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
 pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
+
+// stream column id.
+pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
+pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
+pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";

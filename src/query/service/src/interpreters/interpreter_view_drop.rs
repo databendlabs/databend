@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropViewPlan;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -63,11 +64,15 @@ impl Interpreter for DropViewInterpreter {
         if let Some(table) = &tbl {
             let engine = table.get_table_info().engine();
             if engine != VIEW_ENGINE {
-                return Err(ErrorCode::Internal(format!(
+                return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is not VIEW, please use `DROP {} {}.{}`",
                     &self.plan.database,
                     &self.plan.view_name,
-                    engine,
+                    if engine == STREAM_ENGINE {
+                        "STREAM"
+                    } else {
+                        "TABLE"
+                    },
                     &self.plan.database,
                     &self.plan.view_name
                 )));

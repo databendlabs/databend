@@ -34,6 +34,7 @@ use common_storages_stream::stream_table::StreamTable;
 use common_storages_stream::stream_table::MODE_APPEND_ONLY;
 use common_storages_stream::stream_table::OPT_KEY_DATABASE_NAME;
 use common_storages_stream::stream_table::OPT_KEY_MODE;
+use common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use common_storages_stream::stream_table::STREAM_ENGINE;
@@ -64,6 +65,7 @@ impl StreamHandler for RealStreamHandler {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_info = fuse_table.get_table_info();
         let table_version = table_info.ident.seq;
+        let table_id = table_info.ident.table_id;
         let schema = table_info.schema().clone();
 
         let mut options = BTreeMap::new();
@@ -78,8 +80,13 @@ impl StreamHandler for RealStreamHandler {
                 let stream_database_name = stream_opts
                     .get(OPT_KEY_DATABASE_NAME)
                     .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
+                let stream_table_id = stream_opts
+                    .get(OPT_KEY_TABLE_ID)
+                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?
+                    .parse::<u64>()?;
                 if stream_table_name != &plan.table_name
                     || stream_database_name != &plan.table_database
+                    || stream_table_id != table_id
                 {
                     return Err(ErrorCode::IllegalStream(format!(
                         "The stream '{name}' is not match the table '{}.{}'",
@@ -94,6 +101,7 @@ impl StreamHandler for RealStreamHandler {
                     OPT_KEY_DATABASE_NAME.to_string(),
                     plan.table_database.clone(),
                 );
+                options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
                 options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
                 options.insert(OPT_KEY_MODE.to_string(), MODE_APPEND_ONLY.to_string());
                 if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
@@ -141,9 +149,13 @@ impl StreamHandler for RealStreamHandler {
         if let Some(table) = &tbl {
             let engine = table.get_table_info().engine();
             if engine != STREAM_ENGINE {
-                return Err(ErrorCode::Internal(format!(
+                return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is not STREAM, please use `DROP {} {}.{}`",
-                    &plan.database, &plan.stream_name, engine, &plan.database, &plan.stream_name
+                    &plan.database,
+                    &plan.stream_name,
+                    if engine == "VIEW" { "VIEW" } else { "TABLE" },
+                    &plan.database,
+                    &plan.stream_name
                 )));
             }
 
@@ -157,7 +169,7 @@ impl StreamHandler for RealStreamHandler {
         } else if plan.if_exists {
             Ok(DropTableReply { spec_vec: None })
         } else {
-            Err(ErrorCode::UnknownTable(format!(
+            Err(ErrorCode::UnknownStream(format!(
                 "unknown stream `{}`.`{}` in catalog '{}'",
                 db_name, stream_name, &catalog_name
             )))

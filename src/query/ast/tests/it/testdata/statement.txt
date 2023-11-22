@@ -2507,6 +2507,69 @@ CreateStream(
 
 
 ---------- Input ----------
+show full streams from default.test2 like 's%';
+---------- Output ---------
+SHOW FULL STREAMS FROM default.test2 LIKE 's%'
+---------- AST ------------
+ShowStreams(
+    ShowStreamsStmt {
+        catalog: Some(
+            Identifier {
+                name: "default",
+                quote: None,
+                span: Some(
+                    23..30,
+                ),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    31..36,
+                ),
+            },
+        ),
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "s%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+describe stream test2.s2;
+---------- Output ---------
+DESCRIBE STREAM test2.s2
+---------- AST ------------
+DescribeStream(
+    DescribeStreamStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    16..21,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                22..24,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 drop stream if exists test2.s2;
 ---------- Output ---------
 DROP STREAM IF EXISTS test2.s2
