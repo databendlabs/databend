@@ -471,18 +471,18 @@ impl HashJoinBuildState {
             })
             .collect::<Result<_>>()?;
 
-            let column_nums = chunk.num_columns();
-            let mut block_entries = Vec::with_capacity(self.build_projections.len());
-            for index in 0..column_nums {
-                if !self.build_projections.contains(&index) {
-                    continue;
-                }
-                block_entries.push(chunk.get_by_offset(index).clone());
+        let column_nums = chunk.num_columns();
+        let mut block_entries = Vec::with_capacity(self.build_projections.len());
+        for index in 0..column_nums {
+            if !self.build_projections.contains(&index) {
+                continue;
             }
-            if block_entries.is_empty() {
-                build_state.generation_state.is_build_projected = false;
-            }
-            *chunk = DataBlock::new(block_entries, chunk.num_rows());
+            block_entries.push(chunk.get_by_offset(index).clone());
+        }
+        if block_entries.is_empty() {
+            build_state.generation_state.is_build_projected = false;
+        }
+        *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
