@@ -68,7 +68,7 @@ impl ValueType for BitmapType {
         }
     }
 
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Bitmap(builder) => Some(builder),
             _ => None,

@@ -363,8 +363,8 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         <MapInternal<K, V> as ValueType>::try_downcast_owned_builder(builder)
     }
 
-    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
-        None
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        <MapInternal<K, V> as ValueType>::try_upcast_column_builder(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

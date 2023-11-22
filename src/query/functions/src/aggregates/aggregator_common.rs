@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::panic;
 
 use bumpalo::Bump;
 use common_exception::ErrorCode;
@@ -166,4 +167,25 @@ pub fn deserialize_state<T: serde::de::DeserializeOwned>(slice: &mut &[u8]) -> R
         bincode::serde::decode_from_slice(slice, bincode::config::standard())?;
     *slice = &slice[bytes_read..];
     Ok(value)
+}
+
+// copy from https://docs.rs/take_mut/0.2.2/take_mut/fn.take.html with some modifications.
+// if a panic occurs, the entire process will be aborted, as there's no valid `T` to put back into the `&mut T`.
+pub fn take_mut<T, F>(mut_ref: &mut T, closure: F) -> Result<()>
+where F: FnOnce(T) -> Result<T> {
+    use std::ptr;
+
+    unsafe {
+        let old_t = ptr::read(mut_ref);
+        let closure_result = panic::catch_unwind(panic::AssertUnwindSafe(|| closure(old_t)));
+
+        match closure_result {
+            Ok(Ok(new_t)) => {
+                ptr::write(mut_ref, new_t);
+                Ok(())
+            }
+            Ok(Err(e)) => Err(e),
+            Err(_) => ::std::process::abort(),
+        }
+    }
 }
