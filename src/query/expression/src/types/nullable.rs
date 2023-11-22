@@ -95,10 +95,21 @@ impl<T: ValueType> ValueType for NullableType<T> {
         None
     }
 
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    #[allow(clippy::manual_map)]
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Nullable(inner) => {
                 let builder = T::try_downcast_owned_builder(inner.builder);
+                // ```
+                // builder.map(|builder| NullableColumnBuilder {
+                //     builder,
+                //     validity: inner.validity,
+                // })
+                // ```
+                // If we using the clippy recommend way like above, the compiler will complain:
+                // use of partially moved value: `inner`.
+                // That's rust borrow checker error, if we using the new borrow checker named polonius,
+                // everything goes fine, but polonius is very slow, so we allow manual map here.
                 if let Some(builder) = builder {
                     Some(NullableColumnBuilder {
                         builder,

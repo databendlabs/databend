@@ -80,7 +80,7 @@ impl ValueType for NullType {
         }
     }
 
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Null { len } => Some(len),
             _ => None,

@@ -87,7 +87,7 @@ impl ValueType for VariantType {
         }
     }
 
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Variant(builder) => Some(builder),
             _ => None,

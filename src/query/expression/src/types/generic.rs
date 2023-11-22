@@ -67,7 +67,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         Some(builder)
     }
 
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
         Some(builder)
     }
 
