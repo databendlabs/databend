@@ -112,7 +112,7 @@ impl HashJoinBuildState {
         barrier: Barrier,
         restore_barrier: Barrier,
     ) -> Result<Arc<HashJoinBuildState>> {
-        let hash_key_types_for_build = build_keys
+        let hash_key_types = build_keys
             .iter()
             .map(|expr| {
                 expr.as_expr(&BUILTIN_FUNCTIONS)
@@ -121,11 +121,7 @@ impl HashJoinBuildState {
                     .remove_nullable()
             })
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types_for_build, false)?;
-        let hash_key_types = build_keys
-            .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
-            .collect::<Vec<_>>();
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
@@ -439,9 +435,9 @@ impl HashJoinBuildState {
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::String(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::String(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
-                    // must return `KeysState::Column(Column::String)`.
+                    // must return `Column::String` | `Column::Variant` | `Column::Bitmap`.
                     _ => unreachable!(),
                 };
                 let valid_num = match &$valids {
