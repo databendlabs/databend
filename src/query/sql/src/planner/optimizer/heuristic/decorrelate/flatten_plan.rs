@@ -35,11 +35,13 @@ use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::SrfItem;
 use crate::plans::UnionAll;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
@@ -149,6 +151,13 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
+            RelOperator::ProjectSet(project_set) => self.flatten_project_set(
+                plan,
+                project_set,
+                correlated_columns,
+                flatten_info,
+                need_cross_join,
+            ),
             RelOperator::Filter(filter) => self.flatten_filter(
                 filter,
                 plan,
@@ -238,6 +247,74 @@ impl SubqueryRewriter {
         Ok(SExpr::create_unary(
             Arc::new(EvalScalar { items }.into()),
             Arc::new(flatten_plan),
+        ))
+    }
+
+    fn flatten_project_set(
+        &mut self,
+        plan: &SExpr,
+        project_set: &ProjectSet,
+        correlated_columns: &ColumnSet,
+        flatten_info: &mut FlattenInfo,
+        mut need_cross_join: bool,
+    ) -> Result<SExpr> {
+        if project_set
+            .srfs
+            .iter()
+            .map(|srf| srf.scalar.used_columns())
+            .fold(ColumnSet::new(), |mut acc, v| {
+                acc.extend(v);
+                acc
+            })
+            .iter()
+            .any(|index| correlated_columns.contains(index))
+        {
+            need_cross_join = true;
+        }
+        let flatten_plan = self.flatten_plan(
+            plan.child(0)?,
+            correlated_columns,
+            flatten_info,
+            need_cross_join,
+        )?;
+        let mut srfs = Vec::with_capacity(project_set.srfs.len());
+        for item in project_set.srfs.iter() {
+            let new_item = SrfItem {
+                scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
+                index: item.index,
+            };
+            srfs.push(new_item);
+        }
+        let mut scalar_items = vec![];
+        let metadata = self.metadata.read();
+        for derived_column in self.derived_columns.values() {
+            let column_entry = metadata.column(*derived_column);
+            let column_binding = ColumnBindingBuilder::new(
+                column_entry.name(),
+                *derived_column,
+                Box::from(column_entry.data_type()),
+                Visibility::Visible,
+            )
+            .build();
+            scalar_items.push(ScalarItem {
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }),
+                index: *derived_column,
+            });
+        }
+        Ok(SExpr::create_unary(
+            Arc::new(ProjectSet { srfs }.into()),
+            Arc::new(SExpr::create_unary(
+                Arc::new(
+                    EvalScalar {
+                        items: scalar_items,
+                    }
+                    .into(),
+                ),
+                Arc::new(flatten_plan),
+            )),
         ))
     }
 
