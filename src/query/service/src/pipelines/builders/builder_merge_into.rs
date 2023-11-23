@@ -128,6 +128,7 @@ impl PipelineBuilder {
             ExtractHashTableByRowNumber::create(
                 join_state,
                 self.probe_data_fields.clone().unwrap(),
+                matches!(merge_type, MergeIntoType::InsertOnly),
             )?
             .into_pipe_item(),
             create_dummy_item(),
@@ -283,11 +284,15 @@ impl PipelineBuilder {
         for idx in 0..(self.main_pipeline.output_len() / step) {
             ranges.push(vec![idx + self.main_pipeline.output_len() / step]);
         }
-        vec.clear();
-        for idx in 0..(self.main_pipeline.output_len() / step) {
-            vec.push(idx + self.main_pipeline.output_len() / step * 2);
+        //  need to process row_number.
+        if step == 3 {
+            vec.clear();
+            for idx in 0..(self.main_pipeline.output_len() / step) {
+                vec.push(idx + self.main_pipeline.output_len() / step * 2);
+            }
+            ranges.push(vec);
         }
-        ranges.push(vec);
+
         self.main_pipeline.resize_partial_one(ranges.clone())
     }
 
@@ -470,16 +475,7 @@ impl PipelineBuilder {
                 }
                 self.main_pipeline.reorder_inputs(rules);
                 // resize row_id
-                ranges.clear();
-                let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 2);
-                for idx in 0..(self.main_pipeline.output_len() / 2) {
-                    vec.push(idx);
-                }
-                ranges.push(vec.clone());
-                for idx in 0..(self.main_pipeline.output_len() / 2) {
-                    ranges.push(vec![idx + self.main_pipeline.output_len() / 2]);
-                }
-                self.main_pipeline.resize_partial_one(ranges.clone())?;
+                self.resize_row_id(2)?;
             }
         } else {
             // the complete pipeline(with matched and unmatched) below:
@@ -679,11 +675,15 @@ impl PipelineBuilder {
             0
         };
 
-        let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
-        for idx in 0..serialize_len {
-            vec.push(idx + offset);
+        // for distributed insert-only, the serialize_len is zero.
+        if serialize_len > 0 {
+            let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
+            for idx in 0..serialize_len {
+                vec.push(idx + offset);
+            }
+
+            ranges.push(vec);
         }
-        ranges.push(vec);
 
         // with row_number
         if *distributed && need_unmatch {
@@ -704,7 +704,12 @@ impl PipelineBuilder {
             if need_match {
                 vec.push(create_dummy_item())
             }
-            vec.push(serialize_segment_transform.into_pipe_item());
+            // for distributed insert-only, the serialize_len is zero.
+            // and there is no serialize data here.
+            if serialize_len > 0 {
+                vec.push(serialize_segment_transform.into_pipe_item());
+            }
+
             if need_unmatch {
                 vec.push(create_dummy_item())
             }
@@ -730,11 +735,16 @@ impl PipelineBuilder {
 
         // accumulate row_number
         if *distributed && need_unmatch {
-            let pipe_items = vec![
-                create_dummy_item(),
-                create_dummy_item(),
-                AccumulateRowNumber::create()?.into_pipe_item(),
-            ];
+            let pipe_items = if need_match {
+                vec![
+                    create_dummy_item(),
+                    create_dummy_item(),
+                    AccumulateRowNumber::create()?.into_pipe_item(),
+                ]
+            } else {
+                vec![AccumulateRowNumber::create()?.into_pipe_item()]
+            };
+
             self.main_pipeline.add_pipe(Pipe::create(
                 self.main_pipeline.output_len(),
                 get_output_len(&pipe_items),

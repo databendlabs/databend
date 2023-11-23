@@ -598,8 +598,11 @@ merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched
 statement ok
 create table tt1 (a int, b int);
 
-statement ok
+statement error 1065
 merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
+
+statement ok
+merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt2.b = 2 then insert values (10, 20);
 
 query T
 select count(*) from tt1;
