@@ -32,6 +32,8 @@ use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::GetIndexWithDropTime;
 use common_meta_app::app_error::IndexAlreadyExists;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
+use common_meta_app::app_error::StreamAlreadyExists;
+use common_meta_app::app_error::StreamVersionMismatched;
 use common_meta_app::app_error::TableAlreadyExists;
 use common_meta_app::app_error::TableLockExpired;
 use common_meta_app::app_error::TableVersionMismatched;
@@ -43,8 +45,10 @@ use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownCatalog;
 use common_meta_app::app_error::UnknownIndex;
+use common_meta_app::app_error::UnknownStreamId;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
+use common_meta_app::app_error::ViewAlreadyExists;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
@@ -1526,12 +1530,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         new_table: false,
                     })
                 } else {
-                    Err(KVAppError::AppError(AppError::TableAlreadyExists(
-                        TableAlreadyExists::new(
-                            &tenant_dbname_tbname.table_name,
-                            format!("create_table: {}", tenant_dbname_tbname),
-                        ),
-                    )))
+                    match req.table_meta.engine.as_str() {
+                        "STREAM" => {
+                            return Err(KVAppError::AppError(AppError::StreamAlreadyExists(
+                                StreamAlreadyExists::new(
+                                    &tenant_dbname_tbname.table_name,
+                                    format!("create_table: {}", tenant_dbname_tbname),
+                                ),
+                            )));
+                        }
+                        "VIEW" => {
+                            return Err(KVAppError::AppError(AppError::ViewAlreadyExists(
+                                ViewAlreadyExists::new(
+                                    &tenant_dbname_tbname.table_name,
+                                    format!("create_table: {}", tenant_dbname_tbname),
+                                ),
+                            )));
+                        }
+                        _ => Err(KVAppError::AppError(AppError::TableAlreadyExists(
+                            TableAlreadyExists::new(
+                                &tenant_dbname_tbname.table_name,
+                                format!("create_table: {}", tenant_dbname_tbname),
+                            ),
+                        ))),
+                    }
                 };
             }
 
@@ -2780,6 +2802,42 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     )?;
                 txn_req.condition.extend(conditions);
                 txn_req.if_then.extend(match_operations)
+            }
+
+            for req in &req.update_stream_meta {
+                let stream_id = TableId {
+                    table_id: req.stream_id,
+                };
+                let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
+                    get_pb_value(self, &stream_id).await?;
+
+                if stream_meta_seq == 0 || stream_meta.is_none() {
+                    return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                        UnknownStreamId::new(req.stream_id, "update_table_meta"),
+                    )));
+                }
+
+                if req.seq.match_seq(stream_meta_seq).is_err() {
+                    return Err(KVAppError::AppError(AppError::from(
+                        StreamVersionMismatched::new(
+                            req.stream_id,
+                            req.seq,
+                            stream_meta_seq,
+                            "update_table_meta",
+                        ),
+                    )));
+                }
+
+                let mut new_stream_meta = stream_meta.unwrap();
+                new_stream_meta.options = req.options.clone();
+                new_stream_meta.updated_on = Utc::now();
+
+                txn_req
+                    .condition
+                    .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+                txn_req
+                    .if_then
+                    .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
             }
 
             if let Some(deduplicated_label) = req.deduplicated_label.clone() {

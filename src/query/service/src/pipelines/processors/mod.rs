@@ -19,6 +19,7 @@ pub use transforms::DeduplicateRowNumber;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::SinkRuntimeFilterSource;
+pub use transforms::TransformAddStreamColumns;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCreateSets;
 pub use transforms::TransformLimit;

@@ -18,6 +18,7 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 
@@ -26,12 +27,14 @@ use crate::sessions::QueryContext;
 
 /// This file implements append to table pipeline builder.
 impl PipelineBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub fn build_append2table_with_commit_pipeline(
         ctx: Arc<QueryContext>,
         main_pipeline: &mut Pipeline,
         table: Arc<dyn Table>,
         source_schema: DataSchemaRef,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         append_mode: AppendMode,
     ) -> Result<()> {
@@ -44,7 +47,14 @@ impl PipelineBuilder {
 
         table.append_data(ctx.clone(), main_pipeline, append_mode)?;
 
-        table.commit_insertion(ctx, main_pipeline, copied_files, overwrite, None)?;
+        table.commit_insertion(
+            ctx,
+            main_pipeline,
+            copied_files,
+            update_stream_meta,
+            overwrite,
+            None,
+        )?;
 
         Ok(())
     }

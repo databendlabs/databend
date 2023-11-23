@@ -103,6 +103,7 @@ impl MatchedAggregator {
                 projection,
                 false,
                 false,
+                false,
             )
         }?;
 

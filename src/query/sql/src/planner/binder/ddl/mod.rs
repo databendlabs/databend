@@ -23,6 +23,7 @@ mod network_policy;
 mod role;
 mod share;
 mod stage;
+mod stream;
 mod table;
 mod task;
 mod view;

@@ -30,6 +30,7 @@ common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 common-storages-fuse = { path = "../fuse" }
 common-storages-result-cache = { path = "../result_cache" }
+common-storages-stream = { path = "../stream" }
 common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
 jsonb = { workspace = true }

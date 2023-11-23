@@ -153,6 +153,17 @@ impl AccessChecker for PrivilegeAccess {
                             )))
                         };
                     }
+                    Some(RewriteKind::ShowStreams(database)) => {
+                        let has_priv = has_priv(&tenant, database, None, grant_set).await?;
+                        return if has_priv {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission denied, user {} don't have privilege for database {}",
+                                identity, database
+                            )))
+                        };
+                    }
                     Some(RewriteKind::ShowColumns(database, table)) => {
                         let has_priv = has_priv(&tenant, database, Some(table), grant_set).await?;
                         return if has_priv {
@@ -578,6 +589,22 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropView(plan) => {
+                self.validate_access(
+                    &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                    vec![UserPrivilegeType::Drop],
+                    true,
+                )
+                    .await?;
+            }
+            Plan::CreateStream(plan) => {
+                self.validate_access(
+                    &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                    vec![UserPrivilegeType::Create],
+                    true,
+                )
+                    .await?;
+            }
+            Plan::DropStream(plan) => {
                 self.validate_access(
                     &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                     vec![UserPrivilegeType::Drop],

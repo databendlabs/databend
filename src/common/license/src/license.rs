@@ -22,7 +22,6 @@ use serde::Serialize;
 pub enum Feature {
     LicenseInfo,
     Vacuum,
-    TableLock,
     Test,
     VirtualColumn,
     BackgroundService,
@@ -30,6 +29,7 @@ pub enum Feature {
     AggregateIndex,
     ComputedColumn,
     StorageEncryption,
+    Stream,
 }
 
 impl Display for Feature {
@@ -43,9 +43,6 @@ impl Display for Feature {
             }
             Feature::Vacuum => {
                 write!(f, "vacuum")
-            }
-            Feature::TableLock => {
-                write!(f, "table_lock")
             }
             Feature::Test => {
                 write!(f, "test")
@@ -64,6 +61,9 @@ impl Display for Feature {
             }
             Feature::StorageEncryption => {
                 write!(f, "storage_encryption")
+            }
+            Feature::Stream => {
+                write!(f, "stream")
             }
         }
     }

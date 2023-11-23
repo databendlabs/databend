@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(int_roundings)]
 #![allow(clippy::uninlined_format_args)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
