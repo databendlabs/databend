@@ -60,6 +60,7 @@ pub struct MergeInto {
     pub target_table_idx: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
     pub merge_type: MergeIntoType,
+    pub distributed: bool,
 }
 
 impl std::fmt::Debug for MergeInto {
@@ -72,6 +73,7 @@ impl std::fmt::Debug for MergeInto {
             .field("join", &self.input)
             .field("matched", &self.matched_evaluators)
             .field("unmateched", &self.unmatched_evaluators)
+            .field("distributed", &self.distributed)
             .finish()
     }
 }

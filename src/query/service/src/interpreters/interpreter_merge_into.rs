@@ -137,6 +137,7 @@ impl MergeIntoInterpreter {
             target_table_idx,
             field_index_map,
             merge_type,
+            distributed,
             ..
         } = &self.plan;
 
@@ -192,7 +193,7 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if exchange.is_some() {
+        if distributed {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
@@ -203,7 +204,7 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        if exchange.is_some() && row_number_idx.is_none() {
+        if distributed && row_number_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
@@ -351,7 +352,7 @@ impl MergeIntoInterpreter {
             .enumerate()
             .collect();
 
-        let commit_input = if exchange.is_none() {
+        let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat
             PhysicalPlan::MergeInto(Box::new(MergeInto {

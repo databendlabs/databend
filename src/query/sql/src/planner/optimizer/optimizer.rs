@@ -160,10 +160,21 @@ pub fn optimize(
                 let merge_into_join_sexpr = optimize_distributed_query(ctx.clone(), &join_sexpr)?;
                 // after optimize source, we need to add
                 let merge_source_optimizer = MergeSourceOptimizer::create();
-                let optimized_distributed_merge_into_join_sexpr =
-                    merge_source_optimizer.optimize(&merge_into_join_sexpr)?;
+                let (optimized_distributed_merge_into_join_sexpr, distributed) =
+                    if !merge_into_join_sexpr
+                        .match_pattern(&merge_source_optimizer.merge_source_pattern)
+                    {
+                        (merge_into_join_sexpr.clone(), false)
+                    } else {
+                        (
+                            merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
+                            true,
+                        )
+                    };
+
                 Ok(Plan::MergeInto(Box::new(MergeInto {
                     input: Box::new(optimized_distributed_merge_into_join_sexpr),
+                    distributed,
                     ..*plan
                 })))
             } else {
