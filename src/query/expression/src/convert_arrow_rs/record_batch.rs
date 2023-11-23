@@ -32,16 +32,18 @@ impl DataBlock {
         RecordBatch::try_new(schema, arrays)
     }
 
-    pub fn from_record_batch(batch: &RecordBatch) -> Result<(Self, DataSchema), ArrowError> {
-        let schema: DataSchema = DataSchema::try_from(&(*batch.schema()))?;
+    pub fn from_record_batch(
+        schema: &DataSchema,
+        batch: &RecordBatch,
+    ) -> Result<(Self, DataSchema), ArrowError> {
         if batch.num_columns() == 0 {
-            return Ok((DataBlock::new(vec![], batch.num_rows()), schema));
+            return Ok((DataBlock::new(vec![], batch.num_rows()), schema.clone()));
         }
 
         let mut columns = Vec::with_capacity(batch.columns().len());
-        for (array, field) in batch.columns().iter().zip(batch.schema().fields().iter()) {
+        for (array, field) in batch.columns().iter().zip(schema.fields().iter()) {
             columns.push(Column::from_arrow_rs(array.clone(), field)?)
         }
-        Ok((DataBlock::new_from_columns(columns), schema))
+        Ok((DataBlock::new_from_columns(columns), schema.clone()))
     }
 }

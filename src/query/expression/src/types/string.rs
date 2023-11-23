@@ -74,9 +74,20 @@ impl ValueType for StringType {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::String(builder) => Some(builder),
+            ColumnBuilder::String(builder) => Some(builder),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::String(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::String(builder))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -233,6 +244,10 @@ impl StringColumn {
         }
     }
 
+    pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {
+        (self.data, self.offsets)
+    }
+
     pub fn check_valid(&self) -> Result<()> {
         let offsets = self.offsets.as_slice();
         let len = offsets.len();
@@ -275,6 +290,7 @@ impl<'a> Iterator for StringIterator<'a> {
 }
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
+
 unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

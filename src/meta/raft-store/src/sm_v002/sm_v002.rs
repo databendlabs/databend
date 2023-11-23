@@ -23,7 +23,6 @@ use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_stoerr::MetaBytesError;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::Entry;
@@ -167,9 +166,7 @@ impl SMV002 {
             let ent: RaftStoreEntry = serde_json::from_str(&l)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            importer
-                .import(ent)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            importer.import(ent)?;
         }
 
         let level_data = importer.commit();
@@ -215,7 +212,7 @@ impl SMV002 {
         Ok(())
     }
 
-    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, MetaBytesError> {
+    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, io::Error> {
         let mut importer = Self::new_importer();
 
         for ent in data {

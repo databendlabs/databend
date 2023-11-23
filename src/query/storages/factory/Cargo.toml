@@ -20,6 +20,7 @@ common-storages-fuse = { path = "../fuse" }
 common-storages-memory = { path = "../memory" }
 common-storages-null = { path = "../null" }
 common-storages-random = { path = "../random" }
+common-storages-stream = { path = "../stream" }
 common-storages-view = { path = "../view" }
 
 storages-common-index = { path = "../common/index" }

@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use enum_as_inner::EnumAsInner;
 
-use super::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -38,6 +37,7 @@ use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
 use crate::executor::physical_plans::Project;
@@ -54,6 +54,7 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
+use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
@@ -115,6 +116,9 @@ pub enum PhysicalPlan {
     /// Recluster
     ReclusterSource(Box<ReclusterSource>),
     ReclusterSink(Box<ReclusterSink>),
+
+    /// Update
+    UpdateSource(Box<UpdateSource>),
 }
 
 impl PhysicalPlan {
@@ -158,9 +162,8 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_) => {
-                unreachable!()
-            }
+            | PhysicalPlan::ReclusterSink(_)
+            | PhysicalPlan::UpdateSource(_) => u32::MAX,
         }
     }
 
@@ -203,7 +206,8 @@ impl PhysicalPlan {
             | PhysicalPlan::DistributedInsertSelect(_)
             | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::ReclusterSink(_)
+            | PhysicalPlan::UpdateSource(_) => Ok(DataSchemaRef::default()),
         }
     }
 
@@ -246,6 +250,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
             PhysicalPlan::ReclusterSource(_) => "ReclusterSource".to_string(),
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
+            PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
         }
     }
@@ -260,7 +265,8 @@ impl PhysicalPlan {
             | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
-            | PhysicalPlan::ReclusterSource(_) => Box::new(std::iter::empty()),
+            | PhysicalPlan::ReclusterSource(_)
+            | PhysicalPlan::UpdateSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -352,7 +358,8 @@ impl PhysicalPlan {
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_) => None,
+            | PhysicalPlan::ReclusterSink(_)
+            | PhysicalPlan::UpdateSource(_) => None,
         }
     }
 

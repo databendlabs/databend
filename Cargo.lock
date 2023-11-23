@@ -2134,6 +2134,7 @@ dependencies = [
  "ahash 0.8.3",
  "bumpalo",
  "cfg-if",
+ "common-arrow",
  "common-base",
  "ethnum",
  "ordered-float 3.7.0",
@@ -2737,11 +2738,13 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "common-metrics",
  "dashmap",
  "flagset",
  "futures",
  "log",
  "metrics",
+ "once_cell",
  "opendal",
  "ordered-float 3.7.0",
  "parquet",
@@ -2764,6 +2767,7 @@ dependencies = [
  "common-storages-memory",
  "common-storages-null",
  "common-storages-random",
+ "common-storages-stream",
  "common-storages-view",
  "dashmap",
  "storages-common-index",
@@ -3071,6 +3075,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-stream"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-sql",
+ "common-storages-fuse",
+ "futures",
+ "futures-util",
+ "log",
+ "minitrace",
+ "opendal",
+ "storages-common-pruner",
+ "storages-common-table-meta",
+]
+
+[[package]]
 name = "common-storages-system"
 version = "0.1.0"
 dependencies = [
@@ -3096,6 +3124,7 @@ dependencies = [
  "common-storage",
  "common-storages-fuse",
  "common-storages-result-cache",
+ "common-storages-stream",
  "common-storages-view",
  "common-users",
  "futures",
@@ -3944,6 +3973,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-share",
  "common-storages-stage",
+ "common-storages-stream",
  "common-storages-system",
  "common-storages-view",
  "common-tracing",
@@ -4006,6 +4036,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-locks",
  "storages-common-table-meta",
+ "stream-handler",
  "strength_reduce",
  "sysinfo",
  "temp-env",
@@ -4453,6 +4484,7 @@ dependencies = [
  "common-meta-store",
  "common-sql",
  "common-storages-fuse",
+ "common-storages-stream",
  "common-tracing",
  "common-users",
  "dashmap",
@@ -4467,6 +4499,7 @@ dependencies = [
  "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
+ "stream-handler",
  "tempfile",
  "vacuum-handler",
  "virtual-column",
@@ -11375,6 +11408,19 @@ name = "str_stack"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
+
+[[package]]
+name = "stream-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+ "common-sql",
+]
 
 [[package]]
 name = "stream-more"

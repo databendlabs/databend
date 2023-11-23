@@ -1591,3 +1591,126 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+create table t1(a int, b int, c varchar(20));
+
+statement ok
+create table t2(a int, b int, c varchar(20));
+
+# scalar subquery and sort plan contains count() agg function.
+query T
+explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(a));
+----
+Filter
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
+├── filters: [is_true(t2.c (#2) > scalar_subquery_5 (#5))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
+    ├── join type: LEFT SINGLE
+    ├── build keys: [a (#3)]
+    ├── probe keys: [a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Sort(Build)
+    │   ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+    │   ├── sort keys: [count(a) ASC NULLS LAST]
+    │   ├── estimated rows: 0.00
+    │   └── EvalScalar
+    │       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+    │       ├── expressions: [count(a) (#6)]
+    │       ├── estimated rows: 0.00
+    │       └── AggregateFinal
+    │           ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
+    │           ├── group by: [c, a]
+    │           ├── aggregate functions: [count(a)]
+    │           ├── estimated rows: 0.00
+    │           └── AggregatePartial
+    │               ├── output columns: [count(a) (#6), #_group_by_key]
+    │               ├── group by: [c, a]
+    │               ├── aggregate functions: [count(a)]
+    │               ├── estimated rows: 0.00
+    │               └── Filter
+    │                   ├── output columns: [t1.a (#3), t1.c (#5)]
+    │                   ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.default.t1
+    │                       ├── output columns: [a (#3), c (#5)]
+    │                       ├── read rows: 0
+    │                       ├── read bytes: 0
+    │                       ├── partitions total: 0
+    │                       ├── partitions scanned: 0
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── output columns: [a (#0), b (#1), c (#2)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(*));
+----
+Filter
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
+├── filters: [is_true(t2.c (#2) > scalar_subquery_5 (#5))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
+    ├── join type: LEFT SINGLE
+    ├── build keys: [a (#3)]
+    ├── probe keys: [a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Sort(Build)
+    │   ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+    │   ├── sort keys: [COUNT(*) ASC NULLS LAST]
+    │   ├── estimated rows: 0.00
+    │   └── EvalScalar
+    │       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+    │       ├── expressions: [COUNT(*) (#6)]
+    │       ├── estimated rows: 0.00
+    │       └── AggregateFinal
+    │           ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
+    │           ├── group by: [c, a]
+    │           ├── aggregate functions: [count()]
+    │           ├── estimated rows: 0.00
+    │           └── AggregatePartial
+    │               ├── output columns: [COUNT(*) (#6), #_group_by_key]
+    │               ├── group by: [c, a]
+    │               ├── aggregate functions: [count()]
+    │               ├── estimated rows: 0.00
+    │               └── Filter
+    │                   ├── output columns: [t1.a (#3), t1.c (#5)]
+    │                   ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.default.t1
+    │                       ├── output columns: [a (#3), c (#5)]
+    │                       ├── read rows: 0
+    │                       ├── read bytes: 0
+    │                       ├── partitions total: 0
+    │                       ├── partitions scanned: 0
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── output columns: [a (#0), b (#1), c (#2)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

@@ -6,6 +6,7 @@ FUSE
 MEMORY
 NULL
 RANDOM
+STREAM
 VIEW
 
 statement error 1065

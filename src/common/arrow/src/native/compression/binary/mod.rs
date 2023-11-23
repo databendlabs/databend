@@ -32,8 +32,6 @@ use crate::arrow::error::Result;
 use crate::arrow::types::Offset;
 use crate::native::read::read_basic::read_compress_header;
 use crate::native::read::NativeReadBuf;
-use crate::native::util::env::check_dict_env;
-use crate::native::util::env::check_freq_env;
 use crate::native::write::WriteOptions;
 
 pub fn compress_binary<O: Offset>(
@@ -310,14 +308,14 @@ fn choose_compressor<O: Offset>(
 ) -> BinaryCompressor<O> {
     #[cfg(debug_assertions)]
     {
-        if check_freq_env()
+        if crate::native::util::env::check_freq_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Freq)
         {
             return BinaryCompressor::Extend(Box::new(Freq {}));
         }
-        if check_dict_env()
+        if crate::native::util::env::check_dict_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Dict)

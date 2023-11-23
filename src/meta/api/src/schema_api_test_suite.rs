@@ -16,6 +16,7 @@ use std::assert_ne;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -2172,6 +2173,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     copied_files: None,
                     deduplicated_label: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 
@@ -2193,6 +2195,7 @@ impl SchemaApiTestSuite {
                         new_table_meta: new_table_meta.clone(),
                         copied_files: None,
                         deduplicated_label: None,
+                        update_stream_meta: vec![],
                     })
                     .await;
 
@@ -2234,6 +2237,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     copied_files: Some(upsert_source_table),
                     deduplicated_label: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 
@@ -2273,6 +2277,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     copied_files: Some(upsert_source_table),
                     deduplicated_label: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 
@@ -2313,6 +2318,7 @@ impl SchemaApiTestSuite {
                         new_table_meta: new_table_meta.clone(),
                         copied_files: Some(upsert_source_table),
                         deduplicated_label: None,
+                        update_stream_meta: vec![],
                     })
                     .await;
                 let err = result.unwrap_err();
@@ -2937,7 +2943,7 @@ impl SchemaApiTestSuite {
 
         let drop_on = Some(Utc::now() - Duration::days(1));
 
-        // create db_name_ident1 with two dropped value
+        // create db_name_ident1 with two dropped table
         self.create_out_of_retention_time_db(mt, db_name_ident1.clone(), drop_on, true)
             .await?;
         self.create_out_of_retention_time_db(
@@ -2947,7 +2953,7 @@ impl SchemaApiTestSuite {
             false,
         )
         .await?;
-        // create db_name_ident2 with one dropped value and one non-dropped value
+        // create db_name_ident2 with one dropped value and one non-dropped table
         self.create_out_of_retention_time_db(mt, db_name_ident2.clone(), drop_on, true)
             .await?;
         self.create_out_of_retention_time_db(mt, db_name_ident2.clone(), None, false)
@@ -2978,9 +2984,10 @@ impl SchemaApiTestSuite {
             let _resp = mt.gc_drop_tables(req).await?;
         }
 
-        // assert db id list has been cleaned
-        let id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
-        assert_eq!(id_list.len(), 0);
+        // assert db id list key has been removed
+        let id_list: Result<DbIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &dbid_idlist1).await;
+        assert!(id_list.is_err());
 
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.iter() {
@@ -3136,6 +3143,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta.clone(),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -3178,8 +3186,10 @@ impl SchemaApiTestSuite {
             let _resp = mt.gc_drop_tables(req).await?;
         }
 
-        let id_list: TableIdList = get_kv_data(mt.as_kv_api(), &table_id_idlist).await?;
-        assert_eq!(id_list.len(), 0);
+        // assert table id list key has been removed
+        let id_list: Result<TableIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &table_id_idlist).await;
+        assert!(id_list.is_err());
 
         // assert old table meta and id to name mapping has been removed
         for table_id in old_id_list.iter() {
@@ -3290,6 +3300,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: create_table_meta.clone(),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -3370,9 +3381,10 @@ impl SchemaApiTestSuite {
             let _resp = mt.gc_drop_tables(req).await?;
         }
 
-        // assert db id list has been cleaned
-        let id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
-        assert_eq!(id_list.len(), 0);
+        // assert db id list has been removed
+        let id_list: Result<DbIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &dbid_idlist1).await;
+        assert!(id_list.is_err());
 
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.id_list.iter() {
@@ -3882,9 +3894,9 @@ impl SchemaApiTestSuite {
 
     // construct dropped tables: db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE], db3.{tb1}
     // case 1: with no limit it will return all these tables
-    // case 2: with limit 1 it will return db1.tb[0..DEFAULT_MGET_SIZE + 1]
-    // case 3: with limit DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1]
-    // case 4: with limit 2 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE]
+    // case 2: with limit 1 it will return db1.tb[0]
+    // case 3: with limit DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE]
+    // case 4: with limit 2 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE - 1]
     // case 5: with limit 3 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE], db3.{tb1}
     #[minitrace::trace]
     async fn table_history_filter_with_limit<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
@@ -4041,13 +4053,21 @@ impl SchemaApiTestSuite {
         }
 
         let limit_and_drop_ids = vec![
-            (None, case1_drop_ids),
-            (Some(1), case2_drop_ids),
-            (Some(DEFAULT_MGET_SIZE), case3_drop_ids),
-            (Some(DEFAULT_MGET_SIZE * 2), case4_drop_ids),
-            (Some(DEFAULT_MGET_SIZE * 3), case5_drop_ids),
+            (None, case1_drop_ids.len(), case1_drop_ids),
+            (Some(1), 1, case2_drop_ids),
+            (Some(DEFAULT_MGET_SIZE), DEFAULT_MGET_SIZE, case3_drop_ids),
+            (
+                Some(DEFAULT_MGET_SIZE * 2),
+                DEFAULT_MGET_SIZE * 2,
+                case4_drop_ids,
+            ),
+            (
+                Some(DEFAULT_MGET_SIZE * 3),
+                DEFAULT_MGET_SIZE * 2 + 2,
+                case5_drop_ids,
+            ),
         ];
-        for (limit, drop_ids) in limit_and_drop_ids {
+        for (limit, number, drop_ids) in limit_and_drop_ids {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent {
                     tenant: tenant.to_string(),
@@ -4057,24 +4077,27 @@ impl SchemaApiTestSuite {
                 limit,
             };
             let resp = mt.get_drop_table_infos(req).await?;
+            assert_eq!(resp.drop_ids.len(), number);
 
-            // sort drop id by table id
-            let mut sort_drop_ids = resp.drop_ids;
-            sort_drop_ids.sort_by(|l, r| {
-                if let DroppedId::Table(_, left_table_id, _) = l {
-                    if let DroppedId::Table(_, right_table_id, _) = r {
-                        left_table_id.cmp(right_table_id)
+            let drop_ids_set: HashSet<u64> = drop_ids
+                .iter()
+                .map(|l| {
+                    if let DroppedId::Table(_, table_id, _) = l {
+                        *table_id
                     } else {
                         unreachable!()
                     }
+                })
+                .collect();
+
+            for id in resp.drop_ids {
+                if let DroppedId::Table(_, table_id, _) = id {
+                    assert!(drop_ids_set.contains(&table_id));
                 } else {
                     unreachable!()
                 }
-            });
-            assert_eq!(sort_drop_ids.len(), drop_ids.len());
-            assert_eq!(sort_drop_ids, drop_ids);
+            }
         }
-
         Ok(())
     }
 
@@ -4650,6 +4673,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -4687,6 +4711,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -6074,6 +6099,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -6120,6 +6146,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let result = mt.update_table_meta(req).await;
@@ -6163,6 +6190,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             mt.update_table_meta(req).await?;
@@ -6345,6 +6373,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             new_table_meta: self.table_meta(),
             copied_files: Some(req),
             deduplicated_label: None,
+            update_stream_meta: vec![],
         };
 
         self.mt.update_table_meta(req).await?;
