@@ -152,7 +152,7 @@ pub struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(
+    pub fn try_create(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
@@ -160,9 +160,9 @@ impl<'a> TypeChecker<'a> {
         aliases: &'a [(String, ScalarExpr)],
         allow_pushdown: bool,
         forbid_udf: bool,
-    ) -> Self {
-        let func_ctx = ctx.get_function_context().unwrap();
-        Self {
+    ) -> Result<Self> {
+        let func_ctx = ctx.get_function_context()?;
+        Ok(Self {
             bind_context,
             ctx,
             func_ctx,
@@ -175,7 +175,7 @@ impl<'a> TypeChecker<'a> {
             in_window_function: false,
             allow_pushdown,
             forbid_udf,
-        }
+        })
     }
 
     pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {

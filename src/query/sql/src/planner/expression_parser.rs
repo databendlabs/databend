@@ -118,7 +118,7 @@ pub fn parse_exprs(
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let settings = Settings::create("".to_string());
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::new(
+    let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
         &name_resolution_ctx,
@@ -126,7 +126,7 @@ pub fn parse_exprs(
         &[],
         false,
         false,
-    );
+    )?;
 
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
@@ -213,7 +213,7 @@ pub fn parse_computed_expr(
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::new(
+    let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
         &name_resolution_ctx,
@@ -221,7 +221,7 @@ pub fn parse_computed_expr(
         &[],
         false,
         false,
-    );
+    )?;
 
     let sql_dialect = Dialect::PostgreSQL;
     let tokens = tokenize_sql(sql)?;
@@ -249,7 +249,7 @@ pub fn parse_default_expr_to_string(
     let metadata = Metadata::default();
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::new(
+    let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx.clone(),
         &name_resolution_ctx,
@@ -257,7 +257,7 @@ pub fn parse_default_expr_to_string(
         &[],
         false,
         false,
-    );
+    )?;
 
     let (mut scalar, data_type) =
         *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
@@ -322,7 +322,7 @@ pub fn parse_computed_expr_to_string(
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::new(
+    let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
         &name_resolution_ctx,
@@ -330,7 +330,7 @@ pub fn parse_computed_expr_to_string(
         &[],
         false,
         false,
-    );
+    )?;
 
     let (scalar, data_type) =
         *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
@@ -392,7 +392,7 @@ pub fn parse_lambda_expr(
     );
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::new(
+    let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx.clone(),
         &name_resolution_ctx,
@@ -400,7 +400,7 @@ pub fn parse_lambda_expr(
         &[],
         false,
         false,
-    );
+    )?;
 
     block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))
 }
