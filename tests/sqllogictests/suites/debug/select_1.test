@@ -49,10 +49,7 @@ statement ok
 drop table t4
 
 statement ok
-create CURRENT_TIMESTAMP
-
-statement ok
-create CURRENT_TIMESTAMP()
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
 
 query III
 select number, number + 1, number + 999 from numbers(10)
