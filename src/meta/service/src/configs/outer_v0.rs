@@ -589,10 +589,7 @@ impl Into<InnerLogConfig> for LogConfig {
         InnerLogConfig {
             file: self.file.into(),
             stderr: self.stderr.into(),
-            query: QueryLogConfig {
-                on: false,
-                dir: "".to_string(),
-            },
+            query: QueryLogConfig::default(),
             tracing: TracingConfig::default(),
         }
     }

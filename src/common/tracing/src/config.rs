@@ -40,8 +40,9 @@ impl Config {
                 format: "text".to_string(),
             },
             query: QueryLogConfig {
-                on: true,
-                dir: "./.databend/logs/query-details".to_string(),
+                on: false,
+                dir: "".to_string(),
+                otlp_endpoint: "".to_string(),
             },
             tracing: TracingConfig {
                 on: false,
@@ -119,19 +120,25 @@ impl Default for StderrConfig {
 pub struct QueryLogConfig {
     pub on: bool,
     pub dir: String,
+    pub otlp_endpoint: String,
 }
 
 impl Display for QueryLogConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "enabled={}, dir={}", self.on, self.dir)
+        write!(
+            f,
+            "enabled={}, dir={}, otlp_endpoint={}",
+            self.on, self.dir, self.otlp_endpoint
+        )
     }
 }
 
 impl Default for QueryLogConfig {
     fn default() -> Self {
         Self {
-            on: true,
-            dir: "./.databend/logs/query-details".to_string(),
+            on: false,
+            dir: "".to_string(),
+            otlp_endpoint: "".to_string(),
         }
     }
 }

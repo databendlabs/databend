@@ -1839,13 +1839,14 @@ impl TryInto<InnerLogConfig> for LogConfig {
         }
 
         let mut query: InnerQueryLogConfig = self.query.try_into()?;
-        if query.dir.is_empty() {
+        if query.on && query.dir.is_empty() && query.otlp_endpoint.is_empty() {
             if file.dir.is_empty() {
                 return Err(ErrorCode::InvalidConfig(
                     "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
                 ));
+            } else {
+                query.dir = format!("{}/query-details", &file.dir);
             }
-            query.dir = format!("{}/query-details", &file.dir);
         }
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
@@ -1991,19 +1992,23 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryLogConfig {
-    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub log_query_on: bool,
 
     /// Query Log file dir
-    #[clap(
-        long = "log-query-dir",
-        value_name = "VALUE",
-        default_value = "",
-        help = "Default to <log-file-dir>/query-details"
-    )]
+    #[clap(long = "log-query-dir", value_name = "VALUE", default_value = "")]
     #[serde(rename = "dir")]
     pub log_query_dir: String,
+
+    /// Query Log OpenTelemetry OTLP endpoint
+    #[clap(
+        long = "log-query-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = ""
+    )]
+    #[serde(rename = "otlp_endpoint")]
+    pub log_query_otlp_endpoint: String,
 }
 
 impl Default for QueryLogConfig {
@@ -2019,6 +2024,7 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
         Ok(InnerQueryLogConfig {
             on: self.log_query_on,
             dir: self.log_query_dir,
+            otlp_endpoint: self.log_query_otlp_endpoint,
         })
     }
 }
@@ -2028,6 +2034,7 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
         Self {
             log_query_on: inner.on,
             log_query_dir: inner.dir,
+            log_query_otlp_endpoint: inner.otlp_endpoint,
         }
     }
 }
@@ -2035,7 +2042,7 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct TracingConfig {
-    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "false")]
+    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub tracing_on: bool,
 

@@ -96,15 +96,8 @@ async fn main() {
             level: "WARN".to_string(),
             format: "text".to_string(),
         },
-        query: QueryLogConfig {
-            on: false,
-            dir: "./.databend/logs/query-details".to_string(),
-        },
-        tracing: TracingConfig {
-            on: false,
-            capture_log_level: "TRACE".to_string(),
-            otlp_endpoint: "http://127.0.0.1:4317".to_string(),
-        },
+        query: QueryLogConfig::default(),
+        tracing: TracingConfig::default(),
     };
 
     let _guards = init_logging("databend-metabench", &log_config);
