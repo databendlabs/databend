@@ -147,10 +147,11 @@ impl MergeIntoInterpreter {
 
         let table_name = table_name.clone();
         let input = input.clone();
-        let (exchange, input) = if let RelOperator::Exchange(exchange) = input.plan() {
-            (Some(exchange), Box::new(input.child(0)?.clone()))
+
+        let input = if let RelOperator::Exchange(_) = input.plan() {
+            Box::new(input.child(0)?.clone())
         } else {
-            (None, input)
+            input
         };
 
         let optimized_input =
@@ -193,7 +194,7 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if distributed {
+        if *distributed {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
@@ -204,7 +205,7 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        if distributed && row_number_idx.is_none() {
+        if *distributed && row_number_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
