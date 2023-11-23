@@ -58,7 +58,7 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement(i: Input) -> IResult<StatementMsg> {
+pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let explain = map_res(
         rule! {
             EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
@@ -1258,7 +1258,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_connections = map(
         rule! {
-              SHOW ~ CONNECTIONS
+            SHOW ~ CONNECTIONS
         },
         |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
     );
@@ -1825,7 +1825,7 @@ AS
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
         },
-        |(stmt, opt_format, _, _)| StatementMsg {
+        |(stmt, opt_format, _, _)| StatementWithFormat {
             stmt,
             format: opt_format.map(|(_, format)| format.name),
         },
@@ -2576,7 +2576,7 @@ pub fn match_clause(i: Input) -> IResult<MergeOption> {
 
 fn match_operation(i: Input) -> IResult<MatchOperation> {
     alt((
-        value(MatchOperation::Delete, rule! {DELETE}),
+        value(MatchOperation::Delete, rule! { DELETE }),
         map(
             rule! {
                 UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
@@ -2873,7 +2873,7 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
 pub fn show_options(i: Input) -> IResult<ShowOptions> {
     map(
         rule! {
-            #show_limit? ~ ( LIMIT ~ #literal_u64 )?
+            #show_limit? ~ ( LIMIT ~ ^#literal_u64 )?
         },
         |(show_limit, opt_limit)| ShowOptions {
             show_limit,
@@ -2930,25 +2930,16 @@ pub fn engine(i: Input) -> IResult<Engine> {
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    let engine = alt((value(DatabaseEngine::Default, rule! {DEFAULT}),));
-
-    map(
-        rule! {
-            ^#engine
-        },
-        |engine| engine,
-    )(i)
+    value(DatabaseEngine::Default, rule! { DEFAULT })
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let create_db_engine = alt((map(
-        rule! {
-            ^#database_engine
-        },
+    let create_db_engine = map(
+        database_engine
         CreateDatabaseOption::DatabaseEngine,
-    ),));
+    );
 
-    let share_from = alt((map(
+    let share_from = map(
         rule! {
             #ident ~ "." ~ #ident
         },
@@ -2958,7 +2949,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
                 share_name: share_name.to_string(),
             })
         },
-    ),));
+    );
 
     map(
         rule! {
@@ -2970,30 +2961,29 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
-    let catalog_type = alt((
-        value(CatalogType::Default, rule! {DEFAULT}),
-        value(CatalogType::Hive, rule! {HIVE}),
-        value(CatalogType::Iceberg, rule! {ICEBERG}),
-    ));
-    map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
+    alt((
+        value(CatalogType::Default, rule! { DEFAULT }),
+        value(CatalogType::Hive, rule! { HIVE }),
+        value(CatalogType::Iceberg, rule! { ICEBERG }),
+    ))(i)
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     let default_role_option = map(
         rule! {
-            "DEFAULT_ROLE" ~ "=" ~ #role_name
+            "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
     let set_network_policy = map(
         rule! {
-            SET ~ NETWORK ~ POLICY ~ "=" ~ #literal_string
+            SET ~ ^NETWORK ~ ^POLICY ~ ^"=" ~ ^#literal_string
         },
         |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
     );
     let unset_network_policy = map(
         rule! {
-            UNSET ~ NETWORK ~ POLICY
+            UNSET ~ ^NETWORK ~ ^POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
@@ -3012,7 +3002,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~  "'%'" )?
+            #parameter_to_string ~ ( "@" ~ "'%'" )?
         },
         |(username, _)| {
             let hostname = "%".to_string();
@@ -3048,11 +3038,11 @@ pub fn presign_location(i: Input) -> IResult<PresignLocation> {
 
 pub fn presign_option(i: Input) -> IResult<PresignOption> {
     alt((
-        map(rule! { EXPIRE ~ "=" ~ #literal_u64 }, |(_, _, v)| {
+        map(rule! { EXPIRE ~ ^"=" ~ ^#literal_u64 }, |(_, _, v)| {
             PresignOption::Expire(v)
         }),
         map(
-            rule! { CONTENT_TYPE ~ "=" ~ #literal_string },
+            rule! { CONTENT_TYPE ~ ^"=" ~ ^#literal_string },
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))(i)
@@ -3158,7 +3148,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
-        rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
+        rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
         |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
     )(i)
 }

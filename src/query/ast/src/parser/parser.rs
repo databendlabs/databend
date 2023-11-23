@@ -32,6 +32,7 @@ use crate::util::comma_separated_list0;
 use crate::util::comma_separated_list1;
 use crate::util::ident;
 use crate::util::transform_span;
+use crate::util::IResult;
 use crate::Backtrace;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
@@ -44,85 +45,44 @@ pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
 ) -> Result<(Statement, Option<String>)> {
-    let backtrace = Backtrace::new();
-    match statement(Input(sql_tokens, dialect, &backtrace)) {
-        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok((stmts.stmt, stmts.format)),
-        Ok((rest, _)) => Err(ErrorCode::SyntaxException(
-            "unable to parse rest of the sql".to_string(),
-        )
-        .set_span(transform_span(&rest[..1]))),
-        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            let source = sql_tokens[0].source;
-            Err(ErrorCode::SyntaxException(display_parser_error(
-                err, source,
-            )))
-        }
-        Err(nom::Err::Incomplete(_)) => unreachable!(),
-    }
+    let stmt = run_parser(sql_tokens, dialect, statement)?;
+    Ok((stmt.stmt, stmt.format))
 }
 
 /// Parse udf function into Expr
 pub fn parse_expr<'a>(sql_tokens: &'a [Token<'a>], dialect: Dialect) -> Result<Expr> {
-    let backtrace = Backtrace::new();
-    match expr::expr(Input(sql_tokens, dialect, &backtrace)) {
-        Ok((rest, expr)) if rest[0].kind == TokenKind::EOI => Ok(expr),
-        Ok((rest, _)) => Err(ErrorCode::SyntaxException(
-            "unable to parse rest of the sql".to_string(),
-        )
-        .set_span(transform_span(&rest[..1]))),
-        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            let source = sql_tokens[0].source;
-            Err(ErrorCode::SyntaxException(display_parser_error(
-                err, source,
-            )))
-        }
-        Err(nom::Err::Incomplete(_)) => unreachable!(),
-    }
+    run_parser(sql_tokens, dialect, expr::expr)
 }
 
 pub fn parse_comma_separated_exprs<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
 ) -> Result<Vec<Expr>> {
-    let backtrace = Backtrace::new();
-    let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
-    match comma_separated_exprs_parser(Input(sql_tokens, dialect, &backtrace)) {
-        Ok((_rest, exprs)) => Ok(exprs),
-        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            let source = sql_tokens[0].source;
-            Err(ErrorCode::SyntaxException(display_parser_error(
-                err, source,
-            )))
-        }
-        Err(nom::Err::Incomplete(_)) => unreachable!(),
-    }
+    run_parser(sql_tokens, dialect, comma_separated_list0(subexpr(0)))
 }
 
 pub fn parse_comma_separated_idents<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
 ) -> Result<Vec<Identifier>> {
-    let backtrace = Backtrace::new();
-    let mut comma_separated_idents_parser = comma_separated_list1(ident);
-    match comma_separated_idents_parser(Input(sql_tokens, dialect, &backtrace)) {
-        Ok((_rest, idents)) => Ok(idents),
-        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            let source = sql_tokens[0].source;
-            Err(ErrorCode::SyntaxException(display_parser_error(
-                err, source,
-            )))
-        }
-        Err(nom::Err::Incomplete(_)) => unreachable!(),
-    }
+    run_parser(sql_tokens, dialect, comma_separated_list1(ident))
 }
 
 pub fn parser_values_with_placeholder<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
 ) -> Result<Vec<Option<Expr>>> {
+    run_parser(sql_tokens, dialect, values_with_placeholder)
+}
+
+pub fn run_parser<'a, O>(
+    sql_tokens: &'a [Token<'a>],
+    dialect: Dialect,
+    parser: fn(i: Input) -> IResult<O>,
+) -> Result<O> {
     let backtrace = Backtrace::new();
-    match values_with_placeholder(Input(sql_tokens, dialect, &backtrace)) {
-        Ok((rest, exprs)) if rest[0].kind == TokenKind::EOI => Ok(exprs),
+    match parser(Input(sql_tokens, dialect, &backtrace)) {
+        Ok((rest, expr)) if rest[0].kind == TokenKind::EOI => Ok(expr),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             "unable to parse rest of the sql".to_string(),
         )
