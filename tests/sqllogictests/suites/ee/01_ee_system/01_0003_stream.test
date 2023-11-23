@@ -141,11 +141,8 @@ select * from s3
 3
 4
 
-statement error 1002
-insert into t1 select s2.a from s2 join s3 on s2.a = s3.a
-
 statement ok
-insert into t1 select t.a from t join s3 on t.a = s3.a
+insert into t1 select s2.a from s2 join s3 on s2.a = s3.a
 
 query I
 select * from t1 order by a
@@ -153,6 +150,10 @@ select * from t1 order by a
 2
 3
 4
+
+query I
+select * from s2
+----
 
 query I
 select * from s3

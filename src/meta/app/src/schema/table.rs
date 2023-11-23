@@ -611,7 +611,7 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub copied_files: Option<UpsertTableCopiedFileReq>,
-    pub update_stream_meta: Option<UpdateStreamMetaReq>,
+    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub deduplicated_label: Option<String>,
 }
 

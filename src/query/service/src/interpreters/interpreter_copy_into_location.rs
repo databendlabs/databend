@@ -117,7 +117,7 @@ impl CopyIntoLocationInterpreter {
             to_table,
             data_schema,
             None,
-            None,
+            vec![],
             false,
             AppendMode::Normal,
         )?;

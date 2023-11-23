@@ -71,7 +71,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
-        update_stream_meta: Option<UpdateStreamMetaReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
@@ -149,7 +149,7 @@ impl FuseTable {
             snapshot,
             snapshot_location,
             copied_files,
-            &None,
+            &[],
             operator,
         )
         .await;
@@ -179,7 +179,7 @@ impl FuseTable {
         snapshot: TableSnapshot,
         snapshot_location: String,
         copied_files: &Option<UpsertTableCopiedFileReq>,
-        update_stream_meta: &Option<UpdateStreamMetaReq>,
+        update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
     ) -> Result<()> {
         // 1. prepare table meta
@@ -216,7 +216,7 @@ impl FuseTable {
             new_table_meta,
             copied_files: copied_files.clone(),
             deduplicated_label: ctx.get_settings().get_deduplicate_label()?,
-            update_stream_meta: update_stream_meta.clone(),
+            update_stream_meta: update_stream_meta.to_vec(),
         };
 
         // 3. let's roll

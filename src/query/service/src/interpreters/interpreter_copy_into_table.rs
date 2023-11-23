@@ -73,11 +73,7 @@ impl CopyIntoTableInterpreter {
     async fn build_query(
         &self,
         query: &Plan,
-    ) -> Result<(
-        SelectInterpreter,
-        DataSchemaRef,
-        Option<UpdateStreamMetaReq>,
-    )> {
+    ) -> Result<(SelectInterpreter, DataSchemaRef, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -126,11 +122,7 @@ impl CopyIntoTableInterpreter {
     pub async fn build_physical_plan(
         &self,
         plan: &CopyIntoTablePlan,
-    ) -> Result<(
-        PhysicalPlan,
-        Vec<StageFileInfo>,
-        Option<UpdateStreamMetaReq>,
-    )> {
+    ) -> Result<(PhysicalPlan, Vec<StageFileInfo>, Vec<UpdateStreamMetaReq>)> {
         let to_table = self
             .ctx
             .get_table(
@@ -140,7 +132,7 @@ impl CopyIntoTableInterpreter {
             )
             .await?;
         let files = plan.collect_files(self.ctx.as_ref()).await?;
-        let mut seq = None;
+        let mut seq = vec![];
         let source = if let Some(ref query) = plan.query {
             let (select_interpreter, query_source_schema, update_stream_meta) =
                 self.build_query(query).await?;
@@ -282,7 +274,7 @@ impl CopyIntoTableInterpreter {
         main_pipeline: &mut Pipeline,
         plan: &CopyIntoTablePlan,
         files: &[StageFileInfo],
-        update_stream_meta: Option<UpdateStreamMetaReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx

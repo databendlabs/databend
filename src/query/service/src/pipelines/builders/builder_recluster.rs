@@ -224,7 +224,7 @@ impl PipelineBuilder {
                 table,
                 self.ctx.clone(),
                 None,
-                None,
+                vec![],
                 snapshot_gen.clone(),
                 input,
                 None,

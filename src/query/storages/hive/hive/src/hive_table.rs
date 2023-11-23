@@ -593,7 +593,7 @@ impl Table for HiveTable {
         _ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
-        _update_stream_meta: Option<UpdateStreamMetaReq>,
+        _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {

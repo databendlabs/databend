@@ -290,7 +290,7 @@ impl UpdateInterpreter {
             table_info,
             catalog_info,
             mutation_kind: MutationKind::Update,
-            update_stream_meta: None,
+            update_stream_meta: vec![],
             merge_meta,
             need_lock: false,
         })))

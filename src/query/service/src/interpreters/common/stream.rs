@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
@@ -34,17 +33,22 @@ use crate::sessions::QueryContext;
 pub async fn build_update_stream_meta_seq(
     ctx: Arc<QueryContext>,
     metadata: &MetadataRef,
-) -> Result<Option<UpdateStreamMetaReq>> {
-    let table = get_stream_table(metadata)?;
-    if let Some(table) = table {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
+) -> Result<Vec<UpdateStreamMetaReq>> {
+    let tables = get_stream_table(metadata)?;
+    if tables.is_empty() {
+        return Ok(vec![]);
+    }
 
+    let license_manager = get_license_manager();
+    license_manager
+        .manager
+        .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
+
+    let mut reqs = Vec::with_capacity(tables.len());
+    for table in tables.into_iter() {
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
-        let source_table = stream.source_table(ctx).await?;
+        let source_table = stream.source_table(ctx.clone()).await?;
         let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
 
         let table_version = inner_fuse.get_table_info().ident.seq;
@@ -54,31 +58,24 @@ pub async fn build_update_stream_meta_seq(
             options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
         }
 
-        Ok(Some(UpdateStreamMetaReq {
+        reqs.push(UpdateStreamMetaReq {
             stream_id: stream_info.ident.table_id,
             seq: MatchSeq::Exact(stream_info.ident.seq),
             options,
-        }))
-    } else {
-        Ok(None)
+        });
     }
+    Ok(reqs)
 }
 
-fn get_stream_table(metadata: &MetadataRef) -> Result<Option<Arc<dyn Table>>> {
+fn get_stream_table(metadata: &MetadataRef) -> Result<Vec<Arc<dyn Table>>> {
     let r_lock = metadata.read();
     let tables = r_lock.tables();
     let mut streams = vec![];
     for t in tables {
-        if t.table().engine() == STREAM_ENGINE {
-            streams.push(t);
+        let table = t.table();
+        if table.engine() == STREAM_ENGINE {
+            streams.push(table);
         }
     }
-
-    match streams.len() {
-        0 => Ok(None),
-        1 => Ok(Some(streams[0].table())),
-        _ => Err(ErrorCode::Unimplemented(
-            "Only support single stream queries",
-        )),
-    }
+    Ok(streams)
 }

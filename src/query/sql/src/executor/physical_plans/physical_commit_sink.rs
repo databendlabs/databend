@@ -31,7 +31,7 @@ pub struct CommitSink {
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub mutation_kind: MutationKind,
-    pub update_stream_meta: Option<UpdateStreamMetaReq>,
+    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
     pub need_lock: bool,
 }

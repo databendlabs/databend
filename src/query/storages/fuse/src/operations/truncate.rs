@@ -79,7 +79,7 @@ impl FuseTable {
                     new_table_meta,
                     copied_files: None,
                     deduplicated_label: None,
-                    update_stream_meta: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 

@@ -371,7 +371,7 @@ impl ReplaceInterpreter {
                 .map(|root| ReplaceSourceCtx {
                     root,
                     select_ctx: None,
-                    update_stream_meta: None,
+                    update_stream_meta: vec![],
                     bind_context: None,
                 }),
 
@@ -388,7 +388,7 @@ impl ReplaceInterpreter {
                     Ok(ReplaceSourceCtx {
                         root: Box::new(physical_plan),
                         select_ctx: None,
-                        update_stream_meta: None,
+                        update_stream_meta: vec![],
                         bind_context: None,
                     })
                 }
@@ -463,6 +463,6 @@ impl ReplaceInterpreter {
 struct ReplaceSourceCtx {
     root: Box<PhysicalPlan>,
     select_ctx: Option<ReplaceSelectCtx>,
-    update_stream_meta: Option<UpdateStreamMetaReq>,
+    update_stream_meta: Vec<UpdateStreamMetaReq>,
     bind_context: Option<BindContext>,
 }

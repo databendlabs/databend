@@ -276,7 +276,7 @@ impl Interpreter for InsertInterpreter {
             table.clone(),
             self.plan.schema(),
             None,
-            None,
+            vec![],
             self.plan.overwrite,
             append_mode,
         )?;

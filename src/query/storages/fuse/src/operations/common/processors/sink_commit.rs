@@ -98,7 +98,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     prev_snapshot_id: Option<SnapshotId>,
 
     change_tracking: bool,
-    update_stream_meta: Option<UpdateStreamMetaReq>,
+    update_stream_meta: Vec<UpdateStreamMetaReq>,
 }
 
 impl<F> CommitSink<F>
@@ -109,7 +109,7 @@ where F: SnapshotGenerator + Send + 'static
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         copied_files: Option<UpsertTableCopiedFileReq>,
-        update_stream_meta: Option<UpdateStreamMetaReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,

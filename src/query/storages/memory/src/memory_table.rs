@@ -248,7 +248,7 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
-        _update_stream_meta: Option<UpdateStreamMetaReq>,
+        _update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {

@@ -2804,7 +2804,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_req.if_then.extend(match_operations)
             }
 
-            if let Some(req) = &req.update_stream_meta {
+            for req in &req.update_stream_meta {
                 let stream_id = TableId {
                     table_id: req.stream_id,
                 };

@@ -225,7 +225,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
-        update_stream_meta: Option<UpdateStreamMetaReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {

@@ -134,7 +134,7 @@ impl OptimizeTableInterpreter {
             catalog_info,
             snapshot,
             mutation_kind: MutationKind::Compact,
-            update_stream_meta: None,
+            update_stream_meta: vec![],
             merge_meta,
             need_lock,
         })))

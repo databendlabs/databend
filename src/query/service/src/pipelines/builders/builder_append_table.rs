@@ -34,7 +34,7 @@ impl PipelineBuilder {
         table: Arc<dyn Table>,
         source_schema: DataSchemaRef,
         copied_files: Option<UpsertTableCopiedFileReq>,
-        update_stream_meta: Option<UpdateStreamMetaReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         append_mode: AppendMode,
     ) -> Result<()> {
