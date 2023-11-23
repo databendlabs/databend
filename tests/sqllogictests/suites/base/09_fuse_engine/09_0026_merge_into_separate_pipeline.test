@@ -75,6 +75,21 @@ statement error 1065
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert (b) values(t1.a);
 
 statement ok
+truncate table t1_separate;
+
+## test merge into empty table for insert-only
+statement ok
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
+
+query TTT
+select * from t1_separate order by a,b,c;
+----
+1 a5 b5
+3 a6 b6
+8 a8 b8
+9 a9 b9
+
+statement ok
 set enable_experimental_merge_into = 0;
 
 statement ok
