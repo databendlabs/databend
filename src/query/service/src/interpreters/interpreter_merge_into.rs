@@ -164,10 +164,7 @@ impl MergeIntoInterpreter {
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
-        let insert_only = match merge_type {
-            MergeIntoType::InsertOnly => true,
-            _ => false,
-        };
+        let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
 
         let mut row_id_idx = if !insert_only {
             match meta_data
