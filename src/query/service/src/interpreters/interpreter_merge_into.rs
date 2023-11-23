@@ -29,6 +29,7 @@ use common_expression::RemoteExpr;
 use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::binder::MergeIntoType;
 use common_sql::executor::physical_plans::CommitSink;
 use common_sql::executor::physical_plans::Exchange;
 use common_sql::executor::physical_plans::FragmentKind;
@@ -62,7 +63,7 @@ use crate::sessions::QueryContext;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
-const DUMMY_COL_INDEX: usize = 1;
+const DUMMY_COL_INDEX: usize = MAX as usize;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
     plan: MergePlan,
@@ -163,16 +164,25 @@ impl MergeIntoInterpreter {
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
-        let mut row_id_idx = match meta_data
-            .read()
-            .row_id_index_by_table_index(*target_table_idx)
-        {
-            None => {
-                return Err(ErrorCode::InvalidRowIdIndex(
-                    "can't get internal row_id_idx when running merge into",
-                ));
+        let insert_only = match merge_type {
+            MergeIntoType::InsertOnly => true,
+            _ => false,
+        };
+
+        let mut row_id_idx = if !insert_only {
+            match meta_data
+                .read()
+                .row_id_index_by_table_index(*target_table_idx)
+            {
+                None => {
+                    return Err(ErrorCode::InvalidRowIdIndex(
+                        "can't get internal row_id_idx when running merge into",
+                    ));
+                }
+                Some(row_id_idx) => row_id_idx,
             }
-            Some(row_id_idx) => row_id_idx,
+        } else {
+            DUMMY_COL_INDEX
         };
 
         let mut found_row_id = false;
@@ -189,8 +199,8 @@ impl MergeIntoInterpreter {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
-        // we can't get row_id_idx, throw an exception
-        if !found_row_id {
+        if !insert_only && !found_row_id {
+            // we can't get row_id_idx, throw an exception
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
             ));

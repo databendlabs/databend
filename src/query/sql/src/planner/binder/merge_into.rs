@@ -187,9 +187,7 @@ impl Binder {
         let (source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
 
-        // add all left source columns for read
-        // todo: (JackTan25) do column prune after finish "split expr for target and source"
-        let mut columns_set = source_context.column_set();
+        let mut columns_set = HashSet::<IndexType>::new();
 
         let update_columns_star = if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
             // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
@@ -200,7 +198,7 @@ impl Binder {
                     .num_fields(),
             );
             let source_output_columns = &source_context.columns;
-            // we use Vec as the value, because if there could be duplicate names
+            // we use Vec as the value, because there could be duplicate names
             let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
             for column in source_output_columns {
                 name_map
@@ -301,6 +299,12 @@ impl Binder {
                 &join,
             )
             .await?;
+        {
+            // add join used column idx
+            let join_ctx = bind_ctx.clone();
+            let join_column_set = join_ctx.clone().column_set();
+            columns_set = columns_set.union(&join_column_set).cloned().collect();
+        }
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
@@ -312,11 +316,6 @@ impl Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        // add join condition used column idx
-        columns_set = columns_set
-            .union(&scalar_binder.bind(join_expr).await?.0.used_columns())
-            .cloned()
-            .collect();
 
         let column_entries = self.metadata.read().columns_by_table_index(table_index);
         let mut field_index_map = HashMap::<usize, String>::new();
@@ -649,7 +648,16 @@ fn insert_only(merge_plan: &MergeInto) -> bool {
         .collect();
 
     for evaluator in &merge_plan.unmatched_evaluators {
-        for value in &evaluator.condition {
+        if evaluator.condition.is_some() {
+            let condition = evaluator.condition.as_ref().unwrap();
+            for column in condition.used_columns() {
+                if target_table_columns.contains(&column) {
+                    return false;
+                }
+            }
+        }
+
+        for value in &evaluator.values {
             for column in value.used_columns() {
                 if target_table_columns.contains(&column) {
                     return false;
