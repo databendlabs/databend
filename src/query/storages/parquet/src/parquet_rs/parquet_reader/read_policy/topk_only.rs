@@ -136,6 +136,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
             .fetch(self.topk.projection(), selection.as_ref())
             .await?;
         let block = read_all(
+            self.src_schema.as_ref(),
             &row_group,
             self.topk.field_levels(),
             selection.clone(),
@@ -211,7 +212,8 @@ impl ReadPolicy for TopkOnlyPolicy {
             debug_assert!(
                 self.prefetched.is_none() || !self.prefetched.as_ref().unwrap().is_empty()
             );
-            let mut block = transform_record_batch(&batch, &self.remain_field_paths)?;
+            let mut block =
+                transform_record_batch(self.src_schema.as_ref(), &batch, &self.remain_field_paths)?;
             if let Some(q) = self.prefetched.as_mut() {
                 let prefetched = q.pop_front().unwrap();
                 block.add_column(prefetched);

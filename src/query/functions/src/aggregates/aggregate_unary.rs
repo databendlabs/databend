@@ -14,13 +14,18 @@
 
 use std::alloc::Layout;
 use std::any::Any;
+use std::any::TypeId;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::take_mut;
 use common_exception::Result;
+use common_expression::types::decimal::Decimal128Type;
+use common_expression::types::decimal::Decimal256Type;
+use common_expression::types::decimal::DecimalColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::ValueType;
 use common_expression::AggregateFunction;
@@ -29,7 +34,6 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 use common_expression::StateAddr;
-
 pub trait UnaryState<T, R>: Send + Sync + Default
 where
     T: ValueType,
@@ -129,6 +133,33 @@ where
         self.need_drop = need_drop;
         self
     }
+
+    fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
+        match builder {
+            // current decimal implementation hard do upcast_builder, we do downcast manually.
+            ColumnBuilder::Decimal(b) => match b {
+                DecimalColumnBuilder::Decimal128(_, _) => {
+                    debug_assert!(TypeId::of::<R>() == TypeId::of::<Decimal128Type>());
+                    let builder = R::try_downcast_builder(builder).unwrap();
+                    state.merge_result(builder, self.function_data.as_deref())
+                }
+                DecimalColumnBuilder::Decimal256(_, _) => {
+                    debug_assert!(TypeId::of::<R>() == TypeId::of::<Decimal256Type>());
+                    let builder = R::try_downcast_builder(builder).unwrap();
+                    state.merge_result(builder, self.function_data.as_deref())
+                }
+            },
+            // some `ValueType` like `NullableType` need ownership to downcast builder,
+            // so here we using an unsafe way to take the ownership of builder.
+            // See [`take_mut`] for details.
+            _ => take_mut(builder, |builder| {
+                let mut builder = R::try_downcast_owned_builder(builder).unwrap();
+                state
+                    .merge_result(&mut builder, self.function_data.as_deref())
+                    .map(|_| R::try_upcast_column_builder(builder).unwrap())
+            }),
+        }
+    }
 }
 
 impl<S, T, R> AggregateFunction for AggregateUnaryFunction<S, T, R>
@@ -226,9 +257,7 @@ where
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        let builder = R::try_downcast_builder(builder).unwrap();
-        state.merge_result(builder, self.function_data.as_deref())?;
-        Ok(())
+        self.do_merge_result(state, builder)
     }
 
     fn batch_merge_result(
@@ -239,8 +268,7 @@ where
     ) -> Result<()> {
         for place in places {
             let state: &mut S = place.next(offset).get::<S>();
-            let builder = R::try_downcast_builder(builder).unwrap();
-            state.merge_result(builder, self.function_data.as_deref())?;
+            self.do_merge_result(state, builder)?;
         }
         Ok(())
     }
