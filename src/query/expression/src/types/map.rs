@@ -87,6 +87,14 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         None
     }
 
+    fn try_downcast_owned_builder<'a>(_builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        None
+    }
+
+    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        None
+    }
+
     fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
         Scalar::Tuple(vec![K::upcast_scalar(k), V::upcast_scalar(v)])
     }
@@ -349,6 +357,14 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         <MapInternal<K, V> as ValueType>::try_downcast_builder(builder)
+    }
+
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        <MapInternal<K, V> as ValueType>::try_downcast_owned_builder(builder)
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        <MapInternal<K, V> as ValueType>::try_upcast_column_builder(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
