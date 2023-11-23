@@ -395,6 +395,7 @@ impl Binder {
             target_table_idx: table_index,
             field_index_map,
             merge_type,
+            distributed: false,
         })
     }
 
