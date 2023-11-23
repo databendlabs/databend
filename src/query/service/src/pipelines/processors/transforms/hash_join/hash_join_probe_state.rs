@@ -41,6 +41,7 @@ use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::ColumnSet;
+use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -188,7 +189,7 @@ impl HashJoinProbeState {
         } else {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let probe_keys = self
+        let mut probe_keys = self
             .hash_join_state
             .hash_join_desc
             .probe_keys
@@ -235,6 +236,11 @@ impl HashJoinProbeState {
                     valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
+        }
+
+        for (col, ty) in probe_keys.iter_mut() {
+            *col = col.remove_nullable();
+            *ty = ty.remove_nullable();
         }
 
         let input = input.project(&self.probe_projections);
@@ -445,10 +451,8 @@ impl HashJoinProbeState {
         if task_num == 0 {
             return Ok(());
         }
-        let mut final_scan_tasks = self.final_scan_tasks.write();
-        for idx in 0..task_num {
-            final_scan_tasks.push_back(idx);
-        }
+        let tasks = (0..task_num).collect_vec();
+        *self.final_scan_tasks.write() = tasks.into();
         Ok(())
     }
 
