@@ -81,6 +81,38 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         None
     }
 
+    #[allow(clippy::manual_map)]
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Array(inner) => {
+                let builder = T::try_downcast_owned_builder(inner.builder);
+                // ```
+                // builder.map(|builder| ArrayColumnBuilder {
+                //     builder,
+                //     offsets: inner.offsets,
+                // })
+                // ```
+                // If we using the clippy recommend way like above, the compiler will complain:
+                // use of partially moved value: `inner`.
+                // That's rust borrow checker error, if we using the new borrow checker named polonius,
+                // everything goes fine, but polonius is very slow, so we allow manual map here.
+                if let Some(builder) = builder {
+                    Some(ArrayColumnBuilder {
+                        builder,
+                        offsets: inner.offsets,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Array(Box::new(builder.upcast())))
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Array(T::upcast_column(scalar))
     }
@@ -365,6 +397,13 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
             &T::build_column(self.builder),
             (self.offsets[0] as usize)..(self.offsets[1] as usize),
         )
+    }
+
+    pub fn upcast(self) -> ArrayColumnBuilder<AnyType> {
+        ArrayColumnBuilder {
+            builder: T::try_upcast_column_builder(self.builder).unwrap(),
+            offsets: self.offsets,
+        }
     }
 }
 
