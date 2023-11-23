@@ -602,7 +602,7 @@ statement error 1065
 merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
 
 statement ok
-merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt2.b = 2 then insert values (10, 20);
+merge into tt1 using(select 10 as a, 20 as b) as tt2 on tt1.a = 1 when not matched and tt2.b = 2 then insert values (10, 20);
 
 query T
 select count(*) from tt1;
