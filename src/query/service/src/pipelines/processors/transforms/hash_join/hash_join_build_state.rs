@@ -593,7 +593,7 @@ impl HashJoinBuildState {
             }
             None => None,
         };
-        
+
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
                 let markers = &mut build_state.mark_scan_map[chunk_index];
@@ -655,7 +655,7 @@ impl HashJoinBuildState {
                 ));
             }
         }
-        
+
         {
             let mut raw_entry_spaces = self.raw_entry_spaces.lock();
             raw_entry_spaces.extend(local_raw_entry_spaces);
