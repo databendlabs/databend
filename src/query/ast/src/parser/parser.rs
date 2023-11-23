@@ -41,44 +41,40 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 
 /// Parse a SQL string into `Statement`s.
 #[minitrace::trace]
-pub fn parse_sql<'a>(
-    sql_tokens: &'a [Token<'a>],
-    dialect: Dialect,
-) -> Result<(Statement, Option<String>)> {
+pub fn parse_sql(sql_tokens: &[Token], dialect: Dialect) -> Result<(Statement, Option<String>)> {
     let stmt = run_parser(sql_tokens, dialect, statement)?;
     Ok((stmt.stmt, stmt.format))
 }
 
 /// Parse udf function into Expr
-pub fn parse_expr<'a>(sql_tokens: &'a [Token<'a>], dialect: Dialect) -> Result<Expr> {
+pub fn parse_expr(sql_tokens: &[Token], dialect: Dialect) -> Result<Expr> {
     run_parser(sql_tokens, dialect, expr::expr)
 }
 
-pub fn parse_comma_separated_exprs<'a>(
-    sql_tokens: &'a [Token<'a>],
-    dialect: Dialect,
-) -> Result<Vec<Expr>> {
-    run_parser(sql_tokens, dialect, comma_separated_list0(subexpr(0)))
+pub fn parse_comma_separated_exprs(sql_tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
+    run_parser(sql_tokens, dialect, |i| {
+        comma_separated_list0(subexpr(0))(i)
+    })
 }
 
-pub fn parse_comma_separated_idents<'a>(
-    sql_tokens: &'a [Token<'a>],
+pub fn parse_comma_separated_idents(
+    sql_tokens: &[Token],
     dialect: Dialect,
 ) -> Result<Vec<Identifier>> {
-    run_parser(sql_tokens, dialect, comma_separated_list1(ident))
+    run_parser(sql_tokens, dialect, |i| comma_separated_list1(ident)(i))
 }
 
-pub fn parser_values_with_placeholder<'a>(
-    sql_tokens: &'a [Token<'a>],
+pub fn parser_values_with_placeholder(
+    sql_tokens: &[Token],
     dialect: Dialect,
 ) -> Result<Vec<Option<Expr>>> {
     run_parser(sql_tokens, dialect, values_with_placeholder)
 }
 
-pub fn run_parser<'a, O>(
-    sql_tokens: &'a [Token<'a>],
+pub fn run_parser<O>(
+    sql_tokens: &[Token],
     dialect: Dialect,
-    parser: fn(i: Input) -> IResult<O>,
+    mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
     let backtrace = Backtrace::new();
     match parser(Input(sql_tokens, dialect, &backtrace)) {

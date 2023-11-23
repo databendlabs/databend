@@ -2930,20 +2930,22 @@ pub fn engine(i: Input) -> IResult<Engine> {
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    value(DatabaseEngine::Default, rule! { DEFAULT })
+    value(DatabaseEngine::Default, rule! { DEFAULT })(i)
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
     let create_db_engine = map(
-        database_engine
-        CreateDatabaseOption::DatabaseEngine,
+        rule! {
+            ENGINE ~  ^"=" ~ ^#database_engine
+        },
+        |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
     let share_from = map(
         rule! {
-            #ident ~ "." ~ #ident
+            FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
-        |(tenant, _, share_name)| {
+        |(_, _, tenant, _, share_name)| {
             CreateDatabaseOption::FromShare(ShareNameIdent {
                 tenant: tenant.to_string(),
                 share_name: share_name.to_string(),
@@ -2951,12 +2953,9 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         },
     );
 
-    map(
-        rule! {
-            ENGINE ~  ^"=" ~ ^#create_db_engine
-            | FROM ~ SHARE ~ ^#share_from
-        },
-        |(_, _, option)| option,
+    rule!(
+        #create_db_engine
+        | #share_from
     )(i)
 }
 
