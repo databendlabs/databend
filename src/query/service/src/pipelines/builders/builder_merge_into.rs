@@ -256,21 +256,18 @@ impl PipelineBuilder {
         // an optimization later: for unmatched only, we can reverse
         // `on conditions` and use inner join.
         // merge into's parallism depends on the join probe number.
-        match merge_type {
-            MergeIntoType::FullOperation => {
-                let mut items = Vec::with_capacity(self.main_pipeline.output_len());
-                let output_len = self.main_pipeline.output_len();
-                for _ in 0..output_len {
-                    let merge_into_split_processor =
-                        MergeIntoSplitProcessor::create(*row_id_idx, false)?;
-                    items.push(merge_into_split_processor.into_pipe_item());
-                }
-
-                self.main_pipeline
-                    .add_pipe(Pipe::create(output_len, output_len * 2, items));
+        if let MergeIntoType::FullOperation = merge_type {
+            let mut items = Vec::with_capacity(self.main_pipeline.output_len());
+            let output_len = self.main_pipeline.output_len();
+            for _ in 0..output_len {
+                let merge_into_split_processor =
+                    MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+                items.push(merge_into_split_processor.into_pipe_item());
             }
-            _ => {}
-        };
+
+            self.main_pipeline
+                .add_pipe(Pipe::create(output_len, output_len * 2, items));
+        }
 
         Ok(())
     }
