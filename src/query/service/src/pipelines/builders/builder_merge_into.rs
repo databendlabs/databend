@@ -257,7 +257,7 @@ impl PipelineBuilder {
         // `on conditions` and use inner join.
         // merge into's parallism depends on the join probe number.
         match merge_type {
-            MergeIntoType::FullOperation | MergeIntoType::UnmatechedOnly => {
+            MergeIntoType::FullOperation => {
                 let mut items = Vec::with_capacity(self.main_pipeline.output_len());
                 let output_len = self.main_pipeline.output_len();
                 for _ in 0..output_len {
@@ -372,10 +372,7 @@ impl PipelineBuilder {
 
         let (step, need_match, need_unmatch) = match merge_type {
             MergeIntoType::FullOperation => (2, true, true),
-            // in fact, InsertOnly and UnmatchedOnly has the same pipeline in execution phase,
-            // but we need to distinct them in bind phase, so there are two enum types. It can
-            // make codes more readable logically.
-            MergeIntoType::InsertOnly | MergeIntoType::UnmatechedOnly => (1, false, true),
+            MergeIntoType::InsertOnly => (1, false, true),
             MergeIntoType::MatechedOnly => (1, true, false),
         };
 
