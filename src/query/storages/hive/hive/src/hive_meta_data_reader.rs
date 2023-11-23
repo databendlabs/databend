@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::parquet::read::read_metadata_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::parquet_rs::read_metadata_async;
 use opendal::Operator;
-use parquet::file::metadata::ParquetMetaData;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::ParqueFileMetaData;
 
 pub struct LoaderWrapper<T>(T);
-pub type FileMetaDataReader = InMemoryItemCacheReader<ParquetMetaData, LoaderWrapper<Operator>>;
+pub type FileMetaDataReader = InMemoryItemCacheReader<ParqueFileMetaData, LoaderWrapper<Operator>>;
 pub struct MetaDataReader;
 
 impl MetaDataReader {
@@ -36,16 +36,20 @@ impl MetaDataReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<ParquetMetaData> for LoaderWrapper<Operator> {
+impl Loader<ParqueFileMetaData> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<ParquetMetaData> {
-        read_metadata_async(&params.location, &self.0, params.len_hint)
-            .await
-            .map_err(|err| {
-                ErrorCode::Internal(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })
+    async fn load(&self, params: &LoadParams) -> Result<ParqueFileMetaData> {
+        let mut reader = if let Some(len) = params.len_hint {
+            self.0.reader_with(&params.location).range(0..len).await?
+        } else {
+            self.0.reader(&params.location).await?
+        };
+        match read_metadata_async(&mut reader).await {
+            Ok(data) => Ok(ParqueFileMetaData::Parquet2MetaData(data)),
+            Err(err) => Err(ErrorCode::Internal(format!(
+                "read file meta failed, {}, {:?}",
+                params.location, err
+            ))),
+        }
     }
 }

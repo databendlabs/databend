@@ -21,3 +21,4 @@ storages-common-table-meta = { path = "../table_meta" }
 
 log = { workspace = true }
 parquet = { workspace = true }
+serde = { workspace = true }

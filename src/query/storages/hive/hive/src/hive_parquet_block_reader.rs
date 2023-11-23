@@ -20,6 +20,7 @@ use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
@@ -33,8 +34,8 @@ use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
-use parquet::file::metadata::ParquetMetaData;
 use storages_common_cache::LoadParams;
+use storages_common_cache_manager::ParqueFileMetaData;
 
 use crate::hive_partition::HivePartInfo;
 use crate::HivePartitionFiller;
@@ -232,7 +233,7 @@ impl HiveBlockReader {
         dal: Operator,
         filename: &str,
         filesize: u64,
-    ) -> Result<Arc<ParquetMetaData>> {
+    ) -> Result<Arc<FileMetaData>> {
         let reader = MetaDataReader::meta_data_reader(dal);
 
         let load_params = LoadParams {
@@ -242,7 +243,12 @@ impl HiveBlockReader {
             put_cache: true,
         };
 
-        reader.read(&load_params).await
+        match reader.read(&load_params).await?.as_ref() {
+            ParqueFileMetaData::Parquet2MetaData(m) => Ok(Arc::new(m.clone())),
+            _ => Err(ErrorCode::Internal(
+                "hive meta file cache  must be produced by parquet2.",
+            )),
+        }
     }
 
     #[async_backtrace::framed]

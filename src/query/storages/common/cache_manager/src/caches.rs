@@ -16,6 +16,7 @@ use std::borrow::Borrow;
 use std::hash::BuildHasher;
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::FileMetaData;
 use common_cache::Count;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
@@ -35,6 +36,12 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::cache_manager::CacheManager;
 
+#[derive(Debug, Clone)]
+pub enum ParqueFileMetaData {
+    Parquet2MetaData(FileMetaData),
+    ParquetRSMetaData(ParquetMetaData),
+}
+
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = NamedCache<
     InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>,
@@ -51,7 +58,7 @@ pub type BloomIndexFilterCache =
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<ParquetMetaData>>;
+pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<ParqueFileMetaData>>;
 
 pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
 
@@ -129,7 +136,7 @@ impl CachedObject<Xor8Filter, DefaultHashBuilder, BloomIndexFilterMeter> for Xor
     }
 }
 
-impl CachedObject<ParquetMetaData> for ParquetMetaData {
+impl CachedObject<ParqueFileMetaData> for ParqueFileMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_file_meta_data_cache()

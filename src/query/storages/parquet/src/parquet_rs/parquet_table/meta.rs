@@ -26,6 +26,7 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
 use storages_common_cache::LoadParams;
+use storages_common_cache_manager::ParqueFileMetaData;
 
 use crate::parquet_rs::parquet_reader::MetaDataReader;
 use crate::parquet_rs::statistics::collect_row_group_stats;
@@ -133,7 +134,12 @@ pub async fn read_meta_data(
         put_cache: true,
     };
 
-    reader.read(&load_params).await
+    match reader.read(&load_params).await?.as_ref() {
+        ParqueFileMetaData::ParquetRSMetaData(m) => Ok(Arc::new(m.clone())),
+        _ => Err(ErrorCode::Internal(
+            "parquet meta file cache  must be produced by parquet_rs.",
+        )),
+    }
 }
 
 pub async fn read_parquet_metas_batch(
