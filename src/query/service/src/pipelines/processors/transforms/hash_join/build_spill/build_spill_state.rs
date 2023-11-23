@@ -85,10 +85,12 @@ impl BuildSpillState {
             .buffer_row_size
             .store(0, Ordering::Relaxed);
         // Collect rows in `Chunks`
-        let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+        let chunks = &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks;
         blocks.append(chunks);
-        let build_num_rows = unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
-        *build_num_rows = 0;
+        let build_state = unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
+        build_state.generation_state.build_num_rows = 0;
         Ok(blocks)
     }
 
@@ -145,7 +147,10 @@ impl BuildSpillState {
         // Check if there are rows in `RowSpace`'s buffer and `Chunks`.
         // If not, directly return false, no need to spill.
         let buffer = self.build_state.hash_join_state.row_space.buffer.read();
-        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        let chunks = &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks;
+
         if buffer.is_empty() && chunks.is_empty() {
             return Ok(false);
         }
@@ -204,13 +209,16 @@ impl BuildSpillState {
         for (id, size) in partition_sizes.into_iter() {
             if size as f64 <= memory_limit as f64 / 3.0 {
                 // Put the partition's data to chunks
-                let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+                let chunks =
+                    &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
+                        .generation_state
+                        .chunks;
                 let blocks = partition_blocks.get_mut(&id).unwrap();
                 let rows_num = blocks.iter().fold(0, |acc, block| acc + block.num_rows());
                 chunks.append(blocks);
-                let build_num_rows =
-                    unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
-                *build_num_rows += rows_num;
+                let build_state =
+                    unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
+                build_state.generation_state.build_num_rows += rows_num;
                 partition_blocks.remove(&id);
                 memory_limit -= size;
             } else {

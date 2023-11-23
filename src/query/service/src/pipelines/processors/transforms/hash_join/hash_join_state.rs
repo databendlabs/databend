@@ -25,9 +25,6 @@ use common_base::base::tokio::sync::watch::Receiver;
 use common_base::base::tokio::sync::watch::Sender;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ColumnVec;
-use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodSerializer;
@@ -40,6 +37,7 @@ use common_sql::ColumnSet;
 use ethnum::U256;
 use parking_lot::RwLock;
 
+use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
@@ -97,21 +95,13 @@ pub struct HashJoinState {
     pub(crate) interrupt: AtomicBool,
     /// If there is no data in build side, maybe we can fast return.
     pub(crate) fast_return: AtomicBool,
+    /// Use the column of probe side to construct build side column.
+    /// (probe index, (is probe column nullable, is build column nullable))
+    pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     /// `RowSpace` contains all rows from build side.
     pub(crate) row_space: RowSpace,
-    pub(crate) build_num_rows: SyncUnsafeCell<usize>,
-    /// Data of the build side.
-    pub(crate) chunks: SyncUnsafeCell<Vec<DataBlock>>,
-    pub(crate) build_columns: SyncUnsafeCell<Vec<ColumnVec>>,
-    pub(crate) build_columns_data_type: SyncUnsafeCell<Vec<DataType>>,
-    // Use the column of probe side to construct build side column.
-    // (probe index, (is probe column nullable, is build column nullable))
-    pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
-    pub(crate) is_build_projected: AtomicBool,
-    /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) outer_scan_map: SyncUnsafeCell<Vec<Vec<bool>>>,
-    /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) mark_scan_map: SyncUnsafeCell<Vec<Vec<u8>>>,
+    /// `BuildState` contains all data used in probe phase.
+    pub(crate) build_state: SyncUnsafeCell<BuildState>,
 
     /// Spill related states
     /// Spill partition set
@@ -154,15 +144,9 @@ impl HashJoinState {
             hash_join_desc,
             interrupt: AtomicBool::new(false),
             fast_return: Default::default(),
-            row_space: RowSpace::new(ctx, build_schema, build_projections)?,
-            build_num_rows: SyncUnsafeCell::new(0),
-            chunks: SyncUnsafeCell::new(Vec::new()),
-            build_columns: SyncUnsafeCell::new(Vec::new()),
-            build_columns_data_type: SyncUnsafeCell::new(Vec::new()),
             probe_to_build: probe_to_build.to_vec(),
-            is_build_projected: AtomicBool::new(true),
-            outer_scan_map: SyncUnsafeCell::new(Vec::new()),
-            mark_scan_map: SyncUnsafeCell::new(Vec::new()),
+            row_space: RowSpace::new(ctx, build_schema, build_projections)?,
+            build_state: SyncUnsafeCell::new(BuildState::new()),
             build_spilled_partitions: Default::default(),
             continue_build_watcher,
             _continue_build_dummy_receiver,
@@ -240,22 +224,17 @@ impl HashJoinState {
     // It only be called when spill is enable.
     pub(crate) fn reset(&self) {
         self.row_space.reset();
-        let chunks = unsafe { &mut *self.chunks.get() };
-        chunks.clear();
-        let build_num_rows = unsafe { &mut *self.build_num_rows.get() };
-        *build_num_rows = 0;
-        let build_columns = unsafe { &mut *self.build_columns.get() };
-        build_columns.clear();
-        let build_columns_data_type = unsafe { &mut *self.build_columns_data_type.get() };
-        build_columns_data_type.clear();
+        let build_state = unsafe { &mut *self.build_state.get() };
+        build_state.generation_state.chunks.clear();
+        build_state.generation_state.build_num_rows = 0;
+        build_state.generation_state.build_columns.clear();
+        build_state.generation_state.build_columns_data_type.clear();
         if self.need_outer_scan() {
-            let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
-            outer_scan_map.clear();
+            build_state.outer_scan_map.clear();
         }
         if self.need_mark_scan() {
-            let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
-            mark_scan_map.clear();
+            build_state.mark_scan_map.clear();
         }
-        self.is_build_projected.store(true, Ordering::Relaxed);
+        build_state.generation_state.is_build_projected = true;
     }
 }

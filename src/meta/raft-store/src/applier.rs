@@ -198,7 +198,6 @@ impl<'a> Applier<'a> {
         Ok(st)
     }
 
-    // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
     /// Update or insert a kv entry.
     ///
     /// If the input entry has expired, it performs a delete operation.

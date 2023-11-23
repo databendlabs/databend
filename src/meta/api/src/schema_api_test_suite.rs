@@ -16,6 +16,7 @@ use std::assert_ne;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -1459,7 +1460,7 @@ impl SchemaApiTestSuite {
 
         info!("--- test lvt");
         {
-            let time = 1024;
+            let time = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
             let req = SetLVTReq { table_id, time };
             let get_req = GetLVTReq { table_id };
 
@@ -1467,26 +1468,35 @@ impl SchemaApiTestSuite {
             assert!(res.time.is_none());
 
             let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, 1024);
+            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
             let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(res.time.unwrap(), 1024);
+            assert_eq!(
+                res.time.unwrap(),
+                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
+            );
 
             // test lvt never fall back
-            let time = 102;
+            let time = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, 1024);
+            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
             let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(res.time.unwrap(), 1024);
+            assert_eq!(
+                res.time.unwrap(),
+                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
+            );
 
-            let time = 1025;
+            let time = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
             let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, 1025);
+            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1025, 0).unwrap());
             let res = mt.get_table_lvt(get_req).await?;
-            assert_eq!(res.time.unwrap(), 1025);
+            assert_eq!(
+                res.time.unwrap(),
+                DateTime::<Utc>::from_timestamp(1025, 0).unwrap()
+            );
         }
 
         Ok(())
@@ -2928,7 +2938,7 @@ impl SchemaApiTestSuite {
 
         let drop_on = Some(Utc::now() - Duration::days(1));
 
-        // create db_name_ident1 with two dropped value
+        // create db_name_ident1 with two dropped table
         self.create_out_of_retention_time_db(mt, db_name_ident1.clone(), drop_on, true)
             .await?;
         self.create_out_of_retention_time_db(
@@ -2938,7 +2948,7 @@ impl SchemaApiTestSuite {
             false,
         )
         .await?;
-        // create db_name_ident2 with one dropped value and one non-dropped value
+        // create db_name_ident2 with one dropped value and one non-dropped table
         self.create_out_of_retention_time_db(mt, db_name_ident2.clone(), drop_on, true)
             .await?;
         self.create_out_of_retention_time_db(mt, db_name_ident2.clone(), None, false)
@@ -2969,9 +2979,10 @@ impl SchemaApiTestSuite {
             let _resp = mt.gc_drop_tables(req).await?;
         }
 
-        // assert db id list has been cleaned
-        let id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
-        assert_eq!(id_list.len(), 0);
+        // assert db id list key has been removed
+        let id_list: Result<DbIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &dbid_idlist1).await;
+        assert!(id_list.is_err());
 
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.iter() {
@@ -3169,8 +3180,10 @@ impl SchemaApiTestSuite {
             let _resp = mt.gc_drop_tables(req).await?;
         }
 
-        let id_list: TableIdList = get_kv_data(mt.as_kv_api(), &table_id_idlist).await?;
-        assert_eq!(id_list.len(), 0);
+        // assert table id list key has been removed
+        let id_list: Result<TableIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &table_id_idlist).await;
+        assert!(id_list.is_err());
 
         // assert old table meta and id to name mapping has been removed
         for table_id in old_id_list.iter() {
@@ -3361,9 +3374,10 @@ impl SchemaApiTestSuite {
             let _resp = mt.gc_drop_tables(req).await?;
         }
 
-        // assert db id list has been cleaned
-        let id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
-        assert_eq!(id_list.len(), 0);
+        // assert db id list has been removed
+        let id_list: Result<DbIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &dbid_idlist1).await;
+        assert!(id_list.is_err());
 
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.id_list.iter() {
@@ -3873,9 +3887,9 @@ impl SchemaApiTestSuite {
 
     // construct dropped tables: db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE], db3.{tb1}
     // case 1: with no limit it will return all these tables
-    // case 2: with limit 1 it will return db1.tb[0..DEFAULT_MGET_SIZE + 1]
-    // case 3: with limit DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1]
-    // case 4: with limit 2 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE]
+    // case 2: with limit 1 it will return db1.tb[0]
+    // case 3: with limit DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE]
+    // case 4: with limit 2 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE - 1]
     // case 5: with limit 3 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE], db3.{tb1}
     #[minitrace::trace]
     async fn table_history_filter_with_limit<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
@@ -4032,13 +4046,21 @@ impl SchemaApiTestSuite {
         }
 
         let limit_and_drop_ids = vec![
-            (None, case1_drop_ids),
-            (Some(1), case2_drop_ids),
-            (Some(DEFAULT_MGET_SIZE), case3_drop_ids),
-            (Some(DEFAULT_MGET_SIZE * 2), case4_drop_ids),
-            (Some(DEFAULT_MGET_SIZE * 3), case5_drop_ids),
+            (None, case1_drop_ids.len(), case1_drop_ids),
+            (Some(1), 1, case2_drop_ids),
+            (Some(DEFAULT_MGET_SIZE), DEFAULT_MGET_SIZE, case3_drop_ids),
+            (
+                Some(DEFAULT_MGET_SIZE * 2),
+                DEFAULT_MGET_SIZE * 2,
+                case4_drop_ids,
+            ),
+            (
+                Some(DEFAULT_MGET_SIZE * 3),
+                DEFAULT_MGET_SIZE * 2 + 2,
+                case5_drop_ids,
+            ),
         ];
-        for (limit, drop_ids) in limit_and_drop_ids {
+        for (limit, number, drop_ids) in limit_and_drop_ids {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent {
                     tenant: tenant.to_string(),
@@ -4048,24 +4070,27 @@ impl SchemaApiTestSuite {
                 limit,
             };
             let resp = mt.get_drop_table_infos(req).await?;
+            assert_eq!(resp.drop_ids.len(), number);
 
-            // sort drop id by table id
-            let mut sort_drop_ids = resp.drop_ids;
-            sort_drop_ids.sort_by(|l, r| {
-                if let DroppedId::Table(_, left_table_id, _) = l {
-                    if let DroppedId::Table(_, right_table_id, _) = r {
-                        left_table_id.cmp(right_table_id)
+            let drop_ids_set: HashSet<u64> = drop_ids
+                .iter()
+                .map(|l| {
+                    if let DroppedId::Table(_, table_id, _) = l {
+                        *table_id
                     } else {
                         unreachable!()
                     }
+                })
+                .collect();
+
+            for id in resp.drop_ids {
+                if let DroppedId::Table(_, table_id, _) = id {
+                    assert!(drop_ids_set.contains(&table_id));
                 } else {
                     unreachable!()
                 }
-            });
-            assert_eq!(sort_drop_ids.len(), drop_ids.len());
-            assert_eq!(sort_drop_ids, drop_ids);
+            }
         }
-
         Ok(())
     }
 

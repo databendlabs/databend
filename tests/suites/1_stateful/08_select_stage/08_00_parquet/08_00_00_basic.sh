@@ -35,6 +35,16 @@ echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
 echo "create stage s3 url = '${DATADIR}' FILE_FORMAT = (type = CSV);"  | $BENDSQL_CLIENT_CONNECT
 echo "set use_parquet2 = ${USE_PARQUET2} ; select * from @s3 (FILE_FORMAT => 'PARQUET');" | $BENDSQL_CLIENT_CONNECT
 
+echo "drop table if exists t2;" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE TABLE t2 (id INT, data VARIANT);" | $BENDSQL_CLIENT_CONNECT
+echo "insert into t2 (id,data) values(1,'[1,2,3]'),(2,'{\"k\":\"v\"}');" | $BENDSQL_CLIENT_CONNECT
+
+echo '--- variant named internal stage'
+echo "drop stage if exists s4;" | $BENDSQL_CLIENT_CONNECT
+echo "create stage s4 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s4 from t2;" | $BENDSQL_CLIENT_CONNECT
+echo "set use_parquet2 = ${USE_PARQUET2} ; select * from @s4;" | $BENDSQL_CLIENT_CONNECT
+
 rm -rf ${DATADIR_PATH}
 
 done

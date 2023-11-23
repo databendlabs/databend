@@ -157,6 +157,12 @@ pub enum AccountMgrLevel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecondaryRolesOption {
+    None,
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserOptionItem {
     TenantSetting(bool),
     DefaultRole(String),

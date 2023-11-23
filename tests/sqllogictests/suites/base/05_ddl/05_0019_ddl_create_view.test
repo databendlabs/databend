@@ -14,6 +14,14 @@ statement ok
 CREATE VIEW tmp_view2 AS SELECT * FROM numbers(100)
 
 statement ok
+CREATE VIEW IF NOT EXISTS tmp_view2 AS SELECT * FROM numbers(50)
+
+query TT
+show create table tmp_view2
+----
+tmp_view2 CREATE VIEW `default`.`tmp_view2` AS SELECT * FROM numbers(100)
+
+statement ok
 DROP VIEW IF EXISTS tmp_view
 
 statement ok

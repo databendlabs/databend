@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::fmt;
+use std::fmt::Formatter;
 
 use once_cell::sync::Lazy;
 use semver::BuildMetadata;
@@ -62,7 +64,7 @@ pub static MIN_METACLI_SEMVER: Version = Version {
 ///   Add append_v0
 ///   Add install_snapshot_v0
 ///
-/// - 2023-11-16: since TODO
+/// - 2023-11-16: since 1.2.212:
 ///   Add install_snapshot_v1
 pub static MIN_META_SEMVER: Version = Version::new(0, 9, 41);
 
@@ -79,7 +81,7 @@ pub const RAFT_SERVER_PROVIDES: &[(&str, u8, &str)] = &[
     ("vote_v0",             PROVIDE,     "2023-02-16 0.9.41"),
     ("append_v0",           PROVIDE,     "2023-02-16 0.9.41"),
     ("install_snapshot_v0", PROVIDE,     "2023-02-16 0.9.41"),
-    ("install_snapshot_v1", PROVIDE,     "2023-11-16 TODO"),
+    ("install_snapshot_v1", PROVIDE,     "2023-11-16 1.2.212"),
 ];
 
 /// The server features that raft client depends on.
@@ -88,7 +90,7 @@ pub const RAFT_CLIENT_REQUIRES: &[(&str, u8, &str)] = &[
     ("vote_v0",             REQUIRE,     "2023-02-16 0.9.41"),
     ("append_v0",           REQUIRE,     "2023-02-16 0.9.41"),
     ("install_snapshot_v0", REQUIRE,     "2023-02-16 0.9.41"),
-    ("install_snapshot_v1", OPTIONAL,    "2023-11-16 TODO"),
+    ("install_snapshot_v1", OPTIONAL,    "2023-11-16 1.2.212"),
 ];
 
 /// Feature set provided by raft client.
@@ -101,7 +103,29 @@ pub const RAFT_CLIENT_PROVIDES: &[(&str, u8, &str)] = &[
 pub const RAFT_SERVER_DEPENDS: &[(&str, u8, &str)] = &[
 ];
 
-pub fn raft_server_provides() -> BTreeSet<String> {
+pub struct FeatureSet {
+    features: BTreeSet<String>,
+}
+
+impl FeatureSet {
+    pub fn new(fs: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            features: fs.into_iter().collect(),
+        }
+    }
+}
+
+impl fmt::Display for FeatureSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.features.iter().cloned().collect::<Vec<_>>().join(", ")
+        )
+    }
+}
+
+pub fn raft_server_provides() -> FeatureSet {
     let mut set = BTreeSet::new();
 
     for (name, state, _) in RAFT_SERVER_PROVIDES {
@@ -110,10 +134,10 @@ pub fn raft_server_provides() -> BTreeSet<String> {
         }
     }
 
-    set
+    FeatureSet::new(set)
 }
 
-pub fn raft_client_requires() -> BTreeSet<String> {
+pub fn raft_client_requires() -> FeatureSet {
     let mut set = BTreeSet::new();
 
     for (name, state, _) in RAFT_CLIENT_REQUIRES {
@@ -122,7 +146,7 @@ pub fn raft_client_requires() -> BTreeSet<String> {
         }
     }
 
-    set
+    FeatureSet::new(set)
 }
 
 pub fn to_digit_ver(v: &Version) -> u64 {
@@ -130,6 +154,5 @@ pub fn to_digit_ver(v: &Version) -> u64 {
 }
 
 pub fn from_digit_ver(u: u64) -> Version {
-    println!("{}", u);
     Version::new(u / 1_000_000, u / 1_000 % 1_000, u % 1_000)
 }

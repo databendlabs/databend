@@ -40,10 +40,6 @@ use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::native::read::read_basic::read_compress_header;
 use crate::native::read::NativeReadBuf;
-use crate::native::util::env::check_dict_env;
-use crate::native::util::env::check_freq_env;
-use crate::native::util::env::check_patas_env;
-use crate::native::util::env::check_rle_env;
 use crate::native::write::WriteOptions;
 
 pub fn compress_double<T: DoubleType>(
@@ -252,28 +248,28 @@ fn choose_compressor<T: DoubleType>(
 ) -> DoubleCompressor<T> {
     #[cfg(debug_assertions)]
     {
-        if check_freq_env()
+        if crate::native::util::env::check_freq_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Freq)
         {
             return DoubleCompressor::Extend(Box::new(Freq {}));
         }
-        if check_dict_env()
+        if crate::native::util::env::check_dict_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Dict)
         {
             return DoubleCompressor::Extend(Box::new(Dict {}));
         }
-        if check_rle_env()
+        if crate::native::util::env::check_rle_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Rle)
         {
             return DoubleCompressor::Extend(Box::new(Rle {}));
         }
-        if check_patas_env()
+        if crate::native::util::env::check_patas_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Patas)
