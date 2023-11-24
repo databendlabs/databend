@@ -23,6 +23,7 @@ pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
 pub use http_query_handlers::query_route;
+pub use http_query_handlers::QueryError;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
 pub(crate) use json_block::JsonBlock;

@@ -212,7 +212,7 @@ impl PhysicalPlanBuilder {
             self.ctx.set_cacheable(false);
         }
 
-        let mut table_schema = table.schema();
+        let mut table_schema = table.schema_with_stream();
         if !project_internal_columns.is_empty() {
             let mut schema = table_schema.as_ref().clone();
             for internal_column in project_internal_columns.values() {

@@ -199,6 +199,7 @@ fn to_format_tree(
         PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
         PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
         PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::UpdateSource(_) => Ok(FormatTreeNode::new("UpdateSource".to_string())),
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),

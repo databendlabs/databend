@@ -73,7 +73,7 @@ impl SnapshotsIO {
     }
 
     #[async_backtrace::framed]
-    async fn read_snapshot(
+    pub async fn read_snapshot(
         snapshot_location: String,
         data_accessor: Operator,
     ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {
