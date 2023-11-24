@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -25,6 +24,7 @@ use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::DataBlock;
@@ -41,8 +41,8 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_storages_fuse::table_functions::parse_db_tb_args;
 use common_storages_fuse::table_functions::string_literal;
+use common_storages_fuse::table_functions::string_value;
 
 use crate::stream_table::StreamTable;
 
@@ -50,8 +50,7 @@ const STREAM_STATUS: &str = "stream_status";
 
 pub struct StreamStatusTable {
     table_info: TableInfo,
-    arg_database_name: String,
-    arg_table_name: String,
+    stream_name: String,
 }
 
 impl StreamStatusTable {
@@ -61,8 +60,8 @@ impl StreamStatusTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        // TODO use single string arg
-        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, STREAM_STATUS)?;
+        let args = table_args.expect_all_positioned(STREAM_STATUS, Some(1))?;
+        let stream_name = string_value(&args[0])?;
 
         let engine = STREAM_STATUS.to_owned();
 
@@ -80,8 +79,7 @@ impl StreamStatusTable {
 
         Ok(Arc::new(StreamStatusTable {
             table_info,
-            arg_database_name,
-            arg_table_name,
+            stream_name,
         }))
     }
 }
@@ -107,10 +105,9 @@ impl Table for StreamStatusTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        Some(TableArgs::new_positioned(vec![
-            string_literal(self.arg_database_name.as_str()),
-            string_literal(self.arg_table_name.as_str()),
-        ]))
+        Some(TableArgs::new_positioned(vec![string_literal(
+            self.stream_name.as_str(),
+        )]))
     }
 
     fn read_data(
@@ -122,12 +119,7 @@ impl Table for StreamStatusTable {
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
-                StreamStatusDataSource::create(
-                    ctx.clone(),
-                    output,
-                    self.arg_database_name.to_owned(),
-                    self.arg_table_name.to_owned(),
-                )
+                StreamStatusDataSource::create(ctx.clone(), output, self.stream_name.to_owned())
             },
             1,
         )?;
@@ -148,25 +140,69 @@ impl TableFunction for StreamStatusTable {
 }
 
 struct StreamStatusDataSource {
-    finish: bool,
     ctx: Arc<dyn TableContext>,
-    arg_database_name: String,
-    arg_table_name: String,
+    finish: bool,
+    cat_name: String,
+    db_name: String,
+    stream_name: String,
 }
 
 impl StreamStatusDataSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        arg_database_name: String,
-        arg_table_name: String,
+        stream_name: String,
     ) -> Result<ProcessorPtr> {
+        let (cat_name, db_name, stream_name) =
+            Self::extract_fully_qualified_stream_name(ctx.as_ref(), stream_name.as_str())?;
         AsyncSourcer::create(ctx.clone(), output, StreamStatusDataSource {
             ctx,
             finish: false,
-            arg_table_name,
-            arg_database_name,
+            cat_name,
+            db_name,
+            stream_name,
         })
+    }
+
+    fn extract_fully_qualified_stream_name(
+        ctx: &dyn TableContext,
+        target: &str,
+    ) -> Result<(String, String, String)> {
+        let current_cat_name;
+        let current_db_name;
+        let stream_name_vec: Vec<&str> = target.split('.').collect();
+        let (cat, db, stream) = {
+            match stream_name_vec.len() {
+                1 => {
+                    current_cat_name = ctx.get_current_catalog();
+                    current_db_name = ctx.get_current_database();
+                    (
+                        current_cat_name,
+                        current_db_name,
+                        stream_name_vec[0].to_owned(),
+                    )
+                }
+                2 => {
+                    current_cat_name = ctx.get_current_catalog();
+                    (
+                        current_cat_name,
+                        stream_name_vec[0].to_owned(),
+                        stream_name_vec[1].to_owned(),
+                    )
+                }
+                3 => (
+                    stream_name_vec[0].to_owned(),
+                    stream_name_vec[1].to_owned(),
+                    stream_name_vec[2].to_owned(),
+                ),
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "Invalid stream name. Use the format '[catalog.][database.]stream'",
+                    ));
+                }
+            }
+        };
+        Ok((cat, db, stream))
     }
 }
 
@@ -185,13 +221,9 @@ impl AsyncSource for StreamStatusDataSource {
         let tenant_id = self.ctx.get_tenant();
         let tbl = self
             .ctx
-            .get_catalog(CATALOG_DEFAULT)
+            .get_catalog(&self.cat_name)
             .await?
-            .get_table(
-                tenant_id.as_str(),
-                self.arg_database_name.as_str(),
-                self.arg_table_name.as_str(),
-            )
+            .get_table(tenant_id.as_str(), &self.db_name, &self.stream_name)
             .await?;
 
         let tbl = StreamTable::try_from_table(tbl.as_ref())?;
