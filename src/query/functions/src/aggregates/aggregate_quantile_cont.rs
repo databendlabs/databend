@@ -45,11 +45,11 @@ use crate::BUILTIN_FUNCTIONS;
 const MEDIAN: u8 = 0;
 const QUANTILE_CONT: u8 = 1;
 
-struct QuantileContData {
-    pub levels: Vec<f64>,
+pub(crate) struct QuantileData {
+    pub(crate) levels: Vec<f64>,
 }
 
-impl FunctionData for QuantileContData {
+impl FunctionData for QuantileData {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -101,7 +101,7 @@ where
             function_data
                 .unwrap()
                 .as_any()
-                .downcast_ref_unchecked::<QuantileContData>()
+                .downcast_ref_unchecked::<QuantileData>()
         };
         if quantile_cont_data.levels.len() > 1 {
             let indices = quantile_cont_data
@@ -154,7 +154,7 @@ where
     }
 }
 
-fn get_levels(params: &Vec<Scalar>) -> Result<Vec<f64>> {
+pub(crate) fn get_levels(params: &Vec<Scalar>) -> Result<Vec<f64>> {
     let levels = if params.len() == 1 {
         let level: F64 = check_number(
             None,
@@ -233,7 +233,8 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                 >::try_create(
                     display_name, return_type, params, arguments[0].clone()
                 )
-                .with_function_data(Box::new(QuantileContData { levels }));
+                .with_function_data(Box::new(QuantileData { levels }))
+                .with_need_drop(true);
 
                 Ok(Arc::new(func))
             } else {
@@ -245,7 +246,8 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                 >::try_create(
                     display_name, return_type, params, arguments[0].clone()
                 )
-                .with_function_data(Box::new(QuantileContData { levels }));
+                .with_function_data(Box::new(QuantileData { levels }))
+                .with_need_drop(true);
 
                 Ok(Arc::new(func))
             }
