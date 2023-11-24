@@ -19,5 +19,5 @@ storages-common-cache = { path = "../../common/cache" }
 storages-common-index = { path = "../../common/index" }
 storages-common-table-meta = { path = "../table_meta" }
 
-log = { workspace = true }
 parquet = { workspace = true }
+log = { workspace = true }
