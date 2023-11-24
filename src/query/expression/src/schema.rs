@@ -1413,7 +1413,6 @@ impl From<&ArrowField> for TableDataType {
                         ArrowField::new(custom_name, data_type.as_ref().to_owned(), f.is_nullable);
                     (&a).into()
                 }
-                _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly
             _ => {
