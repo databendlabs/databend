@@ -21,8 +21,7 @@ use crate::ast::Statement;
 use crate::error::display_parser_error;
 use crate::input::Dialect;
 use crate::input::Input;
-use crate::parser::expr;
-use crate::parser::expr::subexpr;
+use crate::parser::expr::expr;
 use crate::parser::expr::values_with_placeholder;
 use crate::parser::statement::statement;
 use crate::parser::token::Token;
@@ -42,18 +41,18 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 /// Parse a SQL string into `Statement`s.
 #[minitrace::trace]
 pub fn parse_sql(sql_tokens: &[Token], dialect: Dialect) -> Result<(Statement, Option<String>)> {
-    let stmt = run_parser(sql_tokens, dialect, statement)?;
+    let stmt = run_parser(sql_tokens, dialect, false, statement)?;
     Ok((stmt.stmt, stmt.format))
 }
 
 /// Parse udf function into Expr
 pub fn parse_expr(sql_tokens: &[Token], dialect: Dialect) -> Result<Expr> {
-    run_parser(sql_tokens, dialect, expr::expr)
+    run_parser(sql_tokens, dialect, false, expr)
 }
 
 pub fn parse_comma_separated_exprs(sql_tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
-    run_parser(sql_tokens, dialect, |i| {
-        comma_separated_list0(subexpr(0))(i)
+    run_parser(sql_tokens, dialect, true, |i| {
+        comma_separated_list0(expr)(i)
     })
 }
 
@@ -61,28 +60,37 @@ pub fn parse_comma_separated_idents(
     sql_tokens: &[Token],
     dialect: Dialect,
 ) -> Result<Vec<Identifier>> {
-    run_parser(sql_tokens, dialect, |i| comma_separated_list1(ident)(i))
+    run_parser(sql_tokens, dialect, true, |i| {
+        comma_separated_list1(ident)(i)
+    })
 }
 
 pub fn parser_values_with_placeholder(
     sql_tokens: &[Token],
     dialect: Dialect,
 ) -> Result<Vec<Option<Expr>>> {
-    run_parser(sql_tokens, dialect, values_with_placeholder)
+    run_parser(sql_tokens, dialect, false, values_with_placeholder)
 }
 
 pub fn run_parser<O>(
     sql_tokens: &[Token],
     dialect: Dialect,
+    allow_partial: bool,
     mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
     let backtrace = Backtrace::new();
     match parser(Input(sql_tokens, dialect, &backtrace)) {
-        Ok((rest, expr)) if rest[0].kind == TokenKind::EOI => Ok(expr),
-        Ok((rest, _)) => Err(ErrorCode::SyntaxException(
-            "unable to parse rest of the sql".to_string(),
-        )
-        .set_span(transform_span(&rest[..1]))),
+        Ok((rest, res)) => {
+            let is_complete = rest[0].kind == TokenKind::EOI;
+            if is_complete || allow_partial {
+                Ok(res)
+            } else {
+                Err(
+                    ErrorCode::SyntaxException("unable to parse rest of the sql".to_string())
+                        .set_span(transform_span(&rest[..1])),
+                )
+            }
+        }
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             let source = sql_tokens[0].source;
             Err(ErrorCode::SyntaxException(display_parser_error(

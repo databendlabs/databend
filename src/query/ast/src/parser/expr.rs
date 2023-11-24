@@ -49,7 +49,7 @@ fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
 
 pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
     let values = comma_separated_list0(expr_or_placeholder);
-    map(rule! { ( "(" ~  #values ~ ")" ) }, |(_, v, _)| v)(i)
+    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v)(i)
 }
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
