@@ -1097,7 +1097,7 @@ pub fn column_ref(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, 
             rule! { #ident ~ "." ~ #column_id },
             |(ident2, _, ident3)| (None, Some(ident2), ident3),
         ),
-        map(rule! {  #column_id }, |ident3| (None, None, ident3)),
+        map(rule! { #column_id }, |ident3| (None, None, ident3)),
     ))(i)
 }
 
