@@ -206,26 +206,32 @@ impl Session {
 
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the `session.role` field in the HTTP query request body.
-    // When the `restricted` is true, this role will become the only role of the current session,
-    // only this role and its sub roles take effect.
     #[async_backtrace::framed]
-    pub async fn set_current_role_checked(
-        self: &Arc<Self>,
-        role_name: &str,
-        restricted: bool,
-    ) -> Result<()> {
+    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
         self.privilege_mgr
-            .set_current_role(Some(role_name.to_string()), restricted)
+            .set_current_role(Some(role_name.to_string()))
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn set_secondary_roles_checked(
+        self: &Arc<Self>,
+        role_names: Option<Vec<String>>,
+    ) -> Result<()> {
+        self.privilege_mgr.set_secondary_roles(role_names).await
     }
 
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
         self.privilege_mgr.get_current_role()
     }
 
+    pub fn get_secondary_roles(self: &Arc<Self>) -> Option<Vec<String>> {
+        self.privilege_mgr.get_secondary_roles()
+    }
+
     #[async_backtrace::framed]
     pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
-        self.privilege_mgr.set_current_role(None, false).await
+        self.privilege_mgr.set_current_role(None).await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,

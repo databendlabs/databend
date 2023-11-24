@@ -293,8 +293,8 @@ pub fn try_create_aggregate_avg_function(
             }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "AggregateSumFunction does not support type '{:?}'",
-            arguments[0]
+            "{} does not support type '{:?}'",
+            display_name, arguments[0]
         ))),
     })
 }

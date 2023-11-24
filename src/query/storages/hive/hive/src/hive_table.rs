@@ -42,6 +42,7 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::ProcessorPtr;
@@ -592,6 +593,7 @@ impl Table for HiveTable {
         _ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
+        _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {

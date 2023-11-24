@@ -27,6 +27,7 @@ use common_ast::ast::FileLocation;
 use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
+use common_ast::ast::Literal;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStageOptions;
 use common_ast::ast::SelectStmt;
@@ -52,6 +53,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
+use common_expression::types::NumberScalar;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
@@ -60,6 +62,8 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use common_expression::ORIGIN_VERSION_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
@@ -94,13 +98,20 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::CteScan;
+use crate::plans::EvalScalar;
+use crate::plans::Filter;
+use crate::plans::FunctionCall;
+use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -127,7 +138,7 @@ impl Binder {
         let catalog = CATALOG_DEFAULT;
         let database = "system";
         let tenant = self.ctx.get_tenant();
-        let table_meta: Arc<dyn Table> = self
+        let table_meta = self
             .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
             .await?;
         let table_index = self.metadata.write().add_table(
@@ -263,7 +274,7 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                new_bind_context.view_info = Some((database.clone(), table_name.to_string()));
+                new_bind_context.view_info = Some((database.clone(), table_name));
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
                         catalog,
@@ -296,6 +307,9 @@ impl Binder {
                 }
             }
             _ => {
+                if table_meta.engine() == "STREAM" {
+                    bind_context.allow_internal_columns(false);
+                }
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
@@ -313,6 +327,137 @@ impl Binder {
                 }
                 Ok((s_expr, bind_context))
             }
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn bind_lateral_table_function(
+        &mut self,
+        parent_context: &mut BindContext,
+        child: SExpr,
+        table_ref: &TableReference,
+    ) -> Result<(SExpr, BindContext)> {
+        match table_ref {
+            TableReference::TableFunction {
+                span,
+                name,
+                params,
+                named_params,
+                alias,
+                ..
+            } => {
+                let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+                if !func_name.name.eq_ignore_ascii_case("flatten") {
+                    return Err(ErrorCode::InvalidArgument(
+                        "lateral join only support `FLATTEN` function",
+                    )
+                    .set_span(*span));
+                }
+
+                let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
+
+                // build flatten function arguments.
+                let mut named_args: HashMap<String, Expr> = named_params
+                    .iter()
+                    .map(|(name, value)| (name.to_lowercase(), value.clone()))
+                    .collect::<HashMap<_, _>>();
+
+                let mut args = Vec::with_capacity(named_args.len());
+                let names = vec!["input", "path", "outer", "recursive", "mode"];
+                for name in names {
+                    if named_args.is_empty() {
+                        break;
+                    }
+                    match named_args.remove(name) {
+                        Some(val) => args.push(val),
+                        None => args.push(Expr::Literal {
+                            span: None,
+                            lit: Literal::Null,
+                        }),
+                    }
+                }
+                if !named_args.is_empty() {
+                    return Err(ErrorCode::InvalidArgument("Invalid param names").set_span(*span));
+                }
+
+                if !params.is_empty() {
+                    args.extend(params.clone());
+                }
+
+                // convert lateral join flatten to srf flatten function
+                let srf = Expr::FunctionCall {
+                    span: *span,
+                    distinct: false,
+                    name: Identifier::from_name("flatten".to_string()),
+                    args,
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                };
+                let srfs = vec![srf.clone()];
+                let srf_expr = self
+                    .bind_project_set(&mut bind_context, &srfs, child)
+                    .await?;
+
+                let mut items = Vec::with_capacity(6);
+                if let Some((_, flatten_scalar)) = bind_context.srfs.remove(&srf.to_string()) {
+                    // extract the tuple fields as columns.
+                    let fields = vec![
+                        "seq".to_string(),
+                        "key".to_string(),
+                        "path".to_string(),
+                        "index".to_string(),
+                        "value".to_string(),
+                        "this".to_string(),
+                    ];
+                    for (i, field) in fields.into_iter().enumerate() {
+                        let field_expr = ScalarExpr::FunctionCall(FunctionCall {
+                            span: srf.span(),
+                            func_name: "get".to_string(),
+                            params: vec![i + 1],
+                            arguments: vec![flatten_scalar.clone()],
+                        });
+                        let data_type = field_expr.data_type()?;
+                        let index = self
+                            .metadata
+                            .write()
+                            .add_derived_column(field.clone(), data_type.clone());
+
+                        let column_binding = ColumnBindingBuilder::new(
+                            field,
+                            index,
+                            Box::new(data_type),
+                            Visibility::Visible,
+                        )
+                        .build();
+                        bind_context.add_column_binding(column_binding);
+
+                        items.push(ScalarItem {
+                            scalar: field_expr,
+                            index,
+                        });
+                    }
+                } else {
+                    return Err(
+                        ErrorCode::Internal("bind `FLATTEN` function failed").set_span(*span)
+                    );
+                }
+                let eval_scalar = EvalScalar { items };
+                let new_expr =
+                    SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
+
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+
+                // add left table columns.
+                for column in &parent_context.columns {
+                    bind_context.add_column_binding(column.clone());
+                }
+
+                return Ok((new_expr, bind_context));
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -402,6 +547,7 @@ impl Binder {
             .get_property(&func_name.name)
             .map(|p| p.kind == FunctionKind::SRF)
             .unwrap_or(false)
+            && !func_name.name.eq_ignore_ascii_case("flatten")
         {
             // If it is a set-returning function, we bind it as a subquery.
             let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
@@ -569,6 +715,7 @@ impl Binder {
                 params,
                 named_params,
                 alias,
+                ..
             } => {
                 self.bind_table_function(bind_context, span, name, params, named_params, alias)
                     .await
@@ -789,20 +936,32 @@ impl Binder {
                     result_ctx = ctx;
                 }
                 _ => {
-                    let (right_expr, right_ctx) =
-                        self.bind_single_table(&mut result_ctx, &join.right).await?;
-                    let (join_expr, ctx) = self
-                        .bind_join(
-                            current_ctx,
-                            result_ctx,
-                            right_ctx,
-                            result_expr,
-                            right_expr,
-                            join,
-                        )
-                        .await?;
-                    result_expr = join_expr;
-                    result_ctx = ctx;
+                    if join.right.is_lateral_table_function() {
+                        let (expr, ctx) = self
+                            .bind_lateral_table_function(
+                                &mut result_ctx,
+                                result_expr.clone(),
+                                &join.right,
+                            )
+                            .await?;
+                        result_expr = expr;
+                        result_ctx = ctx;
+                    } else {
+                        let (right_expr, right_ctx) =
+                            self.bind_single_table(&mut result_ctx, &join.right).await?;
+                        let (join_expr, ctx) = self
+                            .bind_join(
+                                current_ctx,
+                                result_ctx,
+                                right_ctx,
+                                result_expr,
+                                right_expr,
+                                join,
+                            )
+                            .await?;
+                        result_expr = join_expr;
+                        result_ctx = ctx;
+                    }
                 }
             }
         }
@@ -960,10 +1119,25 @@ impl Binder {
         table_index: IndexType,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-        let columns = self.metadata.read().columns_by_table_index(table_index);
+
         let table = self.metadata.read().table(table_index).clone();
-        let statistics_provider = table.table().column_statistics_provider().await?;
+        let table_name = table.name();
+        let table = table.table();
+        let statistics_provider = table.column_statistics_provider().await?;
+        let table_version = if table.engine() == "STREAM" {
+            let options = table.options();
+            let table_version = options
+                .get("table_version")
+                .ok_or(ErrorCode::Internal("table version must be set in stream"))?
+                .parse::<u64>()?;
+            Some(table_version)
+        } else {
+            None
+        };
+
         let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
+        let mut predicates = Vec::new();
+        let columns = self.metadata.read().columns_by_table_index(table_index);
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -987,12 +1161,51 @@ impl Binder {
                             Visibility::Visible
                         },
                     )
-                    .table_name(Some(table.name().to_string()))
+                    .table_name(Some(table_name.to_string()))
                     .database_name(Some(database_name.to_string()))
                     .table_index(Some(*table_index))
                     .column_position(*column_position)
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
+
+                    // For select stream.
+                    if let Some(table_version) = table_version {
+                        match column_name.to_lowercase().as_str() {
+                            ORIGIN_BLOCK_ID_COL_NAME => {
+                                let predicate = ScalarExpr::FunctionCall(FunctionCall {
+                                    span: None,
+                                    func_name: "is_not_null".to_string(),
+                                    params: vec![],
+                                    arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                        span: None,
+                                        column: column_binding.clone(),
+                                    })],
+                                });
+                                predicates.push(predicate);
+                            }
+                            ORIGIN_VERSION_COL_NAME => {
+                                let predicate = ScalarExpr::FunctionCall(FunctionCall {
+                                    span: None,
+                                    func_name: "lt".to_string(),
+                                    params: vec![],
+                                    arguments: vec![
+                                        ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                            span: None,
+                                            column: column_binding.clone(),
+                                        }),
+                                        ScalarExpr::ConstantExpr(ConstantExpr {
+                                            span: None,
+                                            value: Scalar::Number(NumberScalar::UInt64(
+                                                table_version,
+                                            )),
+                                        }),
+                                    ],
+                                });
+                                predicates.push(predicate);
+                            }
+                            _ => {}
+                        }
+                    }
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
@@ -1008,23 +1221,43 @@ impl Binder {
             }
         }
 
-        let stat = table.table().table_statistics().await?;
+        let stat = table.table_statistics().await?;
+        let scan = SExpr::create_leaf(Arc::new(
+            Scan {
+                table_index,
+                columns: columns.into_iter().map(|col| col.index()).collect(),
+                statistics: Statistics {
+                    statistics: stat,
+                    col_stats,
+                },
+                ..Default::default()
+            }
+            .into(),
+        ));
 
-        Ok((
-            SExpr::create_leaf(Arc::new(
-                Scan {
-                    table_index,
-                    columns: columns.into_iter().map(|col| col.index()).collect(),
-                    statistics: Statistics {
-                        statistics: stat,
-                        col_stats,
-                    },
-                    ..Default::default()
-                }
-                .into(),
-            )),
-            bind_context,
-        ))
+        // not(is_not_null(_origin_block_id) and _origin_version<base_table_version)
+        let s_expr = if !predicates.is_empty() {
+            assert!(predicates.len() == 2);
+            let filter_plan = Filter {
+                predicates: vec![ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "not".to_string(),
+                    params: vec![],
+                    arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and".to_string(),
+                        params: vec![],
+                        arguments: vec![predicates[0].clone(), predicates[1].clone()],
+                    })],
+                })],
+            };
+
+            SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(scan))
+        } else {
+            scan
+        };
+
+        Ok((s_expr, bind_context))
     }
 
     #[async_backtrace::framed]

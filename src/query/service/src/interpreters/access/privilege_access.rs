@@ -153,6 +153,17 @@ impl AccessChecker for PrivilegeAccess {
                             )))
                         };
                     }
+                    Some(RewriteKind::ShowStreams(database)) => {
+                        let has_priv = has_priv(&tenant, database, None, grant_set).await?;
+                        return if has_priv {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission denied, user {} don't have privilege for database {}",
+                                identity, database
+                            )))
+                        };
+                    }
                     Some(RewriteKind::ShowColumns(database, table)) => {
                         let has_priv = has_priv(&tenant, database, Some(table), grant_set).await?;
                         return if has_priv {
@@ -585,6 +596,22 @@ impl AccessChecker for PrivilegeAccess {
                 )
                     .await?;
             }
+            Plan::CreateStream(plan) => {
+                self.validate_access(
+                    &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                    vec![UserPrivilegeType::Create],
+                    true,
+                )
+                    .await?;
+            }
+            Plan::DropStream(plan) => {
+                self.validate_access(
+                    &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                    vec![UserPrivilegeType::Drop],
+                    true,
+                )
+                    .await?;
+            }
             Plan::CreateUser(_) => {
                 self.validate_access(
                     &GrantObject::Global,
@@ -721,6 +748,7 @@ impl AccessChecker for PrivilegeAccess {
             // Note: No need to check privileges
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
             Plan::SetRole(_) => {}
+            Plan::SetSecondaryRoles(_) => {}
             Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
                 let stage_name = &plan.stage.stage_name;

@@ -106,6 +106,7 @@ impl PipelineBuilder {
             right_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
+            self.main_pipeline.plans_scope.clone(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
@@ -124,7 +125,7 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-        self.pipelines.push(right_res.main_pipeline);
+        self.pipelines.push(right_res.main_pipeline.finalize());
         self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }
@@ -158,6 +159,7 @@ impl PipelineBuilder {
             build_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
+            self.main_pipeline.plans_scope.clone(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
         let mut build_res = build_side_builder.finalize(build)?;
@@ -212,7 +214,7 @@ impl PipelineBuilder {
             build_res.main_pipeline.add_sink(create_sink_processor)?;
         }
 
-        self.pipelines.push(build_res.main_pipeline);
+        self.pipelines.push(build_res.main_pipeline.finalize());
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }
@@ -403,6 +405,7 @@ impl PipelineBuilder {
             left_side_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
+            self.main_pipeline.plans_scope.clone(),
         );
         left_side_builder.cte_state = self.cte_state.clone();
         let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
@@ -423,7 +426,8 @@ impl PipelineBuilder {
             );
             Ok(ProcessorPtr::create(transform))
         })?;
-        self.pipelines.push(left_side_pipeline.main_pipeline);
+        self.pipelines
+            .push(left_side_pipeline.main_pipeline.finalize());
         self.pipelines.extend(left_side_pipeline.sources_pipelines);
         Ok(())
     }

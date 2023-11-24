@@ -37,6 +37,8 @@ const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
+const MISSING_FIELD_AS: &str = "missing_field_as";
+const NULL_FIELD_AS: &str = "null_field_as";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
@@ -174,7 +176,13 @@ impl FileFormatParams {
             }
             StageFileFormatType::NdJson => {
                 let compression = ast.take_compression()?;
-                FileFormatParams::NdJson(NdJsonFileFormatParams { compression })
+                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
+                let null_field_as = ast.options.remove(NULL_FIELD_AS);
+                FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
+                    compression,
+                    missing_field_as.as_deref(),
+                    null_field_as.as_deref(),
+                )?)
             }
             StageFileFormatType::Parquet => FileFormatParams::Parquet(ParquetFileFormatParams {}),
             StageFileFormatType::Csv => {
@@ -380,6 +388,55 @@ impl Default for XmlFileFormatParams {
     }
 }
 
+/// used for both `missing_field_as` and `null_field_as`
+/// for extensibility, it is stored as PB string in meta
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JsonNullAs {
+    /// for `missing_field_as` only, and is default for it for safety,
+    /// in case of wrong field names when creating table.
+    Error,
+    /// only valid for nullable column
+    Null,
+    /// defined when creating table
+    FieldDefault,
+    TypeDefault,
+}
+
+impl JsonNullAs {
+    fn parse(s: Option<&str>, option_name: &str, default: Self) -> Result<Self> {
+        match s {
+            Some(v) => v.parse::<JsonNullAs>().map_err(|_| {
+                ErrorCode::InvalidArgument(format!("invalid value ({v}) for {option_name}"))
+            }),
+            None => Ok(default),
+        }
+    }
+}
+impl FromStr for JsonNullAs {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "error" => Ok(JsonNullAs::Error),
+            "null" => Ok(JsonNullAs::Null),
+            "field_default" => Ok(JsonNullAs::FieldDefault),
+            "type_default" => Ok(JsonNullAs::TypeDefault),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Display for JsonNullAs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JsonNullAs::Error => write!(f, "error"),
+            JsonNullAs::Null => write!(f, "null"),
+            JsonNullAs::FieldDefault => write!(f, "field_default"),
+            JsonNullAs::TypeDefault => write!(f, "type_default"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonFileFormatParams {
     pub compression: StageFileCompression,
@@ -405,12 +462,39 @@ impl Default for JsonFileFormatParams {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NdJsonFileFormatParams {
     pub compression: StageFileCompression,
+    pub missing_field_as: JsonNullAs,
+    pub null_field_as: JsonNullAs,
+}
+
+impl NdJsonFileFormatParams {
+    pub fn try_create(
+        compression: StageFileCompression,
+        missing_field_as: Option<&str>,
+        null_field_as: Option<&str>,
+    ) -> Result<Self> {
+        let missing_field_as =
+            JsonNullAs::parse(missing_field_as, MISSING_FIELD_AS, JsonNullAs::Error)?;
+        let null_field_as =
+            JsonNullAs::parse(null_field_as, MISSING_FIELD_AS, JsonNullAs::FieldDefault)?;
+        if matches!(null_field_as, JsonNullAs::Error) {
+            return Err(ErrorCode::InvalidArgument(
+                "NULL_FIELD_AS cannot be `error`",
+            ));
+        }
+        Ok(Self {
+            compression,
+            missing_field_as,
+            null_field_as,
+        })
+    }
 }
 
 impl Default for NdJsonFileFormatParams {
     fn default() -> Self {
         NdJsonFileFormatParams {
             compression: StageFileCompression::None,
+            missing_field_as: JsonNullAs::Error,
+            null_field_as: JsonNullAs::FieldDefault,
         }
     }
 }

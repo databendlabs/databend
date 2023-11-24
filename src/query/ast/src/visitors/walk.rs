@@ -287,6 +287,18 @@ pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a Tim
     }
 }
 
+pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
+    match point {
+        StreamPoint::AtStream { database, name } => {
+            if let Some(database) = database {
+                visitor.visit_identifier(database);
+            }
+
+            visitor.visit_identifier(name);
+        }
+    }
+}
+
 pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a JoinCondition) {
     match join_cond {
         JoinCondition::On(expr) => visitor.visit_expr(expr),
@@ -373,6 +385,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             is_default,
             role_name,
         } => visitor.visit_set_role(*is_default, role_name),
+        Statement::SetSecondaryRoles { option } => visitor.visit_set_secondary_roles(option),
         Statement::ShowCatalogs(stmt) => visitor.visit_show_catalogs(stmt),
         Statement::ShowCreateCatalog(stmt) => visitor.visit_show_create_catalog(stmt),
         Statement::CreateCatalog(stmt) => visitor.visit_create_catalog(stmt),
@@ -404,6 +417,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
+        Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
+        Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),
+        Statement::DescribeStream(stmt) => visitor.visit_describe_stream(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),

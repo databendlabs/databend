@@ -86,6 +86,10 @@ pub enum Statement {
         role_name: String,
     },
 
+    SetSecondaryRoles {
+        option: SecondaryRolesOption,
+    },
+
     Insert(InsertStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
@@ -135,6 +139,12 @@ pub enum Statement {
     CreateView(CreateViewStmt),
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
+
+    // Streams
+    CreateStream(CreateStreamStmt),
+    DropStream(DropStreamStmt),
+    ShowStreams(ShowStreamsStmt),
+    DescribeStream(DescribeStreamStmt),
 
     // Indexes
     CreateIndex(CreateIndexStmt),
@@ -407,6 +417,13 @@ impl Display for Statement {
                     write!(f, "{role_name}")?;
                 }
             }
+            Statement::SetSecondaryRoles { option } => {
+                write!(f, "SET SECONDARY ROLES ")?;
+                match option {
+                    SecondaryRolesOption::None => write!(f, "NONE")?,
+                    SecondaryRolesOption::All => write!(f, "ALL")?,
+                }
+            }
             Statement::ShowCatalogs(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::CreateCatalog(stmt) => write!(f, "{stmt}")?,
@@ -439,6 +456,10 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
+            Statement::DropStream(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,

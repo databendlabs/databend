@@ -89,6 +89,14 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_builder(builder)
     }
 
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        Num::try_downcast_owned_builder(builder)
+    }
+
+    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        None
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Num::upcast_scalar(scalar, Num::default_decimal_size())
     }
@@ -291,6 +299,8 @@ pub trait Decimal:
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
 
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>>;
+
     fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self>;
     fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>>;
 
@@ -477,6 +487,13 @@ impl Decimal for i128 {
         }
     }
 
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
     fn try_downcast_scalar<'a>(scalar: &DecimalScalar) -> Option<Self> {
         match scalar {
             DecimalScalar::Decimal128(val, _) => Some(*val),
@@ -624,6 +641,13 @@ impl Decimal for i256 {
     }
 
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
         match builder {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
             _ => None,

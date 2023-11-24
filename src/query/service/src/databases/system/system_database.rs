@@ -49,6 +49,7 @@ use common_storages_system::QuerySummaryTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
 use common_storages_system::StagesTable;
+use common_storages_system::StreamsTable;
 use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
@@ -87,6 +88,7 @@ impl SystemDatabase {
             TablesTableWithHistory::create(sys_db_meta.next_table_id()),
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTable::create(sys_db_meta.next_table_id()),
+            StreamsTable::create(sys_db_meta.next_table_id()),
             Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
             ProcessesTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),

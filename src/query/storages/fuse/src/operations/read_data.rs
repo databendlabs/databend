@@ -19,6 +19,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,15 +47,17 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         projection: Projection,
         query_internal_columns: bool,
+        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
-        let table_schema = self.table_info.schema();
+        let table_schema = self.schema_with_stream();
         BlockReader::create(
             ctx,
             self.operator.clone(),
             table_schema,
             projection,
             query_internal_columns,
+            update_stream_columns,
             put_cache,
         )
     }
@@ -69,10 +72,11 @@ impl FuseTable {
         self.create_block_reader(
             ctx,
             PushDownInfo::projection_of_push_downs(
-                &self.table_info.schema(),
+                &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
             plan.query_internal_columns,
+            plan.update_stream_columns,
             put_cache,
         )
     }
@@ -160,7 +164,7 @@ impl FuseTable {
 
         if !lazy_init_segments.is_empty() {
             let table = self.clone();
-            let table_info = self.table_info.clone();
+            let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
             let dal = self.operator.clone();
@@ -168,7 +172,7 @@ impl FuseTable {
             // TODO: need refactor
             pipeline.set_on_init(move || {
                 let table = table.clone();
-                let table_info = table_info.clone();
+                let table_schema = table_schema.clone();
                 let ctx = query_ctx.clone();
                 let dal = dal.clone();
                 let push_downs = push_downs.clone();
@@ -180,7 +184,7 @@ impl FuseTable {
                             ctx,
                             dal,
                             push_downs,
-                            table_info,
+                            table_schema,
                             lazy_init_segments,
                             0,
                         )

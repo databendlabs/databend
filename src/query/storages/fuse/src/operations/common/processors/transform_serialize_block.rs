@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::ProgressValues;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -74,7 +75,7 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<Self> {
-        let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
+        let source_schema = Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;

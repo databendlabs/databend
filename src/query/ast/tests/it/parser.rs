@@ -119,6 +119,10 @@ fn test_statement() {
         r#"drop view v;"#,
         r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
+        r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
+        r#"show full streams from default.test2 like 's%';"#,
+        r#"describe stream test2.s2;"#,
+        r#"drop stream if exists test2.s2;"#,
         r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
@@ -670,6 +674,7 @@ fn test_query() {
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
         r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
+        r#"select * from t, lateral flatten(input => u.col) f"#,
     ];
 
     for case in cases {

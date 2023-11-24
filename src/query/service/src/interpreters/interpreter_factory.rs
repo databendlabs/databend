@@ -51,7 +51,9 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
+use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::DropShareInterpreter;
+use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::UpdateInterpreter;
@@ -236,6 +238,16 @@ impl InterpreterFactory {
                 *drop_view.clone(),
             )?)),
 
+            // Streams
+            Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
+                ctx,
+                *create_stream.clone(),
+            )?)),
+            Plan::DropStream(drop_stream) => Ok(Arc::new(DropStreamInterpreter::try_create(
+                ctx,
+                *drop_stream.clone(),
+            )?)),
+
             // Indexes
             Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
                 ctx,
@@ -306,6 +318,10 @@ impl InterpreterFactory {
                 ctx,
                 *set_role.clone(),
             )?)),
+            Plan::SetSecondaryRoles(set_secondary_roles) => Ok(Arc::new(
+                SetSecondaryRolesInterpreter::try_create(ctx, *set_secondary_roles.clone())?,
+            )),
+
             Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages

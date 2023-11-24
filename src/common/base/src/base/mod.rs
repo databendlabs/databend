@@ -22,6 +22,7 @@ mod singleton_instance;
 mod stop_handle;
 mod stoppable;
 mod string;
+mod take_mut;
 mod uniq_id;
 
 pub use net::get_free_tcp_port;
@@ -46,6 +47,7 @@ pub use string::mask_connection_info;
 pub use string::mask_string;
 pub use string::unescape_for_key;
 pub use string::unescape_string;
+pub use take_mut::take_mut;
 pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;

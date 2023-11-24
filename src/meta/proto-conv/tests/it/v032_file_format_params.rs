@@ -14,6 +14,7 @@
 
 use common_meta_app as mt;
 use common_meta_app::principal::CsvFileFormatParams;
+use common_meta_app::principal::JsonNullAs;
 use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::TsvFileFormatParams;
 use minitrace::func_name;
@@ -87,6 +88,8 @@ fn test_decode_v32_ndjson_file_format_params() -> anyhow::Result<()> {
     let want = || {
         mt::principal::FileFormatParams::NdJson(NdJsonFileFormatParams {
             compression: StageFileCompression::Gzip,
+            missing_field_as: JsonNullAs::Error,
+            null_field_as: JsonNullAs::FieldDefault,
         })
     };
     common::test_pb_from_to(func_name!(), want())?;

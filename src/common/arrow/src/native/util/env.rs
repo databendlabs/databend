@@ -47,12 +47,10 @@ pub fn check_patas_env() -> bool {
     check_env(PATAS_ENV)
 }
 
-#[allow(dead_code)]
 pub fn remove_env(env: &str) {
     env::remove_var(env);
 }
 
-#[allow(dead_code)]
 pub fn remove_all_env() {
     remove_env(DICT_ENV);
     remove_env(RLE_ENV);
@@ -61,27 +59,22 @@ pub fn remove_all_env() {
     remove_env(PATAS_ENV);
 }
 
-#[allow(dead_code)]
 pub fn set_dict_env() {
     env::set_var(DICT_ENV, "1");
 }
 
-#[allow(dead_code)]
 pub fn set_rle_env() {
     env::set_var(RLE_ENV, "1");
 }
 
-#[allow(dead_code)]
 pub fn set_freq_env() {
     env::set_var(FREQ_ENV, "1");
 }
 
-#[allow(dead_code)]
 pub fn set_bitpack_env() {
     env::set_var(BITPACK_ENV, "1");
 }
 
-#[allow(dead_code)]
 pub fn set_patas_env() {
     env::set_var(PATAS_ENV, "1");
 }

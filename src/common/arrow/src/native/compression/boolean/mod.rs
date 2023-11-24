@@ -30,7 +30,6 @@ use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::native::read::read_basic::read_compress_header;
 use crate::native::read::NativeReadBuf;
-use crate::native::util::env::check_rle_env;
 use crate::native::write::WriteOptions;
 
 pub fn compress_boolean(
@@ -211,7 +210,7 @@ fn choose_compressor(
 ) -> BooleanCompressor {
     #[cfg(debug_assertions)]
     {
-        if check_rle_env()
+        if crate::native::util::env::check_rle_env()
             && !write_options
                 .forbidden_compressions
                 .contains(&Compression::Rle)

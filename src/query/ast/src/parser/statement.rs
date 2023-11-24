@@ -40,6 +40,7 @@ use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
+use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
@@ -392,6 +393,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, opt_is_default, _, role_name)| Statement::SetRole {
             is_default: opt_is_default.is_some(),
             role_name,
+        },
+    );
+
+    let set_secondary_roles = map(
+        rule! {
+            SET ~ SECONDARY ~ ROLES ~ (ALL | NONE)
+        },
+        |(_, _, _, token)| {
+            let option = match token.kind {
+                TokenKind::ALL => SecondaryRolesOption::All,
+                TokenKind::NONE => SecondaryRolesOption::None,
+                _ => unreachable!(),
+            };
+            Statement::SetSecondaryRoles { option }
         },
     );
 
@@ -831,6 +846,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -1644,7 +1660,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #show_indexes : "`SHOW INDEXES`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
@@ -1696,6 +1711,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            | #stream_table
         ),
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
@@ -1719,6 +1735,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
+            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
         ),
         rule!(
             #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
@@ -2870,7 +2888,7 @@ pub fn show_options(i: Input) -> IResult<ShowOptions> {
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #option_to_string )*
         },
         |opts| {
             BTreeMap::from_iter(
@@ -2884,7 +2902,7 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident ~ "=" ~ #parameter_to_string ) ~ ("," ~ #ident ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
         },
         |(key, _, value, opts)| {
             let mut options = BTreeMap::from_iter(
@@ -2894,6 +2912,15 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
             options.insert(key.name.to_lowercase(), value);
             options
         },
+    )(i)
+}
+
+fn option_to_string(i: Input) -> IResult<String> {
+    let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+
+    rule! (
+        #bool_to_string
+        | #parameter_to_string
     )(i)
 }
 
