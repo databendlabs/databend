@@ -158,7 +158,6 @@ impl<'a> AggregateRewriter<'a> {
         Self {
             bind_context,
             metadata,
-            in_window: false,
         }
     }
 
