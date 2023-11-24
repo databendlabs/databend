@@ -612,7 +612,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             },
             // Lift level up the identifier
             ExprElement::DotAccess { key } => {
-                let mut is_map_acess = true;
+                let mut is_map_access = true;
                 if let Expr::ColumnRef {
                     database,
                     table,
@@ -621,14 +621,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 } = &mut lhs
                 {
                     if let ColumnID::Name(name) = column {
-                        is_map_acess = false;
+                        is_map_access = false;
                         *database = table.take();
                         *table = Some(name.clone());
                         *column = key.clone();
                     }
                 }
 
-                if is_map_acess {
+                if is_map_access {
                     match key {
                         ColumnID::Name(id) => Expr::MapAccess {
                             span: transform_span(elem.span.0),
