@@ -1087,9 +1087,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 /// Parse one to three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
-pub fn column_ref(
-    i: Input,
-) -> IResult<(Option<Identifier>, Option<Identifier>, ColumnID)> {
+pub fn column_ref(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, ColumnID)> {
     alt((
         map(
             rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
