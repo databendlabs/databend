@@ -173,7 +173,7 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
     )(i)
 }
 
-/// Parse one two three idents separated by a dot, fulfilling from the right.
+/// Parse one to three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
 pub fn dot_separated_idents_1_to_3(
