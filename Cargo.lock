@@ -3085,6 +3085,7 @@ dependencies = [
  "common-meta-app",
  "common-metrics",
  "common-pipeline-core",
+ "common-pipeline-sources",
  "common-sql",
  "common-storages-fuse",
  "futures",
