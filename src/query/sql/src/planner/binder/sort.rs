@@ -41,6 +41,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::UDFServerCall;
+use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
 use crate::WindowChecker;
@@ -321,8 +322,10 @@ impl Binder {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
                 aggregate @ ScalarExpr::AggregateFunction(_) => {
+                    let mut aggregate = aggregate.clone();
                     let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(aggregate)
+                    rewriter.visit(&mut aggregate)?;
+                    Ok(aggregate)
                 }
                 ScalarExpr::LambdaFunction(lambda_func) => {
                     let args = lambda_func

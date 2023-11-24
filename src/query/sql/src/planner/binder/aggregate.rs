@@ -37,25 +37,18 @@ use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
+use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::GroupingSets;
-use crate::plans::LagLeadFunction;
-use crate::plans::LambdaFunc;
-use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::UDFServerCall;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
-use crate::plans::WindowFunc;
-use crate::plans::WindowFuncType;
-use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -158,9 +151,6 @@ pub struct AggregateInfo {
 pub(super) struct AggregateRewriter<'a> {
     pub bind_context: &'a mut BindContext,
     pub metadata: MetadataRef,
-    // If the aggregate function is in the arguments of window function,
-    // ignore it here, it will be processed later when analyzing window.
-    in_window: bool,
 }
 
 impl<'a> AggregateRewriter<'a> {
@@ -268,7 +258,7 @@ impl<'a> AggregateRewriter<'a> {
         Ok(replaced_agg.into())
     }
 
-    fn replace_grouping(&mut self, function: &FunctionCall) -> Result<ScalarExpr> {
+    fn replace_grouping(&mut self, function: &FunctionCall) -> Result<FunctionCall> {
         let agg_info = &mut self.bind_context.aggregate_info;
         if agg_info.grouping_sets.is_none() {
             return Err(ErrorCode::SemanticError(
@@ -311,24 +301,28 @@ impl<'a> AggregateRewriter<'a> {
             })],
         };
 
-        Ok(replaced_func.into())
+        Ok(replaced_func)
     }
 }
 
 impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
-    fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) -> Result<()> {
-        *aggregate = self.replace_aggregate_function(aggregate)?;
-        Ok(())
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if let ScalarExpr::AggregateFunction(aggregate) = expr {
+            *expr = self.replace_aggregate_function(aggregate)?;
+            Ok(())
+        } else {
+            walk_expr_mut(self, expr)
+        }
     }
 
     fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {
         if func.func_name.eq_ignore_ascii_case("grouping") {
-            *func = self.replace_grouping(func);
+            *func = self.replace_grouping(func)?;
         }
         Ok(())
     }
 
-    fn visit_subquery_expr(&mut self, subquery: &'a mut crate::plans::SubqueryExpr) -> Result<()> {
+    fn visit_subquery_expr(&mut self, _subquery: &'a mut crate::plans::SubqueryExpr) -> Result<()> {
         // TODO(leiysky): should we recursively process subquery here?
         Ok(())
     }
@@ -344,8 +338,7 @@ impl Binder {
     ) -> Result<()> {
         for item in select_list.items.iter_mut() {
             let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-            let new_scalar = rewriter.visit(&item.scalar)?;
-            item.scalar = new_scalar;
+            rewriter.visit(&mut item.scalar)?;
         }
 
         Ok(())

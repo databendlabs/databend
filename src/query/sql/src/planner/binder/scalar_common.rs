@@ -26,7 +26,6 @@ use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
-use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>
@@ -175,10 +174,6 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
 
 /// check if the scalar could be constructed by the columns
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
-    if columns.contains(scalar) {
-        return true;
-    }
-
     struct PruneVisitor<'a> {
         columns: &'a HashSet<ScalarExpr>,
         can_prune: bool,
@@ -194,6 +189,14 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     }
 
     impl<'a> Visitor<'a> for PruneVisitor<'a> {
+        fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+            if self.columns.contains(expr) {
+                return Ok(());
+            }
+
+            walk_expr(self, expr)
+        }
+
         fn visit_bound_column_ref(&mut self, _: &'a BoundColumnRef) -> Result<()> {
             self.can_prune = false;
             Ok(())

@@ -586,8 +586,8 @@ pub struct UDFServerCall {
 }
 
 pub trait Visitor<'a>: Sized {
-    fn visit(&mut self, a: &'a ScalarExpr) -> Result<()> {
-        walk_expr(self, a)?;
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        walk_expr(self, expr)?;
         Ok(())
     }
 
@@ -674,8 +674,8 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
 }
 
 pub trait VisitorMut<'a>: Sized {
-    fn visit(&mut self, a: &'a mut ScalarExpr) -> Result<()> {
-        walk_expr_mut(self, a)?;
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        walk_expr_mut(self, expr)?;
         Ok(())
     }
     fn visit_bound_column_ref(&mut self, _col: &'a mut BoundColumnRef) -> Result<()> {
