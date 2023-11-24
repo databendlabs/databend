@@ -122,10 +122,10 @@ impl PrivilegeAccess {
         session.validate_privilege(object, privileges).await
     }
 
-    async fn check_udf_priv(&self, udf_names: HashSet<String>) -> Result<()> {
+    async fn check_udf_priv(&self, udf_names: HashSet<&String>) -> Result<()> {
         for udf in udf_names {
             self.validate_access(
-                &GrantObject::UDF(udf),
+                &GrantObject::UDF(udf.clone()),
                 vec![UserPrivilegeType::Usage],
                 false,
             )
@@ -186,7 +186,7 @@ impl AccessChecker for PrivilegeAccess {
                         if !udfs.is_empty() {
                             for udf in udfs {
                                 self.validate_access(
-                                    &GrantObject::UDF(udf),
+                                    &GrantObject::UDF(udf.clone()),
                                     vec![UserPrivilegeType::Usage],
                                     false,
                                 ).await?
@@ -572,7 +572,7 @@ impl AccessChecker for PrivilegeAccess {
                         if !udfs.is_empty() {
                             for udf in udfs {
                                 self.validate_access(
-                                    &GrantObject::UDF(udf),
+                                    &GrantObject::UDF(udf.clone()),
                                     vec![UserPrivilegeType::Usage],
                                     false,
                                 ).await?
@@ -629,7 +629,7 @@ impl AccessChecker for PrivilegeAccess {
                             if !udfs.is_empty() {
                                 for udf in udfs {
                                     self.validate_access(
-                                        &GrantObject::UDF(udf),
+                                        &GrantObject::UDF(udf.clone()),
                                         vec![UserPrivilegeType::Usage],
                                         false,
                                     ).await?
@@ -667,7 +667,7 @@ impl AccessChecker for PrivilegeAccess {
                             if !udfs.is_empty() {
                                 for udf in udfs {
                                     self.validate_access(
-                                        &GrantObject::UDF(udf),
+                                        &GrantObject::UDF(udf.clone()),
                                         vec![UserPrivilegeType::Usage],
                                         false,
                                     ).await?

@@ -2104,7 +2104,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     let udf_privs = map(
         rule! {
-        USAGE ~ ON ~ UDF ~ #ident
+            USAGE ~ ON ~ UDF ~ #ident
         },
         |(_, _, _, udf)| AccountMgrSource::Privs {
             privileges: vec![UserPrivilegeType::Usage],
@@ -2114,7 +2114,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     let udf_all_privs = map(
         rule! {
-        ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+            ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
         },
         |(_, _, _, _, udf)| AccountMgrSource::Privs {
             privileges: vec![UserPrivilegeType::Usage],
