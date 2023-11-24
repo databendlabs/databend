@@ -308,16 +308,22 @@ impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::AggregateFunction(aggregate) = expr {
             *expr = self.replace_aggregate_function(aggregate)?;
-            Ok(())
-        } else {
-            walk_expr_mut(self, expr)
+            return Ok(());
         }
+
+        walk_expr_mut(self, expr)
     }
 
     fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {
         if func.func_name.eq_ignore_ascii_case("grouping") {
             *func = self.replace_grouping(func)?;
+            return Ok(());
         }
+
+        for expr in &mut func.arguments {
+            self.visit(expr)?;
+        }
+
         Ok(())
     }
 
