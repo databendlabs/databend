@@ -21,7 +21,6 @@ use common_exception::Result;
 use educe::Educe;
 
 use super::RelationalProperty;
-use crate::binder::Finder;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::StatInfo;
@@ -31,6 +30,8 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
+use crate::plans::UDFLambdaCall;
+use crate::plans::UDFServerCall;
 use crate::plans::Visitor;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
@@ -204,7 +205,7 @@ impl SExpr {
         true
     }
 
-    pub fn get_udfs(&self) -> Result<HashSet<String>> {
+    pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
 
         match self.plan.as_ref() {
@@ -219,14 +220,14 @@ impl SExpr {
                 if let Some(push_down_predicates) = push_down_predicates {
                     for push_down_predicate in push_down_predicates {
                         get_udf_names(push_down_predicate)?.iter().for_each(|udf| {
-                            udfs.insert(udf.clone());
+                            udfs.insert(*udf);
                         });
                     }
                 }
                 if let Some(prewhere) = prewhere {
                     for predicate in &prewhere.predicates {
                         get_udf_names(predicate)?.iter().for_each(|udf| {
-                            udfs.insert(udf.clone());
+                            udfs.insert(*udf);
                         });
                     }
                 }
@@ -238,7 +239,7 @@ impl SExpr {
                     }
                     for selection in &agg_index.selection {
                         get_udf_names(&selection.scalar)?.iter().for_each(|udf| {
-                            udfs.insert(udf.clone());
+                            udfs.insert(*udf);
                         });
                     }
                 }
@@ -255,43 +256,43 @@ impl SExpr {
             RelOperator::Join(op) => {
                 for left in &op.left_conditions {
                     get_udf_names(left)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
                 for right in &op.right_conditions {
                     get_udf_names(right)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
                 for non in &op.non_equi_conditions {
                     get_udf_names(non)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
             RelOperator::EvalScalar(op) => {
                 for item in &op.items {
                     get_udf_names(&item.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
             RelOperator::Filter(op) => {
                 for predicate in &op.predicates {
                     get_udf_names(predicate)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
             RelOperator::Aggregate(op) => {
                 for group_items in &op.group_items {
                     get_udf_names(&group_items.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
                 for agg_func in &op.aggregate_functions {
                     get_udf_names(&agg_func.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
@@ -300,64 +301,64 @@ impl SExpr {
                     WindowFuncType::Aggregate(agg) => {
                         for arg in &agg.args {
                             get_udf_names(arg)?.iter().for_each(|udf| {
-                                udfs.insert(udf.clone());
+                                udfs.insert(*udf);
                             });
                         }
                     }
                     WindowFuncType::LagLead(lag_lead) => {
                         // udfs_pad(&mut udfs, f, &lag_lead.arg)?;
                         get_udf_names(&lag_lead.arg)?.iter().for_each(|udf| {
-                            udfs.insert(udf.clone());
+                            udfs.insert(*udf);
                         });
                         if let Some(default) = &lag_lead.default {
                             get_udf_names(default)?.iter().for_each(|udf| {
-                                udfs.insert(udf.clone());
+                                udfs.insert(*udf);
                             });
                         }
                     }
                     WindowFuncType::NthValue(nth) => {
                         get_udf_names(&nth.arg)?.iter().for_each(|udf| {
-                            udfs.insert(udf.clone());
+                            udfs.insert(*udf);
                         });
                     }
                     _ => {}
                 }
                 for arg in &op.arguments {
                     get_udf_names(&arg.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
                 for order_by in &op.order_by {
                     get_udf_names(&order_by.order_by_item.scalar)?
                         .iter()
                         .for_each(|udf| {
-                            udfs.insert(udf.clone());
+                            udfs.insert(*udf);
                         });
                 }
                 for partition_by in &op.partition_by {
                     get_udf_names(&partition_by.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
             RelOperator::ProjectSet(op) => {
                 for srf in &op.srfs {
                     get_udf_names(&srf.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
             RelOperator::Lambda(op) => {
                 for item in &op.items {
                     get_udf_names(&item.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
             RelOperator::Udf(udf) => {
                 for item in &udf.items {
                     get_udf_names(&item.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
+                        udfs.insert(*udf);
                     });
                 }
             }
@@ -375,7 +376,7 @@ impl SExpr {
         for child in &self.children {
             let udf = child.get_udfs()?;
             udf.iter().for_each(|udf| {
-                udfs.insert(udf.clone());
+                udfs.insert(*udf);
             })
         }
         Ok(udfs)
@@ -506,95 +507,31 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
     }
 }
 
-pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<String>> {
-    let mut udfs = HashSet::new();
-    let f = |scalar: &ScalarExpr| {
-        matches!(
-            scalar,
-            ScalarExpr::UDFServerCall(_) | ScalarExpr::UDFLambdaCall(_)
-        )
-    };
-    let mut finder = Finder::new(&f);
-    finder.visit(scalar)?;
-    for scalar in finder.scalars() {
-        match scalar {
-            ScalarExpr::UDFServerCall(udf) => {
-                udfs.insert(udf.func_name.clone());
-                for arg in &udf.arguments {
-                    let arg_udfs = get_udf_names(arg)?;
-                    arg_udfs.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
+pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
+    struct FindUdfNames<'a> {
+        udfs: HashSet<&'a String>,
+    }
+
+    impl<'a> Visitor<'a> for FindUdfNames<'a> {
+        fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) -> Result<()> {
+            for expr in &udf.arguments {
+                self.visit(expr)?;
             }
-            ScalarExpr::UDFLambdaCall(udf) => {
-                udfs.insert(udf.func_name.clone());
-                let arg_udfs = get_udf_names(&udf.scalar)?;
-                arg_udfs.iter().for_each(|udf| {
-                    udfs.insert(udf.clone());
-                });
-            }
-            ScalarExpr::WindowFunction(expr) => {
-                for part in &expr.partition_by {
-                    let udf = get_udf_names(part)?;
-                    udf.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
-                for order in &expr.order_by {
-                    let scalar = &order.expr;
-                    let udf = get_udf_names(scalar)?;
-                    udf.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
-            }
-            ScalarExpr::AggregateFunction(expr) => {
-                for arg in &expr.args {
-                    let arg_udfs = get_udf_names(arg)?;
-                    arg_udfs.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
-            }
-            ScalarExpr::LambdaFunction(expr) => {
-                for arg in &expr.args {
-                    let arg_udfs = get_udf_names(arg)?;
-                    arg_udfs.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
-            }
-            ScalarExpr::FunctionCall(expr) => {
-                for arg in &expr.arguments {
-                    let arg_udfs = get_udf_names(arg)?;
-                    arg_udfs.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
-            }
-            ScalarExpr::CastExpr(expr) => {
-                let scalar = &expr.argument;
-                let udf = get_udf_names(scalar)?;
-                udf.iter().for_each(|udf| {
-                    udfs.insert(udf.clone());
-                });
-            }
-            ScalarExpr::SubqueryExpr(expr) => {
-                let s_expr = &expr.subquery;
-                let udf = s_expr.get_udfs()?;
-                udf.iter().for_each(|udf| {
-                    udfs.insert(udf.clone());
-                });
-                if let Some(child_expr) = &expr.child_expr {
-                    let udf = get_udf_names(child_expr)?;
-                    udf.iter().for_each(|udf| {
-                        udfs.insert(udf.clone());
-                    });
-                }
-            }
-            ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => {}
+
+            self.udfs.insert(&udf.func_name);
+            Ok(())
+        }
+
+        fn visit_udf_lambda_call(&mut self, udf: &'a UDFLambdaCall) -> Result<()> {
+            let name = &udf.func_name;
+            self.visit(&udf.scalar)?;
+            self.udfs.insert(name);
+            Ok(())
         }
     }
-    Ok(udfs)
+
+    let udfs = HashSet::new();
+    let mut find_udfs = FindUdfNames { udfs };
+    find_udfs.visit(scalar)?;
+    Ok(find_udfs.udfs)
 }
