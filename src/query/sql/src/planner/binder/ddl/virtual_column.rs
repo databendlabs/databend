@@ -186,9 +186,7 @@ impl Binder {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { lit, .. },
                     } => lit.clone(),
-                    MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
-                        Literal::String(key.name.clone())
-                    }
+                    MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                     MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {
                         return Err(ErrorCode::SemanticError(format!(
