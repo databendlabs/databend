@@ -377,17 +377,6 @@ pub trait Table: Sync + Send {
     fn is_read_only(&self) -> bool {
         false
     }
-
-    async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let _ = ctx;
-        Ok(StreamStatus::NotApplicable)
-    }
-}
-
-pub enum StreamStatus {
-    NotApplicable,
-    MayHaveData,
-    NoData,
 }
 
 #[async_trait::async_trait]

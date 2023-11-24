@@ -19,7 +19,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::table::StreamStatus;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
@@ -44,6 +43,7 @@ use common_pipeline_sources::AsyncSourcer;
 use common_storages_fuse::table_functions::string_literal;
 use common_storages_fuse::table_functions::string_value;
 
+use crate::stream_table::StreamStatus;
 use crate::stream_table::StreamTable;
 
 const STREAM_STATUS: &str = "stream_status";
@@ -229,7 +229,7 @@ impl AsyncSource for StreamStatusDataSource {
         let tbl = StreamTable::try_from_table(tbl.as_ref())?;
 
         let has_data = matches!(
-            tbl.new_check_stream_status(self.ctx.clone()).await?,
+            tbl.check_stream_status(self.ctx.clone()).await?,
             StreamStatus::MayHaveData
         );
 
