@@ -52,6 +52,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UDFServerCall;
 use crate::plans::Visitor;
+use crate::plans::VisitorMut;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
@@ -168,151 +169,6 @@ impl<'a> AggregateRewriter<'a> {
             bind_context,
             metadata,
             in_window: false,
-        }
-    }
-
-    pub fn visit(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
-        match scalar {
-            ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
-            ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::FunctionCall(func) => {
-                if func.func_name.eq_ignore_ascii_case("grouping") {
-                    return self.replace_grouping(func);
-                }
-                let new_args = func
-                    .arguments
-                    .iter()
-                    .map(|arg| self.visit(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(FunctionCall {
-                    span: func.span,
-                    func_name: func.func_name.clone(),
-                    params: func.params.clone(),
-                    arguments: new_args,
-                }
-                .into())
-            }
-            ScalarExpr::CastExpr(cast) => Ok(CastExpr {
-                span: cast.span,
-                is_try: cast.is_try,
-                argument: Box::new(self.visit(&cast.argument)?),
-                target_type: cast.target_type.clone(),
-            }
-            .into()),
-
-            // TODO(leiysky): should we recursively process subquery here?
-            ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
-
-            ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
-
-            ScalarExpr::WindowFunction(window) => {
-                self.in_window = true;
-
-                let partition_by = window
-                    .partition_by
-                    .iter()
-                    .map(|part| self.visit(part))
-                    .collect::<Result<Vec<_>>>()?;
-                let order_by = window
-                    .order_by
-                    .iter()
-                    .map(|order| {
-                        Ok(WindowOrderBy {
-                            expr: self.visit(&order.expr)?,
-                            asc: order.asc,
-                            nulls_first: order.nulls_first,
-                        })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let func = match &window.func {
-                    WindowFuncType::Aggregate(agg) => {
-                        let new_args = agg
-                            .args
-                            .iter()
-                            .map(|arg| self.visit(arg))
-                            .collect::<Result<Vec<_>>>()?;
-                        WindowFuncType::Aggregate(AggregateFunction {
-                            func_name: agg.func_name.clone(),
-                            args: new_args,
-                            display_name: agg.display_name.clone(),
-                            distinct: agg.distinct,
-                            params: agg.params.clone(),
-                            return_type: agg.return_type.clone(),
-                        })
-                    }
-                    WindowFuncType::LagLead(ll) => {
-                        let new_arg = self.visit(&ll.arg)?;
-                        let new_default = match ll.default.clone().map(|d| self.visit(&d)) {
-                            None => None,
-                            Some(d) => Some(Box::new(d?)),
-                        };
-
-                        WindowFuncType::LagLead(LagLeadFunction {
-                            is_lag: ll.is_lag,
-                            arg: Box::new(new_arg),
-                            offset: ll.offset,
-                            default: new_default,
-                            return_type: ll.return_type.clone(),
-                        })
-                    }
-                    WindowFuncType::NthValue(func) => {
-                        let new_arg = self.visit(&func.arg)?;
-                        WindowFuncType::NthValue(NthValueFunction {
-                            n: func.n,
-                            arg: Box::new(new_arg),
-                            return_type: func.return_type.clone(),
-                        })
-                    }
-                    func => func.clone(),
-                };
-
-                self.in_window = false;
-
-                Ok(WindowFunc {
-                    span: window.span,
-                    display_name: window.display_name.clone(),
-                    func,
-                    partition_by,
-                    order_by,
-                    frame: window.frame.clone(),
-                }
-                .into())
-            }
-            ScalarExpr::UDFServerCall(udf) => {
-                let new_args = udf
-                    .arguments
-                    .iter()
-                    .map(|arg| self.visit(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(UDFServerCall {
-                    span: udf.span,
-                    func_name: udf.func_name.clone(),
-                    display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments: new_args,
-                }
-                .into())
-            }
-            ScalarExpr::LambdaFunction(lambda_func) => {
-                let new_args = lambda_func
-                    .args
-                    .iter()
-                    .map(|arg| self.visit(arg))
-                    .collect::<Result<Vec<_>>>()?;
-
-                Ok(LambdaFunc {
-                    span: lambda_func.span,
-                    func_name: lambda_func.func_name.clone(),
-                    display_name: lambda_func.display_name.clone(),
-                    args: new_args,
-                    params: lambda_func.params.clone(),
-                    lambda_expr: lambda_func.lambda_expr.clone(),
-                    return_type: lambda_func.return_type.clone(),
-                }
-                .into())
-            }
         }
     }
 
@@ -456,6 +312,25 @@ impl<'a> AggregateRewriter<'a> {
         };
 
         Ok(replaced_func.into())
+    }
+}
+
+impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
+    fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) -> Result<()> {
+        *aggregate = self.replace_aggregate_function(aggregate)?;
+        Ok(())
+    }
+
+    fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {
+        if func.func_name.eq_ignore_ascii_case("grouping") {
+            *func = self.replace_grouping(func);
+        }
+        Ok(())
+    }
+
+    fn visit_subquery_expr(&mut self, subquery: &'a mut crate::plans::SubqueryExpr) -> Result<()> {
+        // TODO(leiysky): should we recursively process subquery here?
+        Ok(())
     }
 }
 

@@ -179,52 +179,36 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         return true;
     }
 
-    match scalar {
-        ScalarExpr::BoundColumnRef(_) => false,
-        ScalarExpr::ConstantExpr(_) => true,
-        ScalarExpr::WindowFunction(scalar) => {
-            let flag = match &scalar.func {
-                WindowFuncType::Aggregate(agg) => {
-                    agg.args.iter().all(|arg| prune_by_children(arg, columns))
-                }
-                WindowFuncType::LagLead(f) => {
-                    if let Some(default) = &f.default {
-                        prune_by_children(&f.arg, columns) & prune_by_children(default, columns)
-                    } else {
-                        prune_by_children(&f.arg, columns)
-                    }
-                }
-                WindowFuncType::NthValue(f) => prune_by_children(&f.arg, columns),
-                _ => false,
-            };
-            flag || scalar
-                .partition_by
-                .iter()
-                .all(|arg| prune_by_children(arg, columns))
-                || scalar
-                    .order_by
-                    .iter()
-                    .all(|arg| prune_by_children(&arg.expr, columns))
-        }
-        ScalarExpr::AggregateFunction(scalar) => scalar
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::LambdaFunction(scalar) => scalar
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::FunctionCall(scalar) => scalar
-            .arguments
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
-        ScalarExpr::SubqueryExpr(_) => false,
-        ScalarExpr::UDFServerCall(udf) => udf
-            .arguments
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
+    struct PruneVisitor<'a> {
+        columns: &'a HashSet<ScalarExpr>,
+        can_prune: bool,
     }
+
+    impl<'a> PruneVisitor<'a> {
+        fn new(columns: &'a HashSet<ScalarExpr>) -> Self {
+            Self {
+                columns,
+                can_prune: true,
+            }
+        }
+    }
+
+    impl<'a> Visitor<'a> for PruneVisitor<'a> {
+        fn visit_bound_column_ref(&mut self, _: &'a BoundColumnRef) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+
+        fn visit_subquery(&mut self, _: &'a crate::plans::SubqueryExpr) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+    }
+
+    let mut visitor = PruneVisitor::new(columns);
+    visitor.visit(scalar).unwrap();
+
+    visitor.can_prune
 }
 
 /// Wrap cast scalar to target type
