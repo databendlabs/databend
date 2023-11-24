@@ -66,9 +66,7 @@ impl ValueType for BooleanType {
         }
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Boolean(builder) => Some(builder),
             _ => None,
@@ -110,10 +108,7 @@ impl ValueType for BooleanType {
         col.get(index)
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.get_bit_unchecked(index)
     }
 

@@ -61,9 +61,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         Some(domain.clone())
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         Some(builder)
     }
 
@@ -95,10 +93,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col.index(index)
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index(index).unwrap()
     }
 

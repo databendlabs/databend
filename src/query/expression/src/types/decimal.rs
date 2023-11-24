@@ -83,9 +83,7 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_domain(domain.as_decimal()?)
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         Num::try_downcast_builder(builder)
     }
 
@@ -117,10 +115,7 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 

@@ -75,9 +75,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         }
     }
 
-    fn try_downcast_builder(
-        _builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
     }
 
@@ -133,10 +131,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         col.index(index)
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index_unchecked(index)
     }
 

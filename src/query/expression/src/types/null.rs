@@ -71,9 +71,7 @@ impl ValueType for NullType {
         }
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Null { len } => Some(len),
             _ => None,
@@ -114,11 +112,7 @@ impl ValueType for NullType {
         if index < *len { Some(()) } else { None }
     }
 
-    unsafe fn index_column_unchecked(
-        _col: &Self::Column,
-        _index: usize,
-    ) -> Self::ScalarRef<'_> {
-    }
+    unsafe fn index_column_unchecked(_col: &Self::Column, _index: usize) -> Self::ScalarRef<'_> {}
 
     fn slice_column(len: &Self::Column, range: Range<usize>) -> Self::Column {
         assert!(range.start < *len, "range {range:?} out of 0..{len}");

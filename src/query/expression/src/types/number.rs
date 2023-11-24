@@ -127,9 +127,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Num::try_downcast_domain(domain.as_number()?)
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
             _ => None,
@@ -167,10 +165,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 

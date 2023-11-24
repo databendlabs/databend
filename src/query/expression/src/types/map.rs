@@ -81,9 +81,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         }
     }
 
-    fn try_downcast_builder(
-        _builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
     }
 
@@ -118,10 +116,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         col.index(index)
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index_unchecked(index)
     }
 
@@ -353,9 +348,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         }
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         <MapInternal<K, V> as ValueType>::try_downcast_builder(builder)
     }
 
@@ -392,10 +385,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         <MapInternal<K, V> as ValueType>::index_column(col, index)
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         <MapInternal<K, V> as ValueType>::index_column_unchecked(col, index)
     }
 

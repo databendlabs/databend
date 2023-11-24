@@ -309,9 +309,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///     builder.push(...);
     /// }
     /// ```
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder>;
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder>;
 
     fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
 
@@ -327,10 +325,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_>;
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;

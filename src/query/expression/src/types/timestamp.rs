@@ -101,9 +101,7 @@ impl ValueType for TimestampType {
         domain.as_timestamp().map(SimpleDomain::clone)
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Timestamp(builder) => Some(builder),
             _ => None,
@@ -141,10 +139,7 @@ impl ValueType for TimestampType {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked(
-        col: &Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 

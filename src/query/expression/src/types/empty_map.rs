@@ -67,9 +67,7 @@ impl ValueType for EmptyMapType {
         }
     }
 
-    fn try_downcast_builder(
-        builder: &mut ColumnBuilder,
-    ) -> Option<&mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::EmptyMap { len } => Some(len),
             _ => None,
@@ -107,11 +105,7 @@ impl ValueType for EmptyMapType {
         if index < *len { Some(()) } else { None }
     }
 
-    unsafe fn index_column_unchecked(
-        _len: &Self::Column,
-        _index: usize,
-    ) -> Self::ScalarRef<'_> {
-    }
+    unsafe fn index_column_unchecked(_len: &Self::Column, _index: usize) -> Self::ScalarRef<'_> {}
 
     fn slice_column(len: &Self::Column, range: Range<usize>) -> Self::Column {
         assert!(range.end <= *len, "range {range:?} out of 0..{len}");
