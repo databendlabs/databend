@@ -145,6 +145,7 @@ impl MergeIntoOperationAggregator {
                 projection,
                 false,
                 false,
+                false,
             )
         }?;
 
@@ -158,6 +159,7 @@ impl MergeIntoOperationAggregator {
                     data_accessor.clone(),
                     table_schema,
                     projection,
+                    false,
                     false,
                     false,
                 )?;

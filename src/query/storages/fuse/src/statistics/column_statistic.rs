@@ -22,6 +22,7 @@ use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
+use common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use common_functions::aggregates::eval_aggr;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
@@ -52,6 +53,11 @@ pub fn gen_columns_statistics(
     for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         // Ignore the range index does not supported type.
         if !RangeIndex::supported_type(data_type) {
+            continue;
+        }
+
+        // Ignore the origin block row number column.
+        if column_id == ORIGIN_BLOCK_ROW_NUM_COLUMN_ID {
             continue;
         }
 

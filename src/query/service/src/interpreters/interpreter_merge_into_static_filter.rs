@@ -283,6 +283,7 @@ impl MergeIntoInterpreter {
             ScalarExpr::CastExpr(x) => format!("{:?}", x),
             ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
             ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
+            ScalarExpr::UDFLambdaCall(x) => format!("{:?}", x),
         }
     }
 

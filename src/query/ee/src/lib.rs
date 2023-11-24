@@ -19,5 +19,6 @@ pub mod enterprise_services;
 pub mod license;
 pub mod storage_encryption;
 pub mod storages;
+pub mod stream;
 pub mod test_kits;
 pub mod virtual_column;

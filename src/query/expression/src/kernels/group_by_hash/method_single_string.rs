@@ -86,7 +86,7 @@ impl KeyAccessor for StringKeyAccessor {
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key {
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
         &self.data[*self.offsets.get_unchecked(index) as usize
             ..*self.offsets.get_unchecked(index + 1) as usize]
     }

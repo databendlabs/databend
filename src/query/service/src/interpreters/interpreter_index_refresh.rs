@@ -86,12 +86,12 @@ impl RefreshIndexInterpreter {
         }
 
         if !lazy_init_segments.is_empty() {
-            let table_info = self.plan.table_info.clone();
+            let table_schema = self.plan.table_info.schema();
             let push_downs = plan.push_downs.clone();
             let ctx = self.ctx.clone();
 
             let (_statistics, partitions) = fuse_table
-                .prune_snapshot_blocks(ctx, dal, push_downs, table_info, lazy_init_segments, 0)
+                .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, lazy_init_segments, 0)
                 .await?;
 
             return Ok(Some(partitions));
@@ -108,12 +108,12 @@ impl RefreshIndexInterpreter {
         dal: Operator,
         segments: Vec<SegmentLocation>,
     ) -> Result<Option<Partitions>> {
-        let table_info = self.plan.table_info.clone();
+        let table_schema = self.plan.table_info.schema();
         let push_downs = plan.push_downs.clone();
         let ctx = self.ctx.clone();
 
         let (_statistics, partitions) = fuse_table
-            .prune_snapshot_blocks(ctx, dal, push_downs, table_info, segments, 0)
+            .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, segments, 0)
             .await?;
 
         Ok(Some(partitions))

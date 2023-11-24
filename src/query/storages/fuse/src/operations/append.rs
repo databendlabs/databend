@@ -219,7 +219,8 @@ impl FuseTable {
             return Ok(ClusterStatsGenerator::default());
         }
 
-        let input_schema = modified_schema.unwrap_or(DataSchema::from(self.schema()).into());
+        let input_schema =
+            modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
         let mut merged: Vec<DataField> = input_schema.fields().clone();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());

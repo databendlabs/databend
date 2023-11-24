@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_metrics::storage::*;
 use common_pipeline_core::processors::Event;
@@ -95,6 +96,9 @@ pub struct CommitSink<F: SnapshotGenerator> {
     need_lock: bool,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
+
+    change_tracking: bool,
+    update_stream_meta: Vec<UpdateStreamMetaReq>,
 }
 
 impl<F> CommitSink<F>
@@ -105,6 +109,7 @@ where F: SnapshotGenerator + Send + 'static
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
@@ -129,6 +134,8 @@ where F: SnapshotGenerator + Send + 'static
             need_lock,
             start_time: Instant::now(),
             prev_snapshot_id,
+            change_tracking: table.change_tracking_enabled(),
+            update_stream_meta,
         })))
     }
 
@@ -228,24 +235,32 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
                 table_info,
             } => {
-                let schema = self.table.schema().as_ref().clone();
-                match self
-                    .snapshot_gen
-                    .generate_new_snapshot(schema, cluster_key_meta, previous)
-                {
-                    Ok(snapshot) => {
-                        self.state = State::TryCommit {
-                            data: snapshot.to_bytes()?,
-                            snapshot,
-                            table_info,
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            "commit mutation failed after {} retries, error: {:?}",
-                            self.retries, e,
-                        );
-                        self.state = State::AbortOperation;
+                if !self.change_tracking && self.table.change_tracking_enabled() {
+                    // If change tracing is disabled when the txn start, but is enabled when commit,
+                    // then the txn should be aborted.
+                    error!("commit mutation failed cause change tracking is enabled when commit");
+                    self.state = State::AbortOperation;
+                } else {
+                    let schema = self.table.schema().as_ref().clone();
+                    match self.snapshot_gen.generate_new_snapshot(
+                        schema,
+                        cluster_key_meta,
+                        previous,
+                    ) {
+                        Ok(snapshot) => {
+                            self.state = State::TryCommit {
+                                data: snapshot.to_bytes()?,
+                                snapshot,
+                                table_info,
+                            };
+                        }
+                        Err(e) => {
+                            error!(
+                                "commit mutation failed after {} retries, error: {:?}",
+                                self.retries, e,
+                            );
+                            self.state = State::AbortOperation;
+                        }
                     }
                 }
             }
@@ -322,6 +337,7 @@ where F: SnapshotGenerator + Send + 'static
                     snapshot,
                     location,
                     &self.copied_files,
+                    &self.update_stream_meta,
                     &self.dal,
                 )
                 .await
@@ -381,8 +397,12 @@ where F: SnapshotGenerator + Send + 'static
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
                         let table_info = self.table.get_table_info();
-                        match self.backoff.next_backoff() {
-                            Some(d) => {
+                        // If change tracking is enabled, we cannot retry the commit operation.
+                        match (
+                            self.backoff.next_backoff(),
+                            self.table.change_tracking_enabled(),
+                        ) {
+                            (Some(d), false) => {
                                 let name = table_info.name.clone();
                                 debug!(
                                     "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
@@ -394,7 +414,7 @@ where F: SnapshotGenerator + Send + 'static
                                 self.retries += 1;
                                 self.state = State::RefreshTable;
                             }
-                            None => {
+                            _ => {
                                 // Commit not fulfilled. try to abort the operations.
                                 // if it is safe to do so.
                                 if FuseTable::no_side_effects_in_meta_store(&e) {
