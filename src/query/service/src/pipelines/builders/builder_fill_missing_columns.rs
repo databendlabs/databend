@@ -14,12 +14,16 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::gen_append_stream_columns;
+use common_catalog::plan::StreamColumnMeta;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
+use common_sql::TransformStreamKind;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
+use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -64,6 +68,19 @@ impl PipelineBuilder {
             })?;
         }
 
+        // Fill stream columns.
+        if table.change_tracking_enabled() {
+            let version = table.get_table_info().ident.seq;
+            let stream_columns = gen_append_stream_columns();
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformAddStreamColumns::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    TransformStreamKind::Append(StreamColumnMeta::Append(version)),
+                    stream_columns.clone(),
+                )
+            })?;
+        }
         Ok(())
     }
 }

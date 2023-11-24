@@ -404,7 +404,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",
                     possible_values: None,
                     display_in_show_settings: true,

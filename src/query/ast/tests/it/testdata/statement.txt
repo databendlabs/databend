@@ -2439,6 +2439,166 @@ AlterView(
 
 
 ---------- Input ----------
+create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COMMENT = 'this is a stream'
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    28..33,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                34..36,
+            ),
+        },
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    46..50,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                51..52,
+            ),
+        },
+        stream_point: Some(
+            AtStream {
+                database: Some(
+                    Identifier {
+                        name: "test1",
+                        quote: None,
+                        span: Some(
+                            67..72,
+                        ),
+                    },
+                ),
+                name: Identifier {
+                    name: "s1",
+                    quote: None,
+                    span: Some(
+                        73..75,
+                    ),
+                },
+            },
+        ),
+        comment: Some(
+            "this is a stream",
+        ),
+    },
+)
+
+
+---------- Input ----------
+show full streams from default.test2 like 's%';
+---------- Output ---------
+SHOW FULL STREAMS FROM default.test2 LIKE 's%'
+---------- AST ------------
+ShowStreams(
+    ShowStreamsStmt {
+        catalog: Some(
+            Identifier {
+                name: "default",
+                quote: None,
+                span: Some(
+                    23..30,
+                ),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    31..36,
+                ),
+            },
+        ),
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "s%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+describe stream test2.s2;
+---------- Output ---------
+DESCRIBE STREAM test2.s2
+---------- AST ------------
+DescribeStream(
+    DescribeStreamStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    16..21,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                22..24,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+drop stream if exists test2.s2;
+---------- Output ---------
+DROP STREAM IF EXISTS test2.s2
+---------- AST ------------
+DropStream(
+    DropStreamStmt {
+        if_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    22..27,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                28..30,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 rename table d.t to e.s;
 ---------- Output ---------
 RENAME TABLE d.t TO e.s
@@ -11299,6 +11459,131 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE write ON stage s1 FROM a;
+---------- Output ---------
+REVOKE Write ON STAGE s1 FROM USER 'a'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Write,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON UDF a TO 'test-grant';
+---------- Output ---------
+GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON UDF a TO 'test-grant';
+---------- Output ---------
+GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON UDF a FROM 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON UDF a FROM 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
                 hostname: "%",
             },
         ),

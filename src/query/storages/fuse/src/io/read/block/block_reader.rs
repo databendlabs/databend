@@ -47,6 +47,8 @@ pub struct BlockReader {
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
     pub query_internal_columns: bool,
+    // used for mutation to update stream columns.
+    pub update_stream_columns: bool,
     pub put_cache: bool,
 }
 
@@ -84,6 +86,7 @@ impl BlockReader {
         schema: TableSchemaRef,
         projection: Projection,
         query_internal_columns: bool,
+        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         // init projected_schema and default_vals of schema.fields
@@ -142,6 +145,7 @@ impl BlockReader {
             parquet_schema_descriptor,
             default_vals,
             query_internal_columns,
+            update_stream_columns,
             put_cache,
         }))
     }
@@ -170,6 +174,10 @@ impl BlockReader {
 
     pub fn query_internal_columns(&self) -> bool {
         self.query_internal_columns
+    }
+
+    pub fn update_stream_columns(&self) -> bool {
+        self.update_stream_columns
     }
 
     pub fn schema(&self) -> TableSchemaRef {

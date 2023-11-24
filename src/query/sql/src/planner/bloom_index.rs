@@ -20,6 +20,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::is_stream_column_id;
 use common_expression::ComputedExpr;
 use common_expression::FieldIndex;
 use common_expression::TableDataType;
@@ -120,6 +121,11 @@ impl BloomIndexColumns {
         match self {
             BloomIndexColumns::All => {
                 for (i, field) in source_schema.fields.into_iter().enumerate() {
+                    // Ignore stream column.
+                    if is_stream_column_id(field.column_id) {
+                        continue;
+                    }
+
                     if verify_type(field.data_type()) {
                         fields_map.insert(i, field);
                     }
