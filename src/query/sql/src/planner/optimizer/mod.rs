@@ -49,4 +49,5 @@ pub use rule::try_push_down_filter_join;
 pub use rule::RuleFactory;
 pub use rule::RuleID;
 pub use rule::RuleSet;
+pub use s_expr::get_udf_names;
 pub use s_expr::SExpr;

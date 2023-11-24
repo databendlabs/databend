@@ -203,8 +203,8 @@ impl Column {
         builder
     }
 
-    pub fn take_string_types<'a, I>(
-        col: &'a StringColumn,
+    pub fn take_string_types<I>(
+        col: &StringColumn,
         indices: &[I],
         string_items_buf: Option<&mut Vec<(u64, usize)>>,
     ) -> StringColumn
