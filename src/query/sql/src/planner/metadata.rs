@@ -289,9 +289,10 @@ impl Metadata {
             source_of_stage,
         };
         self.tables.push(table_entry);
+        let table_schema = table_meta.schema_with_stream();
         let mut index = 0;
-        let mut fields = VecDeque::with_capacity(table_meta.schema().fields().len());
-        for field in table_meta.schema().fields().iter() {
+        let mut fields = VecDeque::with_capacity(table_schema.fields().len());
+        for field in table_schema.fields().iter() {
             if let Some(ComputedExpr::Virtual(_)) = field.computed_expr() {
                 fields.push_back((vec![], field.clone()));
             } else {

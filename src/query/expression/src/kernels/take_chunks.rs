@@ -718,8 +718,8 @@ impl Column {
         builder
     }
 
-    pub fn take_block_vec_string_types<'a>(
-        col: &'a [StringColumn],
+    pub fn take_block_vec_string_types(
+        col: &[StringColumn],
         indices: &[RowPtr],
         string_items_buf: Option<&mut Vec<(u64, usize)>>,
     ) -> StringColumn {

@@ -30,6 +30,7 @@ use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::NameResolutionContext;
 
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_refresh_agg_index;
 use crate::interpreters::common::RefreshAggIndexDesc;
@@ -169,7 +170,7 @@ impl Interpreter for InsertInterpreter {
             }
             InsertInputSource::SelectPlan(plan) => {
                 let table1 = table.clone();
-                let (mut select_plan, select_column_bindings) = match plan.as_ref() {
+                let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
                     Plan::Query {
                         s_expr,
                         metadata,
@@ -181,10 +182,14 @@ impl Interpreter for InsertInterpreter {
                         (
                             builder1.build(s_expr, bind_context.column_set()).await?,
                             bind_context.columns.clone(),
+                            metadata,
                         )
                     }
                     _ => unreachable!(),
                 };
+
+                let update_stream_meta =
+                    build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
 
                 let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
                 let catalog_info = catalog.info();
@@ -237,6 +242,7 @@ impl Interpreter for InsertInterpreter {
                     self.ctx.clone(),
                     &mut build_res.main_pipeline,
                     None,
+                    update_stream_meta,
                     self.plan.overwrite,
                     None,
                 )?;
@@ -270,6 +276,7 @@ impl Interpreter for InsertInterpreter {
             table.clone(),
             self.plan.schema(),
             None,
+            vec![],
             self.plan.overwrite,
             append_mode,
         )?;

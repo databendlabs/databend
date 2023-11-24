@@ -29,7 +29,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
-use common_meta_app::schema::TableInfo;
 use common_sql::field_default_value;
 use common_storage::ColumnNodes;
 use log::debug;
@@ -98,7 +97,7 @@ impl FuseTable {
                 }
 
                 let snapshot_loc = Some(snapshot_loc);
-                let table_info = self.table_info.clone();
+                let table_schema = self.schema_with_stream();
                 let summary = snapshot.summary.block_count as usize;
                 let mut segments_location = Vec::with_capacity(snapshot.segments.len());
                 for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -113,7 +112,7 @@ impl FuseTable {
                     ctx.clone(),
                     self.operator.clone(),
                     push_downs.clone(),
-                    table_info,
+                    table_schema,
                     segments_location,
                     summary,
                 )
@@ -130,7 +129,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         push_downs: Option<PushDownInfo>,
-        table_info: TableInfo,
+        table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
@@ -170,7 +169,7 @@ impl FuseTable {
             FusePruner::create(
                 &ctx,
                 dal.clone(),
-                table_info.schema(),
+                table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
             )?
@@ -180,7 +179,7 @@ impl FuseTable {
             FusePruner::create_with_pages(
                 &ctx,
                 dal.clone(),
-                table_info.schema(),
+                table_schema,
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
@@ -202,9 +201,10 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
+        let schema = self.schema_with_stream();
         let result = self.read_partitions_with_metas(
             ctx.clone(),
-            table_info.schema(),
+            schema,
             push_downs,
             &block_metas,
             summary,

@@ -91,7 +91,7 @@ pub struct HashJoinBuildState {
     pub(crate) build_projections: ColumnSet,
     pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
-    pub(crate) build_hash_table_tasks: RwLock<VecDeque<(usize, usize)>>,
+    pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
     pub(crate) mutex: Mutex<()>,
 
     /// Spill related states
@@ -329,34 +329,20 @@ impl HashJoinBuildState {
 
     /// Divide the finalize phase into multiple tasks.
     pub fn generate_finalize_task(&self) -> Result<()> {
-        let chunks_len = unsafe { &*self.hash_join_state.build_state.get() }
+        let task_num = unsafe { &*self.hash_join_state.build_state.get() }
             .generation_state
             .chunks
             .len();
-        if chunks_len == 0 {
+        if task_num == 0 {
             return Ok(());
         }
-
-        let worker_num = self.build_worker_num.load(Ordering::Relaxed) as usize;
-        let (task_size, task_num) = if chunks_len >= worker_num {
-            (chunks_len / worker_num, worker_num)
-        } else {
-            (1, chunks_len)
-        };
-
-        let mut build_hash_table_tasks = self.build_hash_table_tasks.write();
-        for idx in 0..task_num - 1 {
-            let task = (idx * task_size, (idx + 1) * task_size);
-            build_hash_table_tasks.push_back(task);
-        }
-        let last_task = ((task_num - 1) * task_size, chunks_len);
-        build_hash_table_tasks.push_back(last_task);
-
+        let tasks = (0..task_num).collect_vec();
+        *self.build_hash_table_tasks.write() = tasks.into();
         Ok(())
     }
 
     /// Get the finalize task and using the `chunks` in `hash_join_state.row_space` to build hash table in parallel.
-    pub(crate) fn finalize(&self, task: (usize, usize)) -> Result<()> {
+    pub(crate) fn finalize(&self, task: usize) -> Result<()> {
         let entry_size = self.entry_size.load(Ordering::Relaxed);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
@@ -520,154 +506,153 @@ impl HashJoinBuildState {
             }};
         }
 
-        let mut has_null = false;
-        for chunk_index in task.0..task.1 {
-            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
 
-            let chunk = &mut build_state.generation_state.chunks[chunk_index];
+        let chunk_index = task;
+        let chunk = &mut build_state.generation_state.chunks[chunk_index];
 
-            let mut _nullable_chunk = None;
-            let evaluator = if matches!(
-                self.hash_join_state.hash_join_desc.join_type,
-                JoinType::Left | JoinType::LeftSingle | JoinType::Full
-            ) {
-                let validity = Bitmap::new_constant(true, chunk.num_rows());
-                let nullable_columns = chunk
-                    .columns()
-                    .iter()
-                    .map(|c| wrap_true_validity(c, chunk.num_rows(), &validity))
-                    .collect::<Vec<_>>();
-                _nullable_chunk = Some(DataBlock::new(nullable_columns, chunk.num_rows()));
-                Evaluator::new(
-                    _nullable_chunk.as_ref().unwrap(),
-                    &self.func_ctx,
-                    &BUILTIN_FUNCTIONS,
-                )
-            } else {
-                Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
-            };
-            let mut build_keys: Vec<(Column, DataType)> = self
-                .hash_join_state
-                .hash_join_desc
-                .build_keys
+        let mut _has_null = false;
+        let mut _nullable_chunk = None;
+        let evaluator = if matches!(
+            self.hash_join_state.hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+        ) {
+            let validity = Bitmap::new_constant(true, chunk.num_rows());
+            let nullable_columns = chunk
+                .columns()
                 .iter()
-                .map(|expr| {
-                    let return_type = expr.data_type();
-                    Ok((
-                        evaluator
-                            .run(expr)?
-                            .convert_to_full_column(return_type, chunk.num_rows()),
-                        return_type.clone(),
-                    ))
-                })
-                .collect::<Result<_>>()?;
+                .map(|c| wrap_true_validity(c, chunk.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            _nullable_chunk = Some(DataBlock::new(nullable_columns, chunk.num_rows()));
+            Evaluator::new(
+                _nullable_chunk.as_ref().unwrap(),
+                &self.func_ctx,
+                &BUILTIN_FUNCTIONS,
+            )
+        } else {
+            Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
+        };
+        let mut build_keys: Vec<(Column, DataType)> = self
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .map(|expr| {
+                let return_type = expr.data_type();
+                Ok((
+                    evaluator
+                        .run(expr)?
+                        .convert_to_full_column(return_type, chunk.num_rows()),
+                    return_type.clone(),
+                ))
+            })
+            .collect::<Result<_>>()?;
 
-            let column_nums = chunk.num_columns();
-            let mut block_entries = Vec::with_capacity(self.build_projections.len());
-            for index in 0..column_nums {
-                if !self.build_projections.contains(&index) {
-                    continue;
-                }
-                block_entries.push(chunk.get_by_offset(index).clone());
+        let column_nums = chunk.num_columns();
+        let mut block_entries = Vec::with_capacity(self.build_projections.len());
+        for index in 0..column_nums {
+            if !self.build_projections.contains(&index) {
+                continue;
             }
-            if block_entries.is_empty() {
-                build_state.generation_state.is_build_projected = false;
-            }
-            *chunk = DataBlock::new(block_entries, chunk.num_rows());
+            block_entries.push(chunk.get_by_offset(index).clone());
+        }
+        if block_entries.is_empty() {
+            build_state.generation_state.is_build_projected = false;
+        }
+        *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
-            let mut valids = None;
-            if build_keys
-                .iter()
-                .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-            {
-                for (col, _) in build_keys.iter() {
-                    let (is_all_null, tmp_valids) = col.validity();
-                    if is_all_null {
-                        valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
-                        break;
-                    } else {
-                        valids = and_validities(valids, tmp_valids.cloned());
-                    }
+        let mut valids = None;
+        if build_keys
+            .iter()
+            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
+        {
+            for (col, _) in build_keys.iter() {
+                let (is_all_null, tmp_valids) = col.validity();
+                if is_all_null {
+                    valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
+                    break;
+                } else {
+                    valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
+        }
 
-            valids = match valids {
-                Some(valids) => {
-                    if valids.unset_bits() == valids.len() {
-                        continue;
-                    } else if valids.unset_bits() == 0 {
-                        None
-                    } else {
-                        Some(valids)
-                    }
+        valids = match valids {
+            Some(valids) => {
+                if valids.unset_bits() == valids.len() {
+                    return Ok(());
+                } else if valids.unset_bits() == 0 {
+                    None
+                } else {
+                    Some(valids)
                 }
-                None => None,
-            };
+            }
+            None => None,
+        };
 
-            match self.hash_join_state.hash_join_desc.join_type {
-                JoinType::LeftMark => {
-                    let markers = &mut build_state.mark_scan_map[chunk_index];
-                    self.hash_join_state
-                        .init_markers(&build_keys, chunk.num_rows(), markers);
-                }
-                JoinType::RightMark => {
-                    if !has_null && !build_keys.is_empty() {
-                        if let Some(validity) = build_keys[0].0.validity().1 {
-                            if validity.unset_bits() > 0 {
-                                has_null = true;
-                                let mut has_null_ref = self
-                                    .hash_join_state
-                                    .hash_join_desc
-                                    .marker_join_desc
-                                    .has_null
-                                    .write();
-                                *has_null_ref = true;
-                            }
+        match self.hash_join_state.hash_join_desc.join_type {
+            JoinType::LeftMark => {
+                let markers = &mut build_state.mark_scan_map[chunk_index];
+                self.hash_join_state
+                    .init_markers(&build_keys, chunk.num_rows(), markers);
+            }
+            JoinType::RightMark => {
+                if !_has_null && !build_keys.is_empty() {
+                    if let Some(validity) = build_keys[0].0.validity().1 {
+                        if validity.unset_bits() > 0 {
+                            _has_null = true;
+                            let mut has_null_ref = self
+                                .hash_join_state
+                                .hash_join_desc
+                                .marker_join_desc
+                                .has_null
+                                .write();
+                            *has_null_ref = true;
                         }
                     }
                 }
-                _ => {}
-            };
-
-            for (col, ty) in build_keys.iter_mut() {
-                *col = col.remove_nullable();
-                *ty = ty.remove_nullable();
             }
+            _ => {}
+        };
 
-            match hashtable {
-                HashJoinHashTable::Serializer(table) => insert_string_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
-                },
-                HashJoinHashTable::SingleString(table) => insert_string_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
-                },
-                HashJoinHashTable::KeysU8(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
-                },
-                HashJoinHashTable::KeysU16(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
-                },
-                HashJoinHashTable::KeysU32(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
-                },
-                HashJoinHashTable::KeysU64(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
-                },
-                HashJoinHashTable::KeysU128(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
-                },
-                HashJoinHashTable::KeysU256(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
-                },
-                HashJoinHashTable::Null => {
-                    return Err(ErrorCode::AbortedQuery(
-                        "Aborted query, because the hash table is uninitialized.",
-                    ));
-                }
+        for (col, ty) in build_keys.iter_mut() {
+            *col = col.remove_nullable();
+            *ty = ty.remove_nullable();
+        }
+
+        match hashtable {
+            HashJoinHashTable::Serializer(table) => insert_string_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+            },
+            HashJoinHashTable::SingleString(table) => insert_string_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+            },
+            HashJoinHashTable::KeysU8(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
+            },
+            HashJoinHashTable::KeysU16(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
+            },
+            HashJoinHashTable::KeysU32(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
+            },
+            HashJoinHashTable::KeysU64(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
+            },
+            HashJoinHashTable::KeysU128(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
+            },
+            HashJoinHashTable::KeysU256(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
+            },
+            HashJoinHashTable::Null => {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the hash table is uninitialized.",
+                ));
             }
         }
 
@@ -679,7 +664,7 @@ impl HashJoinBuildState {
     }
 
     /// Get one build hash table task.
-    pub fn finalize_task(&self) -> Option<(usize, usize)> {
+    pub fn finalize_task(&self) -> Option<usize> {
         let mut tasks = self.build_hash_table_tasks.write();
         tasks.pop_front()
     }

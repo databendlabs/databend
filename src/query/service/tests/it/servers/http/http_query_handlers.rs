@@ -36,6 +36,7 @@ use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
+use databend_query::servers::http::v1::QueryError;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -43,7 +44,9 @@ use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestGlobalServices;
 use headers::Header;
+use headers::HeaderMapExt;
 use http::HeaderMap;
+use http::HeaderValue;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
@@ -58,6 +61,7 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use serde_json::Value;
 use tokio::time::sleep;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -69,19 +73,43 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
-struct TestHttpQueryRequest<'a> {
-    ep: &'a EndpointType,
+struct TestHttpQueryRequest {
+    ep: EndpointType,
     json: serde_json::Value,
+    auth_header: HeaderValue,
     headers: HeaderMap,
+    next_uri: Option<String>,
 }
 
-impl<'a> TestHttpQueryRequest<'a> {
-    fn new(ep: &'a EndpointType, json: serde_json::Value) -> Self {
+impl TestHttpQueryRequest {
+    fn new(json: serde_json::Value) -> Self {
+        let session_middleware =
+            HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+
+        let ep = Route::new()
+            .nest("/v1/query", query_route())
+            .with(session_middleware);
+
+        let root_auth_header = {
+            let mut headers = HeaderMap::new();
+            headers.typed_insert(headers::Authorization::basic("root", ""));
+            headers["authorization"].clone()
+        };
+
         Self {
             ep,
             json,
+            auth_header: root_auth_header,
             headers: HeaderMap::new(),
+            next_uri: None,
         }
+    }
+
+    fn with_basic_auth(mut self, username: &str, password: &str) -> Self {
+        let mut headers = HeaderMap::new();
+        headers.typed_insert(headers::Authorization::basic(username, password));
+        self.auth_header = headers["authorization"].clone();
+        self
     }
 
     // fn with_headers(mut self, headers: HeaderMap) -> Self {
@@ -89,34 +117,54 @@ impl<'a> TestHttpQueryRequest<'a> {
     //    self
     // }
 
-    async fn fetch(&self) -> Result<Vec<(StatusCode, QueryResponse)>> {
+    async fn fetch_begin(&mut self) -> Result<(StatusCode, QueryResponse)> {
+        let (status, resp) = self
+            .do_request(Method::POST, "/v1/query")
+            .await
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
+        Ok((status, resp.unwrap()))
+    }
+
+    async fn fetch_next(&mut self) -> Result<(StatusCode, Option<QueryResponse>)> {
+        let (status, resp) = self
+            .do_request(Method::GET, self.next_uri.as_ref().unwrap())
+            .await?;
+        self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
+        Ok((status, resp))
+    }
+
+    async fn fetch_total(&mut self) -> Result<TestHttpQueryFetchReply> {
         let mut resps = vec![];
 
         let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
-        let mut next_uri = resp.next_uri.clone();
-        resps.push((status, resp.clone()));
+        self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
+        resps.push((status, resp.clone().unwrap()));
 
-        while next_uri.is_some() {
+        while self.next_uri.is_some() {
             let (status, resp) = self
-                .do_request(Method::GET, next_uri.as_ref().unwrap())
+                .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
-            next_uri = resp.next_uri.clone();
-            resps.push((status, resp));
+            self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
+            resps.push((status, resp.clone().unwrap()));
         }
 
-        Ok(resps)
+        Ok(TestHttpQueryFetchReply { resps })
     }
 
-    async fn do_request(&self, method: Method, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+    async fn do_request(
+        &self,
+        method: Method,
+        uri: &str,
+    ) -> Result<(StatusCode, Option<QueryResponse>)> {
         let content_type = "application/json";
-        let basic = headers::Authorization::basic("root", "");
         let body = serde_json::to_vec(&self.json).unwrap();
 
         let mut req = Request::builder()
             .uri(uri.parse().unwrap())
             .method(method)
             .header(header::CONTENT_TYPE, content_type)
-            .typed_header(basic)
+            .header(header::AUTHORIZATION, self.auth_header.clone())
             .body(body);
         req.headers_mut().extend(self.headers.clone().into_iter());
 
@@ -129,9 +177,43 @@ impl<'a> TestHttpQueryRequest<'a> {
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
-        let query_resp = serde_json::from_str::<QueryResponse>(&body).unwrap();
+        let query_resp = serde_json::from_str::<QueryResponse>(&body)
+            .map(Some)
+            .unwrap_or_default();
 
         Ok((status_code, query_resp))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TestHttpQueryFetchReply {
+    resps: Vec<(StatusCode, QueryResponse)>,
+}
+
+impl TestHttpQueryFetchReply {
+    fn last(&self) -> (StatusCode, QueryResponse) {
+        self.resps.last().unwrap().clone()
+    }
+
+    fn data(&self) -> Vec<Vec<Value>> {
+        let mut result = vec![];
+        for (_, resp) in &self.resps {
+            result.extend(resp.data.clone());
+        }
+        result
+    }
+
+    fn state(&self) -> ExecuteStateKind {
+        self.last().1.state
+    }
+
+    fn error(&self) -> Option<QueryError> {
+        for (_, resp) in &self.resps {
+            if let Some(e) = &resp.error {
+                return Some(e.clone());
+            }
+        }
+        None
     }
 }
 
@@ -282,7 +364,8 @@ async fn test_return_when_finish() -> Result<()> {
         ("create table t1(a int)", ExecuteStateKind::Failed),
     ] {
         let start_time = std::time::Instant::now();
-        let (status, result) = post_sql_to_endpoint(&ep, sql, wait_time_secs).await?;
+        let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
+        let (status, result) = TestHttpQueryRequest::new(json).fetch_total().await?.last();
         let duration = start_time.elapsed().as_secs_f64();
         let msg = || format!("{}: {:?}", sql, result);
         assert_eq!(status, StatusCode::OK, "{}", msg());
@@ -411,20 +494,19 @@ async fn test_buffer_size() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let rows = 100;
-    let ep = create_endpoint().await?;
     let sql = format!("select * from numbers({})", rows);
 
     for buf_size in [0, 99, 100, 101] {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_in_buffer": buf_size}});
-        let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
         assert_eq!(
-            result.data.len(),
+            reply.data().len(),
             rows,
             "buf_size={}, result={:?}",
             buf_size,
-            result
+            reply,
         );
-        assert_eq!(status, StatusCode::OK, "{} {:?}", buf_size, result);
+        assert_eq!(reply.last().0, StatusCode::OK, "{} {:?}", buf_size, reply);
     }
     Ok(())
 }
@@ -522,24 +604,17 @@ async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
+    let mut req = TestHttpQueryRequest::new(json);
+    let (status, result) = req.fetch_begin().await?;
 
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
-
-    let (status, result) =
-        post_sql_to_endpoint_with_result_timeout(&ep, "select 1", 1, 1u64).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
-    let next_uri = make_page_uri(&query_id, 0);
-    let response = get_uri(&ep, &next_uri).await;
-    assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
+    assert!(!query_id.is_empty());
 
     sleep(std::time::Duration::from_secs(2)).await;
-    let response = get_uri(&ep, &next_uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    let (status, result) = req.fetch_next().await?;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", result);
     Ok(())
 }
 
@@ -811,16 +886,6 @@ async fn post_sql_to_endpoint_new_session(
 ) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
     post_json_to_endpoint(ep, &json, headers).await
-}
-
-async fn post_sql_to_endpoint_with_result_timeout(
-    ep: &EndpointType,
-    sql: &str,
-    wait_time_secs: u64,
-    result_timeout_secs: u64,
-) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"http_handler_result_timeout_secs": result_timeout_secs.to_string()}}});
-    post_json_to_endpoint(ep, &json, HeaderMap::default()).await
 }
 
 async fn post_json_to_endpoint(
@@ -1095,6 +1160,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let bearer = headers::Authorization::bearer(&token).unwrap();
     assert_auth_current_user(&ep, user_name, bearer.clone(), "%").await?;
     assert_auth_current_role(&ep, "account_admin", bearer.clone()).await?;
+    // assert_auth_current_role_with_restricted_role(&ep, "public", "public", bearer).await?;
     assert_auth_current_role_with_role(&ep, "public", "public", bearer).await?;
     Ok(())
 }
@@ -1254,8 +1320,6 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
 async fn test_func_object_keys() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let route = create_endpoint().await?;
-
     let sqls = vec![
         (
             "CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj JSON, var VARIANT) Engine=Fuse;",
@@ -1273,11 +1337,11 @@ async fn test_func_object_keys() -> Result<()> {
 
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        let (status, result) = reply.last();
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
-        assert_eq!(result.data.len(), data_len);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(reply.data().len(), data_len);
     }
     Ok(())
 }
@@ -1285,8 +1349,6 @@ async fn test_func_object_keys() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multi_partition() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
-
-    let route = create_endpoint().await?;
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
@@ -1299,15 +1361,14 @@ async fn test_multi_partition() -> Result<()> {
     let wait_time_secs = 5;
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
-        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-        assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none(), "{:?}", result.error);
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert!(reply.error().is_none(), "{:?}", reply.error());
         assert_eq!(
-            result.state,
+            reply.state(),
             ExecuteStateKind::Succeeded,
             "SQL '{sql}' not finish after {wait_time_secs} secs"
         );
-        assert_eq!(result.data.len(), data_len);
+        assert_eq!(reply.data().len(), data_len);
     }
     Ok(())
 }
@@ -1315,8 +1376,6 @@ async fn test_multi_partition() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 async fn test_affect() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
-
-    let ep = create_endpoint().await?;
 
     let sqls = vec![
         (
@@ -1389,9 +1448,10 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let request = TestHttpQueryRequest::new(&ep, json.clone());
-        let paged_resps = request.fetch().await?;
-        let result = paged_resps.last().unwrap();
+        let result = TestHttpQueryRequest::new(json.clone())
+            .fetch_total()
+            .await?
+            .last();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
         assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
@@ -1451,15 +1511,15 @@ async fn test_auth_configured_user() -> Result<()> {
         .build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+    let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
+        .with_basic_auth(user_name, pass_word);
+    let v = req.fetch_total().await?.data();
 
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
-
-    let basic = headers::Authorization::basic(user_name, pass_word);
-    // root user can only login in localhost
-    assert_auth_current_user(&ep, user_name, basic, "%").await?;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(
+        v[0][0],
+        serde_json::Value::String(format!("'{}'@'%'", user_name))
+    );
     Ok(())
 }

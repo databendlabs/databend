@@ -51,7 +51,9 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
+use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::DropShareInterpreter;
+use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::UpdateInterpreter;
@@ -234,6 +236,16 @@ impl InterpreterFactory {
             Plan::DropView(drop_view) => Ok(Arc::new(DropViewInterpreter::try_create(
                 ctx,
                 *drop_view.clone(),
+            )?)),
+
+            // Streams
+            Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
+                ctx,
+                *create_stream.clone(),
+            )?)),
+            Plan::DropStream(drop_stream) => Ok(Arc::new(DropStreamInterpreter::try_create(
+                ctx,
+                *drop_stream.clone(),
             )?)),
 
             // Indexes

@@ -26,6 +26,7 @@ use super::walk::walk_select_target;
 use super::walk::walk_set_expr;
 use super::walk::walk_statement;
 use super::walk::walk_table_reference;
+use super::walk_stream_point;
 use super::walk_time_travel_point;
 use crate::ast::*;
 use crate::visitors::walk_window_definition;
@@ -490,6 +491,14 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt) {}
 
+    fn visit_create_stream(&mut self, _stmt: &'ast CreateStreamStmt) {}
+
+    fn visit_drop_stream(&mut self, _stmt: &'ast DropStreamStmt) {}
+
+    fn visit_show_streams(&mut self, _stmt: &'ast ShowStreamsStmt) {}
+
+    fn visit_describe_stream(&mut self, _stmt: &'ast DescribeStreamStmt) {}
+
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
@@ -683,6 +692,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {
         walk_time_travel_point(self, time);
+    }
+
+    fn visit_stream_point(&mut self, stream: &'ast StreamPoint) {
+        walk_stream_point(self, stream)
     }
 
     fn visit_join(&mut self, join: &'ast Join) {

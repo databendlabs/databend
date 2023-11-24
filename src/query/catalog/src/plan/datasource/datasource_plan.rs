@@ -40,6 +40,8 @@ pub struct DataSourcePlan {
     pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
     pub query_internal_columns: bool,
+    // used for recluster to update stream columns
+    pub update_stream_columns: bool,
 
     // data mask policy for `output_schema` columns
     pub data_mask_policy: Option<BTreeMap<FieldIndex, RemoteExpr>>,

@@ -28,6 +28,7 @@ use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_bloom_index_columns;
+use super::interpreter_table_create::is_valid_change_tracking;
 use super::interpreter_table_create::is_valid_create_opt;
 use super::interpreter_table_create::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
@@ -59,6 +60,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_change_tracking(&self.plan.set_options)?;
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
         if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
