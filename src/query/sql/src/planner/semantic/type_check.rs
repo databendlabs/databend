@@ -104,6 +104,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
@@ -2792,9 +2793,12 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         };
 
+        let name = udf.name;
+
         match udf.definition {
             UDFDefinition::LambdaUDF(udf_def) => Ok(Some(
-                self.resolve_lambda_udf(span, arguments, udf_def).await?,
+                self.resolve_lambda_udf(span, name, arguments, udf_def)
+                    .await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
                 self.resolve_udf_server(span, arguments, udf_def).await?,
@@ -2870,6 +2874,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_lambda_udf(
         &mut self,
         span: Span,
+        func_name: String,
         arguments: &[Expr],
         udf_definition: LambdaUDF,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2902,8 +2907,16 @@ impl<'a> TypeChecker<'a> {
                 Ok(None)
             })
             .map_err(|e| e.set_span(span))?;
-
-        self.resolve(&udf_expr).await
+        let scalar = self.resolve(&udf_expr).await?;
+        Ok(Box::new((
+            UDFLambdaCall {
+                span,
+                func_name,
+                scalar: Box::new(scalar.0),
+            }
+            .into(),
+            scalar.1,
+        )))
     }
 
     #[async_recursion::async_recursion]

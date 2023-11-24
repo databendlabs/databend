@@ -1057,8 +1057,6 @@ pub enum TokenKind {
     WRITE,
     #[token("UDF", ignore(ascii_case))]
     UDF,
-    #[token("USAGEUDF", ignore(ascii_case))]
-    USAGEUDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]

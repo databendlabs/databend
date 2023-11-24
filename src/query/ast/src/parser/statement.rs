@@ -2105,26 +2105,25 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
-    // TODO(TCeason): next pr, add a priv to control query UDF query
-    // let udf_privs = map(
-    // rule! {
-    // USAGEUDF ~ ON ~ UDF ~ #ident
-    // },
-    // |(_, _, _, udf)| AccountMgrSource::Privs {
-    // privileges: vec![UserPrivilegeType::UsageUDF],
-    // level: AccountMgrLevel::UDF(udf.to_string()),
-    // },
-    // );
-    //
-    // let udf_all_privs = map(
-    // rule! {
-    // ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
-    // },
-    // |(_, _, _, _, udf)| AccountMgrSource::Privs {
-    // privileges: vec![UserPrivilegeType::UsageUDF],
-    // level: AccountMgrLevel::UDF(udf.to_string()),
-    // },
-    // );
+    let udf_privs = map(
+        rule! {
+            USAGE ~ ON ~ UDF ~ #ident
+        },
+        |(_, _, _, udf)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::UDF(udf.to_string()),
+        },
+    );
+
+    let udf_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+        },
+        |(_, _, _, _, udf)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::UDF(udf.to_string()),
+        },
+    );
 
     let stage_privs = map(
         rule! {
@@ -2138,8 +2137,10 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
+        | #udf_privs: "SELECT ON UDF <udf_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
+        | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
 }
@@ -2171,6 +2172,10 @@ pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
+}
+
+pub fn udf_priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((value(UserPrivilegeType::Select, rule! { SELECT }),))(i)
 }
 
 pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {

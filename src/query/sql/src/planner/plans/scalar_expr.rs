@@ -43,6 +43,7 @@ pub enum ScalarExpr {
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
     UDFServerCall(UDFServerCall),
+    UDFLambdaCall(UDFLambdaCall),
 }
 
 impl ScalarExpr {
@@ -116,6 +117,7 @@ impl ScalarExpr {
             ScalarExpr::CastExpr(expr) => expr.span.or(expr.argument.span()),
             ScalarExpr::SubqueryExpr(expr) => expr.span,
             ScalarExpr::UDFServerCall(expr) => expr.span,
+            ScalarExpr::UDFLambdaCall(expr) => expr.span,
             _ => None,
         }
     }
@@ -127,7 +129,8 @@ impl ScalarExpr {
             ScalarExpr::WindowFunction(_)
             | ScalarExpr::AggregateFunction(_)
             | ScalarExpr::SubqueryExpr(_)
-            | ScalarExpr::UDFServerCall(_) => false,
+            | ScalarExpr::UDFServerCall(_)
+            | ScalarExpr::UDFLambdaCall(_) => false,
             ScalarExpr::FunctionCall(func) => func.arguments.iter().all(|arg| arg.evaluable()),
             ScalarExpr::LambdaFunction(func) => func.args.iter().all(|arg| arg.evaluable()),
             ScalarExpr::CastExpr(expr) => expr.argument.evaluable(),
@@ -346,6 +349,25 @@ impl TryFrom<ScalarExpr> for UDFServerCall {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to UDFServerCall",
+            ))
+        }
+    }
+}
+
+impl From<UDFLambdaCall> for ScalarExpr {
+    fn from(v: UDFLambdaCall) -> Self {
+        Self::UDFLambdaCall(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for UDFLambdaCall {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::UDFLambdaCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast Scalar to UDFLambdaCall",
             ))
         }
     }
@@ -585,6 +607,15 @@ pub struct UDFServerCall {
     pub arguments: Vec<ScalarExpr>,
 }
 
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct UDFLambdaCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub func_name: String,
+    pub scalar: Box<ScalarExpr>,
+}
+
 pub trait Visitor<'a>: Sized {
     fn visit(&mut self, a: &'a ScalarExpr) -> Result<()> {
         walk_expr(self, a)?;
@@ -657,6 +688,10 @@ pub trait Visitor<'a>: Sized {
         }
         Ok(())
     }
+
+    fn visit_udf_lambda_call(&mut self, udf: &'a UDFLambdaCall) -> Result<()> {
+        self.visit(&udf.scalar)
+    }
 }
 
 pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {
@@ -670,6 +705,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::CastExpr(expr) => visitor.visit_cast(expr),
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFServerCall(expr) => visitor.visit_udf_server_call(expr),
+        ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
     }
 }
 
@@ -744,6 +780,10 @@ pub trait VisitorMut<'a>: Sized {
         }
         Ok(())
     }
+
+    fn visit_udf_lambda_call(&mut self, udf: &'a mut UDFLambdaCall) -> Result<()> {
+        self.visit(&mut udf.scalar)
+    }
 }
 
 pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
@@ -760,5 +800,6 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::CastExpr(expr) => visitor.visit_cast_expr(expr),
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFServerCall(expr) => visitor.visit_udf_server_call(expr),
+        ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
     }
 }
