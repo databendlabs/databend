@@ -1789,7 +1789,7 @@ impl Column {
                     };
                     Column::Timestamp(values)
                 }
-                _ => unimplemented!("unsupported arrow extention type {ty:?}"),
+                _ => unimplemented!("unsupported arrow extension type {ty:?}"),
             },
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
