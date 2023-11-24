@@ -20,6 +20,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use parquet::arrow::arrow_to_parquet_schema;
@@ -192,7 +193,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
     }
 
     pub fn build_full_reader(&mut self) -> Result<ParquetRSFullReader> {
-        let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let batch_size = self.ctx.get_settings().get_parquet_max_block_size()? as usize;
 
         self.build_predicate()?;
         self.build_output()?;
@@ -204,8 +205,10 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             .map(|(proj, _, _, paths)| (proj.clone(), paths.clone()))
             .unwrap();
 
+        let schema = Arc::new(DataSchema::from(&self.table_schema.as_ref()));
         Ok(ParquetRSFullReader {
             op: self.op.clone(),
+            schema,
             predicate,
             projection,
             field_paths,
@@ -261,9 +264,11 @@ impl<'a> ParquetRSReaderBuilder<'a> {
     }
 
     fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
-        let (projection, _, _, output_field_paths) = self.built_output.as_ref().unwrap();
+        let (projection, _, schema, output_field_paths) = self.built_output.as_ref().unwrap();
+        let data_schema = DataSchema::from(schema);
         NoPretchPolicyBuilder::create(
             &self.schema_desc,
+            data_schema,
             projection.clone(),
             output_field_paths.clone(),
         )

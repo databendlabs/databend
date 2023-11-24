@@ -17,11 +17,15 @@ use std::sync::Arc;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::RoleApi;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropTablePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_spec;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -63,14 +67,43 @@ impl Interpreter for DropTableInterpreter {
             )));
         }
         if let Some(tbl) = tbl {
-            if tbl.get_table_info().engine() == VIEW_ENGINE {
+            let engine = tbl.get_table_info().engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is VIEW that doesn't support drop, use `DROP VIEW {}.{}` instead",
-                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                    "{}.{} engine is {} that doesn't support drop, use `DROP {} {}.{}` instead",
+                    &self.plan.database,
+                    &self.plan.table,
+                    engine,
+                    engine,
+                    &self.plan.database,
+                    &self.plan.table
                 )));
             }
             let catalog = self.ctx.get_catalog(catalog_name).await?;
 
+            // drop the ownership
+            let tenant = self.ctx.get_tenant();
+            let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
+            let db = catalog.get_database(&tenant, &self.plan.database).await?;
+            role_api
+                .drop_ownership(&GrantObjectByID::Table {
+                    catalog_name: self.plan.catalog.clone(),
+                    db_id: db.get_db_info().ident.db_id,
+                    table_id: tbl.get_table_info().ident.table_id,
+                })
+                .await?;
+
+            // Although even if data is in READ_ONLY mode,
+            // as a catalog object, the table itself is allowed to be dropped (and undropped later),
+            // `drop table ALL` is NOT allowed, which implies that the table data need to be truncated.
+            if self.plan.all {
+                // check mutability, if the table is read only, we cannot truncate the data
+                tbl.check_mutable().map_err(|e| {
+                    e.add_message(" drop table ALL is not allowed for read only table, please consider remove the option ALL")
+                })?
+            }
+
+            // actually drop table
             let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
@@ -95,6 +128,7 @@ impl Interpreter for DropTableInterpreter {
                 }
             }
 
+            // update share spec if needed
             if let Some((spec_vec, share_table_info)) = resp.spec_vec {
                 save_share_spec(
                     &self.ctx.get_tenant(),

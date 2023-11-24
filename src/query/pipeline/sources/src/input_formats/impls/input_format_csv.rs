@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::mem;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
-use common_formats::FieldDecoderCSV;
-use common_formats::FieldDecoderRowBased;
 use common_formats::FileFormatOptionsExt;
 use common_formats::RecordDelimiter;
-use common_io::cursor_ext::*;
+use common_formats::SeparatedTextDecoder;
 use common_meta_app::principal::CsvFileFormatParams;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
@@ -34,7 +32,6 @@ use common_storage::FileStatus;
 use csv_core::ReadRecordResult;
 use log::debug;
 
-use crate::input_formats::error_utils::check_column_end;
 use crate::input_formats::error_utils::get_decode_error_by_pos;
 use crate::input_formats::AligningStateCommon;
 use crate::input_formats::AligningStateTextBased;
@@ -55,29 +52,36 @@ impl InputFormatCSV {
 
     fn read_column(
         builder: &mut ColumnBuilder,
-        field_decoder: &FieldDecoderCSV,
+        field_decoder: &SeparatedTextDecoder,
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
-        let mut reader = Cursor::new(col_data);
-        if reader.eof() {
-            builder.push_default();
+        if col_data.is_empty() {
+            match default_values {
+                None => {
+                    builder.push_default();
+                }
+                Some(values) => {
+                    builder.push(values[column_index].as_ref());
+                }
+            }
             return Ok(());
         }
         field_decoder
-            .read_field(builder, &mut reader, true)
-            .map_err(|e| get_decode_error_by_pos(column_index, schema, &e.message(), col_data))?;
-        check_column_end(&mut reader, schema, column_index)
+            .read_field(builder, col_data)
+            .map_err(|e| get_decode_error_by_pos(column_index, schema, &e.message(), col_data))
     }
 
     fn read_row(
-        field_decoder: &FieldDecoderCSV,
+        field_decoder: &SeparatedTextDecoder,
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         field_ends: &[usize],
         columns_to_read: &Option<Vec<usize>>,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         if let Some(columns_to_read) = columns_to_read {
             for c in columns_to_read {
@@ -87,7 +91,14 @@ impl InputFormatCSV {
                     let field_start = if *c == 0 { 0 } else { field_ends[c - 1] };
                     let field_end = field_ends[*c];
                     let col_data = &buf[field_start..field_end];
-                    Self::read_column(&mut columns[*c], field_decoder, col_data, *c, schema)?;
+                    Self::read_column(
+                        &mut columns[*c],
+                        field_decoder,
+                        col_data,
+                        *c,
+                        schema,
+                        default_values,
+                    )?;
                 }
             }
         } else {
@@ -95,7 +106,7 @@ impl InputFormatCSV {
             for (c, column) in columns.iter_mut().enumerate() {
                 let field_end = field_ends[c];
                 let col_data = &buf[field_start..field_end];
-                Self::read_column(column, field_decoder, col_data, c, schema)?;
+                Self::read_column(column, field_decoder, col_data, c, schema, default_values)?;
                 field_start = field_end;
             }
         }
@@ -115,7 +126,7 @@ impl InputFormatTextBase for InputFormatCSV {
         options: &FileFormatOptionsExt,
     ) -> Arc<dyn FieldDecoder> {
         let csv_params = CsvFileFormatParams::downcast_unchecked(params);
-        Arc::new(FieldDecoderCSV::create(csv_params, options))
+        Arc::new(SeparatedTextDecoder::create_csv(csv_params, options))
     }
 
     fn try_create_align_state(
@@ -164,7 +175,7 @@ impl InputFormatTextBase for InputFormatCSV {
         let field_decoder = builder
             .field_decoder
             .as_any()
-            .downcast_ref::<FieldDecoderCSV>()
+            .downcast_ref::<SeparatedTextDecoder>()
             .expect("must success");
         for (i, end) in batch.row_ends.iter().enumerate() {
             let num_fields = batch.num_fields[i];
@@ -176,6 +187,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + num_fields],
                 &builder.projection,
+                &builder.ctx.default_values,
             ) {
                 builder.ctx.on_error(
                     e,
@@ -393,7 +405,7 @@ impl AligningStateTextBased for CsvReaderState {
             row_batch.data = if last_remain.is_empty() {
                 buf_out
             } else {
-                vec![last_remain, buf_out].concat()
+                [last_remain, buf_out].concat()
             };
 
             Ok(vec![row_batch])

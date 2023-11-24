@@ -332,7 +332,7 @@ pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
 pub fn with(i: Input) -> IResult<With> {
     let cte = map(
         consumed(rule! {
-            #table_alias ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
+            #table_alias_without_as ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
         |(span, (table_alias, _, materialized, _, query, _))| CTE {
             span: transform_span(span.0),
@@ -436,10 +436,26 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
 }
 
 pub fn alias_name(i: Input) -> IResult<Identifier> {
-    let as_alias = map(rule! { AS ~ #ident_after_as }, |(_, name)| name);
+    let short_alias = map(
+        rule! {
+            #ident
+            ~ #error_hint(
+                rule! { AS },
+                "an alias without `AS` keyword has already been defined before this one, \
+                    please remove one of them"
+            )
+        },
+        |(ident, _)| ident,
+    );
+    let as_alias = map(
+        rule! {
+            AS ~ #ident_after_as
+        },
+        |(_, name)| name,
+    );
 
     rule!(
-        #ident
+        #short_alias
         | #as_alias
     )(i)
 }
@@ -447,6 +463,16 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
     map(
         rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
+        |(name, opt_columns)| TableAlias {
+            name,
+            columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
+        },
+    )(i)
+}
+
+pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
+    map(
+        rule! { #ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
         |(name, opt_columns)| TableAlias {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
@@ -529,12 +555,16 @@ pub enum TableReferenceElement {
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
+        /// If the table function is a lateral table function
+        lateral: bool,
         name: Identifier,
         params: Vec<TableFunctionParam>,
         alias: Option<TableAlias>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
+        /// If the subquery is a lateral subquery
+        lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
@@ -615,9 +645,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let table_function = map(
         rule! {
-            #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+            LATERAL? ~ #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
         },
-        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
+        |(lateral, name, _, params, _, alias)| TableReferenceElement::TableFunction {
+            lateral: lateral.is_some(),
             name,
             params,
             alias,
@@ -625,9 +656,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            "(" ~ #query ~ ")" ~ #table_alias?
+            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias?
         },
-        |(_, subquery, _, alias)| TableReferenceElement::Subquery {
+        |(lateral, _, subquery, _, alias)| TableReferenceElement::Subquery {
+            lateral: lateral.is_some(),
             subquery: Box::new(subquery),
             alias,
         },
@@ -708,6 +740,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 unpivot,
             },
             TableReferenceElement::TableFunction {
+                lateral,
                 name,
                 params,
                 alias,
@@ -728,14 +761,20 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     .collect();
                 TableReference::TableFunction {
                     span: transform_span(input.span.0),
+                    lateral,
                     name,
                     params: normal_params,
                     named_params,
                     alias,
                 }
             }
-            TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
+            TableReferenceElement::Subquery {
+                lateral,
+                subquery,
+                alias,
+            } => TableReference::Subquery {
                 span: transform_span(input.span.0),
+                lateral,
                 subquery,
                 alias,
             },

@@ -24,12 +24,14 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::SetSecondaryRolesPlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
@@ -38,6 +40,7 @@ use crate::plans::AnalyzeTablePlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
+use crate::plans::CreateConnectionPlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateFileFormatPlan;
@@ -47,17 +50,22 @@ use crate::plans::CreateRolePlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
+use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DeletePlan;
+use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
+use crate::plans::DescribeTaskPlan;
 use crate::plans::DropCatalogPlan;
+use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
@@ -67,13 +75,16 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
+use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
@@ -99,6 +110,7 @@ use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SettingPlan;
+use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
@@ -110,6 +122,7 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
+use crate::plans::ShowTasksPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -201,6 +214,10 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
 
+    // Streams
+    CreateStream(Box<CreateStreamPlan>),
+    DropStream(Box<DropStreamPlan>),
+
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
@@ -232,6 +249,7 @@ pub enum Plan {
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
+    SetSecondaryRoles(Box<SetSecondaryRolesPlan>),
 
     // FileFormat
     CreateFileFormat(Box<CreateFileFormatPlan>),
@@ -242,6 +260,12 @@ pub enum Plan {
     CreateStage(Box<CreateStagePlan>),
     DropStage(Box<DropStagePlan>),
     RemoveStage(Box<RemoveStagePlan>),
+
+    // Connection
+    CreateConnection(Box<CreateConnectionPlan>),
+    DescConnection(Box<DescConnectionPlan>),
+    DropConnection(Box<DropConnectionPlan>),
+    ShowConnections(Box<ShowConnectionsPlan>),
 
     // Presign
     Presign(Box<PresignPlan>),
@@ -276,6 +300,14 @@ pub enum Plan {
     DropNetworkPolicy(Box<DropNetworkPolicyPlan>),
     DescNetworkPolicy(Box<DescNetworkPolicyPlan>),
     ShowNetworkPolicies(Box<ShowNetworkPoliciesPlan>),
+
+    // Task
+    CreateTask(Box<CreateTaskPlan>),
+    AlterTask(Box<AlterTaskPlan>),
+    DropTask(Box<DropTaskPlan>),
+    DescribeTask(Box<DescribeTaskPlan>),
+    ShowTasks(Box<ShowTasksPlan>),
+    ExecuteTask(Box<ExecuteTaskPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -291,6 +323,8 @@ pub enum RewriteKind {
     ShowTables(String),
     ShowColumns(String, String),
     ShowTablesStatus,
+
+    ShowStreams(String),
 
     ShowFunctions,
     ShowTableFunctions,
@@ -376,6 +410,15 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
+
+            Plan::CreateTask(plan) => plan.schema(),
+            Plan::DescribeTask(plan) => plan.schema(),
+            Plan::ShowTasks(plan) => plan.schema(),
+            Plan::ExecuteTask(plan) => plan.schema(),
+
+            Plan::DescConnection(plan) => plan.schema(),
+            Plan::ShowConnections(plan) => plan.schema(),
+
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -410,6 +453,10 @@ impl Plan {
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
                 | Plan::CopyIntoTable(_)
+                | Plan::ShowTasks(_)
+                | Plan::DescribeTask(_)
+                | Plan::DescConnection(_)
+                | Plan::ShowConnections(_)
         )
     }
 }

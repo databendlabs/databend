@@ -24,7 +24,8 @@ use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
     session: Arc<Session>,
-    pub query_id: Option<String>,
+    pub query_id: String,
+    pub node_id: String,
     pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
 }
@@ -32,13 +33,15 @@ pub struct HttpQueryContext {
 impl HttpQueryContext {
     pub fn new(
         session: Arc<Session>,
-        query_id: Option<String>,
+        query_id: String,
+        node_id: String,
         deduplicate_label: Option<String>,
         user_agent: Option<String>,
     ) -> Self {
         HttpQueryContext {
             session,
             query_id,
+            node_id,
             deduplicate_label,
             user_agent,
         }

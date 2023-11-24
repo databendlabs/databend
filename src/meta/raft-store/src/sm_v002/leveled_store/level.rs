@@ -14,16 +14,19 @@
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
+use std::io;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
-use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::map_api::AsMap;
+use crate::sm_v002::leveled_store::map_api::KVResultStream;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
+use crate::sm_v002::leveled_store::map_api::MarkedOf;
+use crate::sm_v002::leveled_store::map_api::Transition;
 use crate::sm_v002::leveled_store::sys_data::SysData;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
@@ -42,13 +45,13 @@ impl MapKey for ExpireKey {
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    sys_data: SysData,
+    pub(in crate::sm_v002) sys_data: SysData,
 
     /// Generic Key-value store.
-    kv: BTreeMap<String, Marked<Vec<u8>>>,
+    pub(in crate::sm_v002) kv: BTreeMap<String, Marked<Vec<u8>>>,
 
     /// The expiration queue of generic kv.
-    expire: BTreeMap<ExpireKey, Marked<String>>,
+    pub(in crate::sm_v002) expire: BTreeMap<ExpireKey, Marked<String>>,
 }
 
 impl Level {
@@ -62,6 +65,10 @@ impl Level {
             kv: Default::default(),
             expire: Default::default(),
         }
+    }
+
+    pub(in crate::sm_v002) fn sys_data_ref(&self) -> &SysData {
+        &self.sys_data
     }
 
     pub(in crate::sm_v002) fn sys_data_mut(&mut self) -> &mut SysData {
@@ -84,25 +91,26 @@ impl Level {
 
 #[async_trait::async_trait]
 impl MapApiRO<String> for Level {
-    async fn get<Q>(&self, key: &Q) -> Marked<<String as MapKey>::V>
+    async fn get<Q>(&self, key: &Q) -> Result<Marked<<String as MapKey>::V>, io::Error>
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.kv.get(key).cloned().unwrap_or(Marked::empty())
+        let got = self.kv.get(key).cloned().unwrap_or(Marked::empty());
+        Ok(got)
     }
 
-    async fn range<'f, Q, R>(
-        &'f self,
-        range: R,
-    ) -> BoxStream<'f, (String, Marked<<String as MapKey>::V>)>
-    where
-        String: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-    {
-        let it = self.kv.range(range).map(|(k, v)| (k.clone(), v.clone()));
-        futures::stream::iter(it).boxed()
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<String>, io::Error>
+    where R: RangeBounds<String> + Clone + Send + Sync + 'static {
+        // Level is borrowed. It has to copy the result to make the returning stream static.
+        let vec = self
+            .kv
+            .range(range)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>();
+
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
+        Ok(strm)
     }
 }
 
@@ -112,7 +120,7 @@ impl MapApi<String> for Level {
         &mut self,
         key: String,
         value: Option<(<String as MapKey>::V, Option<KVMeta>)>,
-    ) -> (Marked<<String as MapKey>::V>, Marked<<String as MapKey>::V>) {
+    ) -> Result<Transition<MarkedOf<String>>, io::Error> {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus we always tombstone the key if it is None.
 
@@ -122,40 +130,37 @@ impl MapApi<String> for Level {
         } else {
             // Do not increase the sequence number, just use the max seq for all tombstone.
             let seq = self.curr_seq();
-            Marked::new_tomb_stone(seq)
+            Marked::new_tombstone(seq)
         };
 
-        let prev = (*self).str_map().get(&key).await;
+        let prev = (*self).str_map().get(&key).await?;
         self.kv.insert(key, marked.clone());
-        (prev, marked)
+        Ok((prev, marked))
     }
 }
 
 #[async_trait::async_trait]
 impl MapApiRO<ExpireKey> for Level {
-    async fn get<Q>(&self, key: &Q) -> Marked<<ExpireKey as MapKey>::V>
+    async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<ExpireKey>, io::Error>
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.expire.get(key).cloned().unwrap_or(Marked::empty())
+        let got = self.expire.get(key).cloned().unwrap_or(Marked::empty());
+        Ok(got)
     }
 
-    async fn range<'f, Q, R>(
-        &'f self,
-        range: R,
-    ) -> BoxStream<'f, (ExpireKey, Marked<<ExpireKey as MapKey>::V>)>
-    where
-        ExpireKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-    {
-        let it = self
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>
+    where R: RangeBounds<ExpireKey> + Clone + Send + Sync + 'static {
+        // Level is borrowed. It has to copy the result to make the returning stream static.
+        let vec = self
             .expire
             .range(range)
-            .map(|(k, v)| (k.clone(), v.clone()));
+            .map(|(k, v)| (*k, v.clone()))
+            .collect::<Vec<_>>();
 
-        futures::stream::iter(it).boxed()
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
+        Ok(strm)
     }
 }
 
@@ -165,12 +170,7 @@ impl MapApi<ExpireKey> for Level {
         &mut self,
         key: ExpireKey,
         value: Option<(<ExpireKey as MapKey>::V, Option<KVMeta>)>,
-    ) -> (
-        Marked<<ExpireKey as MapKey>::V>,
-        Marked<<ExpireKey as MapKey>::V>,
-    ) {
-        // dbg!("set expire", &key, &value);
-
+    ) -> Result<Transition<MarkedOf<ExpireKey>>, io::Error> {
         let seq = self.curr_seq();
 
         let marked = if let Some((v, meta)) = value {
@@ -179,9 +179,9 @@ impl MapApi<ExpireKey> for Level {
             Marked::TombStone { internal_seq: seq }
         };
 
-        let prev = (*self).expire_map().get(&key).await;
+        let prev = (*self).expire_map().get(&key).await?;
         self.expire.insert(key, marked.clone());
-        (prev, marked)
+        Ok((prev, marked))
     }
 }
 

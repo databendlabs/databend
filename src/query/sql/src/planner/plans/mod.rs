@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod add_row_number;
 mod aggregate;
 mod call;
 mod constant_table_scan;
@@ -31,6 +32,7 @@ mod lambda;
 mod limit;
 mod materialized_cte;
 mod merge_into;
+mod udf;
 
 mod copy_into_location;
 pub mod operator;
@@ -51,6 +53,7 @@ mod union_all;
 mod update;
 mod window;
 
+pub use add_row_number::AddRowNumber;
 pub use aggregate::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
@@ -90,6 +93,7 @@ pub use scan::*;
 pub use setting::*;
 pub use share::*;
 pub use sort::*;
+pub use udf::*;
 pub use union_all::UnionAll;
 pub use update::*;
 pub use window::*;

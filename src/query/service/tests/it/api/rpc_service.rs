@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -101,5 +102,21 @@ async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
         }
         _ => unimplemented!("expect TLSConfigError"),
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_rpc_server_port_used() -> Result<()> {
+    let listener = TcpListener::bind("0.0.0.0:0").unwrap();
+    let local_socket = listener.local_addr().unwrap();
+
+    let mut srv = RpcService {
+        config: ConfigBuilder::create().build(),
+        abort_notify: Arc::new(Default::default()),
+    };
+
+    let r = srv.start_with_incoming(local_socket).await;
+
+    assert!(r.is_err());
     Ok(())
 }

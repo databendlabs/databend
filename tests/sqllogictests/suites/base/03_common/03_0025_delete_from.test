@@ -1,0 +1,327 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(c1 Int, c2 Int )
+
+statement ok
+INSERT INTO t VALUES(1,2)
+
+statement ok
+INSERT INTO t VALUES(3,4)
+
+statement ok
+delete from t where c1 > 3
+
+query B
+select count(*) = 2 from t
+----
+1
+
+
+
+statement ok
+delete from t where c1 = 1
+
+query B
+select count(*) = 0 from t where c1 = 1
+----
+1
+
+query B
+select count(*) = 1 from t where c1 <> 1
+----
+1
+
+statement ok
+INSERT INTO t VALUES(5,6)
+
+statement ok
+delete from t as t1 where t1.c2 = 6
+
+statement ok
+delete from t
+
+query B
+select count(*) = 0 from t
+----
+1
+
+
+
+statement ok
+drop table t all
+
+statement ok
+create table t (c Int null)
+
+statement ok
+insert into t values (1),(2),(NULL)
+
+statement ok
+delete from t where 1 = 0
+
+query B
+select count(*) = 3 from t
+----
+1
+
+
+
+statement ok
+delete from t where c = 1
+
+query B
+select count(*) = 2 from t
+----
+1
+
+
+
+query B
+select count(*) = 1 from t where c IS NULL
+----
+1
+
+
+
+statement ok
+delete from t where c IS NULL
+
+query B
+select count(*) = 0 from t where c IS NULL
+----
+1
+
+
+
+query B
+select count(*) = 1 from t where c IS NOT NULL
+----
+1
+
+
+
+statement ok
+delete from t where 1 = 1
+
+query B
+select count(*) = 0 from t
+----
+1
+
+statement ok
+insert into t values (1), (NULL)
+
+statement ok
+delete from t where c >= 1
+
+
+query T
+select * from t
+----
+NULL
+
+
+statement ok
+insert into t values (1),(2),(NULL)
+
+statement error (?s)1002.*Delete must have deterministic predicate
+delete from t where now()
+
+query B
+select count(*) = 0 from t
+----
+0
+
+
+
+statement ok
+drop table t all
+
+statement ok
+create table t(c Int) CLUSTER BY(c+1)
+
+statement ok
+insert into t values (1),(3)
+
+statement ok
+insert into t values (2),(4)
+
+statement ok
+delete from t where c > 2;
+
+query B
+select count(*) = 2 from t
+----
+1
+
+statement ok
+drop table t all
+
+statement ok
+create table t(a Int, b Int)
+
+statement ok
+insert into t select number, 50 - number from numbers(100)
+
+query B
+select count(*) = 100 from t
+----
+1
+
+statement ok
+delete from t where b > 0
+
+query B
+select count(*) = 50 from t
+----
+1
+
+statement ok
+delete from t where t.a in (select * from numbers(10))
+
+statement ok
+drop table t all
+
+
+####################################
+# delete pruning, whole blocks     #
+####################################
+
+statement ok
+create table t (c int);
+
+# case: 3 blocks of single value
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(2);
+
+statement ok
+insert into t values(3);
+
+statement ok
+delete from t where c = 2;
+
+query I
+select * from t order by c;
+----
+1
+3
+
+# case: 3 blocks
+
+statement ok
+truncate table t;
+
+statement ok
+insert into t values(1), (3);
+
+statement ok
+insert into t values(3), (5);
+
+statement ok
+insert into t values(6), (7);
+
+statement ok
+delete from t where c > 0 and c < 4;
+
+query I
+select * from t order by c;
+----
+5
+6
+7
+
+
+
+
+
+statement ok
+drop table t all
+
+####################################
+# delete pruning, whole segments   #
+####################################
+
+statement ok
+create table t (c int);
+
+# add the first segment
+statement ok
+insert into t values(1),(2),(3);
+
+# add the second segment
+statement ok
+insert into t values(4),(5),(6);
+
+# add the third segment
+statement ok
+insert into t values(7),(8),(9);
+
+statement ok
+delete from t where c > 3 and c < 8;
+
+query I
+select * from t order by c;
+----
+1
+2
+3
+8
+9
+
+statement ok
+drop table t all
+
+# test large data
+statement ok
+create table t (c int) row_per_block = 100000 block_per_segment = 1000;
+
+statement ok
+set max_threads = 1;
+
+# 0-1000000
+statement ok
+create table t_number(c int);
+
+statement ok
+insert into t_number select * from numbers(1000000);
+
+# insert data
+statement ok
+insert into t select c from t_number;
+
+statement ok
+insert into t select c + 1000000 from t_number;
+
+statement ok
+delete from t where c >= 0 and c < 1500000;
+
+statement error (?s)1065.*Internal column `_row_id` is not allowed in current statement
+delete from t where _row_id = 18446735277616529408;
+
+query I
+select count(*) from t;
+----
+500000
+
+query I
+select count(*) from t where c >= 0 and c < 1500000;
+----
+0
+
+statement ok
+drop table t all
+
+statement ok
+DROP DATABASE db1

@@ -27,14 +27,14 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 
 // for unmatched clause, we need to calculate the
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnmatchedEvaluator {
     pub source_schema: DataSchemaRef,
     pub condition: Option<ScalarExpr>,
     pub values: Vec<ScalarExpr>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MatchedEvaluator {
     pub condition: Option<ScalarExpr>,
     // table_schema.idx -> update_expression
@@ -61,7 +61,15 @@ pub struct MergeInto {
 }
 
 impl std::fmt::Debug for MergeInto {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Merge Into")
+            .field("catalog", &self.catalog)
+            .field("database", &self.database)
+            .field("table", &self.table)
+            .field("table_id", &self.table_id)
+            .field("join", &self.input)
+            .field("matched", &self.matched_evaluators)
+            .field("unmateched", &self.unmatched_evaluators)
+            .finish()
     }
 }

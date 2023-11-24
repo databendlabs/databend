@@ -14,16 +14,19 @@
 
 use std::sync::Arc;
 
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::{AsyncTransform, AsyncTransformer};
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_transforms::processors::AsyncTransform;
+use common_pipeline_transforms::processors::AsyncTransformer;
 
 use crate::api::ExchangeShuffleMeta;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_exchange_group_by_serializer::{FlightSerialized, FlightSerializedMeta};
+use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
+use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 
 pub struct TransformExchangeAsyncBarrier;
 

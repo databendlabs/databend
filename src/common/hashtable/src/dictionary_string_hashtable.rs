@@ -46,9 +46,11 @@ impl PartialEq for DictionaryKeys {
 }
 
 impl FastHash for DictionaryKeys {
+    #[inline(always)]
     fn fast_hash(&self) -> u64 {
         unsafe {
-            self.keys
+            let hash = self
+                .keys
                 .as_ref()
                 .iter()
                 .map(|x| x.as_ref().fast_hash())
@@ -59,7 +61,12 @@ impl FastHash for DictionaryKeys {
                     b ^= b >> 47;
                     b.wrapping_mul(0x9ddfea08eb382d69_u64)
                 })
-                .unwrap_or_default()
+                .unwrap_or_default();
+            if cfg!(target_feature = "sse4.2") {
+                hash >> 32
+            } else {
+                hash
+            }
         }
     }
 }
@@ -84,7 +91,10 @@ pub struct DictionaryEntry<V> {
 
 impl<V> DictionaryEntry<V> {
     pub fn is_zero(&self) -> bool {
-        unsafe { self.key.assume_init_ref().as_ptr().is_null() }
+        #[allow(useless_ptr_null_checks)]
+        unsafe {
+            self.key.assume_init_ref().as_ptr().is_null()
+        }
     }
 }
 
@@ -444,10 +454,7 @@ impl<'a, V> Clone for DictionaryEntryRef<'a, V>
 where Self: 'a
 {
     fn clone(&self) -> Self {
-        DictionaryEntryRef {
-            key: self.key,
-            entry: self.entry,
-        }
+        *self
     }
 }
 

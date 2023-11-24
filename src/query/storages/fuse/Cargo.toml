@@ -11,9 +11,6 @@ edition = { workspace = true }
 doctest = false
 test = false
 
-[features]
-enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/enable-histogram-metrics"]
-
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
@@ -34,14 +31,14 @@ common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 jsonb = { workspace = true }
-table-lock = { path = "../../ee-features/table-lock" }
 
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }
-storages-common-cache-manager = { path = "../common/cache-manager" }
+storages-common-cache-manager = { path = "../common/cache_manager" }
 storages-common-index = { path = "../common/index" }
+storages-common-locks = { path = "../common/locks" }
 storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
 async-backtrace = { workspace = true }
@@ -54,7 +51,6 @@ futures = "0.3.24"
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = "0.10.5"
-lazy_static = { workspace = true }
 log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }

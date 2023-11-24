@@ -42,9 +42,10 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::SyncSource;
@@ -582,6 +583,7 @@ impl Table for HiveTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }
@@ -591,6 +593,7 @@ impl Table for HiveTable {
         _ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
+        _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
@@ -621,7 +624,7 @@ impl Table for HiveTable {
         Ok(None)
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 
@@ -724,29 +727,6 @@ pub fn convert_hdfs_path(hdfs_path: &str, is_dir: bool) -> String {
     format_path
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use super::convert_hdfs_path;
-
-    #[test]
-    fn test_convert_hdfs_path() {
-        let mut m = HashMap::new();
-        m.insert("hdfs://namenode:8020/user/a", "/user/a/");
-        m.insert("hdfs://namenode:8020/user/a/", "/user/a/");
-        m.insert("hdfs://namenode:8020/", "/");
-        m.insert("hdfs://namenode:8020", "/");
-        m.insert("/user/a", "/user/a/");
-        m.insert("/", "/");
-
-        for (hdfs_path, expected_path) in &m {
-            let path = convert_hdfs_path(hdfs_path, true);
-            assert_eq!(path, *expected_path);
-        }
-    }
-}
-
 #[async_recursion]
 async fn list_files_from_dir(
     operator: Operator,
@@ -817,4 +797,27 @@ async fn do_list_files_from_dir(
         }
     }
     Ok((all_files, all_dirs))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::convert_hdfs_path;
+
+    #[test]
+    fn test_convert_hdfs_path() {
+        let mut m = HashMap::new();
+        m.insert("hdfs://namenode:8020/user/a", "/user/a/");
+        m.insert("hdfs://namenode:8020/user/a/", "/user/a/");
+        m.insert("hdfs://namenode:8020/", "/");
+        m.insert("hdfs://namenode:8020", "/");
+        m.insert("/user/a", "/user/a/");
+        m.insert("/", "/");
+
+        for (hdfs_path, expected_path) in &m {
+            let path = convert_hdfs_path(hdfs_path, true);
+            assert_eq!(path, *expected_path);
+        }
+    }
 }

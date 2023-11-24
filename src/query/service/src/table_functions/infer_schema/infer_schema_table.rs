@@ -37,7 +37,8 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_sql::binder::resolve_stage_location;
@@ -46,8 +47,7 @@ use common_storage::read_parquet_schema_async;
 use common_storage::read_parquet_schema_async_rs;
 use common_storage::StageFilesInfo;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipeline;
+use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 use crate::table_functions::TableFunction;
@@ -126,6 +126,7 @@ impl Table for InferSchemaTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| InferSchemaSource::create(ctx.clone(), output, self.args_parsed.clone()),

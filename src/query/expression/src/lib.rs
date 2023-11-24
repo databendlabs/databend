@@ -13,6 +13,11 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::needless_lifetimes)]
+// FIXME: we should avoid this by implementing Ord correctly.
+#![allow(clippy::non_canonical_partial_ord_impl)]
+#![allow(incomplete_features)]
 #![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]
@@ -25,20 +30,18 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![feature(trait_alias)]
+#![feature(vec_into_raw_parts)]
 #![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
-#![allow(clippy::len_without_is_empty)]
-#![allow(clippy::needless_lifetimes)]
-#![allow(incomplete_features)]
 #![feature(int_roundings)]
 #![feature(trait_upcasting)]
-#![feature(let_chains)]
 
 #[allow(dead_code)]
 mod block;
 
+pub mod aggregate;
 mod convert_arrow_rs;
 pub mod converts;
 mod evaluator;
@@ -54,6 +57,7 @@ pub mod types;
 pub mod utils;
 pub mod values;
 
+pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;

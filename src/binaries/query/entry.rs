@@ -25,6 +25,7 @@ use common_config::QUERY_SEMVER;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
+use common_storage::DataOperator;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
@@ -112,6 +113,9 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
+
+    // Check storage enterprise features.
+    DataOperator::instance().check_license().await?;
     Ok(())
 }
 
@@ -135,7 +139,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
         let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, tls_config)?;
         let listening = handler.start(listening.parse()?).await?;
-        shutdown_handle.add_service(handler);
+        shutdown_handle.add_service("MySQLHandler", handler);
 
         info!(
             "Listening for MySQL compatibility protocol: {}, Usage: mysql -uroot -h{} -P{}",
@@ -152,7 +156,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
         let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse);
         let listening = srv.start(listening.parse()?).await?;
-        shutdown_handle.add_service(srv);
+        shutdown_handle.add_service("ClickHouseHandler", srv);
 
         let http_handler_usage = HttpHandlerKind::Clickhouse.usage(listening);
         info!(
@@ -168,7 +172,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
         let mut srv = HttpHandler::create(HttpHandlerKind::Query);
         let listening = srv.start(listening.parse()?).await?;
-        shutdown_handle.add_service(srv);
+        shutdown_handle.add_service("DatabendHTTPHandler", srv);
 
         let http_handler_usage = HttpHandlerKind::Query.usage(listening);
         info!(
@@ -182,7 +186,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv.start(address.parse()?).await?;
-        shutdown_handle.add_service(srv);
+        shutdown_handle.add_service("MetricService", srv);
         info!("Listening for Metric API: {}/metrics", listening);
     }
 
@@ -191,7 +195,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         let address = conf.query.admin_api_address.clone();
         let mut srv = HttpService::create(conf);
         let listening = srv.start(address.parse()?).await?;
-        shutdown_handle.add_service(srv);
+        shutdown_handle.add_service("AdminHTTP", srv);
         info!("Listening for Admin HTTP API: {}", listening);
     }
 
@@ -203,7 +207,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         );
         let mut srv = FlightSQLServer::create(conf.clone())?;
         let listening = srv.start(address.parse()?).await?;
-        shutdown_handle.add_service(srv);
+        shutdown_handle.add_service("FlightSQLService", srv);
         info!("Listening for FlightSQL API: {}", listening);
     }
 
@@ -212,7 +216,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         let address = conf.query.flight_api_address.clone();
         let mut srv = RpcService::create(conf.clone())?;
         let listening = srv.start(address.parse()?).await?;
-        shutdown_handle.add_service(srv);
+        shutdown_handle.add_service("RPCService", srv);
         info!("Listening for RPC API (interserver): {}", listening);
     }
 

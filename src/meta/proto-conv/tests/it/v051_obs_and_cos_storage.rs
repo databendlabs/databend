@@ -16,6 +16,7 @@ use common_meta_app as mt;
 use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageParams;
+use minitrace::func_name;
 
 use crate::common;
 

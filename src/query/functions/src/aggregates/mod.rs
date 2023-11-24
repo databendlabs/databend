@@ -13,10 +13,8 @@
 // limitations under the License.
 
 mod aggregate_count;
-mod aggregate_function;
 
 mod aggregate_function_factory;
-mod aggregate_function_state;
 
 mod adaptors;
 mod aggregate_approx_count_distinct;
@@ -36,40 +34,40 @@ mod aggregate_null_result;
 mod aggregate_quantile_cont;
 mod aggregate_quantile_disc;
 mod aggregate_quantile_tdigest;
+mod aggregate_quantile_tdigest_weighted;
 mod aggregate_retention;
 mod aggregate_scalar_state;
 mod aggregate_skewness;
 mod aggregate_stddev;
 mod aggregate_string_agg;
 mod aggregate_sum;
+mod aggregate_unary;
 mod aggregate_window_funnel;
 mod aggregator;
 mod aggregator_common;
 
 pub use adaptors::*;
 pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
-pub use aggregate_array_agg::AggregateArrayAggFunction;
-pub use aggregate_array_moving::AggregateArrayMovingAvgFunction;
-pub use aggregate_array_moving::AggregateArrayMovingSumFunction;
-pub use aggregate_avg::AggregateAvgFunction;
+pub use aggregate_array_agg::*;
+pub use aggregate_array_moving::*;
 pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
 pub use aggregate_combinator_if::AggregateIfCombinator;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_covariance::AggregateCovarianceFunction;
-pub use aggregate_function::AggregateFunction;
-pub use aggregate_function::AggregateFunctionRef;
+pub use aggregate_function::*;
 pub use aggregate_function_factory::AggregateFunctionFactory;
-pub use aggregate_function_state::get_layout_offsets;
-pub use aggregate_function_state::StateAddr;
-pub use aggregate_function_state::StateAddrs;
-pub use aggregate_kurtosis::AggregateKurtosisFunction;
-pub use aggregate_min_max_any::AggregateMinMaxAnyFunction;
+pub use aggregate_kurtosis::*;
+pub use aggregate_min_max_any::*;
 pub use aggregate_null_result::AggregateNullResultFunction;
-pub use aggregate_quantile_cont::AggregateQuantileContFunction;
-pub use aggregate_quantile_disc::AggregateQuantileDiscFunction;
-pub use aggregate_retention::AggregateRetentionFunction;
-pub use aggregate_skewness::AggregateSkewnessFunction;
-pub use aggregate_string_agg::AggregateStringAggFunction;
-pub use aggregate_sum::AggregateSumFunction;
+pub use aggregate_quantile_cont::*;
+pub use aggregate_quantile_disc::*;
+pub use aggregate_quantile_tdigest::*;
+pub use aggregate_quantile_tdigest_weighted::*;
+pub use aggregate_retention::*;
+pub use aggregate_skewness::*;
+pub use aggregate_string_agg::*;
+pub use aggregate_sum::*;
+pub use aggregate_unary::*;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
+pub use common_expression::aggregate as aggregate_function;

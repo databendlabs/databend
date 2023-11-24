@@ -153,23 +153,27 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        // 1. Prune unused Columns.
-        if required.contains(&window.index) {
-            // The scalar items in window function is not replaced yet.
-            // The will be replaced in physical plan builder.
-            window.arguments.iter().for_each(|item| {
-                required.extend(item.scalar.used_columns());
-                required.insert(item.index);
-            });
-            window.partition_by.iter().for_each(|item| {
-                required.extend(item.scalar.used_columns());
-                required.insert(item.index);
-            });
-            window.order_by.iter().for_each(|item| {
-                required.extend(item.order_by_item.scalar.used_columns());
-                required.insert(item.order_by_item.index);
-            });
-        }
+        // 1. DO NOT Prune unused Columns cause window may not in required, eg:
+        // select s1.a from ( select t1.a as a, dense_rank() over(order by t1.a desc) as rk
+        // from (select 'a1' as a) t1 ) s1
+        // left join ( select dense_rank() over(order by t1.a desc) as rk
+        // from (select 'a2' as a) t1 )s2 on s1.rk=s2.rk;
+
+        // The scalar items in window function is not replaced yet.
+        // The will be replaced in physical plan builder.
+        window.arguments.iter().for_each(|item| {
+            required.extend(item.scalar.used_columns());
+            required.insert(item.index);
+        });
+        window.partition_by.iter().for_each(|item| {
+            required.extend(item.scalar.used_columns());
+            required.insert(item.index);
+        });
+        window.order_by.iter().for_each(|item| {
+            required.extend(item.order_by_item.scalar.used_columns());
+            required.insert(item.order_by_item.index);
+        });
+
         let column_projections = required.clone().into_iter().collect::<Vec<_>>();
 
         // 2. Build physical plan.
@@ -215,10 +219,7 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by
-                .resolve_and_check(&*input_schema)?
-                .data_type()
-                .clone();
+            let mut common_ty = order_by.type_check(&*input_schema)?.data_type().clone();
             for scalar in start.iter_mut().chain(end.iter_mut()) {
                 let ty = scalar.as_ref().infer_data_type();
                 common_ty = common_super_type(

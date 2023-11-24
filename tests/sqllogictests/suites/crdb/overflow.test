@@ -1,0 +1,24 @@
+statement ok
+drop table if exists large_numbers
+
+statement ok
+CREATE TABLE large_numbers (a INT8)
+
+statement error 1006
+INSERT INTO large_numbers VALUES (9223372036854775807),(1)
+
+query I
+SELECT sum(a) FROM large_numbers
+----
+NULL
+
+statement ok
+DELETE FROM large_numbers
+
+statement error 1006
+INSERT INTO large_numbers VALUES (-9223372036854775808),(-1)
+
+query I
+SELECT sum(a) FROM large_numbers
+----
+NULL

@@ -28,13 +28,14 @@ use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::UserIdentity;
+use common_metrics::mysql::*;
 use common_sql::Planner;
-use common_tracing::func_name;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
 use log::error;
 use log::info;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
@@ -47,7 +48,6 @@ use rand::RngCore;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::servers::mysql::mysql_metrics;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
@@ -187,39 +187,45 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        if self.base.session.is_aborting() {
-            writer
-                .error(
-                    ErrorKind::ER_ABORTING_CONNECTION,
-                    "Aborting this connection. because we are try aborting server.".as_bytes(),
-                )
-                .await?;
+        let root = Span::root(full_name!(), SpanContext::random());
 
-            return Err(ErrorCode::AbortedSession(
-                "Aborting this connection. because we are try aborting server.",
-            ));
+        async {
+            if self.base.session.is_aborting() {
+                writer
+                    .error(
+                        ErrorKind::ER_ABORTING_CONNECTION,
+                        "Aborting this connection. because we are try aborting server.".as_bytes(),
+                    )
+                    .await?;
+
+                return Err(ErrorCode::AbortedSession(
+                    "Aborting this connection. because we are try aborting server.",
+                ));
+            }
+
+            let mut writer = DFQueryResultWriter::create(writer);
+
+            let instant = Instant::now();
+            let query_result = self
+                .base
+                .do_query(query)
+                .await
+                .map_err(|err| err.display_with_sql(query));
+
+            let format = self.base.session.get_format_settings();
+
+            let mut write_result = writer.write(query_result, &format).await;
+
+            if let Err(cause) = write_result {
+                let suffix = format!("(while in query {})", query);
+                write_result = Err(cause.add_message_back(suffix));
+            }
+            observe_mysql_process_request_duration(instant.elapsed());
+
+            write_result
         }
-
-        let mut writer = DFQueryResultWriter::create(writer);
-
-        let instant = Instant::now();
-        let query_result = self
-            .base
-            .do_query(query)
-            .await
-            .map_err(|err| err.display_with_sql(query));
-
-        let format = self.base.session.get_format_settings();
-
-        let mut write_result = writer.write(query_result, &format).await;
-
-        if let Err(cause) = write_result {
-            let suffix = format!("(while in query {})", query);
-            write_result = Err(cause.add_message_back(suffix));
-        }
-        mysql_metrics::observe_mysql_process_request_duration(instant.elapsed());
-
-        write_result
+        .in_span(root)
+        .await
     }
 
     #[async_backtrace::framed]
@@ -315,69 +321,66 @@ impl InteractiveWorkerBase {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn do_query(&mut self, query: &str) -> Result<(QueryResult, Option<FormatSettings>)> {
-        let root = Span::root(func_name!(), SpanContext::random());
-        async {
-            match self.federated_server_command_check(query) {
-                Some((schema, data_block)) => {
-                    info!("Federated query: {}", query);
-                    if data_block.num_rows() > 0 {
-                        info!("Federated response: {:?}", data_block);
-                    }
-                    let has_result = data_block.num_rows() > 0;
-                    Ok((
-                        QueryResult::create(
-                            DataBlockStream::create(None, vec![data_block]).boxed(),
-                            None,
-                            has_result,
-                            schema,
-                            query.to_string(),
-                        ),
-                        None,
-                    ))
+        match self.federated_server_command_check(query) {
+            Some((schema, data_block)) => {
+                info!("Federated query: {}", query);
+                if data_block.num_rows() > 0 {
+                    info!("Federated response: {:?}", data_block);
                 }
-                None => {
-                    info!("Normal query: {}", query);
-                    let context = self.session.create_query_context().await?;
+                let has_result = data_block.num_rows() > 0;
+                Ok((
+                    QueryResult::create(
+                        DataBlockStream::create(None, vec![data_block]).boxed(),
+                        None,
+                        has_result,
+                        schema,
+                        query.to_string(),
+                    ),
+                    None,
+                ))
+            }
+            None => {
+                info!("Normal query: {}", query);
+                let context = self.session.create_query_context().await?;
 
-                    let mut planner = Planner::new(context.clone());
-                    let (plan, extras) = planner.plan_sql(query).await?;
+                let mut planner = Planner::new(context.clone());
+                let (plan, extras) = planner.plan_sql(query).await?;
 
-                    context.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
-                    let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
+                context.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
+                let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
 
-                    let has_result_set = plan.has_result_set();
+                let has_result_set = plan.has_result_set();
 
-                    match interpreter {
-                        Ok(interpreter) => {
-                            let (blocks, extra_info) =
-                                Self::exec_query(interpreter.clone(), &context).await?;
-                            let schema = plan.schema();
-                            let format = context.get_format_settings()?;
-                            Ok((
-                                QueryResult::create(
-                                    blocks,
-                                    extra_info,
-                                    has_result_set,
-                                    schema,
-                                    query.to_string(),
-                                ),
-                                Some(format),
-                            ))
-                        }
-                        Err(e) => {
-                            InterpreterQueryLog::fail_to_start(context, e.clone());
-                            Err(e)
-                        }
+                match interpreter {
+                    Ok(interpreter) => {
+                        let (blocks, extra_info) =
+                            Self::exec_query(interpreter.clone(), &context).await?;
+                        let schema = plan.schema();
+                        let format = context.get_format_settings()?;
+                        Ok((
+                            QueryResult::create(
+                                blocks,
+                                extra_info,
+                                has_result_set,
+                                schema,
+                                query.to_string(),
+                            ),
+                            Some(format),
+                        ))
+                    }
+                    Err(e) => {
+                        InterpreterQueryLog::fail_to_start(context, e.clone());
+                        Err(e)
                     }
                 }
             }
         }
-        .in_span(root)
-        .await
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
@@ -385,39 +388,34 @@ impl InteractiveWorkerBase {
         SendableDataBlockStream,
         Option<Box<dyn ProgressReporter + Send>>,
     )> {
-        let root = Span::root(func_name!(), SpanContext::random());
-        async {
-            let instant = Instant::now();
+        let instant = Instant::now();
 
-            let query_result = context.try_spawn({
-                let ctx = context.clone();
-                async move {
-                    let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                    mysql_metrics::observe_mysql_interpreter_used_time(instant.elapsed());
+        let query_result = context.try_spawn(context.get_id(), {
+            let ctx = context.clone();
+            async move {
+                let mut data_stream = interpreter.execute(ctx.clone()).await?;
+                observe_mysql_interpreter_used_time(instant.elapsed());
 
-                    // Wrap the data stream, log finish event at the end of stream
-                    let intercepted_stream = async_stream::stream! {
+                // Wrap the data stream, log finish event at the end of stream
+                let intercepted_stream = async_stream::stream! {
 
-                        while let Some(item) = data_stream.next().await {
-                            yield item
-                        };
+                    while let Some(item) = data_stream.next().await {
+                        yield item
                     };
+                };
 
-                    Ok::<_, ErrorCode>(intercepted_stream.boxed())
-                }
-                .in_span(Span::enter_with_local_parent("exec_query"))
-            })?;
+                Ok::<_, ErrorCode>(intercepted_stream.boxed())
+            }
+            .in_span(Span::enter_with_local_parent(full_name!()))
+        })?;
 
-            let query_result = query_result.await.map_err_to_code(
-                ErrorCode::TokioError,
-                || "Cannot join handle from context's runtime",
-            )?;
-            let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
-                as Box<dyn ProgressReporter + Send>;
-            query_result.map(|data| (data, Some(reporter)))
-        }
-        .in_span(root)
-        .await
+        let query_result = query_result.await.map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot join handle from context's runtime",
+        )?;
+        let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
+            as Box<dyn ProgressReporter + Send>;
+        query_result.map(|data| (data, Some(reporter)))
     }
 
     #[async_backtrace::framed]

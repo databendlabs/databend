@@ -84,8 +84,41 @@ jobs:
           echo "Create a release for ${{ steps.generated-tag.outputs.tag }}"
           gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
 
+  changelog:
+    runs-on: ubuntu-latest
+    needs: create_release
+    steps:
+      - name: Checkout Docs
+        uses: actions/checkout@v4
+        with:
+          repository: datafuselabs/databend-docs
+          ref: main
+      - name: Get date
+        shell: bash
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      - name: Generate Release Note
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p docs/release-nightly
+          df="docs/release-nightly/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
+          echo "---" > $df
+          gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} >> $df
+          sed -i -E 's/^--$/---/g' $df
+          sed -i -E '/^asset:/d' $df
+          git add docs/release-nightly
+          git status
+      - uses: peter-evans/create-pull-request@v4
+        with:
+          token: ${{ secrets.DATABEND_BOT_TOKEN }}
+          title: "chore(docs): Update Release Notes - ${{ env.DATE }}"
+          base: main
+          commit-message: "chore(docs): Update Release Notes - ${{ env.DATE }}"
+          branch-suffix: random
+          delete-branch: true
+
   macos:
-    runs-on: macos-11
+    runs-on: macos-latest
     needs: create_release
     env:
       RUNNER_PROVIDER: github
@@ -541,7 +574,7 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   benchmark:
-    needs: [create_release, linux]
+    needs: [create_release, docker_separate]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
@@ -550,7 +583,7 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
-      runner_provider: aws
+      runner_provider: github
 
   sqlsmith:
     needs: [create_release, linux]

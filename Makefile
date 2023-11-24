@@ -105,14 +105,14 @@ test: unit-test stateless-test sqllogic-test metactl-test
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 
-docs:
-	bash ./scripts/build/build-website.sh
-
 clean:
 	cargo clean
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_meta*/ ./_logs*/ ./src/query/service_logs*/ ./src/meta/service/_logs*/ ./stateless_test_data/
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
 	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
+
+genproto:
+	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/task.proto
 
 .PHONY: setup test run build fmt lint clean docs

@@ -20,10 +20,11 @@ use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::EventCause;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
@@ -32,6 +33,10 @@ pub trait AsyncSource: Send {
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
+
+    fn un_reacted(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 // TODO: This can be refactored using proc macros
@@ -94,6 +99,14 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
                 Ok(Event::NeedConsume)
             }
         }
+    }
+
+    fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
+        if let EventCause::Output(_output) = _cause {
+            self.inner.un_reacted()?;
+        }
+
+        Ok(())
     }
 
     #[async_backtrace::framed]

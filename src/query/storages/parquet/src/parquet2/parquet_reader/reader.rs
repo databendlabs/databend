@@ -30,8 +30,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
-use common_storage::metrics::copy::metrics_inc_copy_read_part_cost_milliseconds;
-use common_storage::metrics::copy::metrics_inc_copy_read_size_bytes;
+use common_metrics::storage::*;
 use common_storage::ColumnNodes;
 use opendal::BlockingOperator;
 use opendal::Operator;
@@ -174,6 +173,7 @@ impl Parquet2Reader {
                         chunks,
                         part.num_rows,
                         column_node.field.clone(),
+                        column_node.init.clone(),
                     )?);
                     nested_fields.push(self.output_schema.field(idx).clone());
                 } else {
@@ -182,6 +182,7 @@ impl Parquet2Reader {
                         chunks,
                         part.num_rows,
                         column_node.field.clone(),
+                        column_node.init.clone(),
                         bitmap.clone(),
                     )?);
                     normal_fields.push(self.output_schema.field(idx).clone());
@@ -192,6 +193,7 @@ impl Parquet2Reader {
                     chunks,
                     part.num_rows,
                     column_node.field.clone(),
+                    column_node.init.clone(),
                 )?)
             }
         }

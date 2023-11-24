@@ -291,6 +291,24 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        op: &'ast JsonOperator,
+        left: &'ast Expr,
+        right: &'ast Expr,
+    ) {
+        self.visit_expr(left);
+        let left_child = self.children.pop().unwrap();
+        self.visit_expr(right);
+        let right_child = self.children.pop().unwrap();
+
+        let name = format!("JSON Function {op}");
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![left_child, right_child]);
+        self.children.push(node);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, op: &'ast UnaryOperator, expr: &'ast Expr) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
@@ -691,6 +709,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             ExplainKind::Pipeline => "Pipeline",
             ExplainKind::Fragments => "Fragments",
             ExplainKind::Raw => "Raw",
+            ExplainKind::Optimized => "Optimized",
             ExplainKind::Plan => "Plan",
             ExplainKind::Memo(_) => "Memo",
             ExplainKind::JOIN => "JOIN",
@@ -892,48 +911,48 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_settings(&mut self, like: &'ast Option<String>) {
+    fn visit_show_settings(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowSetting".to_string());
+    }
+
+    fn visit_show_process_list(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowProcessList".to_string());
+    }
+
+    fn visit_show_metrics(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowMetrics".to_string());
+    }
+
+    fn visit_show_engines(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowEngines".to_string());
+    }
+
+    fn visit_show_functions(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowFunctions".to_string());
+    }
+
+    fn visit_show_table_functions(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowTableFunctions".to_string());
+    }
+
+    fn visit_show_indexes(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowIndexes".to_string());
+    }
+
+    fn visit_show_options(&mut self, show_options: &'ast Option<ShowOptions>, name: String) {
         let mut children = Vec::new();
-        if let Some(like) = like {
-            let like_name = format!("Like {}", like);
-            let like_format_ctx = AstFormatContext::new(like_name);
-            let like_node = FormatTreeNode::new(like_format_ctx);
-            children.push(like_node);
+        if let Some(show_options) = show_options {
+            if let Some(show_limit) = &show_options.show_limit {
+                self.visit_show_limit(show_limit);
+                children.push(self.children.pop().unwrap());
+            }
+            if let Some(limit) = show_options.limit {
+                let name = format!("Limit {}", limit);
+                let limit_format_ctx = AstFormatContext::new(name);
+                let node = FormatTreeNode::new(limit_format_ctx);
+                children.push(node);
+            }
         }
-        let name = "ShowSetting".to_string();
-        let format_ctx = AstFormatContext::with_children(name, children.len());
-        let node = FormatTreeNode::with_children(format_ctx, children);
-        self.children.push(node);
-    }
-
-    fn visit_show_process_list(&mut self) {
-        let name = "ShowProcessList".to_string();
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
-        self.children.push(node);
-    }
-
-    fn visit_show_metrics(&mut self) {
-        let name = "ShowMetrics".to_string();
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
-        self.children.push(node);
-    }
-
-    fn visit_show_engines(&mut self) {
-        let name = "ShowEngines".to_string();
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
-        self.children.push(node);
-    }
-
-    fn visit_show_functions(&mut self, limit: &'ast Option<ShowLimit>) {
-        let mut children = Vec::new();
-        if let Some(limit) = limit {
-            self.visit_show_limit(limit);
-            children.push(self.children.pop().unwrap());
-        }
-        let name = "ShowFunctions".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
@@ -1062,15 +1081,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_delete(
-        &mut self,
-        table_reference: &'ast TableReference,
-        selection: &'ast Option<Expr>,
-    ) {
+    fn visit_delete(&mut self, delete: &'ast DeleteStmt) {
         let mut children = Vec::new();
-        self.visit_table_reference(table_reference);
+        self.visit_table_reference(&delete.table);
         children.push(self.children.pop().unwrap());
-        if let Some(selection) = selection {
+        if let Some(selection) = &delete.selection {
             self.visit_expr(selection);
             children.push(self.children.pop().unwrap());
         }
@@ -1283,6 +1298,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let database_format_ctx = AstFormatContext::new(database_name);
             let database_node = FormatTreeNode::new(database_format_ctx);
             children.push(database_node);
+        }
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
         }
         let name = "ShowDropTables".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -1647,6 +1666,62 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let child = self.children.pop().unwrap();
 
         let name = "DropView".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_create_stream(&mut self, stmt: &'ast CreateStreamStmt) {
+        let mut children = Vec::new();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.stream);
+        children.push(self.children.pop().unwrap());
+        self.visit_table_ref(&None, &stmt.table_database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+        if let Some(point) = &stmt.stream_point {
+            self.visit_stream_point(point);
+            children.push(self.children.pop().unwrap());
+        }
+        if let Some(comment) = &stmt.comment {
+            let comment_format_ctx = AstFormatContext::new(format!("Comment {}", comment));
+            children.push(FormatTreeNode::new(comment_format_ctx));
+        }
+
+        let name = "CreateStream".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_drop_stream(&mut self, stmt: &'ast DropStreamStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.stream);
+        let child = self.children.pop().unwrap();
+
+        let name = "DropStream".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_streams(&mut self, stmt: &'ast ShowStreamsStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            self.visit_database_ref(&stmt.catalog, database);
+            children.push(self.children.pop().unwrap());
+        }
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "ShowStreams".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_describe_stream(&mut self, stmt: &'ast DescribeStreamStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.stream);
+        let child = self.children.pop().unwrap();
+        let name = "DescribeStream".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
@@ -2796,12 +2871,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             TableReference::Subquery {
                 span: _,
+                lateral,
                 subquery,
                 alias,
             } => {
                 self.visit_query(subquery);
                 let child = self.children.pop().unwrap();
-                let name = "Subquery".to_string();
+                let name = if *lateral {
+                    "LateralSubquery"
+                } else {
+                    "Subquery"
+                }
+                .to_string();
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(name, 1, Some(format!("{}", alias)))
                 } else {
@@ -2812,6 +2893,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             TableReference::TableFunction {
                 span: _,
+                lateral,
                 name,
                 params,
                 named_params,
@@ -2831,7 +2913,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     );
                     children.push(node);
                 }
-                let func_name = format!("TableFunction {}", name);
+                let func_name = if *lateral {
+                    format!("Lateral TableFunction {}", name)
+                } else {
+                    format!("TableFunction {}", name)
+                };
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(
                         func_name,
@@ -2900,6 +2986,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
+        }
+    }
+
+    fn visit_stream_point(&mut self, point: &'ast StreamPoint) {
+        match point {
+            StreamPoint::AtStream { database, name } => self.visit_table_ref(&None, database, name),
         }
     }
 

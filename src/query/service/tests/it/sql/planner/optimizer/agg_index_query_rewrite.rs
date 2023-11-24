@@ -71,6 +71,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         ]),
         engine: Engine::Fuse,
         storage_params: None,
+        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             // database id is required for FUSE
@@ -381,8 +382,8 @@ async fn test_query_rewrite() -> Result<()> {
 }
 
 async fn test_query_rewrite_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;

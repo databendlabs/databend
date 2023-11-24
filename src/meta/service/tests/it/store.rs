@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_sled_store::openraft::async_trait::async_trait;
 use common_meta_sled_store::openraft::entry::RaftEntry;
@@ -28,14 +29,14 @@ use common_meta_types::StorageError;
 use common_meta_types::StoredMembership;
 use common_meta_types::TypeConfig;
 use common_meta_types::Vote;
-use common_tracing::func_name;
-use databend_meta::meta_service::raftmeta::LogStore;
-use databend_meta::meta_service::raftmeta::SMStore;
+use databend_meta::meta_service::meta_node::LogStore;
+use databend_meta::meta_service::meta_node::SMStore;
 use databend_meta::store::RaftStore;
 use databend_meta::Opened;
 use log::debug;
 use log::info;
 use maplit::btreeset;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use pretty_assertions::assert_eq;
 use test_harness::test;
@@ -61,7 +62,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
 #[test(harness = meta_service_test_harness_sync)]
 #[minitrace::trace]
 fn test_impl_raft_storage() -> anyhow::Result<()> {
-    let root = Span::root(func_name!(), SpanContext::random());
+    let root = Span::root(full_name!(), SpanContext::random());
     let _guard = root.set_local_parent();
 
     common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
@@ -135,7 +136,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let (logs, want) = snapshot_logs();
 
     sto.log.write().await.append(logs.clone()).await?;
-    sto.state_machine.write().await.apply_entries(&logs).await;
+    sto.state_machine.write().await.apply_entries(&logs).await?;
 
     let curr_snap = sto.build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
@@ -184,7 +185,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     sto.log.write().await.append(logs.clone()).await?;
     {
         let mut sm = sto.state_machine.write().await;
-        sm.apply_entries(&logs).await;
+        sm.apply_entries(&logs).await?;
     }
 
     sto.build_snapshot().await?;
@@ -227,7 +228,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- feed logs and state machine");
 
         sto.log.write().await.append(logs.clone()).await?;
-        sto.state_machine.write().await.apply_entries(&logs).await;
+        sto.state_machine.write().await.apply_entries(&logs).await?;
 
         snap = sto.build_snapshot().await?;
     }
@@ -251,6 +252,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
                 .state_machine
                 .write()
                 .await
+                .sys_data_ref()
                 .last_membership_ref()
                 .clone();
 
@@ -262,7 +264,12 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
                 mem
             );
 
-            let last_applied = *sto.state_machine.write().await.last_applied_ref();
+            let last_applied = *sto
+                .state_machine
+                .write()
+                .await
+                .sys_data_ref()
+                .last_applied_ref();
             assert_eq!(Some(log_id(1, 0, 9)), last_applied);
         }
 

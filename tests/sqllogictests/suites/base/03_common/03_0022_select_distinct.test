@@ -1,0 +1,58 @@
+query I
+SELECT DISTINCT * FROM numbers(3) order by number
+----
+0
+1
+2
+
+query I
+SELECT DISTINCT 1 FROM numbers(3)
+----
+1
+
+query I
+SELECT DISTINCT (number %3) c FROM numbers(1000) ORDER BY c
+----
+0
+1
+2
+
+query I
+SELECT count(distinct number %3) c FROM numbers(1000) where number > 3;
+----
+3
+
+query I
+SELECT DISTINCT row_number() OVER (PARTITION BY number) FROM numbers(100)
+----
+1
+
+query I
+select
+    count(distinct case when t1.use_status = 1
+                            and date_format(t1.use_time,'%Y-%m-%d') >= '2023-01-01'
+                            and date_format(t1.use_time,'%Y-%m-%d') <= '2023-01-01'
+                        then t1.user_id else null end) as `使用的门店数`, 1 as xxx
+from (
+    select 1 use_status,'222' user_id ,'2023-01-01' use_time union all
+    select 1 use_status,'222' user_id ,'2023-01-01' use_time union all
+    select 0 use_status,'277' user_id ,'2023-01-01' use_time union all
+    select 1 use_status,'287' user_id ,'2023-01-01' use_time
+) t1
+----
+2 1
+
+query I
+select
+    count(distinct case when t1.use_status = 1
+                            and date_format(t1.use_time,'%Y-%m-%d') >= '2023-01-01'
+                            and date_format(t1.use_time,'%Y-%m-%d') <= '2023-01-01'
+                        then t1.user_id else null end) as `使用的门店数`
+from (
+    select 1 use_status,'222' user_id ,'2023-01-01' use_time union all
+    select 1 use_status,'222' user_id ,'2023-01-01' use_time union all
+    select 0 use_status,'277' user_id ,'2023-01-01' use_time union all
+    select 1 use_status,'287' user_id ,'2023-01-01' use_time
+) t1
+----
+2

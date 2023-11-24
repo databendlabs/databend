@@ -26,6 +26,7 @@ use common_expression::Column;
 use common_expression::FromData;
 use common_functions::aggregates::eval_aggr;
 use goldenfile::Mint;
+use itertools::Itertools;
 use roaring::RoaringTreemap;
 
 use super::run_agg_ast;
@@ -59,6 +60,7 @@ fn test_agg() {
     test_agg_quantile_disc(file, eval_aggr);
     test_agg_quantile_cont(file, eval_aggr);
     test_agg_quantile_tdigest(file, eval_aggr);
+    test_agg_quantile_tdigest_weighted(file, eval_aggr);
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
     test_agg_array_agg(file, eval_aggr);
@@ -116,11 +118,13 @@ fn gen_bitmap_data() -> Column {
         rb
     });
 
-    let rbs = rbs_iter.map(|rb| {
-        let mut data = Vec::new();
-        rb.serialize_into(&mut data).unwrap();
-        data
-    });
+    let rbs = rbs_iter
+        .map(|rb| {
+            let mut data = Vec::new();
+            rb.serialize_into(&mut data).unwrap();
+            data
+        })
+        .collect_vec();
 
     BitmapType::from_data(rbs)
 }
@@ -161,10 +165,10 @@ fn get_example() -> Vec<(&'static str, Column)> {
             "event3",
             BooleanType::from_data(vec![false, false, false, false]),
         ),
-        ("s", StringType::from_data(&["abc", "def", "opq", "xyz"])),
+        ("s", StringType::from_data(vec!["abc", "def", "opq", "xyz"])),
         (
             "s_null",
-            StringType::from_data_with_validity(&["a", "", "c", "d"], vec![
+            StringType::from_data_with_validity(vec!["a", "", "c", "d"], vec![
                 true, false, true, true,
             ]),
         ),
@@ -620,6 +624,21 @@ fn test_agg_quantile_tdigest(file: &mut impl Write, simulator: impl AggregationS
     run_agg_ast(
         file,
         "quantile_tdigest(0.8)(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_quantile_tdigest_weighted(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "quantile_tdigest_weighted(0.8)(a, b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "quantile_tdigest_weighted(0.8)(x_null, b)",
         get_example().as_slice(),
         simulator,
     );

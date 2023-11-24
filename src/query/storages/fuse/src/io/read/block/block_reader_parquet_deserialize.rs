@@ -19,7 +19,9 @@ use std::time::Instant;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use common_arrow::arrow::io::parquet::read::nested_column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
+use common_arrow::arrow::io::parquet::read::InitNested;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
@@ -29,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_metrics::storage::*;
 use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
@@ -42,7 +45,6 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::decompressor::BuffedBasicDecompressor;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
-use crate::metrics::*;
 
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
@@ -160,26 +162,30 @@ impl BlockReader {
         };
 
         // populate cache if necessary
-        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-            // populate array cache items
-            for item in deserialized_column_arrays.into_iter() {
-                if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                    let meta = column_metas.get(&column_id).unwrap();
-                    let (offset, len) = meta.offset_length();
-                    let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                    cache.put(key.into(), Arc::new((array, size)))
+        if self.put_cache {
+            if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+                // populate array cache items
+                for item in deserialized_column_arrays.into_iter() {
+                    if let DeserializedArray::Deserialized((column_id, array, size)) = item {
+                        let meta = column_metas.get(&column_id).unwrap();
+                        let (offset, len) = meta.offset_length();
+                        let key = TableDataCacheKey::new(block_path, column_id, offset, len);
+                        cache.put(key.into(), Arc::new((array, size)))
+                    }
                 }
             }
         }
         Ok(data_block)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn chunks_to_parquet_array_iter<'a>(
         metas: Vec<&ColumnMeta>,
         chunks: Vec<&'a [u8]>,
         rows: usize,
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
+        init: Vec<InitNested>,
         compression: &Compression,
         uncompressed_buffer: Arc<UncompressedBuffer>,
     ) -> Result<ArrayIter<'a>> {
@@ -215,15 +221,13 @@ impl BlockReader {
             .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
 
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
-        )?)
+        let array_iter = if init.is_empty() {
+            column_iter_to_arrays(columns, types, field, Some(rows), rows)?
+        } else {
+            nested_column_iter_to_arrays(columns, types, field, init, Some(rows), rows)?
+        };
+        Ok(array_iter)
     }
-
     pub fn deserialize_field<'a>(
         &self,
         deserialization_context: &'a FieldDeserializationContext,
@@ -292,6 +296,7 @@ impl BlockReader {
                 num_rows,
                 field_column_descriptors,
                 column.field.clone(),
+                column.init.clone(),
                 compression,
                 uncompressed_buffer
                     .clone()

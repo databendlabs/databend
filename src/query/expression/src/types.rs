@@ -81,6 +81,8 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+
+    // Used internally for generic types
     Generic(usize),
 }
 
@@ -156,10 +158,7 @@ impl DataType {
     }
 
     pub fn is_numeric(&self) -> bool {
-        match self {
-            DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),
-            _ => false,
-        }
+        matches!(self, DataType::Number(_))
     }
 
     #[inline]
@@ -313,6 +312,10 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn try_downcast_builder<'a>(
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder>;
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder>;
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;

@@ -26,7 +26,7 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
-pub use common_exception::Result;
+use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::UInt32Type;
@@ -45,8 +45,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::tenant::TenantQuota;
 use common_meta_types::MatchSeq;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
@@ -147,6 +147,7 @@ impl Table for TenantQuotaTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| TenantQuotaSource::create(ctx.clone(), output, self.args.clone()),

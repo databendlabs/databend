@@ -19,6 +19,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
 use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::CatalogManager;
+use common_cloud_control::cloud_api::CloudControlApiProvider;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -33,6 +34,7 @@ use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
+use storages_common_locks::LockManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
@@ -52,27 +54,30 @@ impl GlobalServices {
 
     #[async_backtrace::framed]
     pub async fn init_with(config: InnerConfig) -> Result<()> {
+        // app name format: node_id[0..7]@cluster_id
+        let app_name_shuffle = format!(
+            "databend-query-{}@{}",
+            if config.query.node_id.len() >= 7 {
+                &config.query.node_id[0..7]
+            } else {
+                &config.query.node_id
+            },
+            config.query.cluster_id
+        );
+
         // The order of initialization is very important
+        // 1. global config init.
         GlobalConfig::init(config.clone())?;
 
-        let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
-
+        // 2. log init.
         GlobalLogger::init(&app_name_shuffle, &config.log);
+
+        // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
-        // Cluster discovery.
+        // 4. cluster discovery init.
         ClusterDiscovery::init(config.clone()).await?;
-
-        DataOperator::init(&config.storage).await?;
-
-        ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
-            config.query.tenant_id.clone(),
-        )?;
-
-        CacheManager::init(&config.cache, &config.query.tenant_id)?;
 
         // TODO(xuanwo):
         //
@@ -96,6 +101,7 @@ impl GlobalServices {
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(&config)?;
+        LockManager::init()?;
         AuthMgr::init(&config)?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
@@ -107,6 +113,18 @@ impl GlobalServices {
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
         QueryProfileManager::init();
+
+        DataOperator::init(&config.storage).await?;
+        ShareTableConfig::init(
+            &config.query.share_endpoint_address,
+            &config.query.share_endpoint_auth_token_file,
+            config.query.tenant_id.clone(),
+        )?;
+        CacheManager::init(&config.cache, &config.query.tenant_id)?;
+
+        if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
+            CloudControlApiProvider::init(addr).await?;
+        }
 
         Ok(())
     }

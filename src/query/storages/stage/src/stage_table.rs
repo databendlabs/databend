@@ -65,7 +65,16 @@ pub struct StageTable {
 
 impl StageTable {
     pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
-        let table_info_placeholder = TableInfo::default().set_schema(table_info.schema());
+        let table_info_placeholder = TableInfo {
+            ident: Default::default(),
+            desc: "".to_string(),
+            // `system.stage` is used to forbidden the user to select * from text files.
+            name: "stage".to_string(),
+            meta: Default::default(),
+            tenant: "".to_string(),
+            db_type: Default::default(),
+        }
+        .set_schema(table_info.schema());
 
         Ok(Arc::new(Self {
             table_info,
@@ -151,6 +160,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let projection = if let Some(PushDownInfo {
             projection: Some(Projection::Columns(columns)),
@@ -215,6 +225,7 @@ impl Table for StageTable {
             on_error_map,
             self.table_info.is_select,
             projection,
+            self.table_info.default_values.clone(),
         )?);
         debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;

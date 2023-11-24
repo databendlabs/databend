@@ -22,6 +22,7 @@ use common_base::runtime::UnlimitedFuture;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
+use common_metrics::storage::*;
 use futures::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
@@ -32,7 +33,6 @@ use storages_common_table_meta::meta::ColumnMeta;
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
-use crate::metrics::*;
 use crate::MergeIOReadResult;
 
 impl BlockReader {
@@ -48,14 +48,21 @@ impl BlockReader {
         op: Operator,
         location: &str,
         raw_ranges: Vec<(ColumnId, Range<u64>)>,
+        put_cache: bool,
     ) -> Result<MergeIOReadResult> {
+        let table_data_cache = if put_cache {
+            CacheManager::instance().get_table_data_cache()
+        } else {
+            None
+        };
+
         if raw_ranges.is_empty() {
             // shortcut
             let read_res = MergeIOReadResult::create(
                 OwnerMemory::create(vec![]),
                 raw_ranges.len(),
                 location.to_string(),
-                CacheManager::instance().get_table_data_cache(),
+                table_data_cache,
             );
             return Ok(read_res);
         }
@@ -92,7 +99,6 @@ impl BlockReader {
 
         let start = Instant::now();
         let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
-        let table_data_cache = CacheManager::instance().get_table_data_cache();
         let mut read_res = MergeIOReadResult::create(
             owner_memory,
             raw_ranges.len(),
@@ -183,8 +189,14 @@ impl BlockReader {
             }
         }
 
-        let mut merge_io_read_res =
-            Self::merge_io_read(settings, self.operator.clone(), location, ranges).await?;
+        let mut merge_io_read_res = Self::merge_io_read(
+            settings,
+            self.operator.clone(),
+            location,
+            ranges,
+            self.put_cache,
+        )
+        .await?;
 
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;

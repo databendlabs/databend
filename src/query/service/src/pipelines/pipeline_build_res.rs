@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::OutputPort;
+use common_expression::DataField;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
@@ -24,6 +25,13 @@ use common_profile::SharedProcessorProfiles;
 
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::pipelines::processors::transforms::HashJoinBuildState;
+
+#[derive(Clone)]
+pub struct PipelineBuilderData {
+    pub input_join_state: Option<Arc<HashJoinBuildState>>,
+    pub input_probe_schema: Option<Vec<DataField>>,
+}
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -35,6 +43,8 @@ pub struct PipelineBuildResult {
     pub prof_span_set: SharedProcessorProfiles,
 
     pub exchange_injector: Arc<dyn ExchangeInjector>,
+    /// for local fragment data sharing
+    pub builder_data: PipelineBuilderData,
 }
 
 impl PipelineBuildResult {
@@ -44,6 +54,10 @@ impl PipelineBuildResult {
             sources_pipelines: vec![],
             prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
+            builder_data: PipelineBuilderData {
+                input_join_state: None,
+                input_probe_schema: None,
+            },
         }
     }
 
@@ -63,6 +77,10 @@ impl PipelineBuildResult {
             sources_pipelines: vec![],
             prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
+            builder_data: PipelineBuilderData {
+                input_join_state: None,
+                input_probe_schema: None,
+            },
         })
     }
 

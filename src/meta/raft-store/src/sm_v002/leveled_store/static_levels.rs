@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
-
-use futures_util::stream::BoxStream;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
+use crate::sm_v002::leveled_store::map_api::KVResultStream;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::ref_::Ref;
@@ -38,6 +38,11 @@ impl StaticLevels {
         Self {
             levels: levels.into_iter().collect(),
         }
+    }
+
+    /// Return an iterator of all Arc of levels from newest to oldest.
+    pub(in crate::sm_v002) fn iter_arc_levels(&self) -> impl Iterator<Item = &Arc<Level>> {
+        self.levels.iter().rev()
     }
 
     /// Return an iterator of all levels from newest to oldest.
@@ -68,23 +73,20 @@ impl<K> MapApiRO<K> for StaticLevels
 where
     K: MapKey,
     Level: MapApiRO<K>,
+    Arc<Level>: MapApiRO<K>,
 {
-    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
+    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        let levels = self.iter_levels();
+        let levels = self.iter_arc_levels();
         compacted_get(key, levels).await
     }
 
-    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-    {
-        let levels = self.iter_levels();
-        compacted_range(range, levels).await
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
+        let levels = self.iter_arc_levels();
+        compacted_range::<_, _, _, Level>(range, None, levels).await
     }
 }

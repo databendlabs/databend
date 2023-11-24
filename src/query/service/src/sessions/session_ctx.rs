@@ -43,13 +43,20 @@ pub struct SessionContext {
     // The current user is determined by the authentication phase on each connection. It will not be
     // changed during a session.
     current_user: RwLock<Option<UserInfo>>,
-    // Each session have a current role which takes effects, the privileges from the user's other
-    // roles will not take effect. The user can switch to another available role by `SET ROLE`.
-    // If the current_role is not set, it takes the user's default role.
+    // Each session has a current role, by default all the users' granted roles will take effect,
+    // and the current role will become the owner of the database/table that the user created.
+    // The user can switch to another available role by `SET ROLE`. If the current_role is not set,
+    // it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    // The role granted to user by external auth provider, when auth_role is provided, the current
-    // user's all other roles are overridden by this role.
+    // When an user comes from an external authenticator, the session is usually mapped to a single role.
     auth_role: RwLock<Option<String>>,
+    // To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
+    // SET SEONCDARY ROLES NONE will disable all the roles except the current role.
+    // By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
+    // ROLES is preferred to be empty, which is Some([]) here:
+    // 1. The user comes from an external authenticator, which maps to a single role.
+    // 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
+    secondary_roles: RwLock<Option<Vec<String>>>,
     // The client IP from the client.
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Box<dyn FnOnce() + Send + Sync + 'static>>>,
@@ -68,6 +75,7 @@ impl SessionContext {
             current_user: Default::default(),
             current_role: Default::default(),
             auth_role: Default::default(),
+            secondary_roles: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
             current_catalog: RwLock::new("default".to_string()),
@@ -140,6 +148,16 @@ impl SessionContext {
         *lock = role
     }
 
+    pub fn get_auth_role(&self) -> Option<String> {
+        let lock = self.auth_role.read();
+        lock.clone()
+    }
+
+    pub fn set_auth_role(&self, role: Option<String>) {
+        let mut lock = self.auth_role.write();
+        *lock = role
+    }
+
     pub fn get_current_tenant(&self) -> String {
         let conf = GlobalConfig::instance();
 
@@ -177,15 +195,16 @@ impl SessionContext {
         *lock = Some(user);
     }
 
-    // Get auth role. Auth role is the role granted by authenticator.
-    pub fn get_auth_role(&self) -> Option<String> {
-        let lock = self.auth_role.read();
+    // Get restricted role. Restricted role is the role granted by authenticator, or set
+    // by sql client to restrict its privilege.
+    pub fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        let lock = self.secondary_roles.read();
         lock.clone()
     }
 
-    pub fn set_auth_role(&self, role: Option<String>) {
-        let mut lock = self.auth_role.write();
-        *lock = role;
+    pub fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) {
+        let mut lock = self.secondary_roles.write();
+        *lock = secondary_roles;
     }
 
     pub fn get_client_host(&self) -> Option<SocketAddr> {

@@ -29,8 +29,8 @@ use log::debug;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyIntoLocationPlan;
@@ -108,14 +108,16 @@ impl CopyIntoLocationInterpreter {
             },
             files_to_copy: None,
             is_select: false,
+            default_values: None,
         };
         let to_table = StageTable::try_create(stage_table_info)?;
-        build_append2table_with_commit_pipeline(
+        PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             to_table,
             data_schema,
             None,
+            vec![],
             false,
             AppendMode::Normal,
         )?;
@@ -129,7 +131,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         "CopyIntoLocationInterpreterV2"
     }
 
-    #[minitrace::trace(name = "copy_into_location_interpreter_execute_v2")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");

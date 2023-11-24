@@ -34,8 +34,8 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
@@ -179,6 +179,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         ctx: Arc<dyn TableContext>,
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let schema = Event::schema();
         let mut mutable_columns: Vec<ColumnBuilder> = Vec::with_capacity(schema.num_fields());

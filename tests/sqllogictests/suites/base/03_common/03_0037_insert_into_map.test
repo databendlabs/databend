@@ -1,0 +1,86 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(id Int, m Map(Int64, String)) Engine = Fuse
+
+statement ok
+INSERT INTO t1 (id, m) VALUES(1, {100:'abc',200:'def'}),(2, {'300':123}),(3, {});
+
+query IT
+select * from t1
+----
+1 {100:'abc',200:'def'}
+2 {300:'123'}
+3 {}
+
+query TTTT
+select m[100], m[200], m[300], m[400] from t1
+----
+abc def NULL NULL
+NULL NULL 123 NULL
+NULL NULL NULL NULL
+
+query IT
+select * from t1 where m[300] = '123'
+----
+2 {300:'123'}
+
+statement error 1006
+INSERT INTO t1 (id, m) VALUES(1, {100:'k1',100:'k2'})
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2(id Int, m Map(String, Array(Date))) Engine = Fuse
+
+statement ok
+INSERT INTO t2 (id, m) VALUES(1, {'k1':['2020-01-01','2021-01-02'],'k2':['2022-01-01']}),(2, {'k3':['2023-01-01']})
+
+query IT
+select * from t2
+----
+1 {'k1':['2020-01-01','2021-01-02'],'k2':['2022-01-01']}
+2 {'k3':['2023-01-01']}
+
+query TTTT
+select m['k1'], m['k2'], m['k3'], m['k4'] from t2
+----
+['2020-01-01','2021-01-02'] ['2022-01-01'] NULL NULL
+NULL NULL ['2023-01-01'] NULL
+
+query TTTT
+select m:k1, m:k2, m['k3'], m['k4'] from t2
+----
+['2020-01-01','2021-01-02'] ['2022-01-01'] NULL NULL
+NULL NULL ['2023-01-01'] NULL
+
+query IT
+select * from t2 where m['k3'] = ['2023-01-01'::date]
+----
+2 {'k3':['2023-01-01']}
+
+query T
+select {'id':id} from t2
+----
+{'id':1}
+{'id':2}
+
+query T
+select {'id':number} from numbers(5)
+----
+{'id':0}
+{'id':1}
+{'id':2}
+{'id':3}
+{'id':4}
+
+statement error 1006
+CREATE TABLE IF NOT EXISTS t3(id Int, m Map(Array(Date), String)) Engine = Fuse
+
+statement ok
+DROP DATABASE db1

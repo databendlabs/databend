@@ -12,7 +12,6 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-hashtable = { path = "../../common/hashtable" }
@@ -21,12 +20,13 @@ common-io = { path = "../../common/io" }
 # GitHub dependencies
 
 # Crates.io dependencies
-arrow-array = "46.0.0"
-arrow-flight = "46.0.0"
-arrow-schema = "46.0.0"
-arrow-select = "46.0.0"
+arrow-array = { workspace = true }
+arrow-flight = { workspace = true }
+arrow-schema = { workspace = true }
+arrow-select = { workspace = true }
 async-backtrace = { workspace = true }
 base64 = "0.21.0"
+bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
@@ -43,7 +43,7 @@ log = { workspace = true }
 match-template = "0.0.1"
 micromarshal = "0.4.0"
 num-traits = "0.2.15"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 ordered-float = { workspace = true, features = ["serde", "rand"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 roaring = { version = "0.10.1", features = ["serde"] }
@@ -56,7 +56,7 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 
 [dev-dependencies]
-arrow-ord = "46.0.0"
+arrow-ord = { workspace = true }
 common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"

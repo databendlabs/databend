@@ -7,10 +7,10 @@ data_dir="tests/sqllogictests/data"
 
 db="tpch"
 
-echo "CREATE DATABASE IF NOT EXISTS tpch" | $MYSQL_CLIENT_CONNECT
+echo "CREATE DATABASE IF NOT EXISTS tpch" | $BENDSQL_CLIENT_CONNECT
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-    echo "DROP TABLE IF EXISTS ${db}.$t" | $MYSQL_CLIENT_CONNECT
+    echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
 done
 
 # create tpch tables
@@ -20,14 +20,14 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.nation
     n_name       STRING not null,
     n_regionkey  INTEGER not null,
     n_comment    STRING
-) CLUSTER BY (n_nationkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (n_nationkey)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.region
 (
     r_regionkey  INTEGER not null,
     r_name       STRING not null,
     r_comment    STRING
-) CLUSTER BY (r_regionkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (r_regionkey)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.part
 (
@@ -40,7 +40,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.part
     p_container   STRING not null,
     p_retailprice DECIMAL(15, 2) not null,
     p_comment     STRING not null
-) CLUSTER BY (p_partkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (p_partkey)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.supplier
 (
@@ -51,7 +51,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.supplier
     s_phone       STRING not null,
     s_acctbal     DECIMAL(15, 2) not null,
     s_comment     STRING not null
-) CLUSTER BY (s_suppkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (s_suppkey)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.partsupp
 (
@@ -60,7 +60,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.partsupp
     ps_availqty    BIGINT not null,
     ps_supplycost  DECIMAL(15, 2)  not null,
     ps_comment     STRING not null
-) CLUSTER BY (ps_partkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (ps_partkey)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.customer
 (
@@ -72,7 +72,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.customer
     c_acctbal     DECIMAL(15, 2)   not null,
     c_mktsegment  STRING not null,
     c_comment     STRING not null
-) CLUSTER BY (c_custkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (c_custkey)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.orders
 (
@@ -85,7 +85,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.orders
     o_clerk          STRING not null,
     o_shippriority   INTEGER not null,
     o_comment        STRING not null
-) CLUSTER BY (o_orderkey, o_orderdate)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY (o_orderkey, o_orderdate)" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
 (
@@ -105,7 +105,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
     l_shipinstruct STRING not null,
     l_shipmode     STRING not null,
     l_comment      STRING not null
-) CLUSTER BY(l_shipdate, l_orderkey)" | $MYSQL_CLIENT_CONNECT
+) CLUSTER BY(l_shipdate, l_orderkey)" | $BENDSQL_CLIENT_CONNECT
 
 #download data
 mkdir -p $data_dir

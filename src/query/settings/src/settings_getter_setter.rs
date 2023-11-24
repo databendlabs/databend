@@ -34,7 +34,7 @@ impl Settings {
 
     fn try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => DefaultSettings::try_get_string(key),
         }
     }
@@ -66,6 +66,11 @@ impl Settings {
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
+    }
+
+    // Max block size for parquet reader
+    pub fn get_parquet_max_block_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_max_block_size")
     }
 
     // Get max_threads.
@@ -247,6 +252,10 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
     }
 
+    pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("http_handler_result_timeout_secs")
+    }
+
     pub fn get_query_result_cache_ttl_secs(&self) -> Result<u64> {
         self.try_get_u64("query_result_cache_ttl_secs")
     }
@@ -291,6 +300,10 @@ impl Settings {
         self.try_get_u64("table_lock_expire_secs")
     }
 
+    pub fn get_acquire_lock_timeout(&self) -> Result<u64> {
+        self.try_get_u64("acquire_lock_timeout")
+    }
+
     pub fn get_enterprise_license(&self) -> Result<String> {
         self.try_get_string("enterprise_license")
     }
@@ -318,6 +331,14 @@ impl Settings {
 
     pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
+    }
+
+    pub fn get_enable_distributed_merge_into(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_merge_into")? != 0)
+    }
+
+    pub fn get_merge_into_static_filter_partition_threshold(&self) -> Result<u64> {
+        self.try_get_u64("merge_into_static_filter_partition_threshold")
     }
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
@@ -365,8 +386,16 @@ impl Settings {
         self.try_get_u64("recluster_timeout_secs")
     }
 
+    pub fn set_recluster_block_size(&self, val: u64) -> Result<()> {
+        self.try_set_u64("recluster_block_size", val)
+    }
+
     pub fn get_recluster_block_size(&self) -> Result<u64> {
         self.try_get_u64("recluster_block_size")
+    }
+
+    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
 
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
@@ -386,5 +415,29 @@ impl Settings {
 
     pub fn get_enable_query_profiling(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_query_profiling")? != 0)
+    }
+
+    pub fn get_enable_parquet_page_index(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_page_index")? != 0)
+    }
+
+    pub fn get_enable_parquet_rowgroup_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_rowgroup_pruning")? != 0)
+    }
+
+    pub fn get_enable_parquet_prewhere(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
+    }
+
+    pub fn get_numeric_cast_option(&self) -> Result<String> {
+        self.try_get_string("numeric_cast_option")
+    }
+
+    pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_connect_timeout_secs")
+    }
+
+    pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_timeout_secs")
     }
 }

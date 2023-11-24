@@ -88,6 +88,8 @@ impl ToReadDataSourcePlan for dyn Table {
     ) -> Result<DataSourcePlan> {
         let catalog_info = ctx.get_catalog(&catalog).await?.info();
 
+        let start = std::time::Instant::now();
+
         let (statistics, parts) = if let Some(PushDownInfo {
             filters:
                 Some(Filters {
@@ -103,10 +105,15 @@ impl ToReadDataSourcePlan for dyn Table {
         {
             Ok((PartStatistics::default(), Partitions::default()))
         } else {
-            ctx.set_status_info("build physical plan - read partitions");
+            ctx.set_status_info("build physical plan - reading partitions");
             self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
                 .await
         }?;
+
+        ctx.set_status_info(&format!(
+            "build physical plan - got data source partitions, time used {:?}",
+            start.elapsed()
+        ));
 
         ctx.incr_total_scan_value(ProgressValues {
             rows: statistics.read_rows,
@@ -120,23 +127,24 @@ impl ToReadDataSourcePlan for dyn Table {
         }
 
         let source_info = self.get_data_source_info();
-
-        let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
         let mut output_schema = match (self.support_column_projection(), &push_downs) {
-            (true, Some(push_downs)) => match &push_downs.prewhere {
-                Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
-                _ => {
-                    if let Some(output_columns) = &push_downs.output_columns {
-                        Arc::new(output_columns.project_schema(schema))
-                    } else if let Some(projection) = &push_downs.projection {
-                        Arc::new(projection.project_schema(schema))
-                    } else {
-                        schema.clone()
+            (true, Some(push_downs)) => {
+                let schema = &self.schema_with_stream();
+                match &push_downs.prewhere {
+                    Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
+                    _ => {
+                        if let Some(output_columns) = &push_downs.output_columns {
+                            Arc::new(output_columns.project_schema(schema))
+                        } else if let Some(projection) = &push_downs.projection {
+                            Arc::new(projection.project_schema(schema))
+                        } else {
+                            schema.clone()
+                        }
                     }
                 }
-            },
-            _ => schema.clone(),
+            }
+            _ => self.schema(),
         };
 
         if let Some(ref push_downs) = push_downs {
@@ -170,11 +178,9 @@ impl ToReadDataSourcePlan for dyn Table {
 
             if let Some(column_mask_policy) = &table_meta.column_mask_policy {
                 let license_manager = get_license_manager();
-                let ret = license_manager.manager.check_enterprise_enabled(
-                    &ctx.get_settings(),
-                    tenant.clone(),
-                    DataMask,
-                );
+                let ret = license_manager
+                    .manager
+                    .check_enterprise_enabled(ctx.get_license_key(), DataMask);
                 if ret.is_err() {
                     None
                 } else {
@@ -184,6 +190,10 @@ impl ToReadDataSourcePlan for dyn Table {
                     let column_not_null = !ctx.get_settings().get_ddl_column_type_nullable()?;
                     for (i, field) in output_schema.fields().iter().enumerate() {
                         if let Some(mask_policy) = column_mask_policy.get(field.name()) {
+                            ctx.set_status_info(&format!(
+                                "build physical plan - checking data mask policies - getting data masks, time used {:?}",
+                                start.elapsed())
+                            );
                             if let Ok(policy) = handler
                                 .get_data_mask(
                                     meta_api.clone(),
@@ -232,6 +242,10 @@ impl ToReadDataSourcePlan for dyn Table {
                                     false,
                                 );
 
+                                ctx.set_status_info(
+                                    &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
+                                    start.elapsed())
+                                );
                                 let scalar = type_checker.resolve(&ast_expr).await?;
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
                                 mask_policy_map.insert(i, expr.as_remote_expr());
@@ -248,6 +262,11 @@ impl ToReadDataSourcePlan for dyn Table {
         } else {
             None
         };
+
+        ctx.set_status_info(&format!(
+            "build physical plan - built data source plan, time used {:?}",
+            start.elapsed()
+        ));
         // TODO pass in catalog name
 
         Ok(DataSourcePlan {
@@ -260,6 +279,7 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            update_stream_columns: false,
             data_mask_policy,
         })
     }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp;
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -25,17 +24,24 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
+use common_expression::TableSchemaRef;
+use common_sql::executor::physical_plans::ReclusterTask;
+use common_storage::ColumnNodes;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use log::error;
+use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
+use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::table_functions::cmp_with_null;
+use crate::FuseTable;
 use crate::SegmentLocation;
 
 #[derive(Clone)]
@@ -44,12 +50,12 @@ pub struct ReclusterMutator {
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_id: u32,
+    pub(crate) schema: TableSchemaRef,
+    pub(crate) max_tasks: usize,
 
-    pub(crate) total_rows: usize,
-    pub(crate) total_bytes: usize,
-    pub(crate) level: i32,
-
-    pub selected_blocks: Vec<Arc<BlockMeta>>,
+    pub snapshot: Arc<TableSnapshot>,
+    pub tasks: Vec<ReclusterTask>,
+    pub recluster_blocks_count: u64,
     pub remained_blocks: Vec<Arc<BlockMeta>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,
@@ -58,27 +64,27 @@ pub struct ReclusterMutator {
 impl ReclusterMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        schema: TableSchemaRef,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
         cluster_key_id: u32,
+        max_tasks: usize,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
+            schema,
             depth_threshold,
             block_thresholds,
             cluster_key_id,
-            selected_blocks: Vec::new(),
+            max_tasks,
+            snapshot,
+            tasks: Vec::new(),
             remained_blocks: Vec::new(),
+            recluster_blocks_count: 0,
             removed_segment_indexes: Vec::new(),
             removed_segment_summary: Statistics::default(),
-            total_rows: 0,
-            total_bytes: 0,
-            level: 0,
         })
-    }
-
-    pub fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
-        std::mem::take(&mut self.selected_blocks)
     }
 
     #[async_backtrace::framed]
@@ -103,6 +109,15 @@ impl ReclusterMutator {
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
         let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 40 / 100);
+
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_blocks_num = std::cmp::max(
+            memory_threshold / self.block_thresholds.max_bytes_per_block,
+            max_threads,
+        ) * self.max_tasks;
+
+        let arrow_schema = self.schema.to_arrow();
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
         let mut remained_blocks = Vec::new();
         let mut selected = false;
@@ -136,15 +151,21 @@ impl ReclusterMutator {
                 .block_thresholds
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
-                self.selected_blocks = block_metas;
-                self.total_rows = total_rows as usize;
-                self.total_bytes = total_bytes as usize;
-                self.level = level;
+                let block_metas: Vec<_> =
+                    block_metas.into_iter().map(|meta| (None, meta)).collect();
+                self.generate_task(
+                    &block_metas,
+                    &column_nodes,
+                    total_rows as usize,
+                    total_bytes as usize,
+                    level,
+                );
                 selected = true;
                 continue;
             }
 
-            let selected_idx = Self::fetch_max_depth(points_map, self.depth_threshold)?;
+            let selected_idx =
+                Self::fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
             if selected_idx.is_empty() {
                 remained_blocks.extend(block_metas.into_iter());
                 continue;
@@ -156,6 +177,9 @@ impl ReclusterMutator {
                 .for_each(|v| remained_blocks.push(block_metas[*v].clone()));
 
             let mut over_memory = false;
+            let mut task_bytes = 0;
+            let mut task_rows = 0;
+            let mut selected_blocks = Vec::new();
             for idx in selected_idx {
                 let block_meta = block_metas[idx].clone();
                 if over_memory {
@@ -163,19 +187,46 @@ impl ReclusterMutator {
                     continue;
                 }
 
-                let memory_usage = self.total_bytes + block_meta.block_size as usize;
-                if memory_usage > memory_threshold {
-                    remained_blocks.push(block_meta);
-                    over_memory = true;
-                    continue;
+                let block_size = block_meta.block_size as usize;
+                let row_count = block_meta.row_count as usize;
+                if task_bytes + block_size > memory_threshold {
+                    self.generate_task(
+                        &selected_blocks,
+                        &column_nodes,
+                        task_rows,
+                        task_bytes,
+                        level,
+                    );
+
+                    task_rows = 0;
+                    task_bytes = 0;
+                    selected_blocks.clear();
+
+                    if self.tasks.len() >= self.max_tasks {
+                        remained_blocks.push(block_meta);
+                        over_memory = true;
+                        continue;
+                    }
                 }
 
-                self.total_rows += block_meta.row_count as usize;
-                self.total_bytes = memory_usage;
-                self.selected_blocks.push(block_meta);
+                task_rows += row_count;
+                task_bytes += block_size;
+                selected_blocks.push((None, block_meta));
             }
 
-            self.level = level;
+            // the remains.
+            match selected_blocks.len() {
+                0 => (),
+                1 => remained_blocks.push(selected_blocks[0].1.clone()),
+                _ => self.generate_task(
+                    &selected_blocks,
+                    &column_nodes,
+                    task_rows,
+                    task_bytes,
+                    level,
+                ),
+            }
+
             selected = true;
         }
 
@@ -191,6 +242,27 @@ impl ReclusterMutator {
             });
         }
         Ok(selected)
+    }
+
+    fn generate_task(
+        &mut self,
+        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        column_nodes: &ColumnNodes,
+        total_rows: usize,
+        total_bytes: usize,
+        level: i32,
+    ) {
+        let (stats, parts) =
+            FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
+        let task = ReclusterTask {
+            parts,
+            stats,
+            total_rows,
+            total_bytes,
+            level,
+        };
+        self.tasks.push(task);
+        self.recluster_blocks_count += block_metas.len() as u64;
     }
 
     pub fn select_segments(
@@ -229,9 +301,7 @@ impl ReclusterMutator {
             return Ok(indices);
         }
 
-        let mut selected_segs = ReclusterMutator::fetch_max_depth(points_map, 1.0)?;
-        selected_segs.truncate(max_len);
-        Ok(selected_segs)
+        ReclusterMutator::fetch_max_depth(points_map, 1.0, max_len)
     }
 
     pub fn segment_can_recluster(
@@ -260,7 +330,7 @@ impl ReclusterMutator {
                     v.block_metas()
                         .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
                 }
-                .in_span(Span::enter_with_local_parent("try_from_segments"))
+                .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 
@@ -293,9 +363,10 @@ impl ReclusterMutator {
     fn fetch_max_depth(
         points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
         depth_threshold: f64,
+        max_len: usize,
     ) -> Result<IndexSet<usize>> {
         let mut max_depth = 0;
-        let mut max_points = Vec::new();
+        let mut max_point = 0;
         let mut block_depths = Vec::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
         let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
@@ -310,13 +381,9 @@ impl ReclusterMutator {
                 unfinished_parts.len() + start.len()
             };
 
-            match point_depth.cmp(&max_depth) {
-                Ordering::Greater => {
-                    max_depth = point_depth;
-                    max_points = vec![i];
-                }
-                Ordering::Equal => max_points.push(i),
-                Ordering::Less => (),
+            if point_depth > max_depth {
+                max_depth = point_depth;
+                max_point = i;
             }
 
             unfinished_parts
@@ -335,7 +402,6 @@ impl ReclusterMutator {
                 }
             });
         }
-        assert!(!max_points.is_empty());
         if !unfinished_parts.is_empty() {
             error!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
             return Err(ErrorCode::Internal(
@@ -351,21 +417,48 @@ impl ReclusterMutator {
         // find the max point, gather the indices.
         let mut selected_idx = IndexSet::new();
         if average_depth > depth_threshold {
-            let mut point = max_points[0];
-            point_overlaps[point].iter().for_each(|idx| {
+            point_overlaps[max_point].iter().for_each(|idx| {
                 selected_idx.insert(*idx);
             });
-            for next in max_points.into_iter().skip(1) {
-                point += 1;
-                if next != point {
+
+            let mut left = max_point;
+            let mut right = max_point;
+            while selected_idx.len() < max_len {
+                let left_depth = if left > 0 {
+                    point_overlaps[left - 1].len() as f64
+                } else {
+                    0.0
+                };
+
+                let right_depth = if right < point_overlaps.len() - 1 {
+                    point_overlaps[right + 1].len() as f64
+                } else {
+                    0.0
+                };
+
+                let max_depth = left_depth.max(right_depth);
+                if max_depth <= depth_threshold {
                     break;
                 }
 
-                point_overlaps[next].iter().for_each(|idx| {
-                    selected_idx.insert(*idx);
-                });
+                if left_depth >= right_depth {
+                    left -= 1;
+                    let mut merged_idx = IndexSet::new();
+                    point_overlaps[left].iter().for_each(|idx| {
+                        merged_idx.insert(*idx);
+                    });
+                    merged_idx.extend(selected_idx);
+                    selected_idx = merged_idx;
+                } else {
+                    right += 1;
+                    point_overlaps[right].iter().for_each(|idx| {
+                        selected_idx.insert(*idx);
+                    });
+                }
             }
         }
+
+        selected_idx.truncate(max_len);
         Ok(selected_idx)
     }
 

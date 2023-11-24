@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
+use crate::kernels::utils::BitChunks;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -97,9 +100,9 @@ impl Column {
         }
 
         match self {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                self.slice(0..length)
-            }
+            Column::Null { .. } => Column::Null { len: length },
+            Column::EmptyArray { .. } => Column::EmptyArray { len: length },
+            Column::EmptyMap { .. } => Column::EmptyMap { len: length },
             Column::Number(column) => with_number_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => {
                     Column::Number(NumberColumn::NUM_TYPE(Self::filter_primitive_types(
@@ -115,11 +118,10 @@ impl Column {
                     ))
                 }
             }),
-            Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(
-                bm,
-                MutableBitmap::with_capacity(length),
-                filter,
-            ),
+            Column::Boolean(bm) => {
+                let column = Self::filter_boolean_types(bm, filter);
+                Column::Boolean(column)
+            }
             Column::String(column) => {
                 let column = Self::filter_string_scalars(column, filter);
                 Column::String(column)
@@ -164,15 +166,8 @@ impl Column {
 
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
-                let validity = Self::filter_scalar_types::<BooleanType>(
-                    &c.validity,
-                    MutableBitmap::with_capacity(length),
-                    filter,
-                );
-                Column::Nullable(Box::new(NullableColumn {
-                    column,
-                    validity: BooleanType::try_downcast_column(&validity).unwrap(),
-                }))
+                let validity = Self::filter_boolean_types(&c.validity, filter);
+                Column::Nullable(Box::new(NullableColumn { column, validity }))
             }
             Column::Tuple(fields) => {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();
@@ -195,7 +190,10 @@ impl Column {
         let mut start_index: usize = 0;
 
         if offset > 0 {
-            let n = 8 - offset;
+            // If `offset` > 0, the valid bits of this byte start at `offset`, and the
+            // max num of valid bits is `8 - offset`, but we also need to ensure that
+            // we cannot iterate more than `length` bits.
+            let n = std::cmp::min(8 - offset, length);
             start_index += n;
             filter
                 .iter()
@@ -207,7 +205,7 @@ impl Column {
                     }
                 });
             slice = &slice[1..];
-            length -= n;
+            length = if length >= n { length - n } else { 0 };
         }
 
         let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
@@ -238,12 +236,14 @@ impl Column {
         T::upcast_column(T::build_column(builder))
     }
 
-    // low-level API using unsafe to improve performance
+    /// low-level API using unsafe to improve performance.
     fn filter_primitive_types<T: Copy>(values: &Buffer<T>, filter: &Bitmap) -> Buffer<T> {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
         if num_rows == values.len() {
             return values.clone();
+        } else if num_rows == 0 {
+            return vec![].into();
         }
 
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
@@ -256,14 +256,21 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
+                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
+                    // need to ensure that we cannot iterate more than `length` bits.
+                    if n >= offset && n < offset + length {
                         copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
                     }
                     mask = mask & (mask - 1);
                 }
-                length -= 8 - offset;
+                let bits_to_align = 8 - offset;
+                length = if length >= bits_to_align {
+                    length - bits_to_align
+                } else {
+                    0
+                };
                 slice = &slice[1..];
-                values_ptr = values_ptr.add(8 - offset);
+                values_ptr = values_ptr.add(bits_to_align);
             }
 
             const CHUNK_SIZE: usize = 64;
@@ -303,12 +310,14 @@ impl Column {
         builder.into()
     }
 
-    // low-level API using unsafe to improve performance
+    /// low-level API using unsafe to improve performance.
     fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
         if num_rows == values.len() {
             return values.clone();
+        } else if num_rows == 0 {
+            return StringColumn::new(vec![].into(), vec![0].into());
         }
 
         // Each element of `items` is (string pointer(u64), string length).
@@ -331,7 +340,9 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
+                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
+                    // need to ensure that we cannot iterate more than `length` bits.
+                    if n >= offset && n < offset + length {
                         let start = *values_offset.get_unchecked(n - offset) as usize;
                         let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
                         data_size += len as u64;
@@ -343,9 +354,14 @@ impl Column {
                     }
                     mask = mask & (mask - 1);
                 }
-                length -= 8 - offset;
+                let bits_to_align = 8 - offset;
+                length = if length >= bits_to_align {
+                    length - bits_to_align
+                } else {
+                    0
+                };
                 slice = &slice[1..];
-                idx += 8 - offset;
+                idx += bits_to_align;
             }
 
             const CHUNK_SIZE: usize = 64;
@@ -423,5 +439,222 @@ impl Column {
         }
 
         StringColumn::new(data.into(), offsets.into())
+    }
+
+    /// # Safety
+    /// * `src` + `src_idx`(in bits) must be [valid] for reads of `len` bits.
+    /// * `ptr` must be [valid] for writes of `len` bits.
+    unsafe fn copy_continuous_bits(
+        ptr: &mut *mut u8,
+        src: &[u8],
+        mut dst_idx: usize,
+        mut src_idx: usize,
+        len: usize,
+    ) -> (u8, usize) {
+        let mut unset_bits = 0;
+        let chunks = BitChunks::new(src, src_idx, len);
+        chunks.iter().for_each(|chunk| {
+            unset_bits += chunk.count_zeros();
+            copy_advance_aligned(&chunk as *const _ as *const u8, ptr, 8);
+        });
+
+        let mut remainder = chunks.remainder_len();
+        dst_idx += len - remainder;
+        src_idx += len - remainder;
+
+        let mut buf = 0;
+        while remainder > 0 {
+            if (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0 {
+                buf |= BIT_MASK[dst_idx % 8];
+            } else {
+                unset_bits += 1;
+            }
+            src_idx += 1;
+            dst_idx += 1;
+            remainder -= 1;
+            if dst_idx % 8 == 0 {
+                store_advance_aligned(buf, ptr);
+                buf = 0;
+            }
+        }
+        (buf, unset_bits as usize)
+    }
+
+    /// low-level API using unsafe to improve performance.
+    fn filter_boolean_types(bitmap: &Bitmap, filter: &Bitmap) -> Bitmap {
+        debug_assert_eq!(bitmap.len(), filter.len());
+        let num_rows = filter.len() - filter.unset_bits();
+        if num_rows == bitmap.len() {
+            return bitmap.clone();
+        } else if num_rows == 0 {
+            return Bitmap::new();
+        }
+        // Fast path.
+        if num_rows <= bitmap.len()
+            && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+        {
+            let mut bitmap = bitmap.clone();
+            bitmap.slice(0, num_rows);
+            return bitmap;
+        }
+
+        let capacity = num_rows.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let mut builder_ptr = builder.as_mut_ptr();
+        let mut builder_idx = 0;
+        let mut unset_bits = 0;
+        let mut buf = 0;
+
+        let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
+        let mut bitmap_idx = 0;
+
+        let (mut filter_slice, filter_offset, mut filter_length) = filter.as_slice();
+        unsafe {
+            if filter_offset > 0 {
+                let mut mask = filter_slice[0];
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    // If `filter_length` > 0, the valid bits of this byte start at `filter_offset`, we also
+                    // need to ensure that we cannot iterate more than `filter_length` bits.
+                    if n >= filter_offset && n < filter_offset + filter_length {
+                        if bitmap.get_bit_unchecked(n - filter_offset) {
+                            buf |= BIT_MASK[builder_idx % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        builder_idx += 1;
+                    }
+                    mask = mask & (mask - 1);
+                }
+                let bits_to_align = 8 - filter_offset;
+                filter_length = if filter_length >= bits_to_align {
+                    filter_length - bits_to_align
+                } else {
+                    0
+                };
+                filter_slice = &filter_slice[1..];
+                bitmap_idx += bits_to_align;
+            }
+
+            const CHUNK_SIZE: usize = 64;
+            let mut mask_chunks = BitChunksExact::<u64>::new(filter_slice, filter_length);
+            let mut continuous_selected = 0;
+            for mut mask in mask_chunks.by_ref() {
+                if mask == u64::MAX {
+                    continuous_selected += CHUNK_SIZE;
+                } else {
+                    if continuous_selected > 0 {
+                        if builder_idx % 8 != 0 {
+                            while continuous_selected > 0 {
+                                if bitmap.get_bit_unchecked(bitmap_idx) {
+                                    buf |= BIT_MASK[builder_idx % 8];
+                                } else {
+                                    unset_bits += 1;
+                                }
+                                bitmap_idx += 1;
+                                builder_idx += 1;
+                                continuous_selected -= 1;
+                                if builder_idx % 8 == 0 {
+                                    store_advance_aligned(buf, &mut builder_ptr);
+                                    buf = 0;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if continuous_selected > 0 {
+                            let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                                &mut builder_ptr,
+                                bitmap_slice,
+                                builder_idx,
+                                bitmap_idx + bitmap_offset,
+                                continuous_selected,
+                            );
+                            builder_idx += continuous_selected;
+                            bitmap_idx += continuous_selected;
+                            unset_bits += cur_unset_bits;
+                            buf = cur_buf;
+                            continuous_selected = 0;
+                        }
+                    }
+
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        if bitmap.get_bit_unchecked(bitmap_idx + n) {
+                            buf |= BIT_MASK[builder_idx % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        builder_idx += 1;
+                        if builder_idx % 8 == 0 {
+                            store_advance_aligned(buf, &mut builder_ptr);
+                            buf = 0;
+                        }
+                        mask = mask & (mask - 1);
+                    }
+                    bitmap_idx += CHUNK_SIZE;
+                }
+            }
+
+            if continuous_selected > 0 {
+                if builder_idx % 8 != 0 {
+                    while continuous_selected > 0 {
+                        if bitmap.get_bit_unchecked(bitmap_idx) {
+                            buf |= BIT_MASK[builder_idx % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        bitmap_idx += 1;
+                        builder_idx += 1;
+                        continuous_selected -= 1;
+                        if builder_idx % 8 == 0 {
+                            store_advance_aligned(buf, &mut builder_ptr);
+                            buf = 0;
+                            break;
+                        }
+                    }
+                }
+
+                if continuous_selected > 0 {
+                    let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                        &mut builder_ptr,
+                        bitmap_slice,
+                        builder_idx,
+                        bitmap_idx + bitmap_offset,
+                        continuous_selected,
+                    );
+                    builder_idx += continuous_selected;
+                    bitmap_idx += continuous_selected;
+                    unset_bits += cur_unset_bits;
+                    buf = cur_buf;
+                }
+            }
+
+            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
+                if is_selected {
+                    if bitmap.get_bit_unchecked(bitmap_idx + i) {
+                        buf |= BIT_MASK[builder_idx % 8];
+                    } else {
+                        unset_bits += 1;
+                    }
+                    builder_idx += 1;
+                    if builder_idx % 8 == 0 {
+                        store_advance_aligned(buf, &mut builder_ptr);
+                        buf = 0;
+                    }
+                }
+            }
+
+            if builder_idx % 8 != 0 {
+                store_advance_aligned(buf, &mut builder_ptr);
+            }
+        }
+
+        unsafe {
+            set_vec_len_by_ptr(&mut builder, builder_ptr);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+                .ok()
+                .unwrap()
+        }
     }
 }

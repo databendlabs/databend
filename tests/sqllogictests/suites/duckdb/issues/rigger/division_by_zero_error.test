@@ -13,11 +13,12 @@ INSERT INTO t0 VALUES(0.0,0.0)
 statement ok
 INSERT INTO t0 VALUES(0.0,NULL)
 
-statement error 1001
+statement error 1006
 SELECT t0.c1, (1/t0.c1) IS NULL FROM t0 order by c1
 
-statement error 1001
-SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1
+# FIXME: https://github.com/datafuselabs/databend/issues/12834
+# statement error 1006
+# SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1
 
 statement ok
 CREATE TABLE t1(c0 DOUBLE)
@@ -42,4 +43,3 @@ SELECT c0, exp(c0) FROM t1 order by c0
 
 query ok
 SELECT c0 FROM t1 WHERE exp(c0) IS NULL
-

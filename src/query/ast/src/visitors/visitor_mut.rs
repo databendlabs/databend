@@ -26,6 +26,7 @@ use super::walk_mut::walk_select_target_mut;
 use super::walk_mut::walk_set_expr_mut;
 use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
+use super::walk_stream_point_mut;
 use super::walk_time_travel_point_mut;
 use crate::ast::*;
 use crate::visitors::walk_column_id_mut;
@@ -143,6 +144,17 @@ pub trait VisitorMut: Sized {
         &mut self,
         _span: Span,
         _op: &mut BinaryOperator,
+        left: &mut Expr,
+        right: &mut Expr,
+    ) {
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
+    }
+
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        _op: &mut JsonOperator,
         left: &mut Expr,
         right: &mut Expr,
     ) {
@@ -386,19 +398,19 @@ pub trait VisitorMut: Sized {
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
-    fn visit_show_settings(&mut self, _like: &mut Option<String>) {}
+    fn visit_show_settings(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_process_list(&mut self) {}
+    fn visit_show_process_list(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_metrics(&mut self) {}
+    fn visit_show_metrics(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_engines(&mut self) {}
+    fn visit_show_engines(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+    fn visit_show_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_indexes(&mut self) {}
+    fn visit_show_indexes(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+    fn visit_show_table_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}
 
@@ -415,18 +427,14 @@ pub trait VisitorMut: Sized {
     fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt) {}
 
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
+    fn visit_set_secondary_roles(&mut self, _option: &mut SecondaryRolesOption) {}
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
     fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
     fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(
-        &mut self,
-        _table_reference: &mut TableReference,
-        _selection: &mut Option<Expr>,
-    ) {
-    }
+    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
 
     fn visit_update(&mut self, _update: &mut UpdateStmt) {}
 
@@ -495,6 +503,14 @@ pub trait VisitorMut: Sized {
     fn visit_alter_view(&mut self, _stmt: &mut AlterViewStmt) {}
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
+
+    fn visit_create_stream(&mut self, _stmt: &mut CreateStreamStmt) {}
+
+    fn visit_drop_stream(&mut self, _stmt: &mut DropStreamStmt) {}
+
+    fn visit_show_streams(&mut self, _stmt: &mut ShowStreamsStmt) {}
+
+    fn visit_describe_stream(&mut self, _stmt: &mut DescribeStreamStmt) {}
 
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
 
@@ -601,6 +617,18 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_network_policies(&mut self) {}
 
+    fn visit_create_task(&mut self, _stmt: &mut CreateTaskStmt) {}
+
+    fn visit_drop_task(&mut self, _stmt: &mut DropTaskStmt) {}
+
+    fn visit_show_tasks(&mut self, _stmt: &mut ShowTasksStmt) {}
+
+    fn visit_execute_task(&mut self, _stmt: &mut ExecuteTaskStmt) {}
+
+    fn visit_describe_task(&mut self, _stmt: &mut DescribeTaskStmt) {}
+
+    fn visit_alter_task(&mut self, _stmt: &mut AlterTaskStmt) {}
+
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter_mut() {
@@ -679,6 +707,10 @@ pub trait VisitorMut: Sized {
         walk_time_travel_point_mut(self, time);
     }
 
+    fn visit_stream_point(&mut self, stream: &mut StreamPoint) {
+        walk_stream_point_mut(self, stream);
+    }
+
     fn visit_join(&mut self, join: &mut Join) {
         let Join {
             left,
@@ -692,4 +724,9 @@ pub trait VisitorMut: Sized {
 
         walk_join_condition_mut(self, condition);
     }
+
+    fn visit_create_connection(&mut self, _stmt: &mut CreateConnectionStmt) {}
+    fn visit_drop_connection(&mut self, _stmt: &mut DropConnectionStmt) {}
+    fn visit_describe_connection(&mut self, _stmt: &mut DescribeConnectionStmt) {}
+    fn visit_show_connections(&mut self, _stmt: &mut ShowConnectionsStmt) {}
 }

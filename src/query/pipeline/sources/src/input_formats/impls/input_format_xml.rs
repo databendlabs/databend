@@ -21,10 +21,8 @@ use common_exception::Result;
 use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
-use common_formats::FieldDecoderRowBased;
-use common_formats::FieldDecoderXML;
 use common_formats::FileFormatOptionsExt;
-use common_io::cursor_ext::*;
+use common_formats::SeparatedTextDecoder;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::XmlFileFormatParams;
@@ -32,7 +30,6 @@ use common_storage::FileParseError;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
-use crate::input_formats::error_utils::check_column_end;
 use crate::input_formats::error_utils::truncate_column_data;
 use crate::input_formats::AligningStateTextBased;
 use crate::input_formats::BlockBuilder;
@@ -48,12 +45,13 @@ impl InputFormatXML {
         Self {}
     }
     fn read_row(
-        field_decoder: &FieldDecoderXML,
+        field_decoder: &SeparatedTextDecoder,
         row_data: &mut HashMap<String, Vec<u8>>,
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
+        ident_case_sensitive: bool,
     ) -> std::result::Result<(), FileParseError> {
-        let raw_data = if !field_decoder.ident_case_sensitive {
+        let raw_data = if !ident_case_sensitive {
             row_data
                 .drain()
                 .map(|(k, v)| (k.to_lowercase(), v))
@@ -65,28 +63,24 @@ impl InputFormatXML {
         for ((column_index, field), column) in
             schema.fields().iter().enumerate().zip(columns.iter_mut())
         {
-            let value = if field_decoder.ident_case_sensitive {
+            let value = if ident_case_sensitive {
                 raw_data.get(field.name())
             } else {
                 raw_data.get(&field.name().to_lowercase())
             };
             if let Some(value) = value {
-                let mut reader = Cursor::new(&**value);
-                if reader.eof() {
+                if value.is_empty() {
                     column.push_default();
-                } else {
-                    if let Err(e) = field_decoder.read_field(column, &mut reader, true) {
-                        return Err(FileParseError::ColumnDecodeError {
-                            column_index,
-                            column_name: field.name().to_string(),
-                            column_type: field.data_type.to_string(),
-                            decode_error: e.message(),
-                            column_data: truncate_column_data(
-                                String::from_utf8_lossy(value).to_string(),
-                            ),
-                        });
-                    }
-                    check_column_end(&mut reader, schema, column_index)?;
+                } else if let Err(e) = field_decoder.read_field(column, value) {
+                    return Err(FileParseError::ColumnDecodeError {
+                        column_index,
+                        column_name: field.name().to_string(),
+                        column_type: field.data_type.to_string(),
+                        decode_error: e.message(),
+                        column_data: truncate_column_data(
+                            String::from_utf8_lossy(value).to_string(),
+                        ),
+                    });
                 }
             } else {
                 column.push_default();
@@ -145,8 +139,8 @@ impl InputFormatTextBase for InputFormatXML {
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
     ) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldDecoderXML::create(
-            XmlFileFormatParams::downcast_unchecked(params).clone(),
+        Arc::new(SeparatedTextDecoder::create_xml(
+            XmlFileFormatParams::downcast_unchecked(params),
             options,
         ))
     }
@@ -162,7 +156,7 @@ impl InputFormatTextBase for InputFormatXML {
         let field_decoder = builder
             .field_decoder
             .as_any()
-            .downcast_ref::<FieldDecoderXML>()
+            .downcast_ref::<SeparatedTextDecoder>()
             .expect("must success");
         let columns = &mut builder.mutable_columns;
 
@@ -232,7 +226,7 @@ impl InputFormatTextBase for InputFormatXML {
                                             num_rows,
                                         ));
                                     }
-                                    let attr = attributes.get(0).unwrap();
+                                    let attr = attributes.first().unwrap();
                                     key = Some(attr.value.clone());
                                 }
                             }
@@ -245,6 +239,7 @@ impl InputFormatTextBase for InputFormatXML {
                                 &mut cols,
                                 columns,
                                 &builder.ctx.schema,
+                                builder.ident_case_sensitive,
                             ) {
                                 builder
                                     .ctx

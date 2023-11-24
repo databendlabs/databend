@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use log::info;
 use log::warn;
+use minitrace::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -35,10 +36,10 @@ use super::HttpQueryContext;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
+use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
-use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
@@ -133,33 +134,16 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-impl HttpSessionConf {
-    fn apply_affect(&self, affect: &QueryAffect) -> HttpSessionConf {
-        let mut ret = self.clone();
-        match affect {
-            QueryAffect::UseDB { name } => {
-                ret.database = Some(name.to_string());
-            }
-            QueryAffect::ChangeSettings {
-                keys,
-                values,
-                is_globals: _,
-            } => {
-                let settings = ret.settings.get_or_insert_default();
-                for (key, value) in keys.iter().zip(values) {
-                    settings.insert(key.to_string(), value.to_string());
-                }
-            }
-            _ => {}
-        }
-        ret
-    }
-}
+impl HttpSessionConf {}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StageAttachmentConf {
@@ -184,6 +168,7 @@ pub struct HttpQueryResponseInternal {
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
     pub state: ResponseState,
+    pub node_id: String,
 }
 
 pub enum ExpireState {
@@ -201,19 +186,23 @@ pub enum ExpireResult {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
+    pub(crate) node_id: String,
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    config: HttpQueryConfig,
     expire_state: Arc<TokioMutex<ExpireState>>,
+    /// The timeout for the query result polling. In the normal case, the client driver
+    /// should fetch the paginated result in a timely manner, and the interval should not
+    /// exceed this result_timeout_secs.
+    pub(crate) result_timeout_secs: u64,
 }
 
 impl HttpQuery {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = HttpQueryManager::instance();
 
@@ -249,11 +238,20 @@ impl HttpQuery {
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
         // - the current database
-        // - the session-level settings, like max_threads
+        // - the current role
+        // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
             }
+            if let Some(role) = &session_conf.role {
+                session.set_current_role_checked(role).await?;
+            }
+            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+            session
+                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
+                .await?;
+            // TODO(liyz): pass secondary roles here
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {
@@ -261,7 +259,10 @@ impl HttpQuery {
                         .set_setting(k.to_string(), v.to_string())
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!("unknown session setting: {}", k);
+                                warn!(
+                                    "{}: http query unknown session setting: {}",
+                                    &ctx.query_id, k
+                                );
                                 Ok(())
                             } else {
                                 Err(e)
@@ -278,6 +279,8 @@ impl HttpQuery {
             }
         };
 
+        let settings = session.get_settings();
+        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
@@ -291,15 +294,14 @@ impl HttpQuery {
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }
-        if let Some(query_id) = query_id {
-            // TODO: validate the query_id to be uuid format
-            ctx.set_id(query_id);
-        }
+
+        // TODO: validate the query_id to be uuid format
+        ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
-        let query_id = ctx.get_id();
+        let node_id = ctx.get_cluster().local_id.clone();
         let sql = &request.sql;
-        info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
+        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
@@ -328,10 +330,16 @@ impl HttpQuery {
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root(std::any::type_name::<ExecuteState>(), parent)
+        } else {
+            Span::noop()
+        };
+
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
-        http_query_runtime_instance
-            .runtime()
-            .try_spawn(async move {
+        http_query_runtime_instance.runtime().try_spawn(
+            ctx.get_id(),
+            async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
@@ -347,18 +355,21 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
+                        session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
                     };
                     info!(
-                        "http query {}, change state to Stopped, fail to start {:?}",
+                        "{}: http query change state to Stopped, fail to start {:?}",
                         &query_id_clone, e
                     );
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
                         .await;
                     block_sender_closer.close();
                 }
-            })?;
+            }
+            .in_span(span),
+        )?;
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
@@ -368,13 +379,15 @@ impl HttpQuery {
             schema,
             format_settings,
         )));
+
         let query = HttpQuery {
             id: query_id,
             session_id,
+            node_id,
             request,
             state,
             page_manager: data,
-            config,
+            result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
         };
 
@@ -382,20 +395,17 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session = self.request.session.clone().unwrap_or_default();
-        let session = if let Some(affect) = &state.affect {
-            Some(session.apply_affect(affect))
-        } else {
-            Some(session)
-        };
+        let session = self.get_response_session().await;
 
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session,
+            session: Some(session),
+            node_id: self.node_id.clone(),
             session_id: self.session_id.clone(),
         })
     }
@@ -403,17 +413,14 @@ impl HttpQuery {
     #[async_backtrace::framed]
     pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
         let state = self.get_state().await;
-        let session = self.request.session.clone().unwrap_or_default();
-        let session = if let Some(affect) = &state.affect {
-            Some(session.apply_affect(affect))
-        } else {
-            Some(session)
-        };
+        let session = self.get_response_session().await;
+
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
+            node_id: self.node_id.clone(),
             state,
-            session,
+            session: Some(session),
         }
     }
 
@@ -427,6 +434,41 @@ impl HttpQuery {
             state: exe_state,
             error: err,
             affect: state.get_affect(),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_response_session(&self) -> HttpSessionConf {
+        let keep_server_session_secs = self
+            .request
+            .session
+            .clone()
+            .map(|v| v.keep_server_session_secs)
+            .unwrap_or(None);
+
+        // reply the updated session state, includes:
+        // - current_database: updated by USE XXX;
+        // - role: updated by SET ROLE;
+        // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
+        // - settings: updated by SET XXX = YYY;
+        let executor = self.state.read().await;
+        let session_state = executor.get_session_state();
+
+        let settings = session_state
+            .settings
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let database = session_state.current_database.clone();
+        let role = session_state.current_role.clone();
+        let secondary_roles = session_state.secondary_roles.clone();
+
+        HttpSessionConf {
+            database: Some(database),
+            role,
+            secondary_roles,
+            keep_server_session_secs,
+            settings: Some(settings),
         }
     }
 
@@ -445,6 +487,9 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn kill(&self) {
+        // the query will be removed from the query manager before the session is dropped.
+        self.detach().await;
+
         Executor::stop(
             &self.state,
             Err(ErrorCode::AbortedQuery("killed by http")),
@@ -454,14 +499,16 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&self) {
+    async fn detach(&self) {
+        info!("{}: http query detached", &self.id);
+
         let data = self.page_manager.lock().await;
         data.detach().await
     }
 
     #[async_backtrace::framed]
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_secs(self.config.result_timeout_secs)
+        let duration = Duration::from_secs(self.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
@@ -493,7 +540,7 @@ impl HttpQuery {
             }
             ExpireState::Removed => ExpireResult::Removed,
             ExpireState::Working => {
-                ExpireResult::Sleep(Duration::from_secs(self.config.result_timeout_secs))
+                ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
         }
     }

@@ -32,8 +32,8 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::SyncSource;
@@ -155,6 +155,7 @@ impl Table for RandomTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let mut output_schema = self.table_info.schema();
         let push_downs = plan.push_downs.clone();

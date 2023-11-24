@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Not;
-
 use common_exception::Result;
+use common_expression::eval_function;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
@@ -30,6 +29,7 @@ pub struct SplitByExprMutator {
 }
 
 impl SplitByExprMutator {
+    #[allow(dead_code)]
     pub fn create(expr: Option<Expr>, func_ctx: FunctionContext) -> Self {
         Self { expr, func_ctx }
     }
@@ -49,10 +49,17 @@ impl SplitByExprMutator {
                 .map_err(|e| e.add_message("eval filter failed:"))?
                 .try_downcast::<BooleanType>()
                 .unwrap();
-            let filter = predicates.into_column().unwrap();
+            let (predicates_not, _) = eval_function(
+                None,
+                "not",
+                [(predicates.clone().upcast(), DataType::Boolean)],
+                &self.func_ctx,
+                data_block.num_rows(),
+                &BUILTIN_FUNCTIONS,
+            )?;
             Ok((
-                data_block.clone().filter_with_bitmap(&filter)?,
-                data_block.filter_with_bitmap(&filter.not())?,
+                data_block.clone().filter_boolean_value(&predicates)?,
+                data_block.filter_boolean_value(&predicates_not.try_downcast().unwrap())?,
             ))
         }
     }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
 use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::LicenseManager;
@@ -40,11 +39,13 @@ fn build_custom_claims(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_parse_license() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
 
     let key_pair = ES256KeyPair::generate();
-    let license_mgr = RealLicenseManager::new(key_pair.public_key().to_pem().unwrap());
+    let license_mgr = RealLicenseManager::new(
+        fixture.default_tenant(),
+        key_pair.public_key().to_pem().unwrap(),
+    );
     let claims = Claims::with_custom_claims(
         build_custom_claims("trial".to_string(), "databend".to_string(), None),
         Duration::from_hours(2),
@@ -54,17 +55,15 @@ async fn test_parse_license() -> common_exception::Result<()> {
     let parsed = license_mgr.parse_license(token.as_str());
     assert!(parsed.is_ok());
 
-    let settings = ctx.get_settings();
-    settings.set_enterprise_license(token)?;
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::Test)
+            .check_enterprise_enabled(token.clone(), Feature::Test)
             .is_ok()
     );
     // test cache hit
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::Test)
+            .check_enterprise_enabled(token, Feature::Test)
             .is_ok()
     );
 
@@ -77,10 +76,9 @@ async fn test_parse_license() -> common_exception::Result<()> {
     let token = key_pair.sign(claims)?;
     let parsed = license_mgr.parse_license(token.as_str());
     assert!(parsed.is_err());
-    settings.set_enterprise_license(token)?;
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::Test)
+            .check_enterprise_enabled(token, Feature::Test)
             .is_err()
     );
 
@@ -89,11 +87,13 @@ async fn test_parse_license() -> common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_license_features() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
 
     let key_pair = ES256KeyPair::generate();
-    let license_mgr = RealLicenseManager::new(key_pair.public_key().to_pem().unwrap());
+    let license_mgr = RealLicenseManager::new(
+        fixture.default_tenant(),
+        key_pair.public_key().to_pem().unwrap(),
+    );
     let claims = Claims::with_custom_claims(
         build_custom_claims(
             "trial".to_string(),
@@ -102,6 +102,7 @@ async fn test_license_features() -> common_exception::Result<()> {
                 "test".to_string(),
                 "license_info".to_string(),
                 "vacuum".to_string(),
+                "stream".to_string(),
             ]),
         ),
         Duration::from_hours(2),
@@ -111,35 +112,39 @@ async fn test_license_features() -> common_exception::Result<()> {
     let parsed = license_mgr.parse_license(token.as_str());
     assert!(parsed.is_ok());
 
-    let settings = ctx.get_settings();
-    settings.set_enterprise_license(token)?;
-
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::ComputedColumn)
+            .check_enterprise_enabled(token.clone(), Feature::ComputedColumn)
             .is_err()
     );
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::LicenseInfo)
+            .check_enterprise_enabled(token.clone(), Feature::LicenseInfo)
             .is_ok()
     );
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::VirtualColumn)
+            .check_enterprise_enabled(token.clone(), Feature::VirtualColumn)
             .is_err()
     );
+
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::Test)
+            .check_enterprise_enabled(token.clone(), Feature::Test)
             .is_ok()
     );
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::Vacuum)
+            .check_enterprise_enabled(token.clone(), Feature::Vacuum)
+            .is_ok()
+    );
+
+    assert!(
+        license_mgr
+            .check_enterprise_enabled(token, Feature::Stream)
             .is_ok()
     );
 
@@ -160,10 +165,9 @@ async fn test_license_features() -> common_exception::Result<()> {
     let token = key_pair.sign(claims)?;
     let parsed = license_mgr.parse_license(token.as_str());
     assert!(parsed.is_err());
-    settings.set_enterprise_license(token)?;
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::Test)
+            .check_enterprise_enabled(token, Feature::Test)
             .is_err()
     );
 

@@ -1,0 +1,16 @@
+query T
+SELECT SPACE(NULL)
+----
+NULL
+
+statement ok
+SELECT SPACE(0)
+
+statement ok
+SELECT SPACE(1)
+
+statement ok
+SELECT SPACE(2)
+
+statement error 1006
+SELECT SPACE(2000000)

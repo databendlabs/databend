@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem;
+
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Lambda;
@@ -32,6 +34,7 @@ use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_INTEGER_TYPES;
 use rand::Rng;
 
+use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -152,7 +155,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     0 => "and_filters".to_string(),
                     1 => "regexp_like".to_string(),
                     2 => {
-                        let comp_func = vec!["eq", "gt", "gte", "lt", "lte", "ne", "noteq"];
+                        let comp_func = ["eq", "gt", "gte", "lt", "lte", "ne", "noteq"];
                         comp_func[self.rng.gen_range(0..=6)].to_string()
                     }
                     3 => "ignore".to_string(),
@@ -187,11 +190,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     1 => "point_in_polygon".to_string(),
                     2 => "regexp_instr".to_string(),
                     3 => {
-                        let arithmetic_func = vec!["plus", "minus", "multiply", "divide"];
+                        let arithmetic_func = ["plus", "minus", "multiply", "divide"];
                         arithmetic_func[self.rng.gen_range(0..=3)].to_string()
                     }
                     4 => {
-                        let array_func = vec![
+                        let array_func = [
                             "array_approx_count_distinct",
                             "array_avg",
                             "array_kurtosis",
@@ -284,7 +287,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 (name, vec![], args_type)
             }
             DataType::Decimal(_) => {
-                let decimal = vec!["to_float64", "to_float32", "to_decimal", "try_to_decimal"];
+                let decimal = ["to_float64", "to_float32", "to_decimal", "try_to_decimal"];
                 let name = decimal[self.rng.gen_range(0..=3)].to_string();
                 if name == "to_decimal" || name == "try_to_decimal" {
                     let args_type = vec![self.gen_data_type(); 1];
@@ -313,7 +316,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
             DataType::Variant => {
                 if self.rng.gen_bool(0.5) {
-                    let json_func = vec!["json_array", "json_object", "json_object_keep_null"];
+                    let json_func = ["json_array", "json_object", "json_object_keep_null"];
                     let name = json_func[self.rng.gen_range(0..=2)].to_string();
                     let len = self.rng.gen_range(0..=2);
                     let mut args_type = Vec::with_capacity(len * 2);
@@ -323,7 +326,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     (name, vec![], args_type)
                 } else {
-                    let json_func = vec!["unnest", "json_path_query"];
+                    let json_func = ["unnest", "json_path_query"];
                     let name = json_func[self.rng.gen_range(0..=1)].to_string();
                     let args_type = vec![ty.clone()];
                     (name, vec![], args_type)
@@ -343,7 +346,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     (name, vec![], args_type)
                 } else {
-                    let array_func = vec![
+                    let array_func = [
                         "unnest",
                         "array_any",
                         "array_count",
@@ -578,7 +581,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let ty = ty.clone();
         match ty {
             DataType::Number(NumberDataType::UInt64) => {
-                let number = vec!["row_number", "rank", "dense_rank", "ntile"];
+                let number = ["row_number", "rank", "dense_rank", "ntile"];
                 let name = number[self.rng.gen_range(0..=2)];
                 let args_type = if name == "ntile" {
                     vec![DataType::Number(NumberDataType::UInt64)]
@@ -588,12 +591,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 self.gen_func(name.to_string(), vec![], args_type, window, None)
             }
             DataType::Number(NumberDataType::Float64) => {
-                let float = vec!["percent_rank", "cume_dist"];
+                let float = ["percent_rank", "cume_dist"];
                 let name = float[self.rng.gen_range(0..=1)].to_string();
                 self.gen_func(name, vec![], vec![], window, None)
             }
             _ => {
-                let name = vec![
+                let name = [
                     "lag",
                     "lead",
                     "first_value",
@@ -669,6 +672,56 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 })
             },
         }
+    }
+
+    pub(crate) fn gen_lambda_func(&mut self, ty: &DataType) -> Expr {
+        // return value of lambda function must be an array type
+        if !matches!(ty, &DataType::Array(_)) {
+            return self.gen_simple_expr(ty);
+        }
+        let inner_ty = ty.as_array().unwrap();
+
+        let current_cte_tables = mem::take(&mut self.cte_tables);
+        let current_bound_tables = mem::take(&mut self.bound_tables);
+        let current_bound_columns = mem::take(&mut self.bound_columns);
+        let current_is_join = self.is_join;
+
+        self.cte_tables = vec![];
+        self.bound_tables = vec![];
+        self.bound_columns = vec![];
+        self.is_join = false;
+
+        let name = if inner_ty.remove_nullable() == DataType::Boolean {
+            "array_filter".to_string()
+        } else if self.rng.gen_bool(0.5) {
+            "array_transform".to_string()
+        } else {
+            "array_apply".to_string()
+        };
+
+        let args_type = vec![ty.clone()];
+        let lambda_name = format!("l{}", self.gen_random_name());
+        let lambda_column = Column {
+            table_name: "".to_string(),
+            name: lambda_name.clone(),
+            index: 0,
+            data_type: ty.clone(),
+        };
+        self.bound_columns.push(lambda_column);
+
+        let lambda_expr = self.gen_expr(inner_ty);
+
+        let lambda = Lambda {
+            params: vec![Identifier::from_name(lambda_name)],
+            expr: Box::new(lambda_expr),
+        };
+
+        self.cte_tables = current_cte_tables;
+        self.bound_tables = current_bound_tables;
+        self.bound_columns = current_bound_columns;
+        self.is_join = current_is_join;
+
+        self.gen_func(name, vec![], args_type, None, Some(lambda))
     }
 
     fn gen_func(

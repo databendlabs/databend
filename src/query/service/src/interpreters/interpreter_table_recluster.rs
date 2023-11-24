@@ -16,22 +16,37 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_catalog::lock::LockExt;
 use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::TableInfo;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::FragmentKind;
+use common_sql::executor::physical_plans::ReclusterSink;
+use common_sql::executor::physical_plans::ReclusterSource;
+use common_sql::executor::physical_plans::ReclusterTask;
+use common_sql::executor::PhysicalPlan;
+use common_storages_fuse::FuseTable;
 use log::error;
 use log::info;
 use log::warn;
+use storages_common_locks::LockManager;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
@@ -59,16 +74,8 @@ impl Interpreter for ReclusterTableInterpreter {
         let plan = &self.plan;
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
-        let tenant = ctx.get_tenant();
-        let max_threads = settings.get_max_threads()?;
+        let max_threads = settings.get_max_threads()? as usize;
         let recluster_timeout_secs = settings.get_recluster_timeout_secs()?;
-
-        // Status.
-        {
-            let status = "recluster: begin to run recluster";
-            ctx.set_status_info(status);
-            info!("{}", status);
-        }
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
@@ -95,6 +102,15 @@ impl Interpreter for ReclusterTableInterpreter {
             None
         };
 
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let mut table = catalog
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let mut times = 0;
         let mut block_count = 0;
         let start = SystemTime::now();
@@ -108,43 +124,65 @@ impl Interpreter for ReclusterTableInterpreter {
                 return Err(err);
             }
 
-            let table = self
-                .ctx
-                .get_catalog(&plan.catalog)
-                .await?
-                .get_table(tenant.as_str(), &plan.database, &plan.table)
-                .await?;
+            let table_info = table.get_table_info().clone();
 
             // check if the table is locked.
-            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-            let reply = catalog
-                .list_table_lock_revs(table.get_table_info().ident.table_id)
-                .await?;
-            if !reply.is_empty() {
+            let table_lock = LockManager::create_table_lock(table_info.clone())?;
+            if table_lock.check_lock(catalog.clone()).await? {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table '{}' is locked, please retry recluster later",
                     self.plan.table
                 )));
             }
 
-            let mut pipeline = Pipeline::create();
-            let reclustered_block_count = table
-                .recluster(ctx.clone(), extras.clone(), plan.limit, &mut pipeline)
+            // Status.
+            {
+                let status = "recluster: begin to run recluster";
+                ctx.set_status_info(status);
+                info!("{}", status);
+            }
+
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let mutator = fuse_table
+                .build_recluster_mutator(ctx.clone(), extras.clone(), plan.limit)
                 .await?;
-            if pipeline.is_empty() {
+            if mutator.is_none() {
                 break;
             };
 
-            block_count += reclustered_block_count;
-            let max_threads = std::cmp::min(max_threads, reclustered_block_count) as usize;
-            pipeline.set_max_threads(max_threads);
+            let mutator = mutator.unwrap();
+            if mutator.tasks.is_empty() {
+                break;
+            };
+            block_count += mutator.recluster_blocks_count;
+            let physical_plan = build_recluster_physical_plan(
+                mutator.tasks,
+                table_info,
+                catalog.info(),
+                mutator.snapshot,
+                mutator.remained_blocks,
+                mutator.removed_segment_indexes,
+                mutator.removed_segment_summary,
+            )?;
+
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                    .await?;
+            assert!(build_res.main_pipeline.is_complete_pipeline()?);
+            build_res.set_max_threads(max_threads);
 
             let query_id = ctx.get_id();
             let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
-            let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
 
-            ctx.set_executor(executor.get_inner())?;
-            executor.execute()?;
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+
+            let complete_executor =
+                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+            ctx.set_executor(complete_executor.get_inner())?;
+            complete_executor.execute()?;
+            // make sure the executor is dropped before the next loop.
+            drop(complete_executor);
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;
@@ -170,6 +208,11 @@ impl Interpreter for ReclusterTableInterpreter {
                 );
                 break;
             }
+
+            // refresh table.
+            table = catalog
+                .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                .await?;
         }
 
         if block_count != 0 {
@@ -184,4 +227,41 @@ impl Interpreter for ReclusterTableInterpreter {
 
         Ok(PipelineBuildResult::create())
     }
+}
+
+pub fn build_recluster_physical_plan(
+    tasks: Vec<ReclusterTask>,
+    table_info: TableInfo,
+    catalog_info: CatalogInfo,
+    snapshot: Arc<TableSnapshot>,
+    remained_blocks: Vec<Arc<BlockMeta>>,
+    removed_segment_indexes: Vec<usize>,
+    removed_segment_summary: Statistics,
+) -> Result<PhysicalPlan> {
+    let is_distributed = tasks.len() > 1;
+    let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
+        tasks,
+        table_info: table_info.clone(),
+        catalog_info: catalog_info.clone(),
+    }));
+
+    if is_distributed {
+        root = PhysicalPlan::Exchange(Exchange {
+            plan_id: 0,
+            input: Box::new(root),
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            ignore_exchange: false,
+        });
+    }
+
+    Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+        input: Box::new(root),
+        table_info,
+        catalog_info,
+        snapshot,
+        remained_blocks,
+        removed_segment_indexes,
+        removed_segment_summary,
+    })))
 }

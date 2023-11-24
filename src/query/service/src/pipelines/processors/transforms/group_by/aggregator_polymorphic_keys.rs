@@ -30,6 +30,7 @@ use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU256;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
+use common_expression::KeyAccessor;
 use common_expression::KeysState;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
@@ -48,23 +49,23 @@ use log::info;
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use super::BUCKETS_LG2;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::DictionarySerializedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::DictionaryStringKeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::FixedKeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::DictionarySerializedKeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::HashTableCell;
+use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
-use crate::pipelines::processors::transforms::HashTableCell;
-use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
-use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysGroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::DictionaryStringKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::FixedKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::FixedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::FixedKeysGroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::SerializedKeysGroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::StringKeysColumnBuilder;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //
@@ -618,11 +619,13 @@ impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
         self.method.build_keys_iter(keys_state)
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
-        self.method.build_keys_iter_and_hashes(keys_state)
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
+        self.method
+            .build_keys_accessor_and_hashes(keys_state, hashes)
     }
 }
 

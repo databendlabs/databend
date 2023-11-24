@@ -31,6 +31,7 @@ use common_meta_app::principal::UserDefinedFunction;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::TypeChecker;
 use common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -54,27 +55,42 @@ impl AsyncSystemTable for FunctionsTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        // TODO(andylokandy): add rewritable function names, e.g. database()
-        let func_names = BUILTIN_FUNCTIONS.registered_names();
+        let mut scalar_func_names: Vec<String> = BUILTIN_FUNCTIONS.registered_names();
+        scalar_func_names.extend(
+            TypeChecker::all_sugar_functions()
+                .iter()
+                .map(|name| name.to_string()),
+        );
+        scalar_func_names.extend(
+            common_ast::ast::Expr::all_function_like_syntaxes()
+                .iter()
+                .map(|name| name.to_lowercase()),
+        );
+        scalar_func_names.sort();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;
+        // let visibility_checker = ctx.get_visibility_checker().await?;
+        // let udfs = udfs
+        //     .into_iter()
+        //     .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
+        //     .collect::<Vec<_>>();
 
-        let names: Vec<&str> = func_names
+        let names: Vec<&str> = scalar_func_names
             .iter()
-            .chain(aggr_func_names.iter())
+            .chain(&aggr_func_names)
             .chain(udfs.iter().map(|udf| &udf.name))
             .map(|x| x.as_str())
             .collect();
 
-        let builtin_func_len = func_names.len() + aggr_func_names.len();
+        let builtin_func_len = scalar_func_names.len() + aggr_func_names.len();
 
         let is_builtin = (0..names.len())
             .map(|i| i < builtin_func_len)
             .collect::<Vec<bool>>();
 
         let is_aggregate = (0..names.len())
-            .map(|i| i >= func_names.len() && i < builtin_func_len)
+            .map(|i| i >= scalar_func_names.len() && i < builtin_func_len)
             .collect::<Vec<bool>>();
 
         let definitions = (0..names.len())

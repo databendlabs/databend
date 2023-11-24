@@ -17,8 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::backoff::Backoff;
-use backoff::ExponentialBackoff;
-use backoff::ExponentialBackoffBuilder;
 use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
@@ -28,19 +26,22 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
-use common_sql::executor::MutationKind;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use common_sql::executor::physical_plans::MutationKind;
 use log::debug;
 use log::info;
 use log::warn;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
+use storages_common_locks::set_backoff;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
@@ -54,10 +55,6 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
-use crate::metrics::metrics_inc_commit_mutation_retry;
-use crate::metrics::metrics_inc_commit_mutation_success;
-use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
@@ -67,10 +64,6 @@ use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
-const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
-const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
-const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
-
 impl FuseTable {
     #[async_backtrace::framed]
     pub fn do_commit(
@@ -78,6 +71,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
@@ -105,6 +99,7 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 copied_files.clone(),
+                update_stream_meta.clone(),
                 snapshot_gen.clone(),
                 input,
                 None,
@@ -116,6 +111,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn commit_to_meta_server(
         ctx: &dyn TableContext,
@@ -153,11 +149,12 @@ impl FuseTable {
             snapshot,
             snapshot_location,
             copied_files,
+            &[],
             operator,
         )
         .await;
         if need_to_save_statistics {
-            let table_statistics_location = table_statistics_location.unwrap();
+            let table_statistics_location: String = table_statistics_location.unwrap();
             match &res {
                 Ok(_) => TableSnapshotStatistics::cache().put(
                     table_statistics_location,
@@ -173,6 +170,7 @@ impl FuseTable {
         res
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
         ctx: &dyn TableContext,
@@ -181,6 +179,7 @@ impl FuseTable {
         snapshot: TableSnapshot,
         snapshot_location: String,
         copied_files: &Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
     ) -> Result<()> {
         // 1. prepare table meta
@@ -217,6 +216,7 @@ impl FuseTable {
             new_table_meta,
             copied_files: copied_files.clone(),
             deduplicated_label: ctx.get_settings().get_deduplicate_label()?,
+            update_stream_meta: update_stream_meta.to_vec(),
         };
 
         // 3. let's roll
@@ -277,7 +277,7 @@ impl FuseTable {
             });
     }
 
-    // TODO refactor, it is called by segment compaction and re-cluster now
+    // TODO refactor, it is called by segment compaction
     #[async_backtrace::framed]
     pub async fn commit_mutation(
         &self,
@@ -289,7 +289,7 @@ impl FuseTable {
         max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
-        let mut backoff = Self::set_backoff(max_retry_elapsed);
+        let mut backoff = set_backoff(None, None, max_retry_elapsed);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
@@ -344,6 +344,7 @@ impl FuseTable {
                                 self.table_info.ident
                             );
 
+                            common_base::base::tokio::time::sleep(d).await;
                             latest_table_ref = self.refresh(ctx.as_ref()).await?;
                             let latest_fuse_table =
                                 FuseTable::try_from_table(latest_table_ref.as_ref())?;
@@ -463,31 +464,6 @@ impl FuseTable {
         // currently, the only error that we know,  which indicates there are no side effects
         // is TABLE_VERSION_MISMATCHED
         e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
-    }
-
-    #[inline]
-    pub fn set_backoff(max_retry_elapsed: Option<Duration>) -> ExponentialBackoff {
-        // The initial retry delay in millisecond. By default,  it is 5 ms.
-        let init_delay = OCC_DEFAULT_BACKOFF_INIT_DELAY_MS;
-
-        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
-        // By default, it is 20 seconds.
-        let max_delay = OCC_DEFAULT_BACKOFF_MAX_DELAY_MS;
-
-        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
-        // By default, it is 2 minutes
-        let max_elapsed = max_retry_elapsed.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS);
-
-        // TODO(xuanwo): move to backon instead.
-        //
-        // To simplify the settings, using fixed common values for randomization_factor and multiplier
-        ExponentialBackoffBuilder::new()
-            .with_initial_interval(init_delay)
-            .with_max_interval(max_delay)
-            .with_randomization_factor(0.5)
-            .with_multiplier(2.0)
-            .with_max_elapsed_time(Some(max_elapsed))
-            .build()
     }
 
     // check if there are any fuse table legacy options

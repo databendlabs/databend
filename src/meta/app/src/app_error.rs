@@ -163,6 +163,22 @@ impl TableAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("ViewAlreadyExists: {view_name} while {context}")]
+pub struct ViewAlreadyExists {
+    view_name: String,
+    context: String,
+}
+
+impl ViewAlreadyExists {
+    pub fn new(view_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            view_name: view_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateTableWithDropTime: create {table_name} with drop time")]
 pub struct CreateTableWithDropTime {
     table_name: String,
@@ -247,6 +263,58 @@ impl TableVersionMismatched {
             table_id,
             expect,
             curr,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("StreamAlreadyExists: {name} while {context}")]
+pub struct StreamAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl StreamAlreadyExists {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("StreamVersionMismatched: {stream_id} expect `{expect}` but `{curr}`  while `{context}`")]
+pub struct StreamVersionMismatched {
+    stream_id: u64,
+    expect: MatchSeq,
+    curr: u64,
+    context: String,
+}
+
+impl StreamVersionMismatched {
+    pub fn new(stream_id: u64, expect: MatchSeq, curr: u64, context: impl Into<String>) -> Self {
+        Self {
+            stream_id,
+            expect,
+            curr,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownStreamId: `{stream_id}` while `{context}`")]
+pub struct UnknownStreamId {
+    stream_id: u64,
+    context: String,
+}
+
+impl UnknownStreamId {
+    pub fn new(stream_id: u64, context: impl Into<String>) -> UnknownStreamId {
+        Self {
+            stream_id,
             context: context.into(),
         }
     }
@@ -648,6 +716,22 @@ impl UnknownShareEndpointId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("TableLockExpired: `{table_id}` while `{context}`")]
+pub struct TableLockExpired {
+    table_id: u64,
+    context: String,
+}
+
+impl TableLockExpired {
+    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            table_id,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error(
     "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
 )]
@@ -802,6 +886,9 @@ pub enum AppError {
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
+    ViewAlreadyExists(#[from] ViewAlreadyExists),
+
+    #[error(transparent)]
     CreateTableWithDropTime(#[from] CreateTableWithDropTime),
 
     #[error(transparent)]
@@ -893,6 +980,9 @@ pub enum AppError {
     UnknownShareEndpointId(#[from] UnknownShareEndpointId),
 
     #[error(transparent)]
+    TableLockExpired(#[from] TableLockExpired),
+
+    #[error(transparent)]
     CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
 
     #[error(transparent)]
@@ -933,6 +1023,15 @@ pub enum AppError {
 
     #[error(transparent)]
     VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
+
+    #[error(transparent)]
+    StreamAlreadyExists(#[from] StreamAlreadyExists),
+
+    #[error(transparent)]
+    StreamVersionMismatched(#[from] StreamVersionMismatched),
+
+    #[error(transparent)]
+    UnknownStreamId(#[from] UnknownStreamId),
 }
 
 impl AppErrorMessage for UnknownBackgroundJob {
@@ -995,11 +1094,27 @@ impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
 
+impl AppErrorMessage for StreamAlreadyExists {
+    fn message(&self) -> String {
+        format!("'{}' as stream Already Exists", self.name)
+    }
+}
+
+impl AppErrorMessage for StreamVersionMismatched {}
+
+impl AppErrorMessage for UnknownStreamId {}
+
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
+    }
+}
+
+impl AppErrorMessage for ViewAlreadyExists {
+    fn message(&self) -> String {
+        format!("'{}' as view Already Exists", self.view_name)
     }
 }
 
@@ -1114,6 +1229,15 @@ impl AppErrorMessage for UnknownShareEndpoint {
 impl AppErrorMessage for UnknownShareEndpointId {
     fn message(&self) -> String {
         format!("Unknown share endpoint id '{}'", self.share_endpoint_id)
+    }
+}
+
+impl AppErrorMessage for TableLockExpired {
+    fn message(&self) -> String {
+        format!(
+            "the acquired table lock in '{}' has been expired",
+            self.table_id
+        )
     }
 }
 
@@ -1257,6 +1381,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
+            AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())
             }
@@ -1269,6 +1394,11 @@ impl From<AppError> for ErrorCode {
             AppError::TableVersionMismatched(err) => {
                 ErrorCode::TableVersionMismatched(err.message())
             }
+            AppError::StreamAlreadyExists(err) => ErrorCode::StreamAlreadyExists(err.message()),
+            AppError::StreamVersionMismatched(err) => {
+                ErrorCode::StreamVersionMismatched(err.message())
+            }
+            AppError::UnknownStreamId(err) => ErrorCode::UnknownStreamId(err.message()),
             AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
             AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
             AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
@@ -1292,6 +1422,7 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownShareEndpointId(err) => {
                 ErrorCode::UnknownShareEndpointId(err.message())
             }
+            AppError::TableLockExpired(err) => ErrorCode::TableLockExpired(err.message()),
             AppError::CannotShareDatabaseCreatedFromShare(err) => {
                 ErrorCode::CannotShareDatabaseCreatedFromShare(err.message())
             }

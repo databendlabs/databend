@@ -25,12 +25,15 @@ use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Thread;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_pipeline_core::processors::profile::Profile;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Status;
@@ -95,8 +98,27 @@ impl DataExchangeManager {
         )))
     }
 
+    pub fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        let mut queries_profiles = HashMap::new();
+        for (query_id, coordinator) in queries_coordinator.iter() {
+            if let Some(executor) = coordinator
+                .info
+                .as_ref()
+                .and_then(|x| x.query_executor.as_ref())
+            {
+                queries_profiles.insert(query_id.clone(), executor.get_inner().get_profiles());
+            }
+        }
+
+        queries_profiles
+    }
+
     // Create connections for cluster all nodes. We will push data through this connection.
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
@@ -151,7 +173,7 @@ impl DataExchangeManager {
         let address = address.to_string();
 
         GlobalIORuntime::instance()
-            .spawn(async move {
+            .spawn(GLOBAL_TASK, async move {
                 match config.tls_query_cli_enabled() {
                     true => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_rpc_channel(
@@ -172,6 +194,7 @@ impl DataExchangeManager {
     }
 
     // Execute query in background
+    #[minitrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -186,6 +209,7 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
+    #[minitrace::trace]
     pub fn init_query_fragments_plan(
         &self,
         ctx: &Arc<QueryContext>,
@@ -206,6 +230,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn handle_statistics_exchange(
         &self,
         id: String,
@@ -222,6 +247,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
@@ -248,6 +274,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn on_finished_query(&self, query_id: &str) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -262,6 +289,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -492,7 +520,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
+                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
                 .map(|(_, v)| v.convert_to_sender())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
@@ -524,7 +552,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
+                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
                 .map(|(_, v)| v.convert_to_receiver())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
@@ -720,7 +748,14 @@ impl QueryCoordinator {
         let mut statistics_sender =
             StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Distributed-Executor", parent)
+        } else {
+            Span::noop()
+        };
+
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
+            let _g = span.set_local_parent();
             statistics_sender.shutdown(executor.execute().err());
             query_ctx
                 .get_exchange_manager()
@@ -806,14 +841,19 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
+
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
                 enable_profiling,
                 SharedProcessorProfiles::default(),
+                vec![],
             );
-            self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
+
+            let res = pipeline_builder.finalize(&self.physical_plan)?;
+
+            self.pipeline_build_res = Some(res);
         }
 
         Ok(())

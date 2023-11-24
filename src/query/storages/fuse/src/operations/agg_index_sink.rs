@@ -18,14 +18,16 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
 use common_expression::BlockRowIndex;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
 use opendal::Operator;
@@ -33,9 +35,6 @@ use opendal::Operator;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
-use crate::metrics::metrics_inc_agg_index_write_bytes;
-use crate::metrics::metrics_inc_agg_index_write_milliseconds;
-use crate::metrics::metrics_inc_agg_index_write_nums;
 
 pub struct AggIndexSink {
     data_accessor: Operator,
@@ -49,8 +48,10 @@ pub struct AggIndexSink {
 }
 
 impl AggIndexSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
+        ctx: Arc<dyn TableContext>,
         data_accessor: Operator,
         index_id: u64,
         write_settings: WriteSettings,
@@ -58,7 +59,7 @@ impl AggIndexSink {
         block_name_offset: usize,
         keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, AggIndexSink {
+        let sinker = AsyncSinker::create(input, ctx, AggIndexSink {
             data_accessor,
             index_id,
             write_settings,

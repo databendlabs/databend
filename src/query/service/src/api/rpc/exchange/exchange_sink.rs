@@ -18,9 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
+use common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
@@ -30,7 +31,6 @@ use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
-use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -79,6 +79,7 @@ impl ExchangeSink {
                 pipeline.try_resize(1)?;
                 assert_eq!(flight_senders.len(), 1);
                 pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
+                    ctx.clone(),
                     flight_senders.remove(0),
                     params.ignore_exchange,
                 )]));
@@ -89,7 +90,7 @@ impl ExchangeSink {
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = create_writer_items(flight_senders, false);
+                let items = create_writer_items(ctx.clone(), flight_senders, false);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

@@ -18,6 +18,8 @@ use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use super::AnyType;
 use crate::property::Domain;
@@ -77,6 +79,38 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         _builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         None
+    }
+
+    #[allow(clippy::manual_map)]
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Array(inner) => {
+                let builder = T::try_downcast_owned_builder(inner.builder);
+                // ```
+                // builder.map(|builder| ArrayColumnBuilder {
+                //     builder,
+                //     offsets: inner.offsets,
+                // })
+                // ```
+                // If we using the clippy recommend way like above, the compiler will complain:
+                // use of partially moved value: `inner`.
+                // That's rust borrow checker error, if we using the new borrow checker named polonius,
+                // everything goes fine, but polonius is very slow, so we allow manual map here.
+                if let Some(builder) = builder {
+                    Some(ArrayColumnBuilder {
+                        builder,
+                        offsets: inner.offsets,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Array(Box::new(builder.upcast())))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -227,6 +261,27 @@ impl<T: ValueType> ArrayColumn<T> {
         let range = *self.offsets.first().unwrap() as usize..*self.offsets.last().unwrap() as usize;
         T::slice_column(&self.values, range)
     }
+
+    pub fn check_valid(&self) -> Result<()> {
+        let offsets = self.offsets.as_slice();
+        let len = offsets.len();
+        if len < 1 {
+            return Err(ErrorCode::Internal(format!(
+                "ArrayColumn offsets length must be equal or greater than 1, but got {}",
+                len
+            )));
+        }
+
+        for i in 1..len {
+            if offsets[i] < offsets[i - 1] {
+                return Err(ErrorCode::Internal(format!(
+                    "ArrayColumn offsets value must be equal or greater than previous value, but got {}",
+                    offsets[i]
+                )));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl ArrayColumn<AnyType> {
@@ -342,6 +397,13 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
             &T::build_column(self.builder),
             (self.offsets[0] as usize)..(self.offsets[1] as usize),
         )
+    }
+
+    pub fn upcast(self) -> ArrayColumnBuilder<AnyType> {
+        ArrayColumnBuilder {
+            builder: T::try_upcast_column_builder(self.builder).unwrap(),
+            offsets: self.offsets,
+        }
     }
 }
 

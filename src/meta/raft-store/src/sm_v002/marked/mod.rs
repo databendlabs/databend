@@ -136,6 +136,8 @@ impl<T> Marked<T> {
     }
 
     /// Return the one with the larger sequence number.
+    // Not used, may be useful.
+    #[allow(dead_code)]
     pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
         if a.internal_seq() > b.internal_seq() {
             a
@@ -144,10 +146,11 @@ impl<T> Marked<T> {
         }
     }
 
-    pub fn new_tomb_stone(internal_seq: u64) -> Self {
+    pub fn new_tombstone(internal_seq: u64) -> Self {
         Marked::TombStone { internal_seq }
     }
 
+    #[allow(dead_code)]
     pub fn new_normal(seq: u64, value: T) -> Self {
         Marked::Normal {
             internal_seq: seq,
@@ -164,6 +167,7 @@ impl<T> Marked<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_meta(self, meta: Option<KVMeta>) -> Self {
         match self {
             Marked::TombStone { .. } => {
@@ -189,11 +193,10 @@ impl<T> Marked<T> {
         })
     }
 
-    pub fn is_tomb_stone(&self) -> bool {
+    pub fn is_tombstone(&self) -> bool {
         matches!(self, Marked::TombStone { .. })
     }
 
-    #[allow(dead_code)]
     pub(crate) fn is_normal(&self) -> bool {
         matches!(self, Marked::Normal { .. })
     }
@@ -218,6 +221,10 @@ impl From<ExpireValue> for Marked<String> {
     }
 }
 
+/// Convert internally used expire-index value `Marked<String>` to externally used type `ExpireValue`.
+///
+/// `ExpireValue.seq` equals to the seq of the str-map record,
+/// i.e., when a expire-index is inserted, the seq does not increase.
 impl From<Marked<String>> for Option<ExpireValue> {
     fn from(value: Marked<String>) -> Self {
         match value {
@@ -283,7 +290,7 @@ mod tests {
             m
         );
 
-        let m: Marked<u32> = Marked::new_tomb_stone(3);
+        let m: Marked<u32> = Marked::new_tombstone(3);
         assert_eq!(Marked::TombStone { internal_seq: 3 }, m);
     }
 }

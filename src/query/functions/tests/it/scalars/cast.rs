@@ -18,6 +18,7 @@ use common_expression::types::*;
 use common_expression::Column;
 use common_expression::FromData;
 use goldenfile::Mint;
+use itertools::Itertools;
 use roaring::RoaringTreemap;
 
 use super::run_ast;
@@ -676,11 +677,13 @@ fn gen_bitmap_data() -> Column {
         rb
     });
 
-    let rbs = rbs_iter.map(|rb| {
-        let mut data = Vec::new();
-        rb.serialize_into(&mut data).unwrap();
-        data
-    });
+    let rbs = rbs_iter
+        .map(|rb| {
+            let mut data = Vec::new();
+            rb.serialize_into(&mut data).unwrap();
+            data
+        })
+        .collect_vec();
 
     BitmapType::from_data(rbs)
 }

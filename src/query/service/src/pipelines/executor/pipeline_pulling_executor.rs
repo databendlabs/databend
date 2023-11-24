@@ -25,17 +25,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
 use log::warn;
+use minitrace::full_name;
+use minitrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
-use crate::pipelines::executor::executor_settings::ExecutorSettings;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::Pipeline;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::PipelineBuildResult;
 
 struct State {
@@ -148,6 +150,7 @@ impl PipelinePullingExecutor {
         })
     }
 
+    #[minitrace::trace]
     pub fn start(&mut self) {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
@@ -173,7 +176,9 @@ impl PipelinePullingExecutor {
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
+        let span = Span::enter_with_local_parent(full_name!());
         move || {
+            let _g = span.set_local_parent();
             state.finished(executor.execute());
         }
     }

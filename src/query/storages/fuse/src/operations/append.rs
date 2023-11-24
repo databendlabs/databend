@@ -25,13 +25,13 @@ use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::create_dummy_items;
-use common_pipeline_transforms::processors::transforms::transform_block_compact_for_copy::BlockCompactorForCopy;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
-use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_pipeline_transforms::processors::transforms::TransformSortPartial;
+use common_pipeline_transforms::processors::create_dummy_items;
+use common_pipeline_transforms::processors::BlockCompactor;
+use common_pipeline_transforms::processors::BlockCompactorForCopy;
+use common_pipeline_transforms::processors::TransformCompact;
+use common_pipeline_transforms::processors::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 
@@ -87,33 +87,43 @@ impl FuseTable {
         Ok(())
     }
 
-    pub fn cluster_gen_for_append_with_specified_last_len(
+    pub fn cluster_gen_for_append_with_specified_len(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         block_thresholds: BlockThresholds,
+        specified_mid_len: usize,
         specified_last_len: usize,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
         let output_lens = pipeline.output_len();
-        let items1 = create_dummy_items(output_lens - specified_last_len, output_lens);
-        let items2 = create_dummy_items(output_lens - specified_last_len, output_lens);
+        let items1 = create_dummy_items(
+            output_lens - specified_mid_len - specified_last_len,
+            output_lens,
+        );
+        let items2 = create_dummy_items(
+            output_lens - specified_mid_len - specified_last_len,
+            output_lens,
+        );
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
+            let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                         input,
                         output,
+                        num_input_columns,
                         func_ctx2.clone(),
                         operators.clone(),
                     )))
                 },
-                specified_last_len,
+                specified_mid_len,
             )?;
             builder.add_items_prepend(items1);
+            builder.add_items(create_dummy_items(specified_last_len, specified_last_len));
             pipeline.add_pipe(builder.finalize());
         }
 
@@ -138,9 +148,10 @@ impl FuseTable {
                         sort_descs.clone(),
                     )?))
                 },
-                specified_last_len,
+                specified_mid_len,
             )?;
             builder.add_items_prepend(items2);
+            builder.add_items(create_dummy_items(specified_last_len, specified_last_len));
             pipeline.add_pipe(builder.finalize());
         }
         Ok(cluster_stats_gen)
@@ -158,12 +169,14 @@ impl FuseTable {
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
+            let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     func_ctx2.clone(),
                     operators.clone(),
                 )))
@@ -206,7 +219,8 @@ impl FuseTable {
             return Ok(ClusterStatsGenerator::default());
         }
 
-        let input_schema = modified_schema.unwrap_or(DataSchema::from(self.schema()).into());
+        let input_schema =
+            modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
         let mut merged: Vec<DataField> = input_schema.fields().clone();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());

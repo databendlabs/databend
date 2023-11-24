@@ -66,6 +66,7 @@ impl NetworkPolicyMgr {
 #[async_trait::async_trait]
 impl NetworkPolicyApi for NetworkPolicyMgr {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_network_policy(&self, network_policy: NetworkPolicy) -> Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = self.make_network_policy_key(network_policy.name.as_str())?;
@@ -78,17 +79,18 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(&key, match_seq, value, None));
 
-        let res = upsert_kv.await?.added_or_else(|v| {
+        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
             ErrorCode::NetworkPolicyAlreadyExists(format!(
                 "NetworkPolicy already exists, seq [{}]",
                 v.seq
             ))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn update_network_policy(
         &self,
         network_policy: NetworkPolicy,
@@ -116,6 +118,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_network_policy(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = self.make_network_policy_key(name)?;
         let kv_api = self.kv_api.clone();
@@ -132,6 +135,8 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         }
     }
 
+    #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_network_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>> {
         let key = self.make_network_policy_key(name)?;
         let res = self.kv_api.get_kv(&key).await?;
@@ -152,6 +157,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_network_policies(&self) -> Result<Vec<NetworkPolicy>> {
         let values = self
             .kv_api

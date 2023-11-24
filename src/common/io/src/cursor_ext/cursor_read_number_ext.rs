@@ -83,7 +83,7 @@ pub fn collect_number(buffer: &[u8]) -> (usize, usize) {
 }
 
 #[inline]
-fn read_num_text_exact<T: FromLexical>(buf: &[u8]) -> Result<T> {
+pub fn read_num_text_exact<T: FromLexical>(buf: &[u8]) -> Result<T> {
     match buf.is_empty() {
         true => Ok(T::default()),
         false => match FromLexical::from_lexical(buf) {

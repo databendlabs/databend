@@ -60,7 +60,6 @@ use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
-use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -78,6 +77,7 @@ use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
+use crate::binder::bind_values;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -85,9 +85,12 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
+use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
+use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -98,6 +101,7 @@ use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDFServerCall;
@@ -113,7 +117,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::TypeCheck;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -354,11 +357,35 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
+                if list.len() >= 1024 {
+                    if *not {
+                        return self
+                            .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
+                                span: *span,
+                                expr: expr.clone(),
+                                list: list.clone(),
+                                not: false,
+                            })
+                            .await;
+                    }
+                    return self.convert_inlist_to_subquery(expr, list).await;
+                }
+
                 let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
                 if list.len() > get_max_inlist_to_or && list.iter().all(satisfy_contain_func) {
                     let array_expr = Expr::Array {
                         span: *span,
                         exprs: list.clone(),
+                    };
+                    // Deduplicate the array.
+                    let array_expr = Expr::FunctionCall {
+                        span: *span,
+                        name: Identifier::from_name("array_distinct"),
+                        args: vec![array_expr],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                        distinct: false,
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
@@ -508,6 +535,17 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
+            Expr::JsonOp {
+                span,
+                op,
+                left,
+                right,
+            } => {
+                let func_name = op.to_func_name();
+                self.resolve_function(*span, func_name.as_str(), vec![], &[left, right])
+                    .await?
+            }
+
             Expr::UnaryOp { span, op, expr, .. } => {
                 self.resolve_unary_op(*span, op, expr.as_ref()).await?
             }
@@ -538,7 +576,7 @@ impl<'a> TypeChecker<'a> {
                     return Ok(constant);
                 }
                 // if the source type is nullable, cast target type should also be nullable.
-                let target_type = if data_type.is_nullable() {
+                let target_type = if data_type.is_nullable_or_null() {
                     checked_expr.data_type().wrap_nullable()
                 } else {
                     checked_expr.data_type().clone()
@@ -673,7 +711,7 @@ impl<'a> TypeChecker<'a> {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
-                    && !Self::all_rewritable_scalar_function().contains(&func_name)
+                    && !Self::all_sugar_functions().contains(&func_name)
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
                         return Ok(udf);
@@ -686,7 +724,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
-                                Self::all_rewritable_scalar_function()
+                                Self::all_sugar_functions()
                                     .iter()
                                     .cloned()
                                     .map(str::to_string),
@@ -926,19 +964,9 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::CountAll { span, window } => {
-                let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
-
-                let (new_agg_func, data_type) = (
-                    AggregateFunction {
-                        display_name: format!("{:#}", expr),
-                        func_name: "count".to_string(),
-                        distinct: false,
-                        params: vec![],
-                        args: vec![],
-                        return_type: Box::new(agg_func.return_type()?),
-                    },
-                    agg_func.return_type()?,
-                );
+                let (new_agg_func, data_type) = self
+                    .resolve_aggregate_function(*span, "count", expr, false, &[], &[])
+                    .await?;
 
                 if let Some(window) = window {
                     // aggregate window function
@@ -1284,7 +1312,7 @@ impl<'a> TypeChecker<'a> {
             | WindowFrameBound::Preceding(Some(box expr)) => {
                 let box (expr, _) = self.resolve(expr).await?;
                 let (expr, _) =
-                    ConstantFolder::fold(&expr.type_check()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {
@@ -1742,7 +1770,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
         if let Some(rewritten_func_result) = self
-            .try_rewrite_scalar_function(span, func_name, arguments)
+            .try_rewrite_sugar_function(span, func_name, arguments)
             .await
         {
             return rewritten_func_result;
@@ -1818,6 +1846,30 @@ impl<'a> TypeChecker<'a> {
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
+        // Run constant folding for arguments of the scalar function.
+        // This will be helpful to simplify some constant expressions, especially
+        // the implicitly casted literal values, e.g. `timestamp > '2001-01-01'`
+        // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
+        let folded_args = match &expr {
+            common_expression::Expr::FunctionCall {
+                args: checked_args, ..
+            } => {
+                let mut folded_args = Vec::with_capacity(args.len());
+                for (checked_arg, arg) in checked_args.iter().zip(args.iter()) {
+                    match self.try_fold_constant(checked_arg) {
+                        Some(constant) if arg.evaluable() => {
+                            folded_args.push(constant.0);
+                        }
+                        _ => {
+                            folded_args.push(arg.clone());
+                        }
+                    }
+                }
+                folded_args
+            }
+            _ => args,
+        };
+
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
@@ -1830,7 +1882,7 @@ impl<'a> TypeChecker<'a> {
             FunctionCall {
                 span,
                 params,
-                arguments: args,
+                arguments: folded_args,
                 func_name: func_name.to_string(),
             }
             .into(),
@@ -2116,7 +2168,6 @@ impl<'a> TypeChecker<'a> {
         if typ.eq(&SubqueryType::Scalar) {
             data_type = Box::new(data_type.wrap_nullable());
         }
-
         let subquery_expr = SubqueryExpr {
             span: subquery.span,
             subquery: Box::new(s_expr),
@@ -2133,7 +2184,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    pub fn all_rewritable_scalar_function() -> &'static [&'static str] {
+    pub fn all_sugar_functions() -> &'static [&'static str] {
         &[
             "database",
             "currentdatabase",
@@ -2162,7 +2213,7 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
-    async fn try_rewrite_scalar_function(
+    async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -2200,7 +2251,7 @@ impl<'a> TypeChecker<'a> {
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
-                            .unwrap_or_else(|| "".to_string()),
+                            .unwrap_or_default(),
                     ),
                 })
                 .await,
@@ -2776,29 +2827,34 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
-        let mut args = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            let box (arg, _) = self.resolve(argument).await?;
-            args.push(arg);
+        if arguments.len() != udf_definition.arg_types.len() {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Require {} parameters, but got: {}",
+                udf_definition.arg_types.len(),
+                arguments.len()
+            ))
+            .set_span(span));
         }
 
-        let raw_expr_args = args.iter().map(|arg| arg.as_raw_expr()).collect_vec();
-        let raw_expr = RawExpr::UDFServerCall {
-            span,
-            func_name: udf_definition.handler.clone(),
-            server_addr: udf_definition.address.clone(),
-            arg_types: udf_definition.arg_types.clone(),
-            return_type: udf_definition.return_type.clone(),
-            args: raw_expr_args,
-        };
+        let mut args = Vec::with_capacity(arguments.len());
+        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument).await?;
+            if ty != *dest_type {
+                args.push(wrap_cast(&arg, dest_type));
+            } else {
+                args.push(arg);
+            }
+        }
 
-        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
+        let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.ctx.set_cacheable(false);
         Ok(Box::new((
             UDFServerCall {
                 span,
                 func_name: udf_definition.handler,
+                display_name,
                 server_addr: udf_definition.address,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
@@ -3091,7 +3147,7 @@ impl<'a> TypeChecker<'a> {
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = table_data_type
+            } = table_data_type.remove_nullable()
             {
                 let (span, path) = paths.pop_front().unwrap();
                 match path {
@@ -3182,6 +3238,69 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    async fn convert_inlist_to_subquery(
+        &mut self,
+        expr: &Expr,
+        list: &[Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let mut values = Vec::with_capacity(list.len());
+        for val in list.iter() {
+            values.push(vec![val.clone()])
+        }
+        let (const_scan, ctx) = bind_values(
+            self.ctx.clone(),
+            self.name_resolution_ctx,
+            self.metadata.clone(),
+            &mut bind_context,
+            None,
+            &values,
+        )
+        .await?;
+        assert_eq!(ctx.columns.len(), 1);
+        // Wrap group by on `const_scan` to deduplicate values
+        let distinct_const_scan = SExpr::create_unary(
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items: vec![ScalarItem {
+                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ctx.columns[0].clone(),
+                        }),
+                        index: self.metadata.read().columns().len() - 1,
+                    }],
+                    aggregate_functions: vec![],
+                    from_distinct: false,
+                    limit: None,
+                    grouping_sets: None,
+                }
+                .into(),
+            ),
+            Arc::new(const_scan),
+        );
+
+        let data_type = ctx.columns[0].data_type.clone();
+        let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
+        let rel_prop = rel_expr.derive_relational_prop()?;
+        let box (scalar, _) = self.resolve(expr).await?;
+        let child_scalar = Some(Box::new(scalar));
+        let subquery_expr = SubqueryExpr {
+            span: None,
+            subquery: Box::new(distinct_const_scan),
+            child_expr: child_scalar,
+            compare_op: Some(ComparisonOp::Equal),
+            output_column: ctx.columns[0].clone(),
+            projection_index: None,
+            data_type: data_type.clone(),
+            typ: SubqueryType::Any,
+            outer_columns: rel_prop.outer_columns.clone(),
+        };
+        let data_type = subquery_expr.data_type();
+        Ok(Box::new((subquery_expr.into(), data_type)))
+    }
+
+    #[async_recursion::async_recursion]
     async fn resolve_variant_map_access_pushdown(
         &mut self,
         column: ColumnBinding,
@@ -3201,11 +3320,7 @@ impl<'a> TypeChecker<'a> {
         let license_manager = get_license_manager();
         if license_manager
             .manager
-            .check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                VirtualColumn,
-            )
+            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)
             .is_err()
         {
             return None;
@@ -3214,18 +3329,18 @@ impl<'a> TypeChecker<'a> {
         let mut name = String::new();
         name.push_str(&base_column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
-        while let Some((_, path)) = paths.pop_front() {
+        for (_, path) in paths.iter() {
             let json_path = match path {
                 Literal::UInt64(idx) => {
                     name.push('[');
                     name.push_str(&idx.to_string());
                     name.push(']');
-                    Scalar::Number(NumberScalar::UInt64(idx))
+                    Scalar::Number(NumberScalar::UInt64(*idx))
                 }
                 Literal::String(field) => {
                     name.push(':');
                     name.push_str(field.as_ref());
-                    Scalar::String(field.into_bytes())
+                    Scalar::String(field.clone().into_bytes())
                 }
                 _ => unreachable!(),
             };
@@ -3246,16 +3361,10 @@ impl<'a> TypeChecker<'a> {
         }
 
         if index == 0 {
-            let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-            index = self.metadata.write().add_virtual_column(
-                base_column.table_index,
-                base_column.column_name.clone(),
-                base_column.column_index,
-                name.clone(),
-                table_data_type,
-                json_paths,
-            );
+            return None;
         }
+
+        paths.clear();
 
         let data_type = DataType::Nullable(Box::new(DataType::Variant));
         let virtual_column = ColumnBindingBuilder::new(
@@ -3553,7 +3662,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = vec!["substr", "substring", "length"];
+        let names = ["substr", "substring", "length"];
         let result = !args.is_empty()
             && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
             && self.ctx.get_settings().get_collation().unwrap() != "binary"
@@ -3660,7 +3769,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                     TableDataType::Map(Box::new(inner_type))
                 }
                 _ => {
-                    return Err(ErrorCode::Internal(format!(
+                    return Err(ErrorCode::BadArguments(format!(
                         "Invalid Map key type \'{:?}\'",
                         key_type
                     )));

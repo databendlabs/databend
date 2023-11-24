@@ -28,6 +28,7 @@ use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::all_stream_columns;
 
 use super::AggregateInfo;
 use crate::binder::aggregate::find_replaced_aggregate_function;
@@ -345,6 +346,7 @@ impl Binder {
     ) -> Result<()> {
         let mut match_table = false;
         let empty_exclude = exclude_cols.is_empty();
+        let stream_columns = all_stream_columns();
         let table_name = match &names[0] {
             Indirection::Star(_) => None,
             Indirection::Identifier(table_name) => Some(table_name),
@@ -357,14 +359,19 @@ impl Binder {
             if column_binding.visibility != Visibility::Visible {
                 continue;
             }
+            // exclude the stream cols for select *
+            if stream_columns.contains(&column_binding.column_name) {
+                continue;
+            }
             let push_item =
                 empty_exclude || exclude_cols.get(&column_binding.column_name).is_none();
             if star {
-                if column_binding.column_name.starts_with('_')
+                if column_binding.column_name.starts_with("_$")
                     && column_binding.database_name == Some("system".to_string())
+                    && column_binding.table_name == Some("stage".to_string())
                 {
                     return Err(ErrorCode::SemanticError(
-                        "can not select * from csv/ndjson file",
+                        "select * from file only support parquet format",
                     ));
                 }
                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
@@ -388,11 +395,12 @@ impl Binder {
                         &self.name_resolution_ctx,
                     )
                 {
-                    if column_binding.column_name.starts_with('_')
+                    if column_binding.column_name.starts_with("_$")
                         && column_binding.database_name == Some("system".to_string())
+                        && column_binding.table_name == Some("stage".to_string())
                     {
                         return Err(ErrorCode::SemanticError(
-                            "can not select * from csv/ndjson file",
+                            "select * from file only support parquet format",
                         ));
                     }
                     match_table = true;
@@ -430,6 +438,7 @@ impl Binder {
     ) -> Result<()> {
         let mut match_table = false;
         let empty_exclude = exclude_cols.is_empty();
+        let stream_columns = all_stream_columns();
         // db.table.*
         let db_name = &names[0];
         let tab_name = &names[1];
@@ -446,6 +455,10 @@ impl Binder {
                 }
                 for column_binding in input_context.all_column_bindings() {
                     if column_binding.visibility != Visibility::Visible {
+                        continue;
+                    }
+                    // exclude the stream cols for select *
+                    if stream_columns.contains(&column_binding.column_name) {
                         continue;
                     }
                     let match_table_with_db =

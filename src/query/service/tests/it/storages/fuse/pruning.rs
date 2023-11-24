@@ -70,8 +70,8 @@ async fn apply_block_pruning(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
     let test_tbl_name = "test_index_helper";
     let test_schema = TableSchemaRefExt::create(vec![
@@ -93,6 +93,7 @@ async fn test_block_pruner() -> Result<()> {
         schema: test_schema.clone(),
         engine: Engine::Fuse,
         storage_params: None,
+        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),

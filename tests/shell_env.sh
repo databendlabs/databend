@@ -15,9 +15,28 @@ export QUERY_MYSQL_HANDLER_SHARE_1_PORT="13307"
 export QUERY_MYSQL_HANDLER_SHARE_2_PORT="23307"
 export QUERY_MYSQL_HANDLER_SHARE_3_PORT="13317"
 
-export MYSQL_CLIENT_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_PORT} ${MYSQL_CLIENT_TLS_OPTS} ${MYSQL_DATABASE} -s"
-export BENDSQL_CLIENT_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export BENDSQL_CLIENT_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
 
 export MYSQL_CLIENT_SHARE_1_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_1_PORT} ${MYSQL_DATABASE} -s"
 export MYSQL_CLIENT_SHARE_2_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_2_PORT} ${MYSQL_DATABASE} -s"
 export MYSQL_CLIENT_SHARE_3_CONNECT="mysql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_3_PORT} ${MYSQL_DATABASE} -s"
+
+
+query() {
+	echo ">>>> $1"
+	echo "$1" | $BENDSQL_CLIENT_CONNECT
+	echo "<<<<"
+}
+
+stmt() {
+	echo ">>>> $1"
+	echo "$1" | $BENDSQL_CLIENT_CONNECT
+	if [ $? -ne 0 ]; then
+		echo "<<<<"
+	fi
+	return 0
+}
+
+comment() {
+	echo "#### $1"
+}

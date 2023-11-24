@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use common_expression::types::number::Int32Type;
 use common_expression::types::NumberDataType;
-use common_expression::FromOptData;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_formats::FileFormatOptionsExt;
@@ -40,7 +40,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let tsv_block = String::from_utf8(buffer)?;
         let expect = "1\ta\t1\t1.1\t1970-01-02\n\
                             2\tb\"\t1\t2.2\t1970-01-03\n\
-                            3\tc\\'\t0\tnan\t1970-01-04\n";
+                            3\tc\'\t0\tnan\t1970-01-04\n";
         assert_eq!(&tsv_block, expect);
 
         let formatter = get_output_format_clickhouse("TsvWithNames", schema.clone())?;

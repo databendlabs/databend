@@ -31,7 +31,7 @@ use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::UpdateIndexReq;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::PhysicalPlan;
@@ -86,12 +86,12 @@ impl RefreshIndexInterpreter {
         }
 
         if !lazy_init_segments.is_empty() {
-            let table_info = self.plan.table_info.clone();
+            let table_schema = self.plan.table_info.schema();
             let push_downs = plan.push_downs.clone();
             let ctx = self.ctx.clone();
 
             let (_statistics, partitions) = fuse_table
-                .prune_snapshot_blocks(ctx, dal, push_downs, table_info, lazy_init_segments, 0)
+                .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, lazy_init_segments, 0)
                 .await?;
 
             return Ok(Some(partitions));
@@ -108,12 +108,12 @@ impl RefreshIndexInterpreter {
         dal: Operator,
         segments: Vec<SegmentLocation>,
     ) -> Result<Option<Partitions>> {
-        let table_info = self.plan.table_info.clone();
+        let table_schema = self.plan.table_info.schema();
         let push_downs = plan.push_downs.clone();
         let ctx = self.ctx.clone();
 
         let (_statistics, partitions) = fuse_table
-            .prune_snapshot_blocks(ctx, dal, push_downs, table_info, segments, 0)
+            .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, segments, 0)
             .await?;
 
         Ok(Some(partitions))
@@ -150,7 +150,7 @@ impl RefreshIndexInterpreter {
         } else {
             let mut source = source.remove(0);
             let partitions = match segments {
-                Some(segment_locs) => {
+                Some(segment_locs) if !segment_locs.is_empty() => {
                     let segment_locations = create_segment_location_vector(segment_locs, None);
                     self.get_partitions_with_given_segments(
                         &source,
@@ -160,7 +160,7 @@ impl RefreshIndexInterpreter {
                     )
                     .await?
                 }
-                None => self.get_partitions(&source, fuse_table, dal).await?,
+                Some(_) | None => self.get_partitions(&source, fuse_table, dal).await?,
             };
             if let Some(parts) = partitions {
                 source.parts = parts;
@@ -218,11 +218,9 @@ impl Interpreter for RefreshIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            Feature::AggregateIndex,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
@@ -303,11 +301,13 @@ impl Interpreter for RefreshIndexInterpreter {
             let index = input_schema.index_of(field.name())?;
             projections.push(index);
         }
+        let num_input_columns = input_schema.num_fields();
         let func_ctx = self.ctx.get_function_context()?;
         build_res.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -348,10 +348,12 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let write_settings = fuse_table.get_write_settings();
 
+        let ctx = self.ctx.clone();
         build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
+                ctx.clone(),
                 data_accessor.operator(),
                 self.plan.index_id,
                 write_settings.clone(),

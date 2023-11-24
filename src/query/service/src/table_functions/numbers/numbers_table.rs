@@ -43,16 +43,16 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_pipeline_core::Pipeline;
+use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::EmptySource;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
 use super::numbers_part::generate_numbers_parts;
 use super::NumbersPartInfo;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunction;
@@ -183,6 +183,7 @@ impl Table for NumbersTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         if plan.parts.partitions.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;
@@ -209,7 +210,7 @@ impl Table for NumbersTable {
         Ok(())
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(Some(TableStatistics {
             num_rows: Some(self.total),
             data_size: Some(self.total * 8),

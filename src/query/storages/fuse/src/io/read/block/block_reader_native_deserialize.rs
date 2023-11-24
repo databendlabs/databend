@@ -37,6 +37,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_metrics::storage::*;
 use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
@@ -50,7 +51,6 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
 use crate::io::UncompressedBuffer;
-use crate::metrics::*;
 
 impl BlockReader {
     /// Deserialize column chunks data from native format to DataBlock.
@@ -163,14 +163,16 @@ impl BlockReader {
         };
 
         // populate cache if necessary
-        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-            // populate array cache items
-            for item in deserialized_column_arrays.into_iter() {
-                if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                    let meta = column_metas.get(&column_id).unwrap();
-                    let (offset, len) = meta.offset_length();
-                    let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                    cache.put(key.into(), Arc::new((array, size)))
+        if self.put_cache {
+            if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+                // populate array cache items
+                for item in deserialized_column_arrays.into_iter() {
+                    if let DeserializedArray::Deserialized((column_id, array, size)) = item {
+                        let meta = column_metas.get(&column_id).unwrap();
+                        let (offset, len) = meta.offset_length();
+                        let key = TableDataCacheKey::new(block_path, column_id, offset, len);
+                        cache.put(key.into(), Arc::new((array, size)))
+                    }
                 }
             }
         }

@@ -169,9 +169,10 @@ impl SubqueryRewriter {
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) | RelOperator::CteScan(_) => {
-                Ok(s_expr.clone())
-            }
+            RelOperator::DummyTableScan(_)
+            | RelOperator::Scan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::ConstantTableScan(_) => Ok(s_expr.clone()),
 
             _ => Err(ErrorCode::Internal("Invalid plan type")),
         }
@@ -293,7 +294,8 @@ impl SubqueryRewriter {
                         .build(),
                 });
 
-                let scalar = if flatten_info.from_count_func {
+                let scalar = if flatten_info.from_count_func && subquery.typ == SubqueryType::Scalar
+                {
                     // convert count aggregate function to `if(count() is not null, count(), 0)`
                     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
@@ -351,6 +353,7 @@ impl SubqueryRewriter {
                 let expr: ScalarExpr = UDFServerCall {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
@@ -458,6 +461,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 Ok((
@@ -525,6 +529,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -554,6 +559,7 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: false,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         }
         .into();
 
@@ -708,6 +714,15 @@ pub fn check_child_expr_in_subquery(
 ) -> Result<(ScalarExpr, bool)> {
     match child_expr {
         ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        ScalarExpr::FunctionCall(func) => {
+            if func.func_name.eq("tuple") {
+                return Ok((child_expr.clone(), op != &ComparisonOp::Equal));
+            }
+            Err(ErrorCode::Internal(format!(
+                "Invalid child expr in subquery: {:?}",
+                child_expr
+            )))
+        }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {
             let arg = &cast.argument;

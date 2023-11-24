@@ -152,6 +152,14 @@ pub enum AccountMgrLevel {
     Global,
     Database(Option<String>),
     Table(Option<String>, String),
+    UDF(String),
+    Stage(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecondaryRolesOption {
+    None,
+    All,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -199,6 +207,8 @@ impl Display for AccountMgrSource {
                             write!(f, " {table_name}")?;
                         }
                     }
+                    AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
+                    AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
                 }
             }
             AccountMgrSource::ALL { level, .. } => {
@@ -220,6 +230,8 @@ impl Display for AccountMgrSource {
                             write!(f, " {table_name}")?;
                         }
                     }
+                    AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
+                    AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
                 }
             }
         }

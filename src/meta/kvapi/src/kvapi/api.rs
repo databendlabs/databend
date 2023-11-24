@@ -15,8 +15,13 @@
 use std::ops::Deref;
 
 use async_trait::async_trait;
+use common_meta_types::protobuf::StreamItem;
+use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use futures_util::stream::BoxStream;
+use futures_util::TryStreamExt;
+use log::debug;
 
 use crate::kvapi;
 use crate::kvapi::GetKVReply;
@@ -34,6 +39,9 @@ pub trait ApiBuilder<T>: Clone {
     /// Create a cluster of T
     async fn build_cluster(&self) -> Vec<T>;
 }
+
+/// A stream of key-value records that are returned by stream based API such as mget and list.
+pub type KVStream<E> = BoxStream<'static, Result<StreamItem, E>>;
 
 /// API of a key-value store.
 #[async_trait]
@@ -55,7 +63,34 @@ pub trait KVApi: Send + Sync {
     async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error>;
 
     /// List key-value records that are starts with the specified prefix.
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error>;
+    ///
+    /// Same as `prefix_list_kv()`, except it returns a stream.
+    async fn list_kv(
+        &self,
+        prefix: &str,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Self::Error>>, Self::Error>;
+
+    // TODO: deprecate it:
+    // #[deprecated(note = "use list_kv() instead")]
+    /// List key-value records that are starts with the specified prefix.
+    ///
+    /// This method has a default implementation by collecting result from `stream_list_kv()`
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
+        let now = std::time::Instant::now();
+        let strm = self.list_kv(prefix).await?;
+
+        debug!("list_kv() took {:?}", now.elapsed());
+
+        let v = strm
+            .map_ok(|x| {
+                // Safe unwrap(): list_kv() does not return None value
+                (x.key, SeqV::from(x.value.unwrap()))
+            })
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        Ok(v)
+    }
 
     /// Run transaction: update one or more records if specified conditions are met.
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error>;
@@ -75,6 +110,10 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
 
     async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, Self::Error> {
         self.deref().mget_kv(key).await
+    }
+
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.deref().list_kv(prefix).await
     }
 
     async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {

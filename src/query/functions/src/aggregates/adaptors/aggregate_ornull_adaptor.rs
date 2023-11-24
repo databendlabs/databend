@@ -87,6 +87,10 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.init_state(place)
     }
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        self.inner.serialize_size_per_row().map(|row| row + 1)
+    }
+
     #[inline]
     fn state_layout(&self) -> std::alloc::Layout {
         let layout = self.inner.state_layout();
@@ -136,6 +140,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner
             .accumulate_keys(places, offset, columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
+
         match if_cond {
             Some(v) if v.unset_bits() > 0 => {
                 // all nulls

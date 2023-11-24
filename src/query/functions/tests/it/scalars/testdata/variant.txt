@@ -2818,3 +2818,1184 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : parse_json('null')->1
+raw expr       : get(parse_json('null'), 1)
+checked expr   : get<Variant, Int64>(parse_json<String>("null"), to_int64<UInt8>(1_u8))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('null')->'k'
+raw expr       : get(parse_json('null'), 'k')
+checked expr   : get<Variant, String>(parse_json<String>("null"), "k")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3,4]')->1
+raw expr       : get(parse_json('[1,2,3,4]'), 1)
+checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt8>(1_u8))
+optimized expr : 0x20000000200000025002
+output type    : Variant NULL
+output domain  : Undefined
+output         : 2
+
+
+ast            : parse_json('[1,2,3,4]')->(2+3)
+raw expr       : get(parse_json('[1,2,3,4]'), plus(2, 3))
+checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8)))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('{"k":"v"}')->'k'
+raw expr       : get(parse_json('{"k":"v"}'), 'k')
+checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
+optimized expr : 0x200000001000000176
+output type    : Variant NULL
+output domain  : Undefined
+output         : "v"
+
+
+ast            : parse_json('{"k":"v"}')->'x'
+raw expr       : get(parse_json('{"k":"v"}'), 'x')
+checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(('a', 'b') AS VARIANT)->'2'
+raw expr       : get(CAST(tuple('a', 'b') AS Variant), '2')
+checked expr   : get<Variant, String>(to_variant<T0=Tuple(String, String)><T0>(tuple<String, String>("a", "b")), "2")
+optimized expr : 0x200000001000000162
+output type    : Variant NULL
+output domain  : Undefined
+output         : "b"
+
+
+ast            : parse_json(s)->i
+raw expr       : get(parse_json(s::String), i::UInt64)
+checked expr   : get<Variant, Int64>(parse_json<String>(s), to_int64<UInt64>(i))
+evaluation:
++--------+----------------------------------+---------+--------------+
+|        | s                                | i       | Output       |
++--------+----------------------------------+---------+--------------+
+| Type   | String                           | UInt64  | Variant NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
+| Row 0  | 'true'                           | 0       | NULL         |
+| Row 1  | '[1,2,3,4]'                      | 0       | 1            |
+| Row 2  | '["a","b","c"]'                  | 1       | "b"          |
++--------+----------------------------------+---------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 26] }                                      |
+| i      | UInt64([0, 0, 1])                                                                                                                           |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000200000025001200000001000000162, offsets: [0, 0, 10, 19] }, validity: [0b_____110] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s)->i
+raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
+checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
+evaluation:
++--------+------------------------+------------------+--------------+
+|        | s                      | i                | Output       |
++--------+------------------------+------------------+--------------+
+| Type   | String NULL            | UInt64 NULL      | Variant NULL |
+| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                 | NULL             | NULL         |
+| Row 1  | '[1,2,3,4]'            | 2                | 3            |
+| Row 2  | NULL                   | NULL             | NULL         |
+| Row 3  | '["a","b","c"]'        | 1                | "b"          |
++--------+------------------------+------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 13, 26] }, validity: [0b____1011] } |
+| i      | NullableColumn { column: UInt64([0, 2, 0, 1]), validity: [0b____1010] }                                                                                       |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000200000025003200000001000000162, offsets: [0, 0, 10, 10, 19] }, validity: [0b____1010] }               |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s)->k
+raw expr       : get(parse_json(s::String), k::String)
+checked expr   : get<Variant, String>(parse_json<String>(s), k)
+evaluation:
++--------+------------------------+-------------+--------------+
+|        | s                      | k           | Output       |
++--------+------------------------+-------------+--------------+
+| Type   | String                 | String      | Variant NULL |
+| Domain | {"true"..="{\"k\":1}"} | {"k"..="x"} | Unknown      |
+| Row 0  | 'true'                 | 'k'         | NULL         |
+| Row 1  | '{"k":1}'              | 'k'         | 1            |
+| Row 2  | '{"a":"b"}'            | 'x'         | NULL         |
++--------+------------------------+-------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                      |
++--------+---------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 20] }                                |
+| k      | StringColumn { data: 0x6b6b78, offsets: [0, 1, 2, 3] }                                                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000200000025001, offsets: [0, 0, 10, 10] }, validity: [0b_____010] } |
++--------+---------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s)->k
+raw expr       : get(parse_json(s::String NULL), k::String)
+checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
+evaluation:
++--------+-----------------------------+------------+--------------+
+|        | s                           | k          | Output       |
++--------+-----------------------------+------------+--------------+
+| Type   | String NULL                 | String     | Variant NULL |
+| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
+| Row 0  | 'true'                      | ''         | NULL         |
+| Row 1  | '{"k":1}'                   | 'k'        | 1            |
+| Row 2  | NULL                        | ''         | NULL         |
+| Row 3  | '{"a":"b"}'                 | 'a'        | "b"          |
++--------+-----------------------------+------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
+| k      | StringColumn { data: 0x6b61, offsets: [0, 0, 1, 1, 2] }                                                                                           |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000200000025001200000001000000162, offsets: [0, 0, 10, 10, 19] }, validity: [0b____1010] }   |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json('null')->>1
+raw expr       : get_string(parse_json('null'), 1)
+checked expr   : get_string<Variant, Int64>(parse_json<String>("null"), to_int64<UInt8>(1_u8))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('null')->>'k'
+raw expr       : get_string(parse_json('null'), 'k')
+checked expr   : get_string<Variant, String>(parse_json<String>("null"), "k")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3,4]')->>1
+raw expr       : get_string(parse_json('[1,2,3,4]'), 1)
+checked expr   : get_string<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt8>(1_u8))
+optimized expr : "2"
+output type    : String NULL
+output domain  : {"2"..="2"}
+output         : '2'
+
+
+ast            : parse_json('[1,2,3,4]')->>(2+3)
+raw expr       : get_string(parse_json('[1,2,3,4]'), plus(2, 3))
+checked expr   : get_string<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8)))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('{"k":"v"}')->>'k'
+raw expr       : get_string(parse_json('{"k":"v"}'), 'k')
+checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
+optimized expr : "\"v\""
+output type    : String NULL
+output domain  : {"\"v\""..="\"v\""}
+output         : '"v"'
+
+
+ast            : parse_json('{"k":"v"}')->>'x'
+raw expr       : get_string(parse_json('{"k":"v"}'), 'x')
+checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(('a', 'b') AS VARIANT)->>'2'
+raw expr       : get_string(CAST(tuple('a', 'b') AS Variant), '2')
+checked expr   : get_string<Variant, String>(to_variant<T0=Tuple(String, String)><T0>(tuple<String, String>("a", "b")), "2")
+optimized expr : "\"b\""
+output type    : String NULL
+output domain  : {"\"b\""..="\"b\""}
+output         : '"b"'
+
+
+ast            : parse_json(s)->>i
+raw expr       : get_string(parse_json(s::String), i::UInt64)
+checked expr   : get_string<Variant, Int64>(parse_json<String>(s), to_int64<UInt64>(i))
+evaluation:
++--------+----------------------------------+---------+-------------+
+|        | s                                | i       | Output      |
++--------+----------------------------------+---------+-------------+
+| Type   | String                           | UInt64  | String NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown     |
+| Row 0  | 'true'                           | 0       | NULL        |
+| Row 1  | '[1,2,3,4]'                      | 0       | '1'         |
+| Row 2  | '["a","b","c"]'                  | 1       | '"b"'       |
++--------+----------------------------------+---------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                        |
++--------+-------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 26] }      |
+| i      | UInt64([0, 0, 1])                                                                                           |
+| Output | NullableColumn { column: StringColumn { data: 0x31226222, offsets: [0, 0, 1, 4] }, validity: [0b_____110] } |
++--------+-------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s)->>i
+raw expr       : get_string(parse_json(s::String NULL), i::UInt64 NULL)
+checked expr   : get_string<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
+evaluation:
++--------+------------------------+------------------+-------------+
+|        | s                      | i                | Output      |
++--------+------------------------+------------------+-------------+
+| Type   | String NULL            | UInt64 NULL      | String NULL |
+| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown     |
+| Row 0  | 'true'                 | NULL             | NULL        |
+| Row 1  | '[1,2,3,4]'            | 2                | '3'         |
+| Row 2  | NULL                   | NULL             | NULL        |
+| Row 3  | '["a","b","c"]'        | 1                | '"b"'       |
++--------+------------------------+------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 13, 26] }, validity: [0b____1011] } |
+| i      | NullableColumn { column: UInt64([0, 2, 0, 1]), validity: [0b____1010] }                                                                                       |
+| Output | NullableColumn { column: StringColumn { data: 0x33226222, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                                |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s)->>k
+raw expr       : get_string(parse_json(s::String), k::String)
+checked expr   : get_string<Variant, String>(parse_json<String>(s), k)
+evaluation:
++--------+------------------------+-------------+-------------+
+|        | s                      | k           | Output      |
++--------+------------------------+-------------+-------------+
+| Type   | String                 | String      | String NULL |
+| Domain | {"true"..="{\"k\":1}"} | {"k"..="x"} | Unknown     |
+| Row 0  | 'true'                 | 'k'         | NULL        |
+| Row 1  | '{"k":1}'              | 'k'         | '1'         |
+| Row 2  | '{"a":"b"}'            | 'x'         | NULL        |
++--------+------------------------+-------------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 20] }            |
+| k      | StringColumn { data: 0x6b6b78, offsets: [0, 1, 2, 3] }                                                |
+| Output | NullableColumn { column: StringColumn { data: 0x31, offsets: [0, 0, 1, 1] }, validity: [0b_____010] } |
++--------+-------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s)->>k
+raw expr       : get_string(parse_json(s::String NULL), k::String)
+checked expr   : get_string<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
+evaluation:
++--------+-----------------------------+------------+-------------+
+|        | s                           | k          | Output      |
++--------+-----------------------------+------------+-------------+
+| Type   | String NULL                 | String     | String NULL |
+| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown     |
+| Row 0  | 'true'                      | ''         | NULL        |
+| Row 1  | '{"k":1}'                   | 'k'        | '1'         |
+| Row 2  | NULL                        | ''         | NULL        |
+| Row 3  | '{"a":"b"}'                 | 'a'        | '"b"'       |
++--------+-----------------------------+------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
+| k      | StringColumn { data: 0x6b61, offsets: [0, 0, 1, 1, 2] }                                                                                           |
+| Output | NullableColumn { column: StringColumn { data: 0x31226222, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:28
+  |
+1 | parse_json('[10, 20, 30]') #> '1'
+  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath([10,20,30], '1')`
+
+
+
+ast            : NULL #> NULL
+raw expr       : get_by_keypath(NULL, NULL)
+checked expr   : get_by_keypath<NULL, NULL>(NULL, NULL)
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : NULL #> '{0}'
+raw expr       : get_by_keypath(NULL, '{0}')
+checked expr   : get_by_keypath<NULL, String>(NULL, "{0}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('"string"') #> '{0}'
+raw expr       : get_by_keypath(parse_json('"string"'), '{0}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("\"string\""), "{0}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('1') #> '{0}'
+raw expr       : get_by_keypath(parse_json('1'), '{0}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("1"), "{0}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[10, 20, 30]') #> '{1}'
+raw expr       : get_by_keypath(parse_json('[10, 20, 30]'), '{1}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30]"), "{1}")
+optimized expr : 0x20000000200000025014
+output type    : Variant NULL
+output domain  : Undefined
+output         : 20
+
+
+ast            : parse_json('[10, 20, 30]') #> '{3}'
+raw expr       : get_by_keypath(parse_json('[10, 20, 30]'), '{3}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30]"), "{3}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[10, 20, 30]') #> '{a}'
+raw expr       : get_by_keypath(parse_json('[10, 20, 30]'), '{a}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30]"), "{a}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1}'
+raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1}")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : [1,2,3]
+
+
+ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1, 0}'
+raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0}")
+optimized expr : 0x20000000200000025001
+output type    : Variant NULL
+output domain  : Undefined
+output         : 1
+
+
+ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1, 0, 10}'
+raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0, 10}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0, 10}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json(s) #> '{0}'
+raw expr       : get_by_keypath(parse_json(s::String NULL), '{0}')
+checked expr   : get_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0}")
+evaluation:
++--------+-----------------------------+--------------+
+|        | s                           | Output       |
++--------+-----------------------------+--------------+
+| Type   | String NULL                 | Variant NULL |
+| Domain | {""..="{\"k\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3]'                   | 1            |
+| Row 1  | '{"k":1}'                   | NULL         |
+| Row 2  | NULL                        | NULL         |
+| Row 3  | '{"a":"b"}'                 | NULL         |
++--------+-----------------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b312c322c335d7b226b223a317d7b2261223a2262227d, offsets: [0, 7, 14, 14, 23] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000200000025001, offsets: [0, 10, 10, 10, 10] }, validity: [0b____0001] }                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s) #> k
+raw expr       : get_by_keypath(parse_json(s::String NULL), k::String NULL)
+checked expr   : get_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+evaluation:
++--------+-----------------------------+-----------------------+--------------+
+|        | s                           | k                     | Output       |
++--------+-----------------------------+-----------------------+--------------+
+| Type   | String NULL                 | String NULL           | Variant NULL |
+| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="{k}"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                      | '{1}'                 | NULL         |
+| Row 1  | '{"k":1}'                   | '{k}'                 | 1            |
+| Row 2  | NULL                        | NULL                  | NULL         |
+| Row 3  | '{"a":"b"}'                 | '{a}'                 | "b"          |
++--------+-----------------------------+-----------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
+| k      | NullableColumn { column: StringColumn { data: 0x7b317d7b6b7d7b617d, offsets: [0, 3, 6, 6, 9] }, validity: [0b____1011] }                          |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000200000025001200000001000000162, offsets: [0, 0, 10, 10, 19] }, validity: [0b____1010] }   |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : NULL #>> '{0}'
+raw expr       : get_by_keypath_string(NULL, '{0}')
+checked expr   : get_by_keypath_string<NULL, String>(NULL, "{0}")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('"string"') #>> '{0}'
+raw expr       : get_by_keypath_string(parse_json('"string"'), '{0}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("\"string\""), "{0}")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('1') #>> '{0}'
+raw expr       : get_by_keypath_string(parse_json('1'), '{0}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("1"), "{0}")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[10, 20, 30]') #>> '{1}'
+raw expr       : get_by_keypath_string(parse_json('[10, 20, 30]'), '{1}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, 30]"), "{1}")
+optimized expr : "20"
+output type    : String NULL
+output domain  : {"20"..="20"}
+output         : '20'
+
+
+ast            : parse_json('[10, 20, 30]') #>> '{3}'
+raw expr       : get_by_keypath_string(parse_json('[10, 20, 30]'), '{3}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, 30]"), "{3}")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[10, 20, 30]') #>> '{a}'
+raw expr       : get_by_keypath_string(parse_json('[10, 20, 30]'), '{a}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, 30]"), "{a}")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'
+raw expr       : get_by_keypath_string(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1}")
+optimized expr : "[1,2,3]"
+output type    : String NULL
+output domain  : {"[1,2,3]"..="[1,2,3]"}
+output         : '[1,2,3]'
+
+
+ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1, 0}'
+raw expr       : get_by_keypath_string(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0}")
+optimized expr : "1"
+output type    : String NULL
+output domain  : {"1"..="1"}
+output         : '1'
+
+
+ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1, 0, 10}'
+raw expr       : get_by_keypath_string(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0, 10}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0, 10}")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json(s) #>> '{0}'
+raw expr       : get_by_keypath_string(parse_json(s::String NULL), '{0}')
+checked expr   : get_by_keypath_string<Variant NULL, String>(parse_json<String NULL>(s), "{0}")
+evaluation:
++--------+-----------------------------+-------------+
+|        | s                           | Output      |
++--------+-----------------------------+-------------+
+| Type   | String NULL                 | String NULL |
+| Domain | {""..="{\"k\":1}"} ∪ {NULL} | Unknown     |
+| Row 0  | '[1,2,3]'                   | '1'         |
+| Row 1  | '{"k":1}'                   | NULL        |
+| Row 2  | NULL                        | NULL        |
+| Row 3  | '{"a":"b"}'                 | NULL        |
++--------+-----------------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b312c322c335d7b226b223a317d7b2261223a2262227d, offsets: [0, 7, 14, 14, 23] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x31, offsets: [0, 1, 1, 1, 1] }, validity: [0b____0001] }                                                |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s) #>> k
+raw expr       : get_by_keypath_string(parse_json(s::String NULL), k::String NULL)
+checked expr   : get_by_keypath_string<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+evaluation:
++--------+-----------------------------+-----------------------+-------------+
+|        | s                           | k                     | Output      |
++--------+-----------------------------+-----------------------+-------------+
+| Type   | String NULL                 | String NULL           | String NULL |
+| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="{k}"} ∪ {NULL} | Unknown     |
+| Row 0  | 'true'                      | '{1}'                 | NULL        |
+| Row 1  | '{"k":1}'                   | '{k}'                 | '1'         |
+| Row 2  | NULL                        | NULL                  | NULL        |
+| Row 3  | '{"a":"b"}'                 | '{a}'                 | '"b"'       |
++--------+-----------------------------+-----------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
+| k      | NullableColumn { column: StringColumn { data: 0x7b317d7b6b7d7b617d, offsets: [0, 3, 6, 6, 9] }, validity: [0b____1011] }                          |
+| Output | NullableColumn { column: StringColumn { data: 0x31226222, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json('["1","2","3"]') ? NULL
+raw expr       : json_exists_key(parse_json('["1","2","3"]'), NULL)
+checked expr   : json_exists_key<Variant NULL, String NULL>(CAST(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') ? '1'
+raw expr       : json_exists_key(parse_json('true'), '1')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("true"), "1")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('["1","2","3"]') ? '1'
+raw expr       : json_exists_key(parse_json('["1","2","3"]'), '1')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "1")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["1","2","3"]') ? '4'
+raw expr       : json_exists_key(parse_json('["1","2","3"]'), '4')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "4")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ? 'a'
+raw expr       : json_exists_key(parse_json('{"a":1,"b":2,"c":3}'), 'a')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), "a")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ? 'd'
+raw expr       : json_exists_key(parse_json('{"a":1,"b":2,"c":3}'), 'd')
+checked expr   : json_exists_key<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), "d")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json(s) ? 'a'
+raw expr       : json_exists_key(parse_json(s::String NULL), 'a')
+checked expr   : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST("a" AS String NULL))
+optimized expr : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), "a")
+evaluation:
++--------+-----------------------------+--------------+
+|        | s                           | Output       |
++--------+-----------------------------+--------------+
+| Type   | String NULL                 | Boolean NULL |
+| Domain | {""..="{\"b\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3]'                   | false        |
+| Row 1  | '{"a":1}'                   | true         |
+| Row 2  | NULL                        | NULL         |
+| Row 3  | '{"b":1}'                   | false        |
++--------+-----------------------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b312c322c335d7b2261223a317d7b2262223a317d, offsets: [0, 7, 14, 14, 21] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: Boolean([0b____0010]), validity: [0b____1011] }                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json('["1","2","3"]') ?| NULL
+raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), NULL)
+checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(CAST(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST(NULL AS Array(String) NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') ?| ['1','2']
+raw expr       : json_exists_any_keys(parse_json('true'), array('1', '2'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("true"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('["1","2","3"]') ?| ['1','2']
+raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), array('1', '2'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["1","2","3"]') ?| ['4','5']
+raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), array('4', '5'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("4", "5"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?| ['a','b']
+raw expr       : json_exists_any_keys(parse_json('{"a":1,"b":2,"c":3}'), array('a', 'b'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("a", "b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?| ['d','e']
+raw expr       : json_exists_any_keys(parse_json('{"a":1,"b":2,"c":3}'), array('d', 'e'))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("d", "e"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json(s) ?| ['a','b']
+raw expr       : json_exists_any_keys(parse_json(s::String NULL), array('a', 'b'))
+checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
+optimized expr : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
+evaluation:
++--------+-----------------------------+--------------+
+|        | s                           | Output       |
++--------+-----------------------------+--------------+
+| Type   | String NULL                 | Boolean NULL |
+| Domain | {""..="{\"c\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '["a","e","d"]'             | true         |
+| Row 1  | '{"a":1,"b":2}'             | true         |
+| Row 2  | NULL                        | NULL         |
+| Row 3  | '{"c":1}'                   | false        |
++--------+-----------------------------+--------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b2261222c2265222c2264225d7b2261223a312c2262223a327d7b2263223a317d, offsets: [0, 13, 26, 26, 33] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: Boolean([0b____0011]), validity: [0b____1011] }                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json('["1","2","3"]') ?& NULL
+raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), NULL)
+checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(CAST(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST(NULL AS Array(String) NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') ?& ['1','2']
+raw expr       : json_exists_all_keys(parse_json('true'), array('1', '2'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("true"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('["1","2","3"]') ?& ['1','2']
+raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), array('1', '2'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("1", "2"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('["1","2","3"]') ?& ['3','5']
+raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), array('3', '5'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("3", "5"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?& ['a','b']
+raw expr       : json_exists_all_keys(parse_json('{"a":1,"b":2,"c":3}'), array('a', 'b'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("a", "b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2,"c":3}') ?& ['c','e']
+raw expr       : json_exists_all_keys(parse_json('{"a":1,"b":2,"c":3}'), array('c', 'e'))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("c", "e"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json(s) ?& ['a','b']
+raw expr       : json_exists_all_keys(parse_json(s::String NULL), array('a', 'b'))
+checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
+optimized expr : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
+evaluation:
++--------+-------------------------------------+--------------+
+|        | s                                   | Output       |
++--------+-------------------------------------+--------------+
+| Type   | String NULL                         | Boolean NULL |
+| Domain | {""..="{\"a\":1,\"b\":2}"} ∪ {NULL} | Unknown      |
+| Row 0  | '["a","e","b"]'                     | true         |
+| Row 1  | '{"a":1,"b":2}'                     | true         |
+| Row 2  | NULL                                | NULL         |
+| Row 3  | '{"a":0,"c":1}'                     | false        |
++--------+-------------------------------------+--------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b2261222c2265222c2262225d7b2261223a312c2262223a327d7b2261223a302c2263223a317d, offsets: [0, 13, 26, 26, 39] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: Boolean([0b____0011]), validity: [0b____1011] }                                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : NULL @> NULL
+raw expr       : json_contains_in_left(NULL, NULL)
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') @> NULL
+raw expr       : json_contains_in_left(parse_json('[1,2,3]'), NULL)
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : NULL @> parse_json('1')
+raw expr       : json_contains_in_left(NULL, parse_json('1'))
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(parse_json<String>("1") AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') @> parse_json('true')
+raw expr       : json_contains_in_left(parse_json('true'), parse_json('true'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("true"), parse_json<String>("true"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('true') @> parse_json('false')
+raw expr       : json_contains_in_left(parse_json('true'), parse_json('false'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("true"), parse_json<String>("false"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('"asd"') @> parse_json('"asd"')
+raw expr       : json_contains_in_left(parse_json('"asd"'), parse_json('"asd"'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asd\""))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('"asd"') @> parse_json('"asdd"')
+raw expr       : json_contains_in_left(parse_json('"asd"'), parse_json('"asdd"'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asdd\""))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[1,2,3]') @> parse_json('1')
+raw expr       : json_contains_in_left(parse_json('[1,2,3]'), parse_json('1'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("1"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,3]') @> parse_json('4')
+raw expr       : json_contains_in_left(parse_json('[1,2,3]'), parse_json('4'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("4"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[1,2,3,4]') @> parse_json('[2,1,3]')
+raw expr       : json_contains_in_left(parse_json('[1,2,3,4]'), parse_json('[2,1,3]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3,4]"), parse_json<String>("[2,1,3]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,3,4]') @> parse_json('[2,1,1]')
+raw expr       : json_contains_in_left(parse_json('[1,2,3,4]'), parse_json('[2,1,1]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3,4]"), parse_json<String>("[2,1,1]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,[1,3]]') @> parse_json('[1,3]')
+raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[1,3]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[1,3]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[1,2,[1,3]]') @> parse_json('[[1,3]]')
+raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[[1,3]]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[[1,3]]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,2,[1,3]]') @> parse_json('[[[1,3]]]')
+raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[[[1,3]]]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[[[1,3]]]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[{"a":1}]') @> parse_json('{"a":1}')
+raw expr       : json_contains_in_left(parse_json('[{"a":1}]'), parse_json('{"a":1}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[{\"a\":1}]"), parse_json<String>("{\"a\":1}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[{"a":1},{"b":2}]') @> parse_json('[{"a":1}]')
+raw expr       : json_contains_in_left(parse_json('[{"a":1},{"b":2}]'), parse_json('[{"a":1}]'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[{\"a\":1},{\"b\":2}]"), parse_json<String>("[{\"a\":1}]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2}') @> parse_json('{"a":1}')
+raw expr       : json_contains_in_left(parse_json('{"a":1,"b":2}'), parse_json('{"a":1}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"a\":1}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1,"b":2}') @> parse_json('{"a":2}')
+raw expr       : json_contains_in_left(parse_json('{"a":1,"b":2}'), parse_json('{"a":2}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"a\":2}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"z":2,"b":{"a":1}}') @> parse_json('{"a":1}')
+raw expr       : json_contains_in_left(parse_json('{"z":2,"b":{"a":1}}'), parse_json('{"a":1}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"z\":2,\"b\":{\"a\":1}}"), parse_json<String>("{\"a\":1}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":{"c":100,"d":200},"b":2}') @> parse_json('{"a":{}}')
+raw expr       : json_contains_in_left(parse_json('{"a":{"c":100,"d":200},"b":2}'), parse_json('{"a":{}}'))
+checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}"), parse_json<String>("{\"a\":{}}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : NULL <@ NULL
+raw expr       : json_contains_in_right(NULL, NULL)
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') <@ NULL
+raw expr       : json_contains_in_right(parse_json('[1,2,3]'), NULL)
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : NULL <@ parse_json('1')
+raw expr       : json_contains_in_right(NULL, parse_json('1'))
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(parse_json<String>("1") AS Variant NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('true') <@ parse_json('true')
+raw expr       : json_contains_in_right(parse_json('true'), parse_json('true'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("true"), parse_json<String>("true"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('true') <@ parse_json('false')
+raw expr       : json_contains_in_right(parse_json('true'), parse_json('false'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("true"), parse_json<String>("false"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('"asd"') <@ parse_json('"asd"')
+raw expr       : json_contains_in_right(parse_json('"asd"'), parse_json('"asd"'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asd\""))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('"asd"') <@ parse_json('"asdd"')
+raw expr       : json_contains_in_right(parse_json('"asd"'), parse_json('"asdd"'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asdd\""))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('1') <@ parse_json('[1,2,3]')
+raw expr       : json_contains_in_right(parse_json('1'), parse_json('[1,2,3]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("1"), parse_json<String>("[1,2,3]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('4') <@ parse_json('[1,2,3]')
+raw expr       : json_contains_in_right(parse_json('4'), parse_json('[1,2,3]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("4"), parse_json<String>("[1,2,3]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[2,1,3]') <@ parse_json('[1,2,3,4]')
+raw expr       : json_contains_in_right(parse_json('[2,1,3]'), parse_json('[1,2,3,4]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[2,1,3]"), parse_json<String>("[1,2,3,4]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[2,1,1]') <@ parse_json('[1,2,3,4]')
+raw expr       : json_contains_in_right(parse_json('[2,1,1]'), parse_json('[1,2,3,4]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[2,1,1]"), parse_json<String>("[1,2,3,4]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[1,3]') <@ parse_json('[1,2,[1,3]]')
+raw expr       : json_contains_in_right(parse_json('[1,3]'), parse_json('[1,2,[1,3]]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[1,3]"), parse_json<String>("[1,2,[1,3]]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[[1,3]]') <@ parse_json('[1,2,[1,3]]')
+raw expr       : json_contains_in_right(parse_json('[[1,3]]'), parse_json('[1,2,[1,3]]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[[1,3]]"), parse_json<String>("[1,2,[1,3]]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('[[[1,3]]]') <@ parse_json('[1,2,[1,3]]')
+raw expr       : json_contains_in_right(parse_json('[[[1,3]]]'), parse_json('[1,2,[1,3]]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[[[1,3]]]"), parse_json<String>("[1,2,[1,3]]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1}') <@ parse_json('[{"a":1}]')
+raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('[{"a":1}]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("[{\"a\":1}]"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('[{"a":1}]') <@ parse_json('[{"a":1},{"b":2}]')
+raw expr       : json_contains_in_right(parse_json('[{"a":1}]'), parse_json('[{"a":1},{"b":2}]'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[{\"a\":1}]"), parse_json<String>("[{\"a\":1},{\"b\":2}]"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":1}') <@ parse_json('{"a":1,"b":2}')
+raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('{"a":1,"b":2}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("{\"a\":1,\"b\":2}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"a":2}') <@ parse_json('{"a":1,"b":2}')
+raw expr       : json_contains_in_right(parse_json('{"a":2}'), parse_json('{"a":1,"b":2}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":2}"), parse_json<String>("{\"a\":1,\"b\":2}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":1}') <@ parse_json('{"z":2,"b":{"a":1}}')
+raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('{"z":2,"b":{"a":1}}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("{\"z\":2,\"b\":{\"a\":1}}"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}')
+raw expr       : json_contains_in_right(parse_json('{"a":{}}'), parse_json('{"a":{"c":100,"d":200},"b":2}'))
+checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":{}}"), parse_json<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+

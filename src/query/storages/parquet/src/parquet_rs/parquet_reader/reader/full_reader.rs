@@ -18,8 +18,9 @@ use arrow_schema::ArrowError;
 use bytes::Bytes;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_storage::metrics::common::metrics_inc_omit_filter_rowgroups;
-use common_storage::metrics::common::metrics_inc_omit_filter_rows;
+use common_expression::DataSchemaRef;
+use common_metrics::storage::metrics_inc_omit_filter_rowgroups;
+use common_metrics::storage::metrics_inc_omit_filter_rows;
 use futures::StreamExt;
 use opendal::Operator;
 use opendal::Reader;
@@ -40,6 +41,7 @@ use crate::ParquetRSPruner;
 /// The reader to read a whole parquet file.
 pub struct ParquetRSFullReader {
     pub(super) op: Operator,
+    pub(super) schema: DataSchemaRef,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
 
     /// Columns to output.
@@ -122,7 +124,7 @@ impl ParquetRSFullReader {
         let record_batch = stream.next().await.transpose()?;
 
         if let Some(batch) = record_batch {
-            let blocks = transform_record_batch(&batch, &self.field_paths)?;
+            let blocks = transform_record_batch(self.schema.as_ref(), &batch, &self.field_paths)?;
             Ok(Some(blocks))
         } else {
             Ok(None)
@@ -175,7 +177,6 @@ impl ParquetRSFullReader {
                 )]));
             }
         }
-
         let reader = builder.build()?;
         // Write `if` outside iteration to reduce branches.
         if let Some(field_paths) = self.field_paths.as_ref() {
@@ -191,7 +192,7 @@ impl ParquetRSFullReader {
                 .into_iter()
                 .map(|batch| {
                     let batch = batch?;
-                    Ok(DataBlock::from_record_batch(&batch)?.0)
+                    Ok(DataBlock::from_record_batch(self.schema.as_ref(), &batch)?.0)
                 })
                 .collect()
         }

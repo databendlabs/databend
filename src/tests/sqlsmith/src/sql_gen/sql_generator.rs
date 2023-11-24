@@ -40,19 +40,23 @@ pub(crate) struct Column {
 }
 
 pub(crate) struct SqlGenerator<'a, R: Rng> {
+    pub(crate) rng: &'a mut R,
+    pub(crate) settings: Vec<(String, DataType)>,
+    pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
     pub(crate) tables: Vec<Table>,
     pub(crate) cte_tables: Vec<Table>,
     pub(crate) bound_tables: Vec<Table>,
     pub(crate) bound_columns: Vec<Column>,
     pub(crate) is_join: bool,
-    pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
-    pub(crate) rng: &'a mut R,
+    // TODO: Generate expressions of the required type
+    pub(crate) only_scalar_expr: bool,
+    pub(crate) expr_depth: usize,
     pub(crate) group_by: Option<GroupBy>,
     pub(crate) windows_name: Vec<String>,
 }
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
-    pub(crate) fn new(rng: &'a mut R) -> Self {
+    pub(crate) fn new(rng: &'a mut R, settings: Vec<(String, DataType)>) -> Self {
         let mut scalar_func_sigs = Vec::new();
         for (name, func_list) in BUILTIN_FUNCTIONS.funcs.iter() {
             // Ignore unsupported binary functions, avoid parse binary operator failure
@@ -75,13 +79,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
 
         SqlGenerator {
+            rng,
+            settings,
+            scalar_func_sigs,
             tables: vec![],
             cte_tables: vec![],
             bound_tables: vec![],
             bound_columns: vec![],
             is_join: false,
-            scalar_func_sigs,
-            rng,
+            only_scalar_expr: false,
+            expr_depth: 2,
             group_by: None,
             windows_name: vec![],
         }

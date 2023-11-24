@@ -31,8 +31,8 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_with_partition() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::new().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
     let spiller_config = SpillerConfig::create(query_spill_prefix(&tenant));
     let operator = DataOperator::instance().operator();
@@ -47,13 +47,13 @@ async fn test_spill_with_partition() -> Result<()> {
         Int32Type::from_data((1..101).collect::<Vec<_>>()),
     ]);
 
-    let res = spiller.spill_with_partition(&(0_u8), &data, 0).await;
+    let res = spiller.spill_with_partition(0_u8, data, 0).await;
 
     assert!(res.is_ok());
     assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
 
     // Test read spilled data
-    let data_blocks = spiller.read_spilled_data(&(0_u8)).await?;
+    let data_blocks = spiller.read_spilled_data(&(0_u8), 0).await?;
     for block in data_blocks {
         assert_eq!(block.num_rows(), 100);
         assert_eq!(block.num_columns(), 2);

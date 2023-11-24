@@ -13,7 +13,7 @@ test = false
 [features]
 default = []
 storage-hdfs = ["common-config/storage-hdfs"]
-z3-prove = ["common-constraint", "z3"]
+z3-prove = ["common-constraint"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -28,6 +28,7 @@ common-functions = { path = "../functions" }
 common-license = { path = "../../common/license" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
+common-metrics = { path = "../../common/metrics" }
 
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sources = { path = "../pipeline/sources" }
@@ -41,8 +42,8 @@ common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
-data-mask-feature = { path = "../ee-features/data-mask" }
-storages-common-table-meta = { path = "../storages/common/table-meta" }
+data-mask-feature = { path = "../ee_features/data_mask" }
+storages-common-table-meta = { path = "../storages/common/table_meta" }
 
 # GitHub dependencies
 
@@ -55,16 +56,19 @@ async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cidr = { version = "0.2.2" }
+cron = "0.12.0"
 ctor = "0.1.26"
 dashmap = "5.4"
 educe = "0.4"
 enum-as-inner = "0.5"
 globiter = "0.1"
+indexmap = "2.0.0"
 itertools = "0.10.5"
 log = { workspace = true }
+minitrace = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = "0.12.1"
@@ -74,7 +78,3 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-
-indexmap = "2.0.0"
-url = { version = "2.3" }
-z3 = { version = "0.12.1", features = ["static-link-z3"], optional = true }

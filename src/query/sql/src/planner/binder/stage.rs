@@ -16,9 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Expr as AExpr;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -27,16 +24,12 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_pipeline_transforms::processors::transforms::Transform;
+use common_pipeline_transforms::processors::Transform;
 use indexmap::IndexMap;
 
-use crate::binder::wrap_cast;
 use crate::binder::wrap_cast_scalar;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
@@ -78,7 +71,7 @@ impl BindContext {
             if let AExpr::ColumnRef { column, .. } = expr {
                 if column.name().eq_ignore_ascii_case("default") {
                     let field = schema.field(i);
-                    fill_default_value(&mut scalar_binder, &mut map_exprs, field, schema).await?;
+                    map_exprs.push(scalar_binder.get_default_value(field, schema).await?);
                     continue;
                 }
             }
@@ -118,43 +111,4 @@ impl BindContext {
             .collect();
         Ok(scalars)
     }
-}
-
-async fn fill_default_value(
-    binder: &mut ScalarBinder<'_>,
-    map_exprs: &mut Vec<Expr>,
-    field: &DataField,
-    schema: &DataSchema,
-) -> Result<()> {
-    if let Some(default_expr) = field.default_expr() {
-        let tokens = tokenize_sql(default_expr)?;
-        let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
-        let (mut scalar, _) = binder.bind(&ast).await?;
-        scalar = wrap_cast(&scalar, field.data_type());
-
-        let expr = scalar
-            .as_expr()?
-            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
-        map_exprs.push(expr);
-    } else {
-        // If field data type is nullable, then we'll fill it with null.
-        if field.data_type().is_nullable() {
-            let expr = Expr::Constant {
-                span: None,
-                scalar: Scalar::Null,
-                data_type: field.data_type().clone(),
-            };
-            map_exprs.push(expr);
-        } else {
-            let data_type = field.data_type().clone();
-            let default_value = Scalar::default_value(&data_type);
-            let expr = Expr::Constant {
-                span: None,
-                scalar: default_value,
-                data_type,
-            };
-            map_exprs.push(expr);
-        }
-    }
-    Ok(())
 }

@@ -20,6 +20,7 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
+use common_base::base::mask_string;
 use itertools::Itertools;
 use url::Url;
 
@@ -268,8 +269,8 @@ impl Connection {
 
     pub fn mask(&self) -> Self {
         let mut conns = BTreeMap::new();
-        for k in self.conns.keys() {
-            conns.insert(k.to_string(), "********".to_string());
+        for (k, v) in &self.conns {
+            conns.insert(k.to_string(), mask_string(v, 3));
         }
         Self {
             visited_keys: self.visited_keys.clone(),
@@ -401,7 +402,7 @@ impl Display for UriLocation {
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
-        write!(f, "{}", self.connection)?;
+        write!(f, "{}", self.connection.mask())?;
         Ok(())
     }
 }

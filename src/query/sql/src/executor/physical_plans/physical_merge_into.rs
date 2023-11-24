@@ -21,7 +21,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::Location;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlan;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
@@ -46,4 +46,16 @@ pub struct MergeInto {
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     pub row_id_idx: usize,
     pub segments: Vec<(usize, Location)>,
+    pub output_schema: DataSchemaRef,
+    pub distributed: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MergeIntoAppendNotMatched {
+    pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
+    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
+    pub input_schema: DataSchemaRef,
 }

@@ -1,0 +1,50 @@
+statement ok
+DROP DATABASE IF EXISTS issue_13610
+
+statement ok
+CREATE DATABASE issue_13610
+
+statement ok
+USE issue_13610
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(2);
+
+statement ok
+replace into t on (a) values(3);
+
+# after replace-into, auto compaction should be triggered, and succeed
+# row_count should be 3, segment_count should be 1, block_count should be 1
+query III
+select row_count, segment_count, block_count from fuse_snapshot('issue_13610', 't') limit 1;
+----
+3 1 1
+
+statement ok
+insert into t values(4);
+
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+merge into t using (select * from t) as s on (s.a = t.a) when matched then update * when not matched then insert *;
+
+# after merge-into, auto compaction should be triggered, and succeed
+# row_count should be 4, segment_count should be 1, block_count should be 1
+query III
+select row_count, segment_count, block_count from fuse_snapshot('issue_13610', 't') limit 1;
+----
+4 1 1
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP DATABASE issue_13610
+

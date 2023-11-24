@@ -34,7 +34,6 @@ use common_expression::types::StringType;
 use common_expression::types::VariantType;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -44,8 +43,8 @@ use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
@@ -136,6 +135,7 @@ impl Table for SuggestedBackgroundTasksTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| SuggestedBackgroundTasksSource::create(ctx.clone(), output),
@@ -254,11 +254,9 @@ impl AsyncSource for SuggestedBackgroundTasksSource {
 
         let ctx = self.ctx.as_any().downcast_ref::<QueryContext>().unwrap();
         let license_mgr = get_license_manager();
-        license_mgr.manager.check_enterprise_enabled(
-            &ctx.get_settings(),
-            ctx.get_tenant(),
-            Feature::BackgroundService,
-        )?;
+        license_mgr
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::BackgroundService)?;
 
         let suggestions = Self::all_suggestions(Arc::new(ctx.clone())).await?;
         Ok(Some(self.to_block(suggestions)?))

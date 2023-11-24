@@ -19,57 +19,65 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
-use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::SegmentLocation;
+use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
     pub fn create_block_reader(
         &self,
+        ctx: Arc<dyn TableContext>,
         projection: Projection,
         query_internal_columns: bool,
-        ctx: Arc<dyn TableContext>,
+        update_stream_columns: bool,
+        put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
-        let table_schema = self.table_info.schema();
+        let table_schema = self.schema_with_stream();
         BlockReader::create(
+            ctx,
             self.operator.clone(),
             table_schema,
             projection,
-            ctx,
             query_internal_columns,
+            update_stream_columns,
+            put_cache,
         )
     }
 
     // Build the block reader.
     pub fn build_block_reader(
         &self,
-        plan: &DataSourcePlan,
         ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
+            ctx,
             PushDownInfo::projection_of_push_downs(
-                &self.table_info.schema(),
+                &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
             plan.query_internal_columns,
-            ctx,
+            plan.update_stream_columns,
+            put_cache,
         )
     }
 
@@ -119,8 +127,13 @@ impl FuseTable {
             let func_ctx = query_ctx.get_function_context()?;
 
             pipeline.add_transform(|input, output| {
-                let transform =
-                    CompoundBlockOperator::create(input, output, func_ctx.clone(), ops.clone());
+                let transform = CompoundBlockOperator::create(
+                    input,
+                    output,
+                    num_input_columns,
+                    func_ctx.clone(),
+                    ops.clone(),
+                );
                 Ok(ProcessorPtr::create(transform))
             })?;
         }
@@ -134,6 +147,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        put_cache: bool,
     ) -> Result<()> {
         let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
@@ -150,7 +164,7 @@ impl FuseTable {
 
         if !lazy_init_segments.is_empty() {
             let table = self.clone();
-            let table_info = self.table_info.clone();
+            let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
             let dal = self.operator.clone();
@@ -158,7 +172,7 @@ impl FuseTable {
             // TODO: need refactor
             pipeline.set_on_init(move || {
                 let table = table.clone();
-                let table_info = table_info.clone();
+                let table_schema = table_schema.clone();
                 let ctx = query_ctx.clone();
                 let dal = dal.clone();
                 let push_downs = push_downs.clone();
@@ -170,7 +184,7 @@ impl FuseTable {
                             ctx,
                             dal,
                             push_downs,
-                            table_info,
+                            table_schema,
                             lazy_init_segments,
                             0,
                         )
@@ -184,7 +198,7 @@ impl FuseTable {
             });
         }
 
-        let block_reader = self.build_block_reader(plan, ctx.clone())?;
+        let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let topk = plan
@@ -203,6 +217,7 @@ impl FuseTable {
                         self.operator.clone(),
                         agg,
                         self.table_compression,
+                        put_cache,
                     )
                 })
                 .transpose()?,
@@ -219,6 +234,7 @@ impl FuseTable {
                         plan,
                         virtual_columns.clone(),
                         self.table_compression,
+                        put_cache,
                     )
                 })
                 .transpose()?,

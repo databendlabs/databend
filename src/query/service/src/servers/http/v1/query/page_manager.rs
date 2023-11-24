@@ -94,21 +94,29 @@ impl PageManager {
     #[async_backtrace::framed]
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
-        if page_no == next_no && !self.end {
-            let (block, end) = self.collect_new_page(tp).await?;
-            let num_row = block.num_rows();
-            self.total_rows += num_row;
-            let page = Page {
-                data: block,
-                total_rows: self.total_rows,
-            };
-            if num_row > 0 {
-                self.total_pages += 1;
-                self.last_page = Some(page.clone());
+        if page_no == next_no {
+            if !self.end {
+                let (block, end) = self.collect_new_page(tp).await?;
+                let num_row = block.num_rows();
+                self.total_rows += num_row;
+                let page = Page {
+                    data: block,
+                    total_rows: self.total_rows,
+                };
+                if num_row > 0 {
+                    self.total_pages += 1;
+                    self.last_page = Some(page.clone());
+                }
+                self.end = end;
+                Ok(page)
+            } else {
+                // when end is set to true, client should recv a response with next_url = final_url
+                Err(ErrorCode::Internal(format!(
+                    "expect /final from client, got /page/{}.",
+                    page_no
+                )))
             }
-            self.end = end;
-            Ok(page)
-        } else if page_no == next_no - 1 {
+        } else if page_no + 1 == next_no {
             // later, there may be other ways to ack and drop the last page except collect_new_page.
             // but for now, last_page always exists in this branch, since page_no is unsigned.
             Ok(self
@@ -165,18 +173,18 @@ impl PageManager {
                     match tokio::time::timeout(d, self.block_receiver.recv()).await {
                         Ok(Some(block)) => {
                             debug!(
-                                "http query {} got new block with {} rows",
+                                "http query {}: got new block with {} rows",
                                 &self.query_id,
                                 block.num_rows()
                             );
                             self.append_block(&mut res, block, remain)?;
                         }
                         Ok(None) => {
-                            info!("http query {} reach end of blocks", &self.query_id);
+                            info!("{}: http query reach end of blocks", &self.query_id);
                             break;
                         }
                         Err(_) => {
-                            debug!("http query {} long pulling timeout", &self.query_id);
+                            debug!("{}: http query long pulling timeout", &self.query_id);
                             break;
                         }
                     }

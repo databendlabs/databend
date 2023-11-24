@@ -122,7 +122,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
         let sm = mn1.sto.get_state_machine().await;
-        let got = sm.get_kv(&key).await;
+        let got = sm.get_maybe_expired_kv(&key).await?;
         match got {
             None => {
                 panic!("expect get some value for {}", key)

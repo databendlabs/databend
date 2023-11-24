@@ -15,6 +15,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -121,7 +122,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
         let num = data_block.num_rows();
 
         let indices = evaluator.run(&self.indices_scalar).unwrap();
-        let indices = get_hash_values(&indices, num)?;
+        let indices = get_hash_values(indices, num)?;
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
 
         let block_meta = data_block.get_meta();
@@ -139,10 +140,10 @@ impl FlightScatter for HashFlightScatter {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
         let indices = if !self.hash_key.is_empty() {
-            let mut hash_keys = vec![];
+            let mut hash_keys = Vec::with_capacity(self.hash_key.len());
             for expr in &self.hash_key {
                 let indices = evaluator.run(expr).unwrap();
-                let indices = get_hash_values(&indices, num)?;
+                let indices = get_hash_values(indices, num)?;
                 hash_keys.push(indices)
             }
             self.combine_hash_keys(&hash_keys, num)
@@ -163,7 +164,11 @@ impl FlightScatter for HashFlightScatter {
 }
 
 impl HashFlightScatter {
-    pub fn combine_hash_keys(&self, hash_keys: &[Vec<u64>], num_rows: usize) -> Result<Vec<u64>> {
+    pub fn combine_hash_keys(
+        &self,
+        hash_keys: &[Buffer<u64>],
+        num_rows: usize,
+    ) -> Result<Vec<u64>> {
         if self.hash_key.len() != hash_keys.len() {
             return Err(ErrorCode::Internal(
                 "Hash keys and hash functions must be the same length.",
@@ -181,24 +186,47 @@ impl HashFlightScatter {
     }
 }
 
-fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<u64>> {
+fn get_hash_values(column: Value<AnyType>, rows: usize) -> Result<Buffer<u64>> {
     match column {
         Value::Scalar(c) => match c {
-            common_expression::Scalar::Null => Ok(vec![0; rows]),
-            common_expression::Scalar::Number(NumberScalar::UInt64(x)) => Ok(vec![*x; rows]),
+            common_expression::Scalar::Null => Ok(vec![0; rows].into()),
+            common_expression::Scalar::Number(NumberScalar::UInt64(x)) => Ok(vec![x; rows].into()),
             _ => unreachable!(),
         },
         Value::Column(c) => {
-            if let Some(column) = NumberType::<u64>::try_downcast_column(c) {
-                Ok(column.iter().copied().collect())
-            } else if let Some(column) = NullableType::<NumberType<u64>>::try_downcast_column(c) {
+            if let Some(column) = NumberType::<u64>::try_downcast_column(&c) {
+                Ok(column)
+            } else if let Some(mut column) =
+                NullableType::<NumberType<u64>>::try_downcast_column(&c)
+            {
                 let null_map = column.validity;
-                Ok(column
-                    .column
-                    .iter()
-                    .zip(null_map.iter())
-                    .map(|(x, b)| if b { *x } else { 0 })
-                    .collect())
+                if null_map.unset_bits() == 0 {
+                    Ok(column.column)
+                } else if null_map.unset_bits() == null_map.len() {
+                    Ok(vec![0; rows].into())
+                } else {
+                    let mut need_new_vec = true;
+                    if let Some(column) = unsafe { column.column.get_mut() } {
+                        column
+                            .iter_mut()
+                            .zip(null_map.iter())
+                            .for_each(|(x, valid)| {
+                                *x *= valid as u64;
+                            });
+                        need_new_vec = false;
+                    }
+
+                    if !need_new_vec {
+                        Ok(column.column)
+                    } else {
+                        Ok(column
+                            .column
+                            .iter()
+                            .zip(null_map.iter())
+                            .map(|(x, b)| if b { *x } else { 0 })
+                            .collect())
+                    }
+                }
             } else {
                 unreachable!()
             }

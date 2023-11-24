@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check;
+use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::ColumnIndex;
 use common_expression::DataSchema;
@@ -32,16 +32,12 @@ use crate::IndexType;
 use crate::Metadata;
 use crate::Visibility;
 
-pub trait LoweringContext {
-    type ColumnID: ColumnIndex;
-
-    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType>;
+pub trait TypeProvider<ColumnID: ColumnIndex> {
+    fn get_type(&self, column_id: &ColumnID) -> Result<DataType>;
 }
 
-impl LoweringContext for Metadata {
-    type ColumnID = IndexType;
-
-    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+impl TypeProvider<IndexType> for Metadata {
+    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
         let column_entry = self.column(*column_id);
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
@@ -52,21 +48,28 @@ impl LoweringContext for Metadata {
     }
 }
 
-impl LoweringContext for DataSchema {
-    type ColumnID = IndexType;
+impl TypeProvider<ColumnBinding> for Metadata {
+    fn get_type(&self, column_id: &ColumnBinding) -> Result<DataType> {
+        self.get_type(&column_id.index)
+    }
+}
 
-    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+impl TypeProvider<IndexType> for DataSchema {
+    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
         let column = self.field_with_name(&column_id.to_string())?;
         Ok(column.data_type().clone())
     }
 }
 
-impl<Index> LoweringContext for HashMap<Index, DataType>
-where Index: ColumnIndex
-{
-    type ColumnID = Index;
+impl TypeProvider<String> for DataSchema {
+    fn get_type(&self, column_name: &String) -> Result<DataType> {
+        let column = self.field_with_name(column_name)?;
+        Ok(column.data_type().clone())
+    }
+}
 
-    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+impl<ColumnID: ColumnIndex> TypeProvider<ColumnID> for HashMap<ColumnID, DataType> {
+    fn get_type(&self, column_id: &ColumnID) -> Result<DataType> {
         self.get(column_id).cloned().ok_or_else(|| {
             ErrorCode::Internal(format!(
                 "Logical error: can not find column {:?}",
@@ -76,10 +79,10 @@ where Index: ColumnIndex
     }
 }
 
-fn resolve_column_type<C: LoweringContext>(
-    raw_expr: &RawExpr<C::ColumnID>,
-    context: &C,
-) -> Result<RawExpr<C::ColumnID>> {
+fn update_column_type<ColumnID: ColumnIndex, TP: TypeProvider<ColumnID>>(
+    raw_expr: &RawExpr<ColumnID>,
+    type_provider: &TP,
+) -> Result<RawExpr<ColumnID>> {
     match raw_expr {
         RawExpr::ColumnRef {
             span,
@@ -87,7 +90,7 @@ fn resolve_column_type<C: LoweringContext>(
             display_name,
             ..
         } => {
-            let data_type = context.resolve_column_type(id)?;
+            let data_type = type_provider.get_type(id)?;
             Ok(RawExpr::ColumnRef {
                 id: id.clone(),
                 span: *span,
@@ -103,7 +106,7 @@ fn resolve_column_type<C: LoweringContext>(
         } => Ok(RawExpr::Cast {
             span: *span,
             is_try: *is_try,
-            expr: Box::new(resolve_column_type(expr, context)?),
+            expr: Box::new(update_column_type(expr, type_provider)?),
             dest_type: dest_type.clone(),
         }),
         RawExpr::FunctionCall {
@@ -114,7 +117,7 @@ fn resolve_column_type<C: LoweringContext>(
         } => {
             let args = args
                 .iter()
-                .map(|arg| resolve_column_type(arg, context))
+                .map(|arg| update_column_type(arg, type_provider))
                 .collect::<Result<Vec<_>>>()?;
             Ok(RawExpr::FunctionCall {
                 span: *span,
@@ -124,67 +127,25 @@ fn resolve_column_type<C: LoweringContext>(
             })
         }
         RawExpr::Constant { .. } => Ok(raw_expr.clone()),
-        RawExpr::UDFServerCall {
-            span,
-            func_name,
-            server_addr,
-            arg_types,
-            return_type,
-            args,
-        } => {
-            let args = args
-                .iter()
-                .map(|arg| resolve_column_type(arg, context))
-                .collect::<Result<Vec<_>>>()?;
-            Ok(RawExpr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                arg_types: arg_types.clone(),
-                return_type: return_type.clone(),
-                args,
-            })
-        }
     }
 }
 
 pub trait TypeCheck<Index: ColumnIndex> {
     /// Resolve data type with `LoweringContext` and perform type check.
-    fn resolve_and_check(
-        &self,
-        ctx: &impl LoweringContext<ColumnID = Index>,
-    ) -> Result<Expr<Index>>;
-
-    /// Perform type check without resolving data type.
-    fn type_check(&self) -> Result<Expr<Index>>;
+    fn type_check(&self, ctx: &impl TypeProvider<Index>) -> Result<Expr<Index>>;
 }
 
-impl<Index: ColumnIndex> TypeCheck<Index> for RawExpr<Index> {
-    fn resolve_and_check(
-        &self,
-        resolver: &impl LoweringContext<ColumnID = Index>,
-    ) -> Result<Expr<Index>> {
-        let raw_expr = resolve_column_type(self, resolver)?;
-        check(&raw_expr, &BUILTIN_FUNCTIONS)
-    }
-
-    fn type_check(&self) -> Result<Expr<Index>> {
-        check(self, &BUILTIN_FUNCTIONS)
+impl<ColumnID: ColumnIndex> TypeCheck<ColumnID> for RawExpr<ColumnID> {
+    fn type_check(&self, type_provider: &impl TypeProvider<ColumnID>) -> Result<Expr<ColumnID>> {
+        let raw_expr = update_column_type(self, type_provider)?;
+        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)
     }
 }
 
 impl TypeCheck<IndexType> for ScalarExpr {
-    fn resolve_and_check(
-        &self,
-        resolver: &impl LoweringContext<ColumnID = IndexType>,
-    ) -> Result<Expr<IndexType>> {
+    fn type_check(&self, type_provider: &impl TypeProvider<IndexType>) -> Result<Expr<IndexType>> {
         let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
-        raw_expr.resolve_and_check(resolver)
-    }
-
-    fn type_check(&self) -> Result<Expr<IndexType>> {
-        let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
-        raw_expr.type_check()
+        raw_expr.type_check(type_provider)
     }
 }
 
@@ -266,19 +227,23 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: "DUMMY".to_string(),
             },
-            ScalarExpr::UDFServerCall(udf) => RawExpr::UDFServerCall {
-                span: udf.span,
-                func_name: udf.func_name.clone(),
-                server_addr: udf.server_addr.clone(),
-                arg_types: udf.arg_types.clone(),
-                return_type: (*udf.return_type).clone(),
-                args: udf.arguments.iter().map(ScalarExpr::as_raw_expr).collect(),
+            ScalarExpr::UDFServerCall(udf) => RawExpr::ColumnRef {
+                span: None,
+                id: ColumnBindingBuilder::new(
+                    udf.display_name.clone(),
+                    usize::MAX,
+                    Box::new((*udf.return_type).clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+                data_type: (*udf.return_type).clone(),
+                display_name: udf.display_name.clone(),
             },
         }
     }
 
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
-        self.as_raw_expr().type_check()
+        type_check::check(&self.as_raw_expr(), &BUILTIN_FUNCTIONS)
     }
 
     pub fn is_column_ref(&self) -> bool {

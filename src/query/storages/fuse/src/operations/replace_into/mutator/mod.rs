@@ -13,6 +13,12 @@
 // limitations under the License.
 
 mod column_hash;
-pub mod deletion_accumulator;
-pub mod merge_into_mutator;
-pub mod mutator_replace_into;
+mod deletion_accumulator;
+mod merge_into_mutator;
+mod mutator_replace_into;
+
+pub use column_hash::row_hash_of_columns;
+pub use deletion_accumulator::BlockDeletionKeys;
+pub use deletion_accumulator::DeletionAccumulator;
+pub use merge_into_mutator::MergeIntoOperationAggregator;
+pub use mutator_replace_into::ReplaceIntoMutator;

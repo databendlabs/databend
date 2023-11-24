@@ -23,15 +23,15 @@ use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
+use common_pipeline_transforms::processors::Transform;
+use common_pipeline_transforms::processors::Transformer;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_computed_expr;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
 pub struct TransformAddComputedColumns {
@@ -50,11 +50,9 @@ where Self: Transform
         output_schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &ctx.get_settings(),
-            ctx.get_tenant(),
-            ComputedColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), ComputedColumn)?;
 
         let mut exprs = Vec::with_capacity(output_schema.fields().len());
         for f in output_schema.fields().iter() {

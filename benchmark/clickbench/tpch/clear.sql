@@ -1,8 +1,8 @@
-drop table customer all;
-drop table lineitem all;
-drop table nation all;
-drop table orders all;
-drop table partsupp all;
-drop table part all;
-drop table region all;
-drop table supplier all;
+drop table if exists customer;
+drop table if exists lineitem;
+drop table if exists nation;
+drop table if exists orders;
+drop table if exists partsupp;
+drop table if exists part;
+drop table if exists region;
+drop table if exists supplier;

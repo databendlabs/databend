@@ -27,8 +27,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::TableInfo;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::SyncSource;
@@ -77,6 +77,7 @@ impl Table for NullTable {
         ctx: Arc<dyn TableContext>,
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let schema: DataSchemaRef = Arc::new(self.table_info.schema().into());
         pipeline.add_source(

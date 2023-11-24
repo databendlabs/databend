@@ -16,11 +16,21 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::CopyIntoTablePhysicalPlan;
-use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::FragmentKind;
-use common_sql::executor::QuerySource;
-use common_sql::executor::ReplaceInto;
+use common_sql::executor::physical_plans::CompactSource;
+use common_sql::executor::physical_plans::CopyIntoTable;
+use common_sql::executor::physical_plans::CopyIntoTableSource;
+use common_sql::executor::physical_plans::DeleteSource;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::ExchangeSink;
+use common_sql::executor::physical_plans::ExchangeSource;
+use common_sql::executor::physical_plans::FragmentKind;
+use common_sql::executor::physical_plans::HashJoin;
+use common_sql::executor::physical_plans::MergeInto;
+use common_sql::executor::physical_plans::QuerySource;
+use common_sql::executor::physical_plans::ReclusterSource;
+use common_sql::executor::physical_plans::ReplaceInto;
+use common_sql::executor::physical_plans::TableScan;
+use common_sql::executor::PhysicalPlanReplacer;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -30,13 +40,7 @@ use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::sessions::QueryContext;
-use crate::sql::executor::Exchange;
-use crate::sql::executor::ExchangeSink;
-use crate::sql::executor::ExchangeSource;
-use crate::sql::executor::HashJoin;
 use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalPlanReplacer;
-use crate::sql::executor::TableScan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
 pub struct Fragmenter {
@@ -58,6 +62,7 @@ enum State {
     DeleteLeaf,
     ReplaceInto,
     Compact,
+    Recluster,
     Other,
 }
 
@@ -147,10 +152,16 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    fn replace_replace_into(
-        &mut self,
-        plan: &common_sql::executor::ReplaceInto,
-    ) -> Result<PhysicalPlan> {
+    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        self.state = State::SelectLeaf;
+        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         self.state = State::ReplaceInto;
 
@@ -161,10 +172,7 @@ impl PhysicalPlanReplacer for Fragmenter {
     }
 
     //  TODO(Sky): remove rebudant code
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &CopyIntoTablePhysicalPlan,
-    ) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
                 self.state = State::SelectLeaf;
@@ -172,35 +180,33 @@ impl PhysicalPlanReplacer for Fragmenter {
             }
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(
-                    CopyIntoTablePhysicalPlan {
-                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                            plan: input,
-                            ..*query_ctx.clone()
-                        })),
-                        ..plan.clone()
-                    },
-                )))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
             }
         }
     }
 
-    fn replace_compact_partial(
-        &mut self,
-        plan: &common_sql::executor::CompactPartial,
-    ) -> Result<PhysicalPlan> {
-        self.state = State::Compact;
+    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
+        self.state = State::Recluster;
 
-        Ok(PhysicalPlan::CompactPartial(Box::new(plan.clone())))
+        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
     }
 
-    fn replace_delete_partial(
-        &mut self,
-        plan: &common_sql::executor::DeletePartial,
-    ) -> Result<PhysicalPlan> {
+    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
+        self.state = State::Compact;
+
+        Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
+    }
+
+    fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
         self.state = State::DeleteLeaf;
 
-        Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
+        Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
     }
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
@@ -230,6 +236,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             probe_to_build: plan.probe_to_build.clone(),
             output_schema: plan.output_schema.clone(),
             contain_runtime_filter: plan.contain_runtime_filter,
+            need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -265,6 +272,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::Other => FragmentType::Intermediate,
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
+            State::Recluster => FragmentType::Recluster,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

@@ -17,8 +17,10 @@ use std::fmt;
 use std::io;
 use std::io::BufWriter;
 use std::io::Write;
+use std::time::Duration;
 use std::time::SystemTime;
 
+use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
@@ -76,24 +78,53 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     // Initialize tracing reporter
     if cfg.tracing.on {
         let name = name.to_string();
-        let jaeger_endpoint = cfg.tracing.jaeger_endpoint.clone();
-        let otlp_reporter = std::thread::spawn(move || {
-            minitrace_opentelemetry::OpenTelemetryReporter::new(
-                opentelemetry_jaeger::new_collector_pipeline()
-                    .with_endpoint(jaeger_endpoint)
-                    .with_reqwest_blocking()
-                    .with_service_name(&name)
-                    .build_collector_exporter::<opentelemetry::runtime::Tokio>()
-                    .expect("initialize jaeger exporter"),
-                opentelemetry::trace::SpanKind::Server,
-                Cow::Owned(opentelemetry::sdk::Resource::default()),
-                opentelemetry::InstrumentationLibrary::new(name, None, None),
-            )
+        let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
+
+        let (reporter_rt, otlp_reporter) = std::thread::spawn(|| {
+            // Init runtime with 2 threads.
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap();
+            let reporter = rt.block_on(async {
+                minitrace_opentelemetry::OpenTelemetryReporter::new(
+                    opentelemetry_otlp::SpanExporter::new_tonic(
+                        opentelemetry_otlp::ExportConfig {
+                            endpoint: otlp_endpoint,
+                            protocol: opentelemetry_otlp::Protocol::Grpc,
+                            timeout: Duration::from_secs(
+                                opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                            ),
+                        },
+                        opentelemetry_otlp::TonicConfig::default(),
+                    )
+                    .expect("initialize otlp exporter"),
+                    opentelemetry::trace::SpanKind::Server,
+                    Cow::Owned(opentelemetry::sdk::Resource::new([
+                        opentelemetry::KeyValue::new("service.name", name.clone()),
+                    ])),
+                    opentelemetry::InstrumentationLibrary::new(
+                        name,
+                        None::<&'static str>,
+                        None::<&'static str>,
+                        None,
+                    ),
+                )
+            });
+            (rt, reporter)
         })
         .join()
         .unwrap();
+
         minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+
         guards.push(Box::new(defer::defer(minitrace::flush)));
+        guards.push(Box::new(defer::defer(|| {
+            std::thread::spawn(move || std::mem::drop(reporter_rt))
+                .join()
+                .unwrap()
+        })));
     }
 
     // Initialize logging
@@ -112,8 +143,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // File logger
     if cfg.file.on {
-        let (normal_log_file, flush_guard) =
-            new_file_log_writer(&cfg.file.dir, format!("databend-query-{name}"));
+        let (normal_log_file, flush_guard) = new_file_log_writer(&cfg.file.dir, name);
 
         guards.push(Box::new(flush_guard));
 

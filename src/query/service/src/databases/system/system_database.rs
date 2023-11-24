@@ -41,6 +41,7 @@ use common_storages_system::MallocStatsTotalsTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::OneTable;
 use common_storages_system::ProcessesTable;
+use common_storages_system::ProcessorProfileTable;
 use common_storages_system::QueryCacheTable;
 use common_storages_system::QueryLogTable;
 use common_storages_system::QueryProfileTable;
@@ -48,9 +49,12 @@ use common_storages_system::QuerySummaryTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
 use common_storages_system::StagesTable;
+use common_storages_system::StreamsTable;
 use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
+use common_storages_system::TaskHistoryTable;
+use common_storages_system::TasksTable;
 use common_storages_system::TempFilesTable;
 use common_storages_system::TracingTable;
 use common_storages_system::UsersTable;
@@ -84,6 +88,7 @@ impl SystemDatabase {
             TablesTableWithHistory::create(sys_db_meta.next_table_id()),
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTable::create(sys_db_meta.next_table_id()),
+            StreamsTable::create(sys_db_meta.next_table_id()),
             Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
             ProcessesTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
@@ -115,6 +120,9 @@ impl SystemDatabase {
             BacktraceTable::create(sys_db_meta.next_table_id()),
             TempFilesTable::create(sys_db_meta.next_table_id()),
             QuerySummaryTable::create(sys_db_meta.next_table_id()),
+            TasksTable::create(sys_db_meta.next_table_id()),
+            TaskHistoryTable::create(sys_db_meta.next_table_id()),
+            ProcessorProfileTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

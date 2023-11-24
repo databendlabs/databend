@@ -15,6 +15,7 @@
 use common_meta_app as mt;
 use common_meta_app::principal::CsvFileFormatParams;
 use common_meta_app::principal::StageFileCompression;
+use minitrace::func_name;
 
 use crate::common;
 

@@ -18,6 +18,8 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
+use common_management::ConnectionApi;
+use common_management::ConnectionMgr;
 use common_management::FileFormatApi;
 use common_management::FileFormatMgr;
 use common_management::NetworkPolicyApi;
@@ -103,6 +105,13 @@ impl UserApiProvider {
 
     pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
         Ok(Arc::new(FileFormatMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
+    }
+
+    pub fn get_connection_api_client(&self, tenant: &str) -> Result<Arc<dyn ConnectionApi>> {
+        Ok(Arc::new(ConnectionMgr::create(
             self.client.clone(),
             tenant,
         )?))

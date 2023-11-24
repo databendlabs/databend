@@ -126,60 +126,6 @@ pub fn check<Index: ColumnIndex>(
 
             check_function(*span, name, params, &args_expr, fn_registry)
         }
-        RawExpr::UDFServerCall {
-            span,
-            func_name,
-            server_addr,
-            arg_types,
-            return_type,
-            args,
-        } => {
-            let args: Vec<_> = args
-                .iter()
-                .map(|arg| check(arg, fn_registry))
-                .try_collect()?;
-            if arg_types.len() != args.len() {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Require {} parameters, but got: {}",
-                    arg_types.len(),
-                    args.len()
-                ))
-                .set_span(*span));
-            }
-
-            let checked_args = args
-                .iter()
-                .zip(arg_types)
-                .map(|(arg, dest_type)| {
-                    let src_type = arg.data_type();
-                    if !can_auto_cast_to(src_type, dest_type, &fn_registry.default_cast_rules) {
-                        return Err(ErrorCode::InvalidArgument(format!(
-                            "Cannot auto cast datatype {} to {}",
-                            src_type, dest_type,
-                        ))
-                        .set_span(arg.span()));
-                    }
-                    let is_try = fn_registry.is_auto_try_cast_rule(src_type, dest_type);
-                    check_cast(arg.span(), is_try, arg.clone(), dest_type, fn_registry)
-                })
-                .collect::<Result<Vec<_>>>()?;
-
-            debug_assert_eq!(
-                &checked_args
-                    .iter()
-                    .map(|arg| arg.data_type().clone())
-                    .collect::<Vec<_>>(),
-                arg_types
-            );
-
-            Ok(Expr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                return_type: return_type.clone(),
-                args: checked_args,
-            })
-        }
     }
 }
 
@@ -295,6 +241,15 @@ pub fn check_function<Index: ColumnIndex>(
 ) -> Result<Expr<Index>> {
     if let Some(original_fn_name) = fn_registry.aliases.get(name) {
         return check_function(span, original_fn_name, params, args, fn_registry);
+    }
+
+    // to_string('a')
+    if params.is_empty() && name.starts_with("to_") && args.len() == 1 {
+        let type_name = args[0].data_type().remove_nullable();
+        match get_simple_cast_function(false, &type_name) {
+            Some(n) if name.eq_ignore_ascii_case(&n) => return Ok(args[0].clone()),
+            _ => {}
+        }
     }
 
     let candidates = fn_registry.search_candidates(name, params, args);
@@ -742,6 +697,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_variant",
     "to_boolean",
     "to_decimal",
+    "to_bitmap",
 ];
 
 pub fn is_simple_cast_function(name: &str) -> bool {

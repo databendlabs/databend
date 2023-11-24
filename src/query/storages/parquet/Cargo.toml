@@ -19,16 +19,17 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
+common-metrics = { path = "../../../common/metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
-arrow-array = "46.0.0"
-arrow-buffer = "46.0.0"
-arrow-schema = "46.0.0"
+arrow-array = { workspace = true }
+arrow-buffer = { workspace = true }
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bytes = { workspace = true }
@@ -37,7 +38,7 @@ ethnum = { workspace = true }
 futures = "0.3.24"
 log = { workspace = true }
 opendal = { workspace = true }
-parquet = { version = "46.0.0", features = ["async"] }
+parquet = { workspace = true }
 serde = { workspace = true }
 thrift = "0.17.0"
 typetag = "0.2.3"

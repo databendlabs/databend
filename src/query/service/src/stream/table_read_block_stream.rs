@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
 use common_expression::SendableDataBlockStream;
+use common_pipeline_core::Pipeline;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::Table;
@@ -45,7 +45,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
         ctx.set_partitions(plan.parts.clone())?;
-        self.read_data(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline, true)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);

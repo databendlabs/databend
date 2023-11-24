@@ -1,0 +1,127 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0016
+
+statement ok
+CREATE DATABASE db_09_0016
+
+statement ok
+USE db_09_0016
+
+statement ok
+create table t1(a int, b int) cluster by(a+1)
+
+statement ok
+insert into t1 values(1,1),(3,3)
+
+statement ok
+insert into t1 values(2,2),(5,5)
+
+statement ok
+insert into t1 values(4,4)
+
+query TIIIFFT
+select * from clustering_information('db_09_0016','t1')
+----
+((a + 1)) 3 1 0 1.3333 2.0 {"00002":3}
+
+statement ok
+ALTER TABLE t1 RECLUSTER FINAL WHERE a != 4
+
+query TIIIFFT
+select * from clustering_information('db_09_0016','t1')
+----
+((a + 1)) 2 1 0 1.0 2.0 {"00002":2}
+
+query II
+select * from t1 order by a
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+
+# Fix dead cycles in PR #11762 (https://github.com/datafuselabs/databend/pull/11762).
+statement ok
+create table t2(a int) cluster by(a+1) row_per_block=3
+
+statement ok
+insert into t2 values(1),(3)
+
+statement ok
+insert into t2 values(1),(3)
+
+statement ok
+ALTER TABLE t2 RECLUSTER FINAL
+
+# issue #12237
+statement ok
+create table t3(a int, b string null) cluster by(b) row_per_block=3
+
+statement ok
+insert into t3 values(1,'b'),(2,null)
+
+statement ok
+insert into t3 values(1,'a'),(2,null)
+
+query TIIIFFT
+select * from clustering_information('db_09_0016','t3')
+----
+(b) 2 0 0 1.0 2.0 {"00002":2}
+
+statement ok
+insert into t3 values(3,'a'),(4,'c')
+
+statement ok
+ALTER TABLE t3 RECLUSTER
+
+query FFT
+select average_overlaps, average_depth, block_depth_histogram from clustering_information('db_09_0016','t3')
+----
+0.0 1.0 {"00001":2}
+
+# test trim string
+statement ok
+truncate table t3
+
+statement ok
+insert into t3 values(1,'123456780'),(2,'123456781')
+
+statement ok
+insert into t3 values(3,'123456782'),(4,'123456783')
+
+query TIIIFFT
+select * from clustering_information('db_09_0016','t3')
+----
+(b) 2 2 0 1.0 2.0 {"00002":2}
+
+# Fix pr#13332
+statement ok
+create table t4(a int, b string) cluster by(a)
+
+statement ok
+set max_block_size = 5
+
+statement ok
+insert into t4 select number % 2, to_string(number) from numbers(500)
+
+statement ok
+alter table t4 recluster final
+
+statement ok
+DROP Table t1 all
+
+statement ok
+DROP Table t2 all
+
+statement ok
+DROP Table t3 all
+
+statement ok
+DROP Table t4 all
+
+statement ok
+DROP DATABASE db_09_0016
+
+statement ok
+set max_block_size = 65536

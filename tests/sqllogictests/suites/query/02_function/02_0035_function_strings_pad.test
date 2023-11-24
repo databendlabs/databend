@@ -1,0 +1,282 @@
+query T
+SELECT LPAD(NULL, NULL, NULL)
+----
+NULL
+
+query T
+SELECT LPAD('a', NULL, NULL)
+----
+NULL
+
+query T
+SELECT LPAD(NULL, 1, NULL)
+----
+NULL
+
+query T
+SELECT LPAD('a', 1, NULL)
+----
+NULL
+
+query T
+SELECT LPAD(NULL, NULL, 'b')
+----
+NULL
+
+query T
+SELECT LPAD('a', NULL, 'b')
+----
+NULL
+
+query T
+SELECT LPAD(NULL, 1, 'b')
+----
+NULL
+
+statement ok
+SELECT LPAD('', 0, '')
+
+statement error 1006
+SELECT LPAD('', 10, '')
+
+statement error 1006
+SELECT LPAD('123', 10, '')
+
+statement error 1006
+SELECT LPAD('123', 2000000, '')
+
+query T
+SELECT LPAD('', 10, 'abcde')
+----
+abcdeabcde
+
+statement ok
+SELECT LPAD('12345', 0, '')
+
+statement ok
+SELECT LPAD('12345', 0, 'a')
+
+query T
+SELECT LPAD('12345', 1, 'a')
+----
+1
+
+query T
+SELECT LPAD('12345', 10, 'a')
+----
+aaaaa12345
+
+query T
+SELECT LPAD('12345', 10, 'abc')
+----
+abcab12345
+
+query T
+SELECT LPAD('12345', 10, 'abcde')
+----
+abcde12345
+
+query T
+SELECT LPAD(to_varchar(number), 3, 'a') FROM numbers(5) ORDER BY number
+----
+aa0
+aa1
+aa2
+aa3
+aa4
+
+query T
+SELECT LPAD('1', number, 'a') FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+a1
+aa1
+aaa1
+
+query T
+SELECT LPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+a2
+aa3
+aaa4
+
+query T
+SELECT LPAD('1', 3, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+001
+111
+221
+331
+441
+
+query T
+SELECT LPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+000
+111
+222
+333
+444
+
+query T
+SELECT LPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+21
+331
+4441
+
+query T
+SELECT LPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+22
+333
+4444
+
+query T
+SELECT RPAD(NULL, NULL, NULL)
+----
+NULL
+
+query T
+SELECT RPAD('a', NULL, NULL)
+----
+NULL
+
+query T
+SELECT RPAD(NULL, 1, NULL)
+----
+NULL
+
+query T
+SELECT RPAD('a', 1, NULL)
+----
+NULL
+
+query T
+SELECT RPAD(NULL, NULL, 'b')
+----
+NULL
+
+query T
+SELECT RPAD('a', NULL, 'b')
+----
+NULL
+
+query T
+SELECT RPAD(NULL, 1, 'b')
+----
+NULL
+
+statement ok
+SELECT RPAD('', 0, '')
+
+statement error 1006
+SELECT RPAD('', 10, '')
+
+statement error 1006
+SELECT RPAD('123', 10, '')
+
+statement error 1006
+SELECT RPAD('123', 2000000, '')
+
+query T
+SELECT RPAD('', 10, 'abcde')
+----
+abcdeabcde
+
+statement ok
+SELECT RPAD('12345', 0, '')
+
+statement ok
+SELECT RPAD('12345', 0, 'a')
+
+query T
+SELECT RPAD('12345', 1, 'a')
+----
+1
+
+query T
+SELECT RPAD('12345', 10, 'a')
+----
+12345aaaaa
+
+query T
+SELECT RPAD('12345', 10, 'abc')
+----
+12345abcab
+
+query T
+SELECT RPAD('12345', 10, 'abcde')
+----
+12345abcde
+
+query T
+SELECT RPAD(to_varchar(number), 3, 'a') FROM numbers(5) ORDER BY number
+----
+0aa
+1aa
+2aa
+3aa
+4aa
+
+query T
+SELECT RPAD('1', number, 'a') FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+1a
+1aa
+1aaa
+
+query T
+SELECT RPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+2a
+3aa
+4aaa
+
+query T
+SELECT RPAD('1', 3, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+100
+111
+122
+133
+144
+
+query T
+SELECT RPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+000
+111
+222
+333
+444
+
+query T
+SELECT RPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+12
+133
+1444
+
+query T
+SELECT RPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+22
+333
+4444
+

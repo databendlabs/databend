@@ -19,6 +19,10 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metrics::http::metrics_incr_http_request_count;
+use common_metrics::http::metrics_incr_http_response_panics_count;
+use common_metrics::http::metrics_incr_http_slow_request_count;
+use common_storages_fuse::TableContext;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
@@ -37,13 +41,11 @@ use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
 use poem::Response;
+use uuid::Uuid;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
-use crate::servers::http::metrics::metrics_incr_http_request_count;
-use crate::servers::http::metrics::metrics_incr_http_response_panics_count;
-use crate::servers::http::metrics::metrics_incr_http_slow_request_count;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -179,6 +181,7 @@ impl<E> HTTPSessionEndpoint<E> {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             session.set_current_tenant(tenant_id);
         }
+        let node_id = ctx.get_cluster().local_id.clone();
 
         self.auth_manager
             .auth(ctx.get_current_session(), &credential)
@@ -197,11 +200,13 @@ impl<E> HTTPSessionEndpoint<E> {
         let query_id = req
             .headers()
             .get(QUERY_ID)
-            .map(|id| id.to_str().unwrap().to_string());
+            .map(|id| id.to_str().unwrap().to_string())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         Ok(HttpQueryContext::new(
             session,
             query_id,
+            node_id,
             deduplicate_label,
             user_agent,
         ))
@@ -265,7 +270,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
+    let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
         .map(|(k, v)| {

@@ -15,14 +15,21 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::EventCause;
+use common_pipeline_core::processors::profile::Profile;
+use common_pipeline_core::processors::EventCause;
+use common_pipeline_core::Pipeline;
+use common_pipeline_core::PlanScope;
 use log::debug;
 use log::trace;
+use minitrace::prelude::*;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -30,19 +37,18 @@ use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorTask;
-use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
+use crate::pipelines::executor::ExecutorTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::pipeline::Pipeline;
+use crate::pipelines::executor::ProcessorAsyncTask;
+use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::processors::connect;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::DirectedEdge;
+use crate::pipelines::processors::Event;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::processors::UpdateList;
 use crate::pipelines::processors::UpdateTrigger;
 
@@ -58,10 +64,11 @@ struct EdgeInfo {
     output_index: usize,
 }
 
-struct Node {
+pub(crate) struct Node {
     state: std::sync::Mutex<State>,
-    processor: ProcessorPtr,
+    pub(crate) processor: ProcessorPtr,
 
+    pub(crate) profile: Arc<Profile>,
     updated_list: Arc<UpdateList>,
     inputs_port: Vec<Arc<InputPort>>,
     outputs_port: Vec<Arc<OutputPort>>,
@@ -69,16 +76,20 @@ struct Node {
 
 impl Node {
     pub fn create(
+        pid: usize,
+        scope: Option<PlanScope>,
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
     ) -> Arc<Node> {
+        let p_name = unsafe { processor.name() };
         Arc::new(Node {
             state: std::sync::Mutex::new(State::Idle),
             processor: processor.clone(),
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
+            profile: Arc::new(Profile::create(pid, p_name, scope)),
         })
     }
 
@@ -92,6 +103,7 @@ impl Node {
 }
 
 struct ExecutingGraph {
+    finished_nodes: AtomicUsize,
     graph: StableGraph<Arc<Node>, EdgeInfo>,
 }
 
@@ -101,7 +113,10 @@ impl ExecutingGraph {
     pub fn create(mut pipeline: Pipeline) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         Self::init_graph(&mut pipeline, &mut graph);
-        Ok(ExecutingGraph { graph })
+        Ok(ExecutingGraph {
+            graph,
+            finished_nodes: AtomicUsize::new(0),
+        })
     }
 
     pub fn from_pipelines(mut pipelines: Vec<Pipeline>) -> Result<ExecutingGraph> {
@@ -111,7 +126,10 @@ impl ExecutingGraph {
             Self::init_graph(pipeline, &mut graph);
         }
 
-        Ok(ExecutingGraph { graph })
+        Ok(ExecutingGraph {
+            finished_nodes: AtomicUsize::new(0),
+            graph,
+        })
     }
 
     fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
@@ -134,7 +152,14 @@ impl ExecutingGraph {
             let mut pipe_edges = Vec::with_capacity(pipe.output_length);
 
             for item in &pipe.items {
-                let node = Node::create(&item.processor, &item.inputs_port, &item.outputs_port);
+                let pid = graph.node_count();
+                let node = Node::create(
+                    pid,
+                    pipe.scope.clone(),
+                    &item.processor,
+                    &item.inputs_port,
+                    &item.outputs_port,
+                );
 
                 let graph_node_index = graph.add_node(node.clone());
                 unsafe {
@@ -218,6 +243,7 @@ impl ExecutingGraph {
         let mut need_schedule_edges = VecDeque::new();
 
         need_schedule_nodes.push_back(index);
+
         while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
             // To avoid lock too many times, we will try to cache lock.
             let mut state_guard_cache = None;
@@ -242,6 +268,8 @@ impl ExecutingGraph {
                 if matches!(*node_state, State::Idle) {
                     state_guard_cache = Some(node_state);
                     need_schedule_nodes.push_back(target_index);
+                } else {
+                    node.processor.un_reacted(event_cause.clone())?;
                 }
             }
 
@@ -259,7 +287,13 @@ impl ExecutingGraph {
                     event
                 );
                 let processor_state = match event {
-                    Event::Finished => State::Finished,
+                    Event::Finished => {
+                        if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
+                            locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
+                        }
+
+                        State::Finished
+                    }
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
                         schedule_queue.push_sync(node.processor.clone());
@@ -317,7 +351,7 @@ impl ScheduleQueue {
         mut self,
         global: &Arc<ExecutorTasksQueue>,
         context: &mut ExecutorWorkerContext,
-        executor: &PipelineExecutor,
+        executor: &Arc<PipelineExecutor>,
     ) {
         debug_assert!(!context.has_task());
 
@@ -344,24 +378,30 @@ impl ScheduleQueue {
     pub fn schedule_async_task(
         proc: ProcessorPtr,
         query_id: Arc<String>,
-        executor: &PipelineExecutor,
+        executor: &Arc<PipelineExecutor>,
         wakeup_worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<ExecutorTasksQueue>,
     ) {
         unsafe {
             workers_condvar.inc_active_async_worker();
+            let weak_executor = Arc::downgrade(executor);
             let process_future = proc.async_process();
-            executor
-                .async_runtime
-                .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+            executor.async_runtime.spawn(
+                query_id.as_ref().clone(),
+                TrackedFuture::create(ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
                     proc.clone(),
                     global_queue,
                     workers_condvar,
+                    weak_executor,
                     process_future,
-                )));
+                ))
+                .in_span(Span::enter_with_local_parent(std::any::type_name::<
+                    ProcessorAsyncTask,
+                >())),
+            );
         }
     }
 
@@ -403,11 +443,35 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
+    pub(crate) fn get_node(&self, pid: NodeIndex) -> &Node {
+        &self.0.graph[pid]
+    }
+
+    pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
+        self.0
+            .graph
+            .node_weights()
+            .map(|x| x.profile.clone())
+            .collect::<Vec<_>>()
+    }
+
     pub fn interrupt_running_nodes(&self) {
         unsafe {
             for node_index in self.0.graph.node_indices() {
                 self.0.graph[node_index].processor.interrupt();
             }
+        }
+    }
+
+    pub fn assert_finished_graph(&self) -> Result<()> {
+        let finished_nodes = self.0.finished_nodes.load(Ordering::SeqCst);
+
+        match finished_nodes >= self.0.graph.node_count() {
+            true => Ok(()),
+            false => Err(ErrorCode::Internal(format!(
+                "Pipeline graph is not finished, details: {}",
+                self.format_graph_nodes()
+            ))),
         }
     }
 

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
@@ -44,9 +45,15 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
+    fn get_secondary_roles(&self) -> Option<Vec<String>>;
+
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
 
     async fn set_current_role(&self, role: Option<String>) -> Result<()>;
+
+    async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()>;
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
@@ -54,8 +61,9 @@ pub trait SessionPrivilegeManager {
         &self,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()>;
+
+    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
@@ -114,14 +122,6 @@ impl SessionPrivilegeManagerImpl {
         self.session_ctx.set_current_role(Some(role));
         Ok(())
     }
-
-    #[async_backtrace::framed]
-    async fn get_object_owner(&self, owner: &GrantObject) -> Result<Option<RoleInfo>> {
-        let role_mgr = RoleCacheManager::instance();
-        let tenant = self.session_ctx.get_current_tenant();
-        // return true only if grant object owner is the role itself
-        role_mgr.find_object_owner(&tenant, owner).await
-    }
 }
 
 #[async_trait::async_trait]
@@ -129,7 +129,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
-    // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
+    // becomes the CURRENT ROLE if not set session.role in the HTTP query.
     #[async_backtrace::framed]
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()> {
         self.session_ctx.set_current_user(user);
@@ -140,12 +140,35 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
     #[async_backtrace::framed]
     async fn set_current_role(&self, role_name: Option<String>) -> Result<()> {
-        let role = match role_name {
-            Some(role_name) => Some(self.validate_available_role(&role_name).await?),
+        let role = match &role_name {
+            Some(role_name) => Some(self.validate_available_role(role_name).await?),
             None => None,
         };
         self.session_ctx.set_current_role(role);
         Ok(())
+    }
+
+    /// If secondary_roles is set, it must be ALL or NONE:
+    /// 1. ALL: all the roles granted to the current user will have effects on validate_privilege,
+    ///    `secondary_roles` will be set to None, which is default.
+    /// 2. NONE: only the current_role has effects on validate_privilge, `secondary_roles`
+    ///    will be set to Some([]).
+    /// We can release this restriction in the future if any user needed. If an user want to set
+    /// secondary_roles to be a subset of the roles granted to the current user, he can pass
+    /// `secondary_roles` as Some([role1, role2, .. etc.]).
+    #[async_backtrace::framed]
+    async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
+        if secondary_roles.is_some() && !secondary_roles.as_ref().unwrap().is_empty() {
+            return Err(ErrorCode::InvalidArgument(
+                "only ALL or NONE is allowed on setting secondary roles",
+            ));
+        }
+        self.session_ctx.set_secondary_roles(secondary_roles);
+        Ok(())
+    }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.session_ctx.get_secondary_roles()
     }
 
     fn get_current_user(&self) -> Result<UserInfo> {
@@ -158,6 +181,36 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         self.session_ctx.get_current_role()
     }
 
+    #[async_backtrace::framed]
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        let secondary_roles = self.session_ctx.get_secondary_roles();
+
+        // if secondary_roles is not set, return all the available roles
+        if secondary_roles.is_none() {
+            let available_roles = self.get_all_available_roles().await?;
+            return Ok(available_roles);
+        }
+
+        // the current role is always included in the effective roles.
+        self.ensure_current_role().await?;
+        let mut role_names = self
+            .get_current_role()
+            .map(|r| vec![r.name])
+            .unwrap_or_default();
+
+        // if secondary_roles is set to be Some([]), only return the current role and its related roles.
+        // if the secondary_roles is set to be non-empty, return both current_role and the secondary_roles
+        // and their related roles.
+        let secondary_roles = secondary_roles.unwrap_or_default();
+        role_names.extend(secondary_roles);
+
+        // find their related roles as the final effective roles
+        let role_cache = RoleCacheManager::instance();
+        let tenant = self.session_ctx.get_current_tenant();
+        let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
+        Ok(effective_roles)
+    }
+
     // Returns all the roles the current session has. If the user have been granted auth_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
@@ -167,7 +220,11 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             Some(auth_role) => vec![auth_role],
             None => {
                 let current_user = self.get_current_user()?;
-                current_user.grants.roles()
+                let mut roles = current_user.grants.roles();
+                if let Some(current_role) = self.get_current_role() {
+                    roles.push(current_role.name);
+                }
+                roles
             }
         };
 
@@ -184,7 +241,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         &self,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
@@ -197,31 +253,19 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
         // 2. check the user's roles' privilege set
         self.ensure_current_role().await?;
-        let available_roles = self.get_all_available_roles().await?;
-        let role_verified = &available_roles
+        let effective_roles = self.get_all_effective_roles().await?;
+        let role_verified = &effective_roles
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege.clone()));
         if *role_verified {
             return Ok(());
         }
 
-        if verify_ownership {
-            let object_owner = self.get_object_owner(object).await?;
-            if let Some(owner) = object_owner.as_ref() {
-                for role in &available_roles {
-                    if *role.identity() == *owner.identity() {
-                        return Ok(());
-                    }
-                }
-            }
-        }
-
-        let roles_name = available_roles
+        let roles_name = effective_roles
             .iter()
             .map(|r| r.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-
         Err(ErrorCode::PermissionDenied(format!(
             "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
             privilege.clone(),
@@ -229,6 +273,28 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             &current_user.identity(),
             roles_name,
         )))
+    }
+
+    #[async_backtrace::framed]
+    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()> {
+        let role_mgr = RoleCacheManager::instance();
+        let tenant = self.session_ctx.get_current_tenant();
+
+        // if the object is not owned by any role, then considered as PUBLIC, which is always true
+        let owner_role = match role_mgr.find_object_owner(&tenant, object).await? {
+            Some(owner_role) => owner_role,
+            None => return Ok(()),
+        };
+
+        let available_roles = self.get_all_available_roles().await?;
+        if !available_roles.iter().any(|r| r.name == owner_role.name) {
+            return Err(ErrorCode::PermissionDenied(
+                "Permission denied, current session do not have the ownership of this object"
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     #[async_backtrace::framed]

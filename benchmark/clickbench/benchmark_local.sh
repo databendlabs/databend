@@ -22,6 +22,10 @@ for bin in databend-query databend-meta; do
         killall -9 $bin || true
     fi
 done
+
+# Wait for killed process to cleanup resources
+sleep 1
+
 echo 'Start databend-meta...'
 nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
@@ -86,7 +90,7 @@ function run_query() {
     local query=$3
 
     local q_time
-    q_time=$(echo "$query" | bendsql --time)
+    q_time=$(echo "$query" | bendsql --time=server)
     if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" -o json result.json

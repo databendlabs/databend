@@ -251,6 +251,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
         | RelOperator::CteScan(_)
+        | RelOperator::AddRowNumber(_)
         | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_)
         | RelOperator::MaterializedCte(_)
@@ -292,6 +293,10 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
         RelOperator::Lambda(op) => op
+            .items
+            .iter()
+            .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::Udf(op) => op
             .items
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),

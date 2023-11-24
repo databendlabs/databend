@@ -22,10 +22,11 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::RemoteExpr;
+use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::Exchange;
+use crate::executor::physical_plans::Exchange;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
@@ -62,6 +63,9 @@ pub struct HashJoin {
     pub output_schema: DataSchemaRef,
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
+    // if we execute distributed merge into, we need to hold the
+    // hash table to get not match data from source.
+    pub need_hold_hash_table: bool,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -85,7 +89,6 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
-
         // Unify the data types of the left and right exchange keys.
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -174,12 +177,13 @@ impl PhysicalPlanBuilder {
             .iter()
             .zip(join.right_conditions.iter())
         {
-            let left_expr = left_condition
-                .resolve_and_check(probe_schema.as_ref())?
-                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
             let right_expr = right_condition
-                .resolve_and_check(build_schema.as_ref())?
+                .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
+            let left_expr = left_condition
+                .type_check(probe_schema.as_ref())?
+                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
                     (left_condition, right_condition)
@@ -256,6 +260,12 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        // for distributed merge into, there is a field called "_row_number", but
+        // it's not an internal row_number, we need to add it here
+        if let Ok(index) = build_schema.index_of(ROW_NUMBER_COL_NAME) {
+            build_projections.insert(index);
+        }
+
         let mut merged_fields =
             Vec::with_capacity(probe_projections.len() + build_projections.len());
         let mut probe_fields = Vec::with_capacity(probe_projections.len());
@@ -293,8 +303,8 @@ impl PhysicalPlanBuilder {
                 }
                 if !is_tail {
                     build_fields.push(field.clone());
+                    merged_fields.push(field.clone());
                 }
-                merged_fields.push(field.clone());
             }
         }
         build_fields.extend(tail_fields.clone());
@@ -347,6 +357,12 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        // for distributed merge into, there is a field called "_row_number", but
+        // it's not an internal row_number, we need to add it here
+        if let Ok(index) = projected_schema.index_of(ROW_NUMBER_COL_NAME) {
+            projections.insert(index);
+        }
+
         let mut output_fields = Vec::with_capacity(column_projections.len());
         for (i, field) in merged_fields.iter().enumerate() {
             if projections.contains(&i) {
@@ -370,7 +386,7 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| {
                     let expr = scalar
-                        .resolve_and_check(merged_schema.as_ref())?
+                        .type_check(merged_schema.as_ref())?
                         .project_column_ref(|index| {
                             merged_schema.index_of(&index.to_string()).unwrap()
                         });
@@ -383,6 +399,7 @@ impl PhysicalPlanBuilder {
             probe_to_build,
             output_schema,
             contain_runtime_filter: join.contain_runtime_filter,
+            need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
         }))
     }

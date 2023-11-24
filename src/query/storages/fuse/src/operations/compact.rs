@@ -22,9 +22,10 @@ use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
-use common_sql::executor::MutationKind;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use common_sql::executor::physical_plans::MutationKind;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -33,7 +34,6 @@ use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -108,7 +108,7 @@ impl FuseTable {
         )))
     }
 
-    pub fn build_compact_partial(
+    pub fn build_compact_source(
         &self,
         ctx: Arc<dyn TableContext>,
         parts: Partitions,
@@ -160,12 +160,20 @@ impl FuseTable {
 
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
+        let block_reader = self.create_block_reader(
+            ctx.clone(),
+            projection,
+            false,
+            self.change_tracking_enabled(),
+            false,
+        )?;
+        let schema = self.schema_with_stream();
         // Add source pipe.
         pipeline.add_source(
             |output| {
                 CompactSource::try_create(
                     ctx.clone(),
+                    schema.clone(),
                     self.storage_format,
                     block_reader.clone(),
                     output,
@@ -178,7 +186,7 @@ impl FuseTable {
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds, None)?;
         pipeline.add_transform(
-            |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
+            |input: Arc<common_pipeline_core::processors::InputPort>, output| {
                 let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
                     input,

@@ -14,42 +14,29 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_meta_api::serialize_struct;
-use common_meta_api::txn_cond_seq;
-use common_meta_api::txn_op_put;
-use common_meta_api::SchemaApi;
-use common_meta_api::TXN_MAX_RETRY_TIMES;
-use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
+use common_meta_app::principal::OwnershipInfo;
 use common_meta_app::principal::RoleInfo;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::Ownership;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::ConditionResult::Eq;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TxnRequest;
 
 use crate::role::role_api::RoleApi;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
+static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     role_prefix: String,
-    tenant: String,
+    object_owner_prefix: String,
 }
 
 impl RoleMgr {
@@ -65,8 +52,8 @@ impl RoleMgr {
         let tenant = tenant.to_string();
         Ok(RoleMgr {
             kv_api,
-            tenant: tenant.clone(),
             role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
+            object_owner_prefix: format!("{}/{}", OBJECT_OWNER_API_KEY_PREFIX, tenant),
         })
     }
 
@@ -96,128 +83,32 @@ impl RoleMgr {
         format!("{}/{}", self.role_prefix, role)
     }
 
-    #[async_backtrace::framed]
-    async fn grant_database_ownership(
-        &self,
-        from: &String,
-        to: &String,
-        _catalog: &str,
-        db_name: &String,
-    ) -> common_exception::Result<()> {
-        let mut retry = 0;
-        let tenant = self.tenant.clone();
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-
-            let db_info = self
-                .kv_api
-                .get_database(GetDatabaseReq {
-                    inner: DatabaseNameIdent {
-                        tenant: tenant.clone(),
-                        db_name: db_name.clone(),
-                    },
-                })
-                .await?;
-            let mut db_meta = db_info.meta.clone();
-
-            let db_meta_seq = db_info.ident.seq;
-            let db_id_key = DatabaseId {
-                db_id: db_info.ident.db_id,
-            };
-            db_meta.owner = Some(Ownership {
-                owner_role_name: to.clone(),
-                updated_on: Utc::now(),
-            });
-            let condition = vec![txn_cond_seq(&db_id_key, Eq, db_meta_seq)];
-
-            let if_then = vec![txn_op_put(
-                &db_id_key,
-                serialize_struct(&db_meta).map_err_to_code(
-                    ErrorCode::IllegalGrant,
-                    || "failed to serialize database meta",
-                )?,
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-            let reply = self.kv_api.clone().transaction(txn_req).await?;
-            let succ = reply.success;
-            if succ {
-                return Ok(());
+    fn make_object_owner_key(&self, object: &GrantObjectByID) -> String {
+        match object {
+            GrantObjectByID::Database {
+                catalog_name: _,
+                db_id: database_id,
+            } => {
+                format!(
+                    "{}/database-by-id/{}",
+                    self.object_owner_prefix, database_id
+                )
+            }
+            GrantObjectByID::Table {
+                catalog_name: _,
+                db_id: _,
+                table_id,
+            } => {
+                format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
             }
         }
-        Err(ErrorCode::TxnRetryMaxTimes(format!(
-            "failed to update database ownership {} from: {:?} to: {:?}",
-            db_name, from, to
-        )))
-    }
-    #[async_backtrace::framed]
-    async fn grant_table_ownership(
-        &self,
-        from: &String,
-        to: &String,
-        _catalog: &str,
-        db_name: &String,
-        table_name: &String,
-    ) -> common_exception::Result<()> {
-        let mut retry = 0;
-        let tenant = self.tenant.clone();
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-            let table_info = self
-                .kv_api
-                .get_table(GetTableReq {
-                    inner: TableNameIdent {
-                        tenant: tenant.clone(),
-                        db_name: db_name.clone(),
-                        table_name: table_name.clone(),
-                    },
-                })
-                .await?;
-            let mut table_meta = table_info.meta.clone();
-
-            let tb_meta_seq = table_info.ident.seq;
-            let tb_id_key = TableId {
-                table_id: table_info.ident.table_id,
-            };
-
-            table_meta.owner = Some(Ownership {
-                owner_role_name: to.clone(),
-                updated_on: Utc::now(),
-            });
-            let condition = vec![txn_cond_seq(&tb_id_key, Eq, tb_meta_seq)];
-
-            let if_then = vec![txn_op_put(
-                &tb_id_key,
-                serialize_struct(&table_meta).map_err_to_code(
-                    ErrorCode::IllegalGrant,
-                    || "failed to serialize table meta",
-                )?,
-            )];
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-            let reply = self.kv_api.clone().transaction(txn_req).await?;
-            let succ = reply.success;
-            if succ {
-                return Ok(());
-            }
-        }
-        Err(ErrorCode::TxnRetryMaxTimes(format!(
-            "failed to update table ownership {}.{} from: {:?} to: {:?}",
-            db_name, table_name, from, to
-        )))
     }
 }
 
 #[async_trait::async_trait]
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_role(&self, role_info: RoleInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = self.make_role_key(role_info.identity());
@@ -231,14 +122,15 @@ impl RoleApi for RoleMgr {
             None,
         ));
 
-        let res = upsert_kv.await?.added_or_else(|v| {
+        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
             ErrorCode::UserAlreadyExists(format!("Role already exists, seq [{}]", v.seq))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.make_role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
@@ -252,6 +144,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let role_prefix = self.role_prefix.clone();
         let kv_api = self.kv_api.clone();
@@ -274,6 +167,7 @@ impl RoleApi for RoleMgr {
     ///
     /// Seq number ensures there is no other write happens between get and set.
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn update_role_with<F>(
         &self,
         role: &String,
@@ -298,31 +192,63 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn grant_ownership(
         &self,
-        from: &String,
-        to: &String,
-        object: &GrantObject,
+        object: &GrantObjectByID,
+        role: &str,
     ) -> common_exception::Result<()> {
-        match object {
-            GrantObject::Database(catalog, db) => {
-                self.grant_database_ownership(from, to, catalog, db).await?;
-            }
-            GrantObject::Table(catalog, db, table) => {
-                self.grant_table_ownership(from, to, catalog, db, table)
-                    .await?;
-            }
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "grant object {:?} not implemented",
-                    object
-                )));
-            }
-        }
+        let match_seq = MatchSeq::GE(0);
+        let key = self.make_object_owner_key(object);
+
+        let value = serde_json::to_vec(&OwnershipInfo {
+            object: object.clone(),
+            role: role.to_string(),
+        })?;
+
+        let kv_api = self.kv_api.clone();
+        kv_api
+            .upsert_kv(UpsertKVReq::new(
+                &key,
+                match_seq,
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
+
         Ok(())
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_ownership(
+        &self,
+        object: &GrantObjectByID,
+    ) -> common_exception::Result<Option<OwnershipInfo>> {
+        let key = self.make_object_owner_key(object);
+        let res = self.kv_api.get_kv(&key).await?;
+        let res_value = match res {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+        let ownership: SeqV<OwnershipInfo> = res_value.into_seqv()?;
+        Ok(Some(ownership.data))
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn drop_ownership(&self, object: &GrantObjectByID) -> common_exception::Result<()> {
+        let seq = MatchSeq::Exact(0);
+        let key = self.make_object_owner_key(object);
+        let kv_api = self.kv_api.clone();
+        kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
+            .await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();

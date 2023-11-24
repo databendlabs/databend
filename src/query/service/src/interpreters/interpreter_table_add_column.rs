@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_license::license::Feature::ComputedColumn;
@@ -25,6 +26,7 @@ use common_sql::field_default_value;
 use common_sql::plans::AddColumnOption;
 use common_sql::plans::AddTableColumnPlan;
 use common_storages_share::save_share_table_info;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
@@ -65,11 +67,15 @@ impl Interpreter for AddTableColumnInterpreter {
             .ok();
 
         if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
+
             let table_info = table.get_table_info();
-            if table_info.engine() == VIEW_ENGINE {
+            let engine = table_info.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is VIEW that doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
@@ -84,11 +90,9 @@ impl Interpreter for AddTableColumnInterpreter {
             let field = self.plan.field.clone();
             if field.computed_expr().is_some() {
                 let license_manager = get_license_manager();
-                license_manager.manager.check_enterprise_enabled(
-                    &self.ctx.get_settings(),
-                    self.plan.tenant.clone(),
-                    ComputedColumn,
-                )?;
+                license_manager
+                    .manager
+                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
             }
 
             if field.default_expr().is_some() {
@@ -111,6 +115,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 new_table_meta,
                 copied_files: None,
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let res = catalog.update_table_meta(table_info, req).await?;

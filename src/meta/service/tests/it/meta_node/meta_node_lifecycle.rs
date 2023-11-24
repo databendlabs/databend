@@ -752,7 +752,7 @@ fn join_req(
     endpoint: Endpoint,
     grpc_api_advertise_address: Option<String>,
     forward: u64,
-) -> ForwardRequest {
+) -> ForwardRequest<ForwardRequestBody> {
     ForwardRequest {
         forward_to_leader: forward,
         body: ForwardRequestBody::Join(JoinRequest::new(

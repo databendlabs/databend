@@ -63,14 +63,6 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         params: Vec<usize>,
         args: Vec<RawExpr<Index>>,
     },
-    UDFServerCall {
-        span: Span,
-        func_name: String,
-        server_addr: String,
-        arg_types: Vec<DataType>,
-        return_type: DataType,
-        args: Vec<RawExpr<Index>>,
-    },
 }
 
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
@@ -104,18 +96,11 @@ pub enum Expr<Index: ColumnIndex = usize> {
         #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         id: FunctionID,
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr<Index>>,
         return_type: DataType,
-    },
-    UDFServerCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-        span: Span,
-        func_name: String,
-        server_addr: String,
-        return_type: DataType,
-        args: Vec<Expr<Index>>,
     },
 }
 
@@ -156,14 +141,6 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         args: Vec<RemoteExpr<Index>>,
         return_type: DataType,
     },
-    UDFServerCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-        span: Span,
-        func_name: String,
-        server_addr: String,
-        return_type: DataType,
-        args: Vec<RemoteExpr<Index>>,
-    },
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
@@ -176,7 +153,6 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 RawExpr::Cast { expr, .. } => walk(expr, buf),
                 RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 RawExpr::Constant { .. } => (),
-                RawExpr::UDFServerCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
             }
         }
 
@@ -227,21 +203,6 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 params: params.clone(),
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
             },
-            RawExpr::UDFServerCall {
-                span,
-                func_name,
-                server_addr,
-                arg_types,
-                return_type,
-                args,
-            } => RawExpr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                arg_types: arg_types.clone(),
-                return_type: return_type.clone(),
-                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
-            },
         }
     }
 }
@@ -253,7 +214,6 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::ColumnRef { span, .. } => *span,
             Expr::Cast { span, .. } => *span,
             Expr::FunctionCall { span, .. } => *span,
-            Expr::UDFServerCall { span, .. } => *span,
         }
     }
 
@@ -263,7 +223,6 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::ColumnRef { data_type, .. } => data_type,
             Expr::Cast { dest_type, .. } => dest_type,
             Expr::FunctionCall { return_type, .. } => return_type,
-            Expr::UDFServerCall { return_type, .. } => return_type,
         }
     }
 
@@ -276,7 +235,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                 Expr::Cast { expr, .. } => walk(expr, buf),
                 Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 Expr::Constant { .. } => (),
-                Expr::UDFServerCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
             }
         }
 
@@ -336,19 +294,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
                 return_type: return_type.clone(),
             },
-            Expr::UDFServerCall {
-                span,
-                func_name,
-                server_addr,
-                return_type,
-                args,
-            } => Expr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                return_type: return_type.clone(),
-                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
-            },
         }
     }
 
@@ -399,19 +344,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(Expr::as_remote_expr).collect(),
                 return_type: return_type.clone(),
             },
-            Expr::UDFServerCall {
-                span,
-                func_name,
-                server_addr,
-                return_type,
-                args,
-            } => RemoteExpr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                return_type: return_type.clone(),
-                args: args.iter().map(Expr::as_remote_expr).collect(),
-            },
         }
     }
 
@@ -427,7 +359,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                     .non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic(registry))
             }
-            Expr::UDFServerCall { .. } => false,
         }
     }
 }
@@ -483,19 +414,6 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                     return_type: return_type.clone(),
                 }
             }
-            RemoteExpr::UDFServerCall {
-                span,
-                func_name,
-                server_addr,
-                return_type,
-                args,
-            } => Expr::UDFServerCall {
-                span: *span,
-                func_name: func_name.clone(),
-                server_addr: server_addr.clone(),
-                return_type: return_type.clone(),
-                args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
-            },
         }
     }
 }

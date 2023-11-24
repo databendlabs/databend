@@ -28,6 +28,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
@@ -75,7 +76,6 @@ use crate::types::*;
 use crate::utils::arrow::append_bitmap;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::utils::arrow::buffer_into_mut;
-use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::utils::FromData;
@@ -370,7 +370,12 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Map(col)
             }
-            DataType::Bitmap => Scalar::Bitmap(vec![]),
+            DataType::Bitmap => {
+                let rb = RoaringTreemap::new();
+                let mut buf = vec![];
+                rb.serialize_into(&mut buf).unwrap();
+                Scalar::Bitmap(buf)
+            }
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
 
@@ -515,9 +520,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Null => DataType::Null,
             ScalarRef::EmptyArray => DataType::EmptyArray,
             ScalarRef::EmptyMap => DataType::EmptyMap,
-            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
-                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
-            }),
+            ScalarRef::Number(s) => DataType::Number(s.data_type()),
             ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
                 DecimalScalar::DECIMAL_TYPE(_, size) =>
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
@@ -1081,6 +1084,7 @@ impl Column {
                     .unwrap(),
                 )
             }
+
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
@@ -1217,6 +1221,36 @@ impl Column {
         }
     }
 
+    pub fn check_valid(&self) -> Result<()> {
+        match self {
+            Column::String(x) => x.check_valid(),
+            Column::Variant(x) => x.check_valid(),
+            Column::Bitmap(x) => x.check_valid(),
+            Column::Map(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
+                }
+                Ok(())
+            }
+            Column::Array(x) => x.check_valid(),
+            Column::Nullable(x) => {
+                if x.column.len() != x.validity.len() {
+                    return Err(ErrorCode::Internal(
+                        "column and validity length mismatch".to_string(),
+                    ));
+                }
+                x.column.check_valid()
+            }
+            Column::Tuple(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub fn from_arrow(
         arrow_col: &dyn common_arrow::arrow::array::Array,
         data_type: &DataType,
@@ -1226,8 +1260,16 @@ impl Column {
         let is_nullable = data_type.is_nullable();
         let data_type = data_type.remove_nullable();
         let column = match arrow_col.data_type() {
-            ArrowDataType::Null => Column::Null {
-                len: arrow_col.len(),
+            ArrowDataType::Null => match data_type {
+                DataType::EmptyArray => Column::EmptyArray {
+                    len: arrow_col.len(),
+                },
+                DataType::EmptyMap => Column::EmptyMap {
+                    len: arrow_col.len(),
+                },
+                _ => Column::Null {
+                    len: arrow_col.len(),
+                },
             },
             ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_ARRAY => {
                 Column::EmptyArray {
@@ -1339,11 +1381,15 @@ impl Column {
                 let offsets = arrow_col.offsets().clone().into_inner();
 
                 let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                if data_type.is_variant() {
-                    // Variant column from udf server is converted to LargeBinary, we restore it back here.
-                    Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                } else {
-                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                // LargeBinary may be Extension data type variant and bitmap
+                match data_type {
+                    DataType::Variant => {
+                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    DataType::Bitmap => {
+                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    _ => Column::String(StringColumn::new(arrow_col.values().clone(), offsets)),
                 }
             }
             // TODO: deprecate it and use LargeBinary instead
@@ -1358,11 +1404,21 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
+                // Binary may be Extension data type variant and bitmap
+                match data_type {
+                    DataType::Variant => Column::Variant(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    )),
+                    DataType::Bitmap => Column::Bitmap(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    )),
+                    _ => Column::String(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    )),
+                }
             }
 
             ArrowDataType::FixedSizeBinary(size) => {
@@ -1628,11 +1684,10 @@ impl Column {
         };
 
         if is_nullable {
-            let validity = arrow_col.validity().cloned().unwrap_or_else(|| {
-                let mut validity = MutableBitmap::with_capacity(arrow_col.len());
-                validity.extend_constant(arrow_col.len(), true);
-                validity.into()
-            });
+            let validity = arrow_col
+                .validity()
+                .cloned()
+                .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
             Column::Nullable(Box::new(NullableColumn { column, validity }))
         } else {
             column
@@ -1650,22 +1705,30 @@ impl Column {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
             DataType::EmptyMap => Column::EmptyMap { len },
-            DataType::Boolean => {
-                BooleanType::from_data((0..len).map(|_| SmallRng::from_entropy().gen_bool(0.5)))
-            }
-            DataType::String => StringType::from_data((0..len).map(|_| {
-                let rng = SmallRng::from_entropy();
-                rng.sample_iter(&Alphanumeric)
-                    // randomly generate 5 characters.
-                    .take(5)
-                    .map(u8::from)
-                    .collect::<Vec<_>>()
-            })),
+            DataType::Boolean => BooleanType::from_data(
+                (0..len)
+                    .map(|_| SmallRng::from_entropy().gen_bool(0.5))
+                    .collect_vec(),
+            ),
+            DataType::String => StringType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let rng = SmallRng::from_entropy();
+                        rng.sample_iter(&Alphanumeric)
+                            // randomly generate 5 characters.
+                            .take(5)
+                            .map(u8::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect_vec(),
+            ),
             DataType::Number(num_ty) => {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
                         NumberType::<NUM_TYPE>::from_data(
-                            (0..len).map(|_| SmallRng::from_entropy().gen()),
+                            (0..len)
+                                .map(|_| SmallRng::from_entropy().gen::<NUM_TYPE>())
+                                .collect_vec(),
                         )
                     }
                 })
@@ -1728,14 +1791,18 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
-            DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
-                let data: [u64; 4] = SmallRng::from_entropy().gen();
-                let rb = RoaringTreemap::from_iter(data.iter());
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed serialize roaring treemap");
-                buf
-            })),
+            DataType::Bitmap => BitmapType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let data: [u64; 4] = SmallRng::from_entropy().gen();
+                        let rb = RoaringTreemap::from_iter(data.iter());
+                        let mut buf = vec![];
+                        rb.serialize_into(&mut buf)
+                            .expect("failed serialize roaring treemap");
+                        buf
+                    })
+                    .collect_vec(),
+            ),
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()
@@ -1776,11 +1843,7 @@ impl Column {
                 }))
             }
             _ => {
-                let validity = validity.unwrap_or_else(|| {
-                    let mut validity = MutableBitmap::with_capacity(self.len());
-                    validity.extend_constant(self.len(), true);
-                    validity.into()
-                });
+                let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
                 Column::Nullable(Box::new(NullableColumn {
                     column: self.clone(),
                     validity,
@@ -1937,7 +2000,7 @@ impl ColumnBuilder {
                 }
                 return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                     builder,
-                    validity: constant_bitmap(true, n),
+                    validity: Bitmap::new_constant(true, n).make_mut(),
                 }));
             }
         }
@@ -1952,7 +2015,7 @@ impl ColumnBuilder {
                     }
                     ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                         builder,
-                        validity: constant_bitmap(false, n),
+                        validity: Bitmap::new_constant(false, n).make_mut(),
                     }))
                 }
                 _ => unreachable!(),
@@ -1963,7 +2026,7 @@ impl ColumnBuilder {
             ScalarRef::Decimal(dec) => {
                 ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
             }
-            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
+            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
@@ -1971,14 +2034,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(b) => {
-                let rb =
-                    RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed to serialize bitmap");
-                ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
-            }
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
                     DataType::Tuple(fields_ty) => fields_ty,
@@ -2345,6 +2401,7 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];

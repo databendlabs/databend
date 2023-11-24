@@ -17,6 +17,7 @@ use std::io::Write;
 use std::time::Duration;
 
 use common_meta_client::MetaGrpcClient;
+use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_types::protobuf::Empty;
 use tokio_stream::StreamExt;
 
@@ -31,7 +32,7 @@ pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
         None,
     )?;
 
-    let mut grpc_client = client.make_client().await?;
+    let (mut grpc_client, _server_version) = client.make_client().await?;
 
     let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
 
@@ -49,6 +50,17 @@ pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
         let chunk = chunk_res?;
 
         for line in &chunk.data {
+            // Check if the received line is a valid json string.
+            let de_res: Result<(String, RaftStoreEntry), _> = serde_json::from_str(line);
+            match de_res {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Invalid json string: {:?}", line);
+                    eprintln!("              Error: {}", e);
+                    return Err(e.into());
+                }
+            }
+
             if file.as_ref().is_none() {
                 println!("{}", line);
             } else {

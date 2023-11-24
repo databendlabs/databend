@@ -78,6 +78,7 @@ use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
 use crate::binder::location::parse_uri_location;
@@ -117,6 +118,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
@@ -310,7 +312,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowDropTablesStmt,
     ) -> Result<Plan> {
-        let ShowDropTablesStmt { database } = stmt;
+        let ShowDropTablesStmt { database, limit } = stmt;
 
         let database = self.check_database_exist(&None, database).await?;
 
@@ -337,9 +339,20 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-        select_builder.with_filter("dropped_on != 'NULL'".to_string());
+        select_builder.with_filter("dropped_on IS NOT NULL".to_string());
 
-        let query = select_builder.build();
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+
         debug!("show drop tables rewrite to: {:?}", query);
         self.bind_rewrite_to_query(
             bind_context,
@@ -350,7 +363,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn check_database_exist(
+    pub async fn check_database_exist(
         &mut self,
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
@@ -415,7 +428,7 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri).await?;
+                let (sp, _) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -576,6 +589,7 @@ impl Binder {
             schema: schema.clone(),
             engine,
             storage_params,
+            read_only_attach: false,
             part_prefix,
             options,
             field_comments,
@@ -625,9 +639,15 @@ impl Binder {
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
 
+        // keep a copy of table data uri_location, will be used in "show create table"
+        options.insert(
+            OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
+            stmt.uri_location.to_string(),
+        );
+
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri).await?;
+        let (sp, _) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
@@ -645,14 +665,15 @@ impl Binder {
             catalog,
             database,
             table,
-            options,
+            schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            storage_params: Some(sp),
+            read_only_attach: stmt.read_only,
+            part_prefix,
+            options,
+            field_comments: vec![],
             cluster_key: None,
             as_select: None,
-            schema: Arc::new(TableSchema::default()),
-            field_comments: vec![],
-            storage_params: Some(sp),
-            part_prefix,
         })))
     }
 
@@ -1022,6 +1043,7 @@ impl Binder {
             table,
             action,
             limit: limit.map(|v| v as usize),
+            need_lock: true,
         })))
     }
 
@@ -1099,9 +1121,10 @@ impl Binder {
                 _ => None,
             };
 
-            VacuumTableOption {
+            VacuumDropTableOption {
                 retain_hours,
                 dry_run: option.dry_run,
+                limit: option.limit,
             }
         };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
@@ -1395,7 +1418,7 @@ impl Binder {
             )
             .build();
 
-            bind_context.columns.push(column);
+            bind_context.add_column_binding(column);
         }
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
@@ -1412,7 +1435,7 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            if cluster_key.used_columns().len() != 1 || !cluster_key.valid_for_clustering() {
+            if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",
                     cluster_by

@@ -28,6 +28,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
+use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -44,7 +45,7 @@ pub async fn create_query_context_with_session(
     guard: Option<TestGuard>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
     let guard = match guard {
-        None => TestGlobalServices::setup(ConfigBuilder::create().build()).await?,
+        None => TestGlobalServices::setup(&ConfigBuilder::create().build()).await?,
         Some(g) => g,
     };
     let dummy_session = SessionManager::instance().create_session(typ).await?;
@@ -59,6 +60,11 @@ pub async fn create_query_context_with_session(
         UserPrivilegeSet::available_privileges_on_global(),
     );
 
+    user_info.grants.grant_privileges(
+        &GrantObject::Global,
+        UserPrivilegeSet::available_privileges_on_stage(),
+    );
+
     dummy_session.set_authed_user(user_info, None).await?;
 
     let dummy_query_context = dummy_session.create_query_context().await?;
@@ -71,9 +77,17 @@ pub async fn create_query_context_with_session(
 
 pub async fn create_query_context_with_config(
     config: InnerConfig,
-    mut current_user: Option<UserInfo>,
+    current_user: Option<UserInfo>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
-    let guard = TestGlobalServices::setup(config).await?;
+    let (g, c, _s) = create_query_context_with_config_new(config, current_user).await?;
+    Ok((g, c))
+}
+
+pub async fn create_query_context_with_config_new(
+    config: InnerConfig,
+    mut current_user: Option<UserInfo>,
+) -> Result<(TestGuard, Arc<QueryContext>, Arc<Session>)> {
+    let guard = TestGlobalServices::setup(&config).await?;
 
     let dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)
@@ -90,6 +104,11 @@ pub async fn create_query_context_with_config(
             UserPrivilegeSet::available_privileges_on_global(),
         );
 
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_stage(),
+        );
+
         current_user = Some(user_info);
     }
 
@@ -99,7 +118,7 @@ pub async fn create_query_context_with_config(
     let dummy_query_context = dummy_session.create_query_context().await?;
 
     dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok((guard, dummy_query_context))
+    Ok((guard, dummy_query_context, dummy_session))
 }
 
 pub struct ClusterDescriptor {
@@ -148,7 +167,7 @@ pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
     let config = ConfigBuilder::create().build();
-    let guard = TestGlobalServices::setup(config.clone()).await?;
+    let guard = TestGlobalServices::setup(&config).await?;
     let dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;

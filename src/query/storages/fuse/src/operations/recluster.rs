@@ -15,34 +15,19 @@
 use std::sync::Arc;
 
 use common_base::runtime::TrySpawn;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PruningStatistics;
+use common_base::GLOBAL_TASK;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_expression::SortColumnDescription;
 use common_expression::TableSchemaRef;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
-use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::BloomIndexColumns;
-use log::info;
 use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::operations::common::CommitSink;
-use crate::operations::common::MutationGenerator;
-use crate::operations::common::TransformSerializeBlock;
-use crate::operations::mutation::ReclusterAggregator;
 use crate::operations::ReclusterMutator;
-use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
@@ -68,22 +53,21 @@ impl FuseTable {
     // │         ┌──────────────┐
     // │    ┌───►│SerializeBlock├───┐
     // │    │    └──────────────┘   │
-    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────────┐     ┌──────────┐
-    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│TableMutationAggr├────►│CommitSink│
-    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────────┘     └──────────┘
+    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────┐     ┌──────────┐
+    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│ReclusterAggr├────►│CommitSink│
+    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────┘     └──────────┘
     //      │    ┌──────────────┐   │
     //      └───►│SerializeBlock├───┘
     //           └──────────────┘
     #[async_backtrace::framed]
-    pub(crate) async fn do_recluster(
+    pub async fn build_recluster_mutator(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<u64> {
+    ) -> Result<Option<ReclusterMutator>> {
         if self.cluster_key_meta.is_none() {
-            return Ok(0);
+            return Ok(None);
         }
 
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -91,9 +75,17 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no recluster.
-            return Ok(0);
+            return Ok(None);
         };
 
+        let settings = ctx.get_settings();
+        let mut max_tasks = 1;
+        let cluster = ctx.get_cluster();
+        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
+            max_tasks = cluster.nodes.len();
+        }
+
+        let schema = self.schema_with_stream();
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let block_thresholds = self.get_block_thresholds();
         let block_per_seg =
@@ -108,23 +100,25 @@ impl FuseTable {
             .min(64.0);
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
+            snapshot.clone(),
+            schema,
             threshold,
             block_thresholds,
             default_cluster_key_id,
+            max_tasks,
         )?;
 
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = settings.get_max_threads()? as usize;
         let limit = limit.unwrap_or(1000);
 
-        let mut need_recluster = false;
-        for chunk in segment_locations.chunks(limit) {
+        'F: for chunk in segment_locations.chunks(limit) {
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
-                self.schema(),
+                self.schema_with_stream(),
                 self.get_operator(),
                 &push_downs,
                 chunk.to_vec(),
@@ -153,8 +147,7 @@ impl FuseTable {
                     }
 
                     if mutator.target_select(vec![compact_segment]).await? {
-                        need_recluster = true;
-                        break;
+                        break 'F;
                     }
                 }
             } else {
@@ -162,160 +155,13 @@ impl FuseTable {
                 selected_segs.into_iter().for_each(|i| {
                     selected_segments.push(compact_segments[i].clone());
                 });
-                need_recluster = mutator.target_select(selected_segments).await?;
-            }
-
-            if need_recluster {
-                break;
+                if mutator.target_select(selected_segments).await? {
+                    break;
+                }
             }
         }
 
-        let block_metas: Vec<_> = mutator
-            .take_blocks()
-            .iter()
-            .map(|meta| (None, meta.clone()))
-            .collect();
-        let block_count = block_metas.len();
-        if block_count < 2 {
-            return Ok(0);
-        }
-
-        // Status.
-        {
-            let status = format!(
-                "recluster: select block files: {}, total bytes: {}, total rows: {}",
-                block_count, mutator.total_bytes, mutator.total_rows,
-            );
-            ctx.set_status_info(&status);
-            info!("{}", status);
-        }
-
-        let (statistics, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
-            self.table_info.schema(),
-            None,
-            &block_metas,
-            block_count,
-            PruningStatistics::default(),
-        )?;
-        let table_info = self.get_table_info();
-        let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
-        let description = statistics.get_description(&table_info.desc);
-        let plan = DataSourcePlan {
-            catalog_info,
-            source_info: DataSourceInfo::TableSource(table_info.clone()),
-            output_schema: table_info.schema(),
-            parts,
-            statistics,
-            description,
-            tbl_args: self.table_args(),
-            push_downs: None,
-            query_internal_columns: false,
-            data_mask_policy: None,
-        };
-
-        ctx.set_partitions(plan.parts.clone())?;
-
-        // ReadDataKind to avoid OOM.
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
-
-        let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds, None)?;
-        let operators = cluster_stats_gen.operators.clone();
-        if !operators.is_empty() {
-            let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-            pipeline.add_transform(move |input, output| {
-                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                    input,
-                    output,
-                    func_ctx2.clone(),
-                    operators.clone(),
-                )))
-            })?;
-        }
-
-        // merge sort
-        let block_num = mutator
-            .total_bytes
-            .div_ceil(block_thresholds.max_bytes_per_block);
-        let final_block_size = std::cmp::min(
-            // estimate block_size based on max_bytes_per_block.
-            mutator.total_rows / block_num,
-            block_thresholds.max_rows_per_block,
-        );
-        let partial_block_size = if pipeline.output_len() > 1 {
-            std::cmp::min(
-                final_block_size,
-                ctx.get_settings().get_max_block_size()? as usize,
-            )
-        } else {
-            final_block_size
-        };
-        // construct output fields
-        let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
-        let schema = DataSchemaRefExt::create(output_fields);
-        let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
-            .cluster_key_index
-            .iter()
-            .map(|offset| SortColumnDescription {
-                offset: *offset,
-                asc: true,
-                nulls_first: false,
-                is_nullable: false, // This information is not needed here.
-            })
-            .collect();
-
-        build_merge_sort_pipeline(
-            pipeline,
-            schema,
-            sort_descs,
-            None,
-            partial_block_size,
-            final_block_size,
-            None,
-        )?;
-
-        let output_block_num = mutator.total_rows.div_ceil(final_block_size);
-        let max_threads = std::cmp::min(max_threads, output_block_num);
-        pipeline.try_resize(max_threads)?;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = TransformSerializeBlock::try_create(
-                ctx.clone(),
-                transform_input_port,
-                transform_output_port,
-                self,
-                cluster_stats_gen.clone(),
-            )?;
-            proc.into_processor()
-        })?;
-
-        pipeline.try_resize(1)?;
-        pipeline.add_transform(|input, output| {
-            let aggregator = ReclusterAggregator::new(
-                &mutator,
-                self.get_operator(),
-                self.meta_location_generator().clone(),
-                block_per_seg,
-            );
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
-
-        let snapshot_gen = MutationGenerator::new(snapshot);
-        pipeline.add_sink(|input| {
-            CommitSink::try_create(
-                self,
-                ctx.clone(),
-                None,
-                snapshot_gen.clone(),
-                input,
-                None,
-                true,
-                None,
-            )
-        })?;
-        Ok(block_count as u64)
+        Ok(Some(mutator))
     }
 
     pub async fn segment_pruning(
@@ -360,7 +206,7 @@ impl FuseTable {
             remain -= gap_size;
 
             let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(pruning_ctx.pruning_runtime.spawn({
+            works.push(pruning_ctx.pruning_runtime.spawn(GLOBAL_TASK, {
                 let segment_pruner = segment_pruner.clone();
 
                 async move {

@@ -21,9 +21,9 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
 common-storages-parquet = { path = "../parquet" }
 storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
-arrow-schema = "46.0.0"
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
@@ -32,7 +32,7 @@ icelake = "0.0.10"
 match-template = "0.0.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet = "46.0.0"
+parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = "0.2"

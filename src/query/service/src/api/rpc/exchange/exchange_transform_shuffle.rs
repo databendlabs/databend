@@ -24,14 +24,14 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::EventCause;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::EventCause;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
@@ -166,6 +166,11 @@ impl Processor for ExchangeShuffleTransform {
                     self.finished_outputs += 1;
                     output.status = PortStatus::Finished;
                 }
+
+                self.buffer.clear(*output_index);
+
+                self.wakeup_inputs();
+                self.wakeup_outputs();
             } else if output.port.can_push() {
                 if !self.buffer.is_empty(*output_index) {
                     let data_block = self.buffer.pop(*output_index).unwrap();
@@ -204,6 +209,9 @@ impl Processor for ExchangeShuffleTransform {
                     self.finished_inputs += 1;
                     input.status = PortStatus::Finished;
                 }
+
+                self.wakeup_outputs();
+                self.wakeup_inputs();
             } else if input.port.has_data() {
                 if !self.buffer.is_full() {
                     self.take_input_data_into_buffer(*input_index);
@@ -256,9 +264,12 @@ impl ExchangeShuffleTransform {
             let output = &mut self.outputs[*waiting_output];
 
             if output.port.is_finished() {
-                self.finished_outputs += 1;
+                if output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                }
+
                 self.buffer.clear(*waiting_output);
-                output.status = PortStatus::Finished;
                 continue;
             }
 

@@ -47,45 +47,51 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let settings = self.ctx.get_shard_settings();
+
+        let settings = self.ctx.get_shared_settings();
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
-                setting => {
+                setting_key => {
+                    // TODO(liyz): why drop the global setting without checking the variable is global or not?
                     self.ctx
-                        .get_shard_settings()
-                        .try_drop_global_setting(setting)
+                        .get_shared_settings()
+                        .try_drop_global_setting(setting_key)
                         .await?;
 
                     let default_val = {
-                        if setting == "max_memory_usage" {
+                        if setting_key == "max_memory_usage" {
                             let conf = GlobalConfig::instance();
                             if conf.query.max_server_memory_usage == 0 {
-                                settings.check_and_get_default_value(setting)?.to_string()
+                                settings
+                                    .check_and_get_default_value(setting_key)?
+                                    .to_string()
                             } else {
                                 conf.query.max_server_memory_usage.to_string()
                             }
-                        } else if setting == "max_threads" {
+                        } else if setting_key == "max_threads" {
                             let conf = GlobalConfig::instance();
                             if conf.query.num_cpus == 0 {
-                                settings.check_and_get_default_value(setting)?.to_string()
+                                settings
+                                    .check_and_get_default_value(setting_key)?
+                                    .to_string()
                             } else {
                                 conf.query.num_cpus.to_string()
                             }
                         } else {
-                            settings.check_and_get_default_value(setting)?.to_string()
+                            settings
+                                .check_and_get_default_value(setting_key)?
+                                .to_string()
                         }
                     };
                     (true, default_val)
                 }
             };
             if ok {
-                // reset the current ctx settings to default val
-                self.ctx
-                    .get_shard_settings()
-                    .set_setting(var.clone(), value.clone())?;
-                // set affect
+                // reset the current ctx settings, just remove it.
+                self.ctx.get_shared_settings().unset_setting(&var);
+                // set effect, this can be considered to be removed in the future.
                 keys.push(var);
                 values.push(value);
                 is_globals.push(false);

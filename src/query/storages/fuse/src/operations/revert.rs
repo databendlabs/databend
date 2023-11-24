@@ -53,6 +53,7 @@ impl FuseTable {
             new_table_meta: table_meta_to_be_committed,
             copied_files: None,
             deduplicated_label: None,
+            update_stream_meta: vec![],
         };
 
         // 4. let's roll

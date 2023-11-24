@@ -147,6 +147,11 @@ pub fn try_push_down_filter_join(
         }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
+            JoinPredicate::ALL(_) => {
+                need_push = true;
+                left_push_down.push(predicate.clone());
+                right_push_down.push(predicate.clone());
+            }
             JoinPredicate::Left(_) => {
                 if matches!(join.join_type, JoinType::Right) {
                     original_predicates.push(predicate);

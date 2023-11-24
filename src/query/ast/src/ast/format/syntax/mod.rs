@@ -30,11 +30,7 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
         // Format and beautify large SQL statements to make them easy to read.
         Statement::Query(query) => pretty_query(*query),
         Statement::Insert(insert_stmt) => pretty_insert(insert_stmt),
-        Statement::Delete {
-            table_reference,
-            selection,
-            ..
-        } => pretty_delete(table_reference, selection),
+        Statement::Delete(delete_stmt) => pretty_delete(delete_stmt),
         Statement::CopyIntoTable(copy_stmt) => pretty_copy_into_table(copy_stmt),
         Statement::CopyIntoLocation(copy_stmt) => pretty_copy_into_location(copy_stmt),
         Statement::Update(update_stmt) => pretty_update(update_stmt),
@@ -42,6 +38,7 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
         Statement::AlterTable(alter_table_stmt) => pretty_alter_table(alter_table_stmt),
         Statement::CreateView(create_view_stmt) => pretty_create_view(create_view_stmt),
         Statement::AlterView(alter_view_stmt) => pretty_alter_view(alter_view_stmt),
+        Statement::CreateStream(create_stream_stmt) => pretty_create_stream(create_stream_stmt),
         // Other SQL statements are relatively short and don't need extra format.
         _ => RcDoc::text(stmt.to_string()),
     };

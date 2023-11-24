@@ -40,10 +40,10 @@ use common_sql::planner::binder::parse_uri_location;
 
 #[tokio::test]
 async fn test_parse_uri_location() -> Result<()> {
-    let thread_name = match std::thread::current().name() {
-        None => panic!("thread name is none"),
-        Some(thread_name) => thread_name.to_string(),
-    };
+    let thread_name = std::thread::current()
+        .name()
+        .map(ToString::to_string)
+        .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
     GlobalConfig::init(InnerConfig::default())?;
@@ -90,9 +90,11 @@ async fn test_parse_uri_location() -> Result<()> {
                     endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                     presign_endpoint_url: "".to_string(),
                     root: "/highest/".to_string(),
+                    server_side_encryption: "".to_string(),
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),
                     access_key_secret: "p=ear1".to_string(),
+                    server_side_encryption_key_id: "".to_string(),
                 }),
                 "/".to_string(),
             ),
@@ -162,10 +164,11 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![
+                [
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
                     ("session_token", "session_token"),
+                    ("region", "us-east-2"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -197,10 +200,11 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![
+                [
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("session_token", "security_token"),
+                    ("region", "us-east-2"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -232,10 +236,11 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![
+                [
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("aws_token", "security_token"),
+                    ("region", "us-east-2"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -267,7 +272,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![("role_arn", "aws::iam::xxxx")]
+                [("role_arn", "aws::iam::xxxx"), ("region", "us-east-2")]
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
                     .collect::<BTreeMap<String, String>>(),
@@ -416,7 +421,7 @@ async fn test_parse_uri_location() -> Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input).await?;
+        let actual = parse_uri_location(&mut input, None).await?;
         assert_eq!(expected, actual, "{}", name);
     }
 

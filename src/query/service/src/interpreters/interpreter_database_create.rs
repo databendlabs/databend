@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::RoleApi;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::Ownership;
 use common_meta_app::share::ShareGrantObjectPrivilege;
@@ -54,7 +56,7 @@ impl CreateDatabaseInterpreter {
                 Some(share_name.clone()),
             )
             .await?;
-        match share_specs.get(0) {
+        match share_specs.first() {
             Some((_, share_spec)) => {
                 if !share_spec.tenants.contains(tenant) {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
@@ -122,7 +124,22 @@ impl Interpreter for CreateDatabaseInterpreter {
         if let Some(role) = self.ctx.get_current_role() {
             create_db_req.meta.owner = Some(Ownership::new(role.name))
         }
-        catalog.create_database(create_db_req).await?;
+        let reply = catalog.create_database(create_db_req).await?;
+
+        // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
+        // the future.
+        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+        if let Some(current_role) = self.ctx.get_current_role() {
+            role_api
+                .grant_ownership(
+                    &GrantObjectByID::Database {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id: reply.db_id,
+                    },
+                    &current_role.name,
+                )
+                .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

@@ -17,6 +17,6 @@ common-config = { path = "../../../config" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 
-storages-common-table-meta = { path = "../table-meta" }
+storages-common-table-meta = { path = "../table_meta" }
 
 [build-dependencies]

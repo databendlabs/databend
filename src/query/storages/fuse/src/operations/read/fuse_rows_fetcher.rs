@@ -27,12 +27,12 @@ use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Value;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::AsyncTransform;
-use common_pipeline_transforms::processors::transforms::AsyncTransformer;
+use common_pipeline_transforms::processors::AsyncTransform;
+use common_pipeline_transforms::processors::AsyncTransformer;
 
 use super::native_rows_fetcher::NativeRowsFetcher;
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
@@ -54,7 +54,8 @@ pub fn build_row_fetcher_pipeline(
         .ok_or_else(|| ErrorCode::Internal("Row fetcher is only supported by Fuse engine"))?
         .to_owned();
     let fuse_table = Arc::new(fuse_table);
-    let block_reader = fuse_table.create_block_reader(projection.clone(), false, ctx.clone())?;
+    let block_reader =
+        fuse_table.create_block_reader(ctx.clone(), projection.clone(), false, false, true)?;
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     match &fuse_table.storage_format {

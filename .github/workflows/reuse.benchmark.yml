@@ -39,9 +39,9 @@ env:
 
 jobs:
   local:
-    if: inputs.runner_provider == 'aws' && inputs.source == 'release'
+    if: inputs.source == 'release'
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
     strategy:
       matrix:
         dataset:
@@ -57,8 +57,6 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: Download artifact for pr
         if: inputs.source == 'pr'
         uses: ./.github/actions/artifact_download
@@ -94,14 +92,14 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   cloud:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Medium }
-          - { dataset: hits, size: XLarge }
-          - { dataset: tpch, size: Medium }
-          - { dataset: tpch, size: XLarge }
+          - { dataset: hits, size: Small }
+          - { dataset: hits, size: Large }
+          - { dataset: tpch, size: Small }
+          - { dataset: tpch, size: Large }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -112,8 +110,6 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-        env:
-          GH_TOKEN: ${{ github.token }}
       - uses: ./.github/actions/benchmark_cloud
         timeout-minutes: 20
         id: benchmark
@@ -132,13 +128,13 @@ jobs:
   comment:
     needs: cloud
     if: inputs.source == 'pr'
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
-          sudo apt update -y
-          sudo apt install -y python3-jinja2
+          sudo apt-get update -yq
+          sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v3
         with:
           name: benchmark-hits
@@ -175,7 +171,7 @@ jobs:
           number: ${{ inputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
+            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Small&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/hits.html
             * **tpch**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/tpch.html
@@ -183,7 +179,7 @@ jobs:
   archive:
     needs: cloud
     if: inputs.source == 'release'
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         dataset:
@@ -193,8 +189,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
-          sudo apt update -y
-          sudo apt install -y python3-jinja2
+          sudo apt-get update -yq
+          sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v3
         with:
           name: benchmark-${{ matrix.dataset }}
@@ -207,6 +203,7 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         run: |
+          aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date --date='-1 month' -u +%Y)/$(date --date='-1 month' -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}
 

@@ -14,9 +14,10 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
+use common_catalog::lock::Lock;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
@@ -32,7 +33,7 @@ use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::physical_plans::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::field_default_value;
@@ -43,12 +44,13 @@ use common_sql::BloomIndexColumns;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_table_info;
+use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
 use storages_common_index::BloomIndex;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use table_lock::TableLockHandlerWrapper;
 
 use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
@@ -76,11 +78,9 @@ impl ModifyTableColumnInterpreter {
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            DataMask,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
@@ -145,11 +145,9 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            DataMask,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
@@ -215,13 +213,8 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
-        let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
+        let catalog_name = table_info.catalog();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -277,6 +270,10 @@ impl ModifyTableColumnInterpreter {
         if schema == new_schema {
             return Ok(PipelineBuildResult::create());
         }
+
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(table_info.clone())?;
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();
@@ -344,23 +341,12 @@ impl ModifyTableColumnInterpreter {
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             None,
+            vec![],
             true,
             prev_snapshot_id,
         )?;
 
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
-
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 
@@ -372,11 +358,9 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            ComputedColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
 
         let table_info = table.get_table_info();
         let schema = table.schema();
@@ -414,6 +398,7 @@ impl ModifyTableColumnInterpreter {
             new_table_meta,
             copied_files: None,
             deduplicated_label: None,
+            update_stream_meta: vec![],
         };
 
         let res = catalog.update_table_meta(table_info, req).await?;
@@ -452,16 +437,19 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .ok();
 
         let table = if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
             table
         } else {
             return Ok(PipelineBuildResult::create());
         };
 
         let table_info = table.get_table_info();
-        if table_info.engine() == VIEW_ENGINE {
+        let engine = table.engine();
+        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is VIEW that doesn't support alter",
-                &self.plan.database, &self.plan.table
+                "{}.{} engine is {} that doesn't support alter",
+                &self.plan.database, &self.plan.table, engine
             )));
         }
         if table_info.db_type != DatabaseType::NormalDB {

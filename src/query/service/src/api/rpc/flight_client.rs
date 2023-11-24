@@ -14,6 +14,7 @@
 
 use std::convert::TryInto;
 use std::error::Error;
+use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -21,12 +22,15 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::Duration;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
+use futures_util::future::Either;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -64,7 +68,7 @@ impl FlightClient {
         query_id: &str,
         target: &str,
     ) -> Result<FlightExchange> {
-        let mut streaming = self
+        let streaming = self
             .get_streaming(
                 RequestBuilder::create(Ticket::default())
                     .with_metadata("x-type", "request_server_exchange")?
@@ -74,70 +78,74 @@ impl FlightClient {
             )
             .await?;
 
-        let (tx, rx) = async_channel::bounded(1);
-        GlobalIORuntime::instance().spawn({
-            async move {
-                while let Some(message) = streaming.next().await {
-                    match message {
-                        Ok(message) => {
-                            if tx.send(Ok(message)).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(status) => {
-                            let _ = tx.send(Err(ErrorCode::from(status))).await;
-                            break;
-                        }
-                    }
-                }
-
-                tx.close();
-            }
-        });
-
-        Ok(FlightExchange::create_receiver(rx))
+        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
+        Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn do_get(
         &mut self,
         query_id: &str,
         target: &str,
         fragment: usize,
     ) -> Result<FlightExchange> {
-        let mut streaming = self
-            .get_streaming(
-                RequestBuilder::create(Ticket::default())
-                    .with_metadata("x-type", "exchange_fragment")?
-                    .with_metadata("x-target", target)?
-                    .with_metadata("x-query-id", query_id)?
-                    .with_metadata("x-fragment-id", &fragment.to_string())?
-                    .build(),
-            )
-            .await?;
+        let request = RequestBuilder::create(Ticket::default())
+            .with_metadata("x-type", "exchange_fragment")?
+            .with_metadata("x-target", target)?
+            .with_metadata("x-query-id", query_id)?
+            .with_metadata("x-fragment-id", &fragment.to_string())?
+            .build();
+        let request = common_tracing::inject_span_to_tonic_request(request);
 
+        let streaming = self.get_streaming(request).await?;
+
+        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
+        Ok(FlightExchange::create_receiver(notify, rx))
+    }
+
+    fn streaming_receiver(
+        query_id: &str,
+        mut streaming: Streaming<FlightData>,
+    ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
-        GlobalIORuntime::instance().spawn({
+        let notify = Arc::new(tokio::sync::Notify::new());
+        GlobalIORuntime::instance().spawn(query_id, {
+            let notify = notify.clone();
             async move {
-                while let Some(message) = streaming.next().await {
-                    match message {
-                        Ok(message) => {
-                            if tx.send(Ok(message)).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(status) => {
-                            let _ = tx.send(Err(ErrorCode::from(status))).await;
+                let mut notified = Box::pin(notify.notified());
+                let mut streaming_next = streaming.next();
+
+                loop {
+                    match futures::future::select(notified, streaming_next).await {
+                        Either::Left((_, _)) | Either::Right((None, _)) => {
                             break;
+                        }
+                        Either::Right((Some(message), next_notified)) => {
+                            notified = next_notified;
+                            streaming_next = streaming.next();
+
+                            match message {
+                                Ok(message) => {
+                                    if tx.send(Ok(message)).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(status) => {
+                                    let _ = tx.send(Err(ErrorCode::from(status))).await;
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
 
+                drop(streaming);
                 tx.close();
             }
         });
 
-        Ok(FlightExchange::create_receiver(rx))
+        (notify, rx)
     }
 
     #[async_backtrace::framed]
@@ -149,8 +157,8 @@ impl FlightClient {
     }
 
     // Execute do_action.
-    #[minitrace::trace]
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
@@ -171,12 +179,16 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
+    notify: Arc<Notify>,
     rx: Receiver<Result<FlightData>>,
 }
 
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver { rx }
+        FlightReceiver {
+            rx,
+            notify: Arc::new(Notify::new()),
+        }
     }
 
     #[async_backtrace::framed]
@@ -190,6 +202,7 @@ impl FlightReceiver {
 
     pub fn close(&self) {
         self.rx.close();
+        self.notify.notify_waiters();
     }
 }
 
@@ -224,7 +237,10 @@ impl FlightSender {
 
 pub enum FlightExchange {
     Dummy,
-    Receiver(Receiver<Result<FlightData>>),
+    Receiver {
+        notify: Arc<Notify>,
+        receiver: Receiver<Result<FlightData>>,
+    },
     Sender(Sender<Result<FlightData, Status>>),
 }
 
@@ -233,8 +249,11 @@ impl FlightExchange {
         FlightExchange::Sender(sender)
     }
 
-    pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> FlightExchange {
-        FlightExchange::Receiver(receiver)
+    pub fn create_receiver(
+        notify: Arc<Notify>,
+        receiver: Receiver<Result<FlightData>>,
+    ) -> FlightExchange {
+        FlightExchange::Receiver { notify, receiver }
     }
 
     pub fn convert_to_sender(self) -> FlightSender {
@@ -246,7 +265,10 @@ impl FlightExchange {
 
     pub fn convert_to_receiver(self) -> FlightReceiver {
         match self {
-            FlightExchange::Receiver(rx) => FlightReceiver { rx },
+            FlightExchange::Receiver { notify, receiver } => FlightReceiver {
+                notify,
+                rx: receiver,
+            },
             _ => unreachable!(),
         }
     }

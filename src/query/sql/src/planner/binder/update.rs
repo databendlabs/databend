@@ -19,12 +19,14 @@ use common_ast::ast::UpdateStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::Finder;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::plans::ScalarExpr;
 use crate::plans::UpdatePlan;
+use crate::plans::Visitor;
 use crate::BindContext;
 
 impl Binder {
@@ -64,7 +66,7 @@ impl Binder {
             ));
         };
 
-        let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
+        let (table_expr, mut context) = self.bind_single_table(bind_context, table).await?;
 
         let table = self
             .ctx
@@ -102,11 +104,23 @@ impl Binder {
 
             // TODO(zhyass): update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
-            if matches!(scalar, ScalarExpr::SubqueryExpr(_)) {
-                return Err(ErrorCode::Internal(
-                    "update_list in update statement does not support subquery temporarily",
-                ));
+            let f = |scalar: &ScalarExpr| {
+                matches!(
+                    scalar,
+                    ScalarExpr::WindowFunction(_)
+                        | ScalarExpr::AggregateFunction(_)
+                        | ScalarExpr::SubqueryExpr(_)
+                )
+            };
+            let mut finder = Finder::new(&f);
+            finder.visit(&scalar)?;
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "update_list in update statement can't contain subquery|window|aggregate functions".to_string(),
+                )
+                .set_span(scalar.span()));
             }
+
             update_columns.insert(index, scalar);
         }
 

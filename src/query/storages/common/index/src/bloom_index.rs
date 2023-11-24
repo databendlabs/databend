@@ -202,17 +202,14 @@ impl BloomIndex {
                     if !Xor8Filter::supported_type(&val_type) {
                         continue;
                     }
-                    let source_columns = data_blocks_tobe_indexed
-                        .iter()
-                        .map(|block| {
-                            let value = &block.get_by_offset(index).value;
-                            let column = value.convert_to_full_column(field_type, block.num_rows());
-                            let map_column =
-                                MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap();
-                            map_column.values.values
-                        })
-                        .collect::<Vec<_>>();
-                    let column = Column::concat(&source_columns);
+                    let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
+                        let value = &block.get_by_offset(index).value;
+                        let column = value.convert_to_full_column(field_type, block.num_rows());
+                        let map_column =
+                            MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap();
+                        map_column.values.values
+                    });
+                    let column = Column::concat_columns(source_columns_iter)?;
 
                     if Self::check_large_string(&column) {
                         continue;
@@ -224,14 +221,11 @@ impl BloomIndex {
                     if !Xor8Filter::supported_type(field_type) {
                         continue;
                     }
-                    let source_columns = data_blocks_tobe_indexed
-                        .iter()
-                        .map(|block| {
-                            let value = &block.get_by_offset(index).value;
-                            value.convert_to_full_column(field_type, block.num_rows())
-                        })
-                        .collect::<Vec<_>>();
-                    let column = Column::concat(&source_columns);
+                    let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
+                        let value = &block.get_by_offset(index).value;
+                        value.convert_to_full_column(field_type, block.num_rows())
+                    });
+                    let column = Column::concat_columns(source_columns_iter)?;
 
                     if Self::check_large_string(&column) {
                         continue;
@@ -304,7 +298,7 @@ impl BloomIndex {
     /// This happens when the data doesn't show up in the filter.
     ///
     /// Otherwise return `Uncertain`.
-    #[minitrace::trace(name = "block_filter_index_eval")]
+    #[minitrace::trace]
     pub fn apply(
         &self,
         mut expr: Expr<String>,

@@ -117,6 +117,8 @@ impl PhysicalPlanBuilder {
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
+            RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
+            RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
             _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()

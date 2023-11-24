@@ -22,7 +22,6 @@
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
 #![feature(alloc_error_hook)]
-#![feature(return_position_impl_trait_in_trait)]
 #![feature(slice_swap_unchecked)]
 
 pub mod base;
@@ -33,5 +32,8 @@ pub mod rangemap;
 pub mod runtime;
 
 pub use runtime::dump_backtrace;
+pub use runtime::get_all_tasks;
 pub use runtime::match_join_handle;
 pub use runtime::set_alloc_error_hook;
+pub use runtime::AsyncTaskItem;
+pub use runtime::GLOBAL_TASK;

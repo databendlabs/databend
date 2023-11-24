@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -38,15 +39,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::types::DataType;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
 use common_expression::Scalar;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
+use indexmap::IndexMap;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -60,6 +65,7 @@ use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
+use crate::ScalarBinder;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -68,6 +74,35 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
     ) -> Result<Plan> {
+        match &stmt.src {
+            CopyIntoTableSource::Location(location) => {
+                let plan = self
+                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .await?;
+                self.bind_copy_into_table_from_location(bind_context, plan)
+                    .await
+            }
+            CopyIntoTableSource::Query(query) => {
+                let mut max_column_position = MaxColumnPosition::new();
+                max_column_position.visit_query(query.as_ref());
+                self.metadata
+                    .write()
+                    .set_max_column_position(max_column_position.max_pos);
+                let (select_list, location, alias) = check_transform_query(query)?;
+                let plan = self
+                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .await?;
+                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
+                    .await
+            }
+        }
+    }
+    async fn bind_copy_into_table_common(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &CopyIntoTableStmt,
+        location: &FileLocation,
+    ) -> Result<CopyIntoTablePlan> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
             &stmt.dst.database,
@@ -80,111 +115,57 @@ impl<'a> Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
-        match &stmt.src {
-            CopyIntoTableSource::Location(location) => {
-                let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
-                self.apply_copy_into_table_options(stmt, &mut stage_info)
-                    .await?;
-                let files_info = StageFilesInfo {
-                    path,
-                    files: stmt.files.clone(),
-                    pattern: stmt.pattern.clone(),
-                };
-                let required_values_schema: DataSchemaRef = Arc::new(
-                    match &stmt.dst_columns {
-                        Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => self.schema_project(&table.schema(), &[])?,
-                    }
-                    .into(),
-                );
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
 
-                let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-                    .map_err(ErrorCode::SyntaxException)?;
-
-                let stage_schema = infer_table_schema(&required_values_schema)?;
-
-                let plan = CopyIntoTablePlan {
-                    catalog_info,
-                    database_name,
-                    table_name,
-                    validation_mode,
-                    no_file_to_copy: false,
-                    from_attachment: false,
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: stage_schema,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
-                    },
-                    values_consts: vec![],
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    write_mode: CopyIntoTableMode::Copy,
-                    query: None,
-
-                    enable_distributed: false,
-                };
-
-                self.bind_copy_into_table_from_location(bind_context, plan)
-                    .await
+        let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
+        self.apply_copy_into_table_options(stmt, &mut stage_info)
+            .await?;
+        let files_info = StageFilesInfo {
+            path,
+            files: stmt.files.clone(),
+            pattern: stmt.pattern.clone(),
+        };
+        let required_values_schema: DataSchemaRef = Arc::new(
+            match &stmt.dst_columns {
+                Some(cols) => self.schema_project(&table.schema(), cols)?,
+                None => self.schema_project(&table.schema(), &[])?,
             }
-            CopyIntoTableSource::Query(query) => {
-                let mut max_column_position = MaxColumnPosition::new();
-                max_column_position.visit_query(query.as_ref());
-                self.metadata
-                    .write()
-                    .set_max_column_position(max_column_position.max_pos);
+            .into(),
+        );
 
-                let (select_list, location, alias) = check_transform_query(query)?;
-                let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
-                self.apply_copy_into_table_options(stmt, &mut stage_info)
-                    .await?;
-                let files_info = StageFilesInfo {
-                    path,
-                    pattern: stmt.pattern.clone(),
-                    files: stmt.files.clone(),
-                };
+        let stage_schema = infer_table_schema(&required_values_schema)?;
+        let default_values = self
+            .prepare_default_values(bind_context, &required_values_schema)
+            .await?;
 
-                let required_values_schema: DataSchemaRef = Arc::new(
-                    match &stmt.dst_columns {
-                        Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
-                    }
-                    .into(),
-                );
-                let plan = CopyIntoTablePlan {
-                    no_file_to_copy: false,
-                    catalog_info,
-                    database_name,
-                    table_name,
-                    from_attachment: false,
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    values_consts: vec![],
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: infer_table_schema(&required_values_schema)?,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
-                    },
-                    write_mode: CopyIntoTableMode::Copy,
-                    query: None,
-                    validation_mode: ValidationMode::None,
+        Ok(CopyIntoTablePlan {
+            catalog_info,
+            database_name,
+            table_name,
+            validation_mode,
+            no_file_to_copy: false,
+            from_attachment: false,
+            force: stmt.force,
+            stage_table_info: StageTableInfo {
+                schema: stage_schema,
+                files_info,
+                stage_info,
+                files_to_copy: None,
+                is_select: false,
+                default_values: Some(default_values),
+            },
+            values_consts: vec![],
+            required_source_schema: required_values_schema.clone(),
+            required_values_schema: required_values_schema.clone(),
+            write_mode: CopyIntoTableMode::Copy,
+            query: None,
 
-                    enable_distributed: false,
-                };
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
-                    .await
-            }
-        }
+            enable_distributed: false,
+        })
     }
 
     /// Bind COPY INFO <table> FROM <stage_location>
-    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn bind_copy_into_table_from_location(
         &mut self,
@@ -257,6 +238,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <table> FROM <location>
+    /// called by bind_insert
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub(crate) async fn bind_copy_from_attachment(
@@ -284,6 +266,10 @@ impl<'a> Binder {
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
+        let default_values = self
+            .prepare_default_values(bind_context, &data_schema)
+            .await?;
+
         let plan = CopyIntoTablePlan {
             catalog_info,
             database_name,
@@ -300,6 +286,7 @@ impl<'a> Binder {
                 stage_info,
                 files_to_copy: None,
                 is_select: false,
+                default_values: Some(default_values),
             },
             write_mode,
             query: None,
@@ -314,7 +301,6 @@ impl<'a> Binder {
 
     /// Bind COPY INTO <table> FROM <query>
     #[async_backtrace::framed]
-    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
@@ -452,6 +438,32 @@ impl<'a> Binder {
             .await?;
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
     }
+
+    async fn prepare_default_values(
+        &mut self,
+        bind_context: &mut BindContext,
+        data_schema: &DataSchemaRef,
+    ) -> Result<Vec<Scalar>> {
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            HashMap::new(),
+            Box::new(IndexMap::new()),
+        );
+        let func_ctx = self.ctx.get_function_context()?;
+        let input = DataBlock::empty();
+        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        let mut values = vec![];
+        for field in &data_schema.fields {
+            let expr = scalar_binder.get_default_value(field, data_schema).await?;
+            values.push(evaluator.run(&expr)?.as_scalar().unwrap().clone());
+        }
+        Ok(values)
+    }
 }
 
 // we can avoid this by specializing the parser.
@@ -549,7 +561,7 @@ pub async fn resolve_file_location(
     match location.clone() {
         FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
         FileLocation::Uri(mut uri) => {
-            let (storage_params, path) = parse_uri_location(&mut uri).await?;
+            let (storage_params, path) = parse_uri_location(&mut uri, Some(ctx)).await?;
             if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 Err(ErrorCode::StorageInsecure(
                     "copy from insecure storage is not allowed",

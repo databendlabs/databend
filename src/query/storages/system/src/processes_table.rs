@@ -26,7 +26,6 @@ use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
-use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -54,6 +53,9 @@ impl SyncSystemTable for ProcessesTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let processes_info = ctx.get_processes_info();
 
+        let local_node = ctx.get_cluster().local_id.clone();
+
+        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(processes_info.len());
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());
@@ -79,6 +81,7 @@ impl SyncSystemTable for ProcessesTable {
                 .unwrap_or(Duration::from_secs(0))
                 .as_secs();
 
+            nodes.push(local_node.clone().into_bytes());
             processes_id.push(process_info.id.clone().into_bytes());
             processes_type.push(process_info.typ.clone().into_bytes());
             processes_state.push(process_info.state.to_string().into_bytes());
@@ -118,6 +121,7 @@ impl SyncSystemTable for ProcessesTable {
         }
 
         Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(nodes),
             StringType::from_data(processes_id),
             StringType::from_data(processes_type),
             StringType::from_opt_data(processes_host),
@@ -140,6 +144,7 @@ impl SyncSystemTable for ProcessesTable {
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
             TableField::new("id", TableDataType::String),
             TableField::new("type", TableDataType::String),
             TableField::new(

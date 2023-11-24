@@ -17,7 +17,6 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 
-use crate::convert_arrow_rs::schema::data_schema_to_arrow_schema;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataSchema;
@@ -33,30 +32,18 @@ impl DataBlock {
         RecordBatch::try_new(schema, arrays)
     }
 
-    /// Convert DataBlock to RecordBatch, and keep the schema not change.
-    pub fn to_record_batch_keep_schema(
-        self,
-        data_schema: &DataSchema,
-    ) -> Result<RecordBatch, ArrowError> {
-        let mut arrays = Vec::with_capacity(self.columns().len());
-        for entry in self.convert_to_full().columns() {
-            let column = entry.value.to_owned().into_column().unwrap();
-            arrays.push(column.into_arrow_rs()?)
-        }
-        let schema = Arc::new(data_schema_to_arrow_schema(data_schema));
-        RecordBatch::try_new(schema, arrays)
-    }
-
-    pub fn from_record_batch(batch: &RecordBatch) -> Result<(Self, DataSchema), ArrowError> {
-        let schema: DataSchema = DataSchema::try_from(&(*batch.schema()))?;
+    pub fn from_record_batch(
+        schema: &DataSchema,
+        batch: &RecordBatch,
+    ) -> Result<(Self, DataSchema), ArrowError> {
         if batch.num_columns() == 0 {
-            return Ok((DataBlock::new(vec![], batch.num_rows()), schema));
+            return Ok((DataBlock::new(vec![], batch.num_rows()), schema.clone()));
         }
 
         let mut columns = Vec::with_capacity(batch.columns().len());
-        for (array, field) in batch.columns().iter().zip(batch.schema().fields().iter()) {
+        for (array, field) in batch.columns().iter().zip(schema.fields().iter()) {
             columns.push(Column::from_arrow_rs(array.clone(), field)?)
         }
-        Ok((DataBlock::new_from_columns(columns), schema))
+        Ok((DataBlock::new_from_columns(columns), schema.clone()))
     }
 }

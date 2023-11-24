@@ -190,7 +190,7 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
-            lambda_info: LambdaInfo::default(),
+            lambda_info: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
             allow_internal_columns: parent.allow_internal_columns,
@@ -210,11 +210,6 @@ impl BindContext {
         bind_context.cte_name = self.cte_name.clone();
         bind_context.cte_map_ref = self.cte_map_ref.clone();
         bind_context
-    }
-
-    /// Generate a new BindContext and take current BindContext as its parent.
-    pub fn push(self) -> Self {
-        Self::with_parent(Box::new(self))
     }
 
     /// Returns all column bindings in current scope.

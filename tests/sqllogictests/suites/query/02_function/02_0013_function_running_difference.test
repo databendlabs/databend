@@ -1,0 +1,23 @@
+statement ok
+drop table if exists running_difference_test
+
+statement ok
+create table running_difference_test (a Int8, b Int32, c Int64, d varchar, e Float32, f Float64) Engine = Fuse
+
+statement ok
+insert into running_difference_test values (1, 1, 1, 'a', 1, 1),(3, 3, 3, 'b', 3, 3),(5, 5, 5, 'c', 5, 5),(10, 10, 10, 'd', 10, 10)
+
+query IIIFI
+select running_difference(a), running_difference(b), running_difference(c), running_difference(e), running_difference(10) from running_difference_test
+----
+0 0 0 0.0 0
+2 2 2 2.0 0
+2 2 2 2.0 0
+5 5 5 5.0 0
+
+statement error 1006
+select d, running_difference(d) from running_difference_test
+
+statement ok
+DROP TABLE IF EXISTS running_difference_test
+

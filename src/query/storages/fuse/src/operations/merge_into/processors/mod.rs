@@ -12,11 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod processor_distributed_merge_into_block_deserialize;
+mod processor_distributed_merge_into_block_serialize;
 mod processor_merge_into_matched_and_split;
 mod processor_merge_into_not_matched;
 mod processor_merge_into_split;
+mod processor_merge_into_split_row_number_and_log;
+mod transform_add_rownumber_column;
 mod transform_matched_mutation_aggregator;
+
+pub use processor_distributed_merge_into_block_deserialize::TransformDistributedMergeIntoBlockDeserialize;
+pub use processor_distributed_merge_into_block_serialize::TransformDistributedMergeIntoBlockSerialize;
 pub use processor_merge_into_matched_and_split::MatchedSplitProcessor;
+pub use processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
 pub(crate) use processor_merge_into_matched_and_split::RowIdKind;
 pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_split::MergeIntoSplitProcessor;
+pub use processor_merge_into_split_row_number_and_log::RowNumberAndLogSplitProcessor;
+pub use transform_add_rownumber_column::TransformAddRowNumberColumnProcessor;

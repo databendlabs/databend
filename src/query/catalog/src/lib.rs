@@ -18,10 +18,12 @@ pub mod catalog;
 pub mod catalog_kind;
 pub mod cluster_info;
 pub mod database;
+pub mod lock;
 pub mod plan;
 pub mod query_kind;
 pub mod statistics;
-pub mod table;
 pub mod table_args;
 pub mod table_context;
 pub mod table_function;
+
+pub mod table;

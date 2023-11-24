@@ -53,6 +53,8 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
         RelOperator::Lambda(_) => "LambdaFunc".to_string(),
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
+        RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
+        RelOperator::Udf(_) => "Udf".to_string(),
     }
 }
 
@@ -62,7 +64,7 @@ fn group_to_format_tree(
 ) -> FormatTreeNode<String> {
     FormatTreeNode::with_children(
         format!("Group #{}", group.group_index),
-        vec![
+        [
             if let Some(cost_context) = cost_context {
                 vec![FormatTreeNode::new(format!(
                     "best cost: [#{}] {}",

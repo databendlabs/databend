@@ -13,24 +13,27 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![recursion_limit = "256"]
 
+pub mod count;
 pub mod counter;
 mod dump;
 pub mod histogram;
+mod metrics;
 pub mod registry;
 
 pub type VecLabels = Vec<(&'static str, String)>;
 
+pub use counter::Counter;
 pub use dump::dump_metric_samples;
 pub use dump::HistogramCount;
 pub use dump::MetricSample;
 pub use dump::MetricValue;
 pub use dump::SummaryCount;
+pub use histogram::Histogram;
 pub use metrics_exporter_prometheus::PrometheusHandle;
-pub use prometheus_client::metrics::counter::Counter;
 pub use prometheus_client::metrics::family::Family;
 pub use prometheus_client::metrics::gauge::Gauge;
-pub use prometheus_client::metrics::histogram::Histogram;
 pub use registry::load_global_prometheus_registry;
 pub use registry::register_counter;
 pub use registry::register_counter_family;
@@ -42,3 +45,14 @@ pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;
 pub use registry::render_prometheus_metrics;
 pub use registry::reset_global_prometheus_registry;
+
+pub use crate::metrics::cache;
+pub use crate::metrics::cluster;
+/// Metrics.
+pub use crate::metrics::http;
+pub use crate::metrics::interpreter;
+pub use crate::metrics::mysql;
+pub use crate::metrics::openai;
+pub use crate::metrics::session;
+pub use crate::metrics::storage;
+pub use crate::metrics::transform;

@@ -1,5 +1,6 @@
-## use this script to test merge into performance
 #!/bin/bash
+## use this script to test merge into performance
+
 set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
@@ -22,6 +23,10 @@ for bin in databend-query databend-meta; do
         killall -9 $bin || true
     fi
 done
+
+# Wait for killed process to cleanup resources
+sleep 1
+
 echo 'Start databend-meta...'
 nohup ./databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
@@ -57,8 +62,8 @@ echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql
 echo "Creating table for benchmark with native storage format..."
 bendsql <"${BENCHMARK_DATASET}/create_local.sql"
 
-# Detect instance type 
-instance_type=`uname -a`
+# Detect instance type
+instance_type=$(uname -a)
 echo "Instance type: ${instance_type}"
 echo "SystemInfo: $(system_profiler SPHardwareDataType)"
 echo "Loading data..."
@@ -69,7 +74,7 @@ load_time=$(python3 -c "print($load_end - $load_start)")
 echo "Data loaded in ${load_time}s."
 
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
-format_instance_type=$(fold -w 40 <<< "$instance_type")
+format_instance_type=$(fold -w 40 <<<"$instance_type")
 echo '{}' >result.json
 yq -i ".date = \"$(date -u +%Y-%m-%d)\"" -o json result.json
 yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" -o json result.json
@@ -86,7 +91,7 @@ function run_query() {
     local query=$3
 
     local q_time
-    q_time=$(echo "$query" | bendsql --time)
+    q_time=$(echo "$query" | bendsql --time=server)
     if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" -o json result.json

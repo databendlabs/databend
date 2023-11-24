@@ -1,0 +1,102 @@
+query T
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 2)
+----
+def
+
+query T
+SELECT REGEXP_SUBSTR('abc def GHI', '[a-z]+', 1, 3, 'c')
+----
+NULL
+
+query T
+SELECT REGEXP_SUBSTR('Customers - (NY)','\\([[:alnum:]\-]+\\)')
+----
+(NY)
+
+query T
+SELECT REGEXP_SUBSTR('周周周周', '.*', 2)
+----
+周周周
+
+query T
+SELECT REGEXP_SUBSTR('🍣🍣b', 'b', 2)
+----
+b
+
+query T
+SELECT REGEXP_SUBSTR('µå周çб周周', '周+', 3, 2)
+----
+周周
+
+query T
+SELECT REGEXP_SUBSTR('周 周周 周周周 周周周周', '周+', 2, 3)
+----
+周周周周
+
+query T
+SELECT REGEXP_SUBSTR('周 周周', '周+', 5)
+----
+NULL
+
+query T
+SELECT REGEXP_SUBSTR(NULL, '')
+----
+NULL
+
+query T
+SELECT REGEXP_SUBSTR('abc def ghi', NULL)
+----
+NULL
+
+query T
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', NULL)
+----
+NULL
+
+query T
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, NULL)
+----
+NULL
+
+query T
+SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 2, NULL)
+----
+NULL
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, mt String NULL) Engine = Fuse
+
+statement ok
+INSERT INTO t1 (s, pat, pos, occu, mt) VALUES (NULL, '[a-z]+', 1, 1, ''), ('abc def ghi', NULL, 1, 1, 'c'), ('abc def ghi', '[a-z]+', NULL, 1, 'c'), ('abc def ghi', '[a-z]+', 1, NULL, 'c'), ('abc def ghi', '[a-z]+', 1, 1, NULL), ('abc def ghi', '[a-z]+', 1, 1, 'c')
+
+statement ok
+DROP TABLE IF EXISTS tt1
+
+statement ok
+CREATE TABLE tt1(a boolean not null, b int not null, c int64 not null, d string not null) Engine = Fuse
+
+statement ok
+INSERT INTO tt1 VALUES (true,826203185,-3958367336395157675,'Jd695'),(true,-1439480114,-4881196055243782954,'Lzcda'),(true,-1439480114,-4881196055243782954,'Lzcda'),(false,733863457,6458421525263813535,'m8maS'),(true,-739644074,4390046195034875158,'zWvEj'),(true,-1611495410,-2002171580743726810,'rtOs8')
+
+statement ok
+DROP TABLE IF EXISTS tt2
+
+statement ok
+CREATE TABLE tt2(b int not null) Engine = Fuse
+
+statement ok
+INSERT INTO tt2 VALUES (-1448403955),(1978682043),(775979323),(-2057711809),(183393966),(618200641)
+
+statement error 1006
+SELECT string_agg(regexp_substr(tt1.d, '-', tt1.c)), tt1.a FROM tt1 FULL OUTER JOIN tt2 USING(b) GROUP BY ROLLUP (tt1.a)
+
+
+statement ok
+DROP TABLE IF EXISTS tt1
+
+
+statement ok
+DROP TABLE IF EXISTS tt2

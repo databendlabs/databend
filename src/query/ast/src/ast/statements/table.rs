@@ -106,6 +106,7 @@ impl Display for ShowTablesStatusStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShowDropTablesStmt {
     pub database: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
 }
 
 impl Display for ShowDropTablesStmt {
@@ -113,6 +114,9 @@ impl Display for ShowDropTablesStmt {
         write!(f, "SHOW DROP TABLE")?;
         if let Some(database) = &self.database {
             write!(f, " FROM {database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
         }
 
         Ok(())
@@ -156,6 +160,10 @@ impl Display for CreateTableStmt {
             write!(f, " {source}")?;
         }
 
+        if let Some(uri_location) = &self.uri_location {
+            write!(f, " {uri_location}")?;
+        }
+
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
         }
@@ -182,6 +190,7 @@ pub struct AttachTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
+    pub read_only: bool,
 }
 
 impl Display for AttachTableStmt {
@@ -195,7 +204,11 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        write!(f, " FROM {0}", self.uri_location)?;
+        write!(f, " FROM {}", self.uri_location)?;
+
+        if self.read_only {
+            write!(f, " READ_ONLY")?;
+        }
 
         Ok(())
     }
@@ -512,7 +525,7 @@ impl Display for VacuumTableStmt {
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    pub option: VacuumTableOption,
+    pub option: VacuumDropTableOption,
 }
 
 impl Display for VacuumDropTableStmt {
@@ -643,6 +656,32 @@ impl Display for VacuumTableOption {
             } else {
                 write!(f, "DRY RUN")?;
             }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumDropTableOption {
+    pub retain_hours: Option<Expr>,
+    pub dry_run: Option<()>,
+    pub limit: Option<usize>,
+}
+
+impl Display for VacuumDropTableOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(retain_hours) = &self.retain_hours {
+            write!(f, "RETAIN {} HOURS", retain_hours)?;
+        }
+        if self.dry_run.is_some() {
+            if self.retain_hours.is_some() {
+                write!(f, " DRY RUN")?;
+            } else {
+                write!(f, "DRY RUN")?;
+            }
+        }
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {}", limit)?;
         }
         Ok(())
     }

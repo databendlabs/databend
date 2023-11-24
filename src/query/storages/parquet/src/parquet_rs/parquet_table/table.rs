@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
@@ -31,8 +32,8 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::query_kind::QueryKind;
-use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::DummyColumnStatisticsProvider;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
@@ -240,6 +241,7 @@ impl Table for ParquetRSTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }
@@ -275,6 +277,8 @@ impl Table for ParquetRSTable {
 
         let num_columns = self.leaf_fields.len();
 
+        let now = Instant::now();
+        log::info!("begin read {} parquet file metas", file_locations.len());
         let metas = read_metas_in_parallel(
             &self.operator,
             &file_locations, // The first file is already read.
@@ -284,6 +288,12 @@ impl Table for ParquetRSTable {
             self.max_memory_usage,
         )
         .await?;
+        let elapsed = now.elapsed();
+        log::info!(
+            "end read {} parquet file metas, use {} secs",
+            file_locations.len(),
+            elapsed.as_secs_f32()
+        );
 
         let provider = create_stats_provider(&metas, num_columns);
 
@@ -292,7 +302,7 @@ impl Table for ParquetRSTable {
         Ok(Box::new(provider))
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         // Unwrap safety: no other thread will hold this lock.
         let parquet_metas = self.parquet_metas.try_lock().unwrap();
         if parquet_metas.is_empty() {

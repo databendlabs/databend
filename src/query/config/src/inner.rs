@@ -21,6 +21,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use common_base::base::mask_string;
+use common_base::base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
@@ -72,8 +73,11 @@ impl InnerConfig {
     pub async fn load() -> Result<Self> {
         let mut cfg: Self = Config::load(true)?.try_into()?;
 
+        // Handle the node_id for query node.
+        cfg.query.node_id = GlobalUniqName::unique();
+
         // Handle auto detect for storage params.
-        cfg.storage.params = cfg.storage.params.auto_detect().await;
+        cfg.storage.params = cfg.storage.params.auto_detect().await?;
 
         // Only check meta config when cmd is empty.
         if cfg.subcommand.is_none() {
@@ -145,6 +149,9 @@ pub struct QueryConfig {
     pub tenant_id: String,
     /// ID for construct the cluster.
     pub cluster_id: String,
+    // ID for the query node.
+    // This only initialized when InnerConfig::load().
+    pub node_id: String,
     pub num_cpus: u64,
     pub mysql_handler_host: String,
     pub mysql_handler_port: u16,
@@ -214,6 +221,8 @@ pub struct QueryConfig {
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
+
+    pub cloud_control_grpc_server_address: Option<String>,
 }
 
 impl Default for QueryConfig {
@@ -221,6 +230,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: "admin".to_string(),
             cluster_id: "".to_string(),
+            node_id: "".to_string(),
             num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -279,6 +289,7 @@ impl Default for QueryConfig {
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
+            cloud_control_grpc_server_address: None,
         }
     }
 }
@@ -391,7 +402,7 @@ impl MetaConfig {
             } else {
                 None
             },
-            unhealth_endpoint_evict_time: Duration::from_secs(self.unhealth_endpoint_evict_time),
+            unhealthy_endpoint_evict_time: Duration::from_secs(self.unhealth_endpoint_evict_time),
         }
     }
 }
@@ -597,7 +608,7 @@ impl Default for CacheConfig {
             table_bloom_index_filter_size: 2147483648,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
-            table_data_cache_population_queue_size: 65536,
+            table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
             table_data_deserialized_data_bytes: 0,
         }

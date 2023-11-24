@@ -21,11 +21,18 @@ use common_expression::types::bitmap::BitmapType;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
+use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
+use common_expression::types::ALL_SIGNED_INTEGER_TYPES;
+use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
+use common_expression::with_signed_integer_mapped_type;
+use common_expression::with_unsigned_integer_mapped_type;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
@@ -62,19 +69,55 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<UInt64Type>, BitmapType, _, _>(
-        "build_bitmap",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<ArrayType<UInt64Type>, BitmapType>(|arg, builder, _ctx| {
-            let mut rb = RoaringTreemap::new();
-            for a in arg.iter() {
-                rb.insert(*a);
-            }
+    for num_type in ALL_UNSIGNED_INTEGER_TYPES {
+        with_unsigned_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_passthrough_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType, _, _>(
+                    "build_bitmap",
+                    |_, _| FunctionDomain::Full,
+                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, _ctx| {
+                        let mut rb = RoaringTreemap::new();
+                        for a in arg.iter() {
+                            if let Some(a) = a {
+                                rb.insert(a.try_into().unwrap());
+                            }
+                        }
 
-            rb.serialize_into(&mut builder.data).unwrap();
-            builder.commit_row();
-        }),
-    );
+                        rb.serialize_into(&mut builder.data).unwrap();
+                        builder.commit_row();
+                    }),
+                );
+            }
+            _ => unreachable!(),
+        })
+    }
+
+    for num_type in ALL_SIGNED_INTEGER_TYPES {
+        with_signed_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_passthrough_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType, _, _>(
+                    "build_bitmap",
+                    |_, _| FunctionDomain::MayThrow,
+                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, ctx| {
+                        let mut rb = RoaringTreemap::new();
+                        for a in arg.iter() {
+                            if let Some(a) = a {
+                                if a >= 0 {
+                                    rb.insert(a.try_into().unwrap());
+                                } else {
+                                    ctx.set_error(builder.len(), "build_bitmap just support positive integer");
+                                }
+                            }
+                        }
+
+                        rb.serialize_into(&mut builder.data).unwrap();
+                        builder.commit_row();
+                    }),
+                );
+            }
+            _ => unreachable!(),
+        })
+    }
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
         "bitmap_count",
@@ -180,7 +223,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             builder.commit_row();
                         } else {
                             let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
-                            let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize ..(subset_start + adjusted_length) as usize];
+                            let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize..(subset_start + adjusted_length) as usize];
                             let rb = RoaringTreemap::from_iter(subset_bitmap.iter());
                             rb.serialize_into(&mut builder.data).unwrap();
                             builder.commit_row();
@@ -338,17 +381,23 @@ fn bitmap_logic_operate(
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {
-    let Some(rb1) = RoaringTreemap::deserialize_from(arg1).map_err(|e| {
-        ctx.set_error(builder.len(), e.to_string());
-        builder.commit_row();
-    }).ok() else {
+    let Some(rb1) = RoaringTreemap::deserialize_from(arg1)
+        .map_err(|e| {
+            ctx.set_error(builder.len(), e.to_string());
+            builder.commit_row();
+        })
+        .ok()
+    else {
         return;
     };
 
-    let Some(rb2) = RoaringTreemap::deserialize_from(arg2).map_err(|e| {
-        ctx.set_error(builder.len(), e.to_string());
-        builder.commit_row();
-    }).ok() else {
+    let Some(rb2) = RoaringTreemap::deserialize_from(arg2)
+        .map_err(|e| {
+            ctx.set_error(builder.len(), e.to_string());
+            builder.commit_row();
+        })
+        .ok()
+    else {
         return;
     };
 

@@ -20,14 +20,14 @@ use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::TransformDummy;
+use common_pipeline_transforms::processors::TransformDummy;
 use common_profile::SharedProcessorProfiles;
-use common_sql::executor::FragmentKind;
+use common_sql::executor::physical_plans::FragmentKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
 use common_sql::ColumnBinding;
@@ -223,7 +223,7 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[minitrace::trace(name = "select_interpreter_execute")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.attach_tables_to_ctx();

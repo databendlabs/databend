@@ -15,6 +15,7 @@
 use common_meta_app as mt;
 use common_meta_app::storage::StorageHdfsConfig;
 use common_meta_app::storage::StorageParams;
+use minitrace::func_name;
 
 use crate::common;
 

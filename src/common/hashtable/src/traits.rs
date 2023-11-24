@@ -20,6 +20,8 @@ use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use ethnum::i256;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
@@ -234,6 +236,31 @@ impl FastHash for i128 {
     }
 }
 
+impl FastHash for i256 {
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        cfg_if::cfg_if! {
+            if #[cfg(target_feature = "sse4.2")] {
+                use std::arch::x86_64::_mm_crc32_u64;
+                let mut value = u64::MAX;
+                for x in self.0 {
+                    value = unsafe { _mm_crc32_u64(value, x as u64) };
+                    value = unsafe { _mm_crc32_u64(value, (x >> 64) as u64) };
+                }
+                value
+            } else {
+                use std::hash::Hasher;
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
+                for x in self.0 {
+                    hasher.write_i128(x);
+                }
+                hasher.finish()
+            }
+        }
+    }
+}
+
 impl FastHash for U256 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -256,6 +283,13 @@ impl FastHash for U256 {
                 hasher.finish()
             }
         }
+    }
+}
+
+impl FastHash for bool {
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        (*self as u8).fast_hash()
     }
 }
 
@@ -340,6 +374,42 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
                 hasher.write_u64(self.1.get());
                 hasher.finish()
             }
+        }
+    }
+}
+
+// For hash join string hash table.
+#[inline(always)]
+pub fn hash_join_fast_string_hash(key: &[u8]) -> u64 {
+    cfg_if::cfg_if! {
+        if #[cfg(target_feature = "sse4.2")] {
+            use crate::utils::read_le;
+            use std::arch::x86_64::_mm_crc32_u64;
+            if std::intrinsics::unlikely(key.is_empty()) {
+                u32::MAX as u64
+            } else {
+                let mut value = u64::MAX;
+                for i in (0..key.len()).step_by(8) {
+                    if i + 8 < key.len() {
+                        unsafe {
+                            let x = (&key[i] as *const u8 as *const u64).read_unaligned();
+                            value = _mm_crc32_u64(value, x);
+                        }
+                    } else {
+                        unsafe {
+                            let x = read_le(&key[i] as *const u8, key.len() - i);
+                            value = _mm_crc32_u64(value, x);
+                        }
+                    }
+                }
+                value
+            }
+        } else {
+            use std::hash::Hasher;
+            let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+            let mut hasher = state.build_hasher();
+            hasher.write(key);
+            hasher.finish()
         }
     }
 }
@@ -437,7 +507,18 @@ pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn probe(&self, hashes: &mut [u64]);
+    fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
+
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
+
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn early_filtering_probe_with_selection(
+        &self,
+        hashes: &mut [u64],
+        valids: Option<Bitmap>,
+        selection: &mut [u32],
+    ) -> usize;
 
     fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 

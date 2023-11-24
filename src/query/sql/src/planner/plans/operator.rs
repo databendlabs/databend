@@ -18,6 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::add_row_number::AddRowNumber;
 use super::aggregate::Aggregate;
 use super::dummy_table_scan::DummyTableScan;
 use super::eval_scalar::EvalScalar;
@@ -40,6 +41,7 @@ use crate::plans::CteScan;
 use crate::plans::Exchange;
 use crate::plans::Lambda;
 use crate::plans::ProjectSet;
+use crate::plans::Udf;
 use crate::plans::Window;
 
 pub trait Operator {
@@ -84,6 +86,8 @@ pub enum RelOp {
     MaterializedCte,
     Lambda,
     ConstantTableScan,
+    AddRowNumber,
+    Udf,
 
     // Pattern
     Pattern,
@@ -101,6 +105,7 @@ pub enum RelOperator {
     Sort(Sort),
     Limit(Limit),
     Exchange(Exchange),
+    AddRowNumber(AddRowNumber),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     RuntimeFilterSource(RuntimeFilterSource),
@@ -109,6 +114,7 @@ pub enum RelOperator {
     MaterializedCte(MaterializedCte),
     Lambda(Lambda),
     ConstantTableScan(ConstantTableScan),
+    Udf(Udf),
     Pattern(PatternPlan),
 }
 
@@ -133,6 +139,8 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
             RelOperator::Lambda(rel_op) => rel_op.rel_op(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
+            RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
+            RelOperator::Udf(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -156,6 +164,8 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -179,6 +189,8 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -202,6 +214,8 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::AddRowNumber(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Udf(rel_op) => rel_op.derive_cardinality(rel_expr),
         }
     }
 
@@ -265,6 +279,12 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::ConstantTableScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::AddRowNumber(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -606,6 +626,24 @@ impl TryFrom<RelOperator> for ConstantTableScan {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to ConstantTableScan",
             ))
+        }
+    }
+}
+
+impl From<Udf> for RelOperator {
+    fn from(value: Udf) -> Self {
+        Self::Udf(value)
+    }
+}
+
+impl TryFrom<RelOperator> for Udf {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::Udf(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Udf"))
         }
     }
 }

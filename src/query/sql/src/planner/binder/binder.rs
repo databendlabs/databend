@@ -44,6 +44,8 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
+use crate::plans::DescConnectionPlan;
+use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
@@ -53,6 +55,7 @@ use crate::plans::MaterializedCte;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
+use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
@@ -119,10 +122,13 @@ impl<'a> Binder {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
-        self.bind_statement(&mut init_bind_context, stmt).await
+        let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
+        self.bind_query_index(&mut init_bind_context, &plan).await?;
+        Ok(plan)
     }
 
     pub(crate) async fn opt_hints_set_var(
@@ -181,13 +187,13 @@ impl<'a> Binder {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
-                    if !cte_info.materialized || cte_info.used_count == 0{
+                    if !cte_info.materialized || cte_info.used_count == 0 {
                         continue;
                     }
                     let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
                     let left_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx})),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx })),
                         Arc::new(cte_s_expr.clone()),
                         Arc::new(s_expr),
                     );
@@ -220,12 +226,12 @@ impl<'a> Binder {
                 Plan::ExplainAnalyze { plan: Box::new(plan) }
             }
 
-            Statement::ShowFunctions { limit } => {
-                self.bind_show_functions(bind_context, limit).await?
+            Statement::ShowFunctions { show_options } => {
+                self.bind_show_functions(bind_context, show_options).await?
             }
 
-            Statement::ShowTableFunctions { limit } => {
-                self.bind_show_table_functions(bind_context, limit).await?
+            Statement::ShowTableFunctions { show_options } => {
+                self.bind_show_table_functions(bind_context, show_options).await?
             }
 
             Statement::CopyIntoTable(stmt) => {
@@ -246,27 +252,11 @@ impl<'a> Binder {
                 self.bind_copy_into_location(bind_context, stmt).await?
             }
 
-            Statement::ShowMetrics => {
-                self.bind_rewrite_to_query(
-                    bind_context,
-                    "SELECT metric, kind, labels, value FROM system.metrics",
-                    RewriteKind::ShowMetrics,
-                )
-                    .await?
-            }
-            Statement::ShowProcessList => {
-                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes", RewriteKind::ShowProcessList)
-                    .await?
-            }
-            Statement::ShowEngines => {
-                self.bind_rewrite_to_query(bind_context, "SELECT \"Engine\", \"Comment\" FROM system.engines ORDER BY \"Engine\" ASC", RewriteKind::ShowEngines)
-                    .await?
-            }
-            Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
-            Statement::ShowIndexes => {
-                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.indexes", RewriteKind::ShowProcessList)
-                    .await?
-            }
+            Statement::ShowMetrics { show_options } => self.bind_show_metrics(bind_context, show_options).await?,
+            Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
+            Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
+            Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
+            Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
@@ -362,7 +352,7 @@ impl<'a> Binder {
                     "".to_string()
                 };
                 self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})").as_str(), RewriteKind::ListStage).await?
-            },
+            }
             Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
@@ -398,18 +388,14 @@ impl<'a> Binder {
                     }
                 }
                 self.bind_merge_into(bind_context, stmt).await?
-            },
-            Statement::Delete {
-                hints,
-                table_reference,
-                selection,
-            } => {
-                if let Some(hints) = hints {
+            }
+            Statement::Delete(stmt) => {
+                if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                         warn!("In DELETE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_delete(bind_context, table_reference, selection)
+                self.bind_delete(bind_context, stmt)
                     .await?
             }
             Statement::Update(stmt) => {
@@ -441,7 +427,6 @@ impl<'a> Binder {
                     file_format_params: file_format_options.clone().try_into()?,
                 }))
             }
-
             Statement::DropFileFormat {
                 if_exists,
                 name,
@@ -451,6 +436,17 @@ impl<'a> Binder {
             })),
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
+            // Connections
+            Statement::CreateConnection(stmt) => self.bind_create_connection(stmt).await?,
+            Statement::DropConnection(stmt) => Plan::DropConnection(Box::new(DropConnectionPlan {
+                if_exists: stmt.if_exists,
+                name: stmt.name.to_string(),
+            })),
+            Statement::DescribeConnection(stmt) => Plan::DescConnection(Box::new(DescConnectionPlan {
+                name: stmt.name.to_string(),
+            })),
+            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan{})),
+
             // UDFs
             Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
             Statement::AlterUDF(stmt) => self.bind_alter_udf(stmt).await?,
@@ -459,7 +455,7 @@ impl<'a> Binder {
                 udf_name,
             } => Plan::DropUDF(Box::new(DropUDFPlan {
                 if_exists: *if_exists,
-                name: udf_name.to_string(),
+                udf: udf_name.to_string(),
             })),
             Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
@@ -484,6 +480,9 @@ impl<'a> Binder {
                 role_name,
             } => {
                 self.bind_set_role(bind_context, *is_default, role_name).await?
+            }
+            Statement::SetSecondaryRoles { option } => {
+                self.bind_set_secondary_roles(bind_context, option).await?
             }
 
             Statement::KillStmt { kill_target, object_id } => {
@@ -551,6 +550,43 @@ impl<'a> Binder {
             }
             Statement::ShowNetworkPolicies => {
                 self.bind_show_network_policies().await?
+            }
+            Statement::CreateTask(stmt) => {
+                self.bind_create_task(stmt).await?
+            }
+            Statement::AlterTask(stmt) => {
+                self.bind_alter_task(stmt).await?
+            }
+            Statement::DropTask(stmt) => {
+                self.bind_drop_task(stmt).await?
+            }
+            Statement::DescribeTask(stmt) => {
+                self.bind_describe_task(stmt).await?
+            }
+            Statement::ExecuteTask(stmt) => {
+                self.bind_execute_task(stmt).await?
+            }
+            Statement::ShowTasks(stmt) => {
+                self.bind_show_tasks(stmt).await?
+            }
+
+            // Streams
+            Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
+            Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
+            Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
+            Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
+
+            Statement::CreatePipe(_) => {
+                todo!()
+            }
+            Statement::DescribePipe(_) => {
+                todo!()
+            }
+            Statement::AlterPipe(_) => {
+                todo!()
+            }
+            Statement::DropPipe(_) => {
+                todo!()
             }
         };
         Ok(plan)

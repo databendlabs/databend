@@ -19,10 +19,11 @@ use async_trait::async_trait;
 use async_trait::unboxed_simple;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
 
 #[async_trait]
@@ -47,15 +48,21 @@ pub struct AsyncSinker<T: AsyncSink + 'static> {
     inner: Option<T>,
     finished: bool,
     input: Arc<InputPort>,
+    query_id: String,
     input_data: Option<DataBlock>,
     called_on_start: bool,
     called_on_finish: bool,
 }
 
 impl<T: AsyncSink + 'static> AsyncSinker<T> {
-    pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
+    pub fn create(
+        input: Arc<InputPort>,
+        ctx: Arc<dyn TableContext>,
+        inner: T,
+    ) -> Box<dyn Processor> {
         Box::new(AsyncSinker {
             input,
+            query_id: ctx.get_id(),
             finished: false,
             input_data: None,
             inner: Some(inner),
@@ -69,7 +76,7 @@ impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
     fn drop(&mut self) {
         if !self.called_on_start || !self.called_on_finish {
             if let Some(mut inner) = self.inner.take() {
-                GlobalIORuntime::instance().spawn({
+                GlobalIORuntime::instance().spawn(self.query_id.clone(), {
                     let called_on_start = self.called_on_start;
                     let called_on_finish = self.called_on_finish;
                     async move {

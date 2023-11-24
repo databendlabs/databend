@@ -29,7 +29,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep as tokio_async_sleep;
 use common_base::base::DummySignalStream;
 use common_base::base::GlobalInstance;
-use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
 pub use common_catalog::cluster_info::Cluster;
@@ -44,6 +43,7 @@ use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
+use common_metrics::cluster::*;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -165,7 +165,7 @@ impl ClusterDiscovery {
         let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_id: GlobalUniqName::unique(),
+            local_id: cfg.query.node_id.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -200,7 +200,7 @@ impl ClusterDiscovery {
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(
+                metric_incr_cluster_error_count(
                     &self.local_id,
                     "discover",
                     &self.cluster_id,
@@ -229,7 +229,7 @@ impl ClusterDiscovery {
                     res.push(Arc::new(node.clone()));
                 }
 
-                super::metrics::metrics_gauge_discovered_nodes(
+                metrics_gauge_discovered_nodes(
                     &self.local_id,
                     &self.cluster_id,
                     &self.tenant_id,
@@ -246,7 +246,7 @@ impl ClusterDiscovery {
         let current_nodes_info = match self.api_provider.get_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(
+                metric_incr_cluster_error_count(
                     &self.local_id,
                     "drop_invalid_ndes.get_nodes",
                     &self.cluster_id,
@@ -319,9 +319,9 @@ impl ClusterDiscovery {
                     let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                     let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
                     warn!(
-                        "Used loopback or unspecified address as cluster flight address. \
-                        we rewrite it(\"{}\" -> \"{}\") for other nodes can connect it.\
-                        If your has proxy between nodes, you can specify the node's IP address in the configuration file.",
+                        "Detected loopback or unspecified address as cluster flight endpoint. \
+                        We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
+                        If there are proxies between nodes, you can specify endpoint with --flight-api-address.",
                         address, new_addr
                     );
 
@@ -407,7 +407,7 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
-                            super::metrics::metric_incr_cluster_heartbeat_count(
+                            metric_incr_cluster_heartbeat_count(
                                 &node.id,
                                 &node.flight_address,
                                 &cluster_id,

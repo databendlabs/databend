@@ -177,25 +177,21 @@ fn resolve_range_condition(
                 let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
                 match join_predicate {
                     JoinPredicate::Left(_) => {
-                        left = Some(
-                            arg.resolve_and_check(left_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    left_schema.index_of(&index.to_string()).unwrap()
-                                }),
-                        );
+                        left = Some(arg.type_check(left_schema.as_ref())?.project_column_ref(
+                            |index| left_schema.index_of(&index.to_string()).unwrap(),
+                        ));
                     }
                     JoinPredicate::Right(_) => {
                         if idx == 0 {
                             opposite = true;
                         }
-                        right = Some(
-                            arg.resolve_and_check(right_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    right_schema.index_of(&index.to_string()).unwrap()
-                                }),
-                        );
+                        right = Some(arg.type_check(right_schema.as_ref())?.project_column_ref(
+                            |index| right_schema.index_of(&index.to_string()).unwrap(),
+                        ));
                     }
-                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => unreachable!(),
+                    JoinPredicate::ALL(_)
+                    | JoinPredicate::Both { .. }
+                    | JoinPredicate::Other(_) => unreachable!(),
                 }
             }
             let op = if opposite {
@@ -221,7 +217,7 @@ fn resolve_range_condition(
 
 fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteExpr> {
     let expr = scalar
-        .resolve_and_check(schema.as_ref())?
+        .type_check(schema.as_ref())?
         .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
     Ok(expr.as_remote_expr())
 }

@@ -57,6 +57,7 @@ use crate::IndexType;
 use crate::Metadata;
 use crate::ScalarExpr;
 use crate::TableInternalColumn;
+use crate::TypeCheck;
 use crate::VirtualColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
@@ -211,7 +212,7 @@ impl PhysicalPlanBuilder {
             self.ctx.set_cacheable(false);
         }
 
-        let mut table_schema = table.schema();
+        let mut table_schema = table.schema_with_stream();
         if !project_internal_columns.is_empty() {
             let mut schema = table_schema.as_ref().clone();
             for internal_column in project_internal_columns.values() {
@@ -338,7 +339,8 @@ impl PhysicalPlanBuilder {
                 let predicates = predicates
                     .iter()
                     .map(|p| {
-                        Ok(p.as_expr()?
+                        Ok(p.as_raw_expr()
+                            .type_check(&metadata)?
                             .project_column_ref(|col| col.column_name.clone()))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -419,7 +421,8 @@ impl PhysicalPlanBuilder {
 
                 let filter = cast_expr_to_non_null_boolean(
                     predicate
-                        .as_expr()?
+                        .as_raw_expr()
+                        .type_check(&metadata)?
                         .project_column_ref(|col| col.column_name.clone()),
                 )?;
                 let filter = filter.as_remote_expr();

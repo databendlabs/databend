@@ -281,11 +281,7 @@ impl<'a, K: ?Sized, V> Copy for StringHashtableEntryRefInner<'a, K, V> {}
 
 impl<'a, K: ?Sized, V> Clone for StringHashtableEntryRefInner<'a, K, V> {
     fn clone(&self) -> Self {
-        use StringHashtableEntryRefInner::*;
-        match self {
-            TableEmpty(a, b) => TableEmpty(a, *b),
-            Table(a) => Table(a),
-        }
+        *self
     }
 }
 
@@ -321,7 +317,7 @@ impl<'a, K: ?Sized, V> Copy for StringHashtableEntryRef<'a, K, V> {}
 
 impl<'a, K: ?Sized, V> Clone for StringHashtableEntryRef<'a, K, V> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        *self
     }
 }
 
@@ -514,7 +510,7 @@ where A: Allocator + Clone + Default
 
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
         self.entry_mut(key)
-            .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
+            .map(|e| unsafe { &mut *(e.get_mut_ptr()) })
     }
 
     unsafe fn insert(

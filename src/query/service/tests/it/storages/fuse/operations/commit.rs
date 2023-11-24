@@ -40,6 +40,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -48,11 +49,13 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -61,6 +64,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -68,7 +72,9 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -94,6 +100,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
@@ -106,7 +113,6 @@ use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
@@ -120,10 +126,9 @@ use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -158,7 +163,8 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
     // let's check it out
     let qry = format!("select * from {}.{} order by id ", db, tbl);
-    let blocks = execute_query(ctx.clone(), qry.as_str())
+    let blocks = fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;
@@ -177,7 +183,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::new().await?;
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -223,9 +229,9 @@ async fn test_commit_to_meta_server() -> Result<()> {
 
     impl Case {
         async fn run(&self) -> Result<()> {
-            let fixture = TestFixture::new().await;
+            let fixture = TestFixture::new().await?;
             fixture.create_default_table().await?;
-            let ctx = fixture.ctx();
+            let ctx = fixture.new_query_ctx().await?;
             let catalog = ctx.get_catalog("default").await?;
 
             let table = fixture.latest_default_table().await?;
@@ -494,6 +500,9 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
@@ -527,7 +536,7 @@ impl TableContext for CtxDelegation {
         Settings::create("fake_settings".to_string())
     }
 
-    fn get_shard_settings(&self) -> Arc<Settings> {
+    fn get_shared_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
@@ -588,6 +597,9 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
+        todo!()
+    }
     async fn get_table(
         &self,
         _catalog: &str,
@@ -640,6 +652,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
+        todo!()
+    }
+
+    fn get_license_key(&self) -> String {
+        todo!()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
         todo!()
     }
 }
@@ -852,28 +872,19 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
+    async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         todo!()
     }
 
-    async fn create_table_lock_rev(
-        &self,
-        _expire_sec: u64,
-        _table_info: &TableInfo,
-    ) -> Result<CreateTableLockRevReply> {
+    async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
         todo!()
     }
 
-    async fn extend_table_lock_rev(
-        &self,
-        _expire_sec: u64,
-        _table_info: &TableInfo,
-        _revision: u64,
-    ) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
         todo!()
     }
 
-    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         todo!()
     }
 }

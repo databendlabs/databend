@@ -36,12 +36,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_rows_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_rows_counter;
+use common_metrics::storage::*;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -97,14 +92,17 @@ impl MatchedAggregator {
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
+
         let block_reader = {
             let projection =
                 Projection::Columns((0..target_table_schema.num_fields()).collect_vec());
             BlockReader::create(
+                ctx.clone(),
                 data_accessor.clone(),
                 target_table_schema,
                 projection,
-                ctx.clone(),
+                false,
+                false,
                 false,
             )
         }?;
@@ -121,16 +119,16 @@ impl MatchedAggregator {
             io_request_semaphore,
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
-            segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+            segment_locations: AHashMap::from_iter(segment_locations),
         })
     }
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
-        let start = Instant::now();
         if data_block.is_empty() {
             return Ok(());
         }
+        let start = Instant::now();
         // data_block is from matched_split, so there is only one column.
         // that's row_id
         let row_ids = get_row_id(&data_block, 0)?;
@@ -234,21 +232,21 @@ impl MatchedAggregator {
                     "multi rows from source match one and the same row in the target_table multi times",
                 ));
             }
-            let handle = io_runtime.spawn(async_backtrace::location!().frame({
-                async move {
-                    let mutation_log_entry = aggregation_ctx
-                        .apply_update_and_deletion_to_data_block(
-                            segment_idx,
-                            block_idx,
-                            &block_meta,
-                            modified_offsets,
-                        )
-                        .await?;
 
-                    drop(permit);
-                    Ok::<_, ErrorCode>(mutation_log_entry)
-                }
-            }));
+            let query_id = aggregation_ctx.ctx.get_id();
+            let handle = io_runtime.spawn(query_id, async move {
+                let mutation_log_entry = aggregation_ctx
+                    .apply_update_and_deletion_to_data_block(
+                        segment_idx,
+                        block_idx,
+                        &block_meta,
+                        modified_offsets,
+                    )
+                    .await?;
+
+                drop(permit);
+                Ok::<_, ErrorCode>(mutation_log_entry)
+            });
             mutation_log_handlers.push(handle);
         }
 

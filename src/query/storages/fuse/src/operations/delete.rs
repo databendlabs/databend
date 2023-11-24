@@ -42,21 +42,21 @@ use common_expression::TableSchema;
 use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_metrics::storage::*;
+use common_pipeline_core::Pipeline;
 use common_sql::evaluator::BlockOperator;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePruner;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
-use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
-use crate::metrics::metrics_inc_deletion_segment_range_purned_whole_segment_nums;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
-use crate::pipelines::Pipeline;
+use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
+use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
 
@@ -171,7 +171,13 @@ impl FuseTable {
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
 
-        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
+        let block_reader = self.create_block_reader(
+            ctx.clone(),
+            projection,
+            false,
+            self.change_tracking_enabled(),
+            false,
+        )?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(
@@ -199,9 +205,11 @@ impl FuseTable {
             source_col_indices.extend_from_slice(&remain_column_indices);
             Arc::new(Some(
                 (*self.create_block_reader(
+                    ctx.clone(),
                     Projection::Columns(remain_column_indices),
                     false,
-                    ctx.clone(),
+                    self.change_tracking_enabled(),
+                    false,
                 )?)
                 .clone(),
             ))
@@ -236,14 +244,48 @@ impl FuseTable {
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {
-        self.table_info
-            .schema()
+        self.schema_with_stream()
             .fields()
             .iter()
             .enumerate()
             .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .map(|(i, _)| i)
             .collect::<Vec<FieldIndex>>()
+    }
+
+    pub async fn mutation_read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        col_indices: Vec<FieldIndex>,
+        filters: Option<Filters>,
+        is_lazy: bool,
+        is_delete: bool,
+    ) -> Result<Partitions> {
+        let partitions = if is_lazy {
+            let mut segments = Vec::with_capacity(snapshot.segments.len());
+            for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+            }
+            Partitions::create(PartitionsShuffleKind::Mod, segments, true)
+        } else {
+            let projection = Projection::Columns(col_indices.clone());
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations: create_segment_location_vector(snapshot.segments.clone(), None),
+                block_count: Some(snapshot.summary.block_count as usize),
+            };
+            let (partitions, info) = self
+                .do_mutation_block_pruning(ctx, filters, projection, prune_ctx, true, is_delete)
+                .await?;
+            if is_delete {
+                log::info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+            }
+            partitions
+        };
+        Ok(partitions)
     }
 
     #[async_backtrace::framed]
@@ -270,7 +312,7 @@ impl FuseTable {
         let mut pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
-            self.table_info.schema(),
+            self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
         )?;
@@ -325,7 +367,7 @@ impl FuseTable {
 
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
-            self.table_info.schema(),
+            self.schema_with_stream(),
             None,
             &range_block_metas,
             block_count.unwrap_or_default(),

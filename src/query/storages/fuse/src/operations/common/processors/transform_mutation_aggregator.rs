@@ -26,8 +26,8 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
-use common_sql::executor::MutationKind;
+use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
+use common_sql::executor::physical_plans::MutationKind;
 use itertools::Itertools;
 use log::debug;
 use log::info;
@@ -190,9 +190,7 @@ impl TableMutationAggregator {
             MutationLogEntry::CompactExtras { extras } => {
                 match self.mutations.entry(extras.segment_index) {
                     Entry::Occupied(mut v) => {
-                        v.get_mut()
-                            .replaced_blocks
-                            .extend(extras.unchanged_blocks.into_iter());
+                        v.get_mut().replaced_blocks.extend(extras.unchanged_blocks);
                     }
                     Entry::Vacant(v) => {
                         v.insert(BlockMutations {

@@ -24,6 +24,7 @@ use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::gen_mutation_stream_meta;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
@@ -51,11 +52,12 @@ use common_expression::Scalar;
 use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_metrics::storage::*;
+use common_pipeline_core::processors::Event;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProcessorPtr;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
@@ -63,7 +65,6 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
@@ -302,7 +303,7 @@ impl NativeDeserializeDataTransform {
                     // If the source column is the default value, num_rows may be zero
                     if block.num_columns() > 0 && block.num_rows() == 0 {
                         let num_rows = array.len();
-                        let mut columns = block.columns().clone().to_vec();
+                        let mut columns = block.columns().to_vec();
                         columns.push(column);
                         *block = DataBlock::new(columns, num_rows);
                     } else {
@@ -451,11 +452,17 @@ impl NativeDeserializeDataTransform {
                 data_block.add_column(column);
             }
         }
-        let data_block = if !self.block_reader.query_internal_columns() {
-            data_block
-        } else {
-            fill_internal_column_meta(data_block, fuse_part, None)?
-        };
+
+        if self.block_reader.query_internal_columns() {
+            data_block = fill_internal_column_meta(data_block, fuse_part, None)?;
+        }
+
+        if self.block_reader.update_stream_columns() {
+            let inner_meta = data_block.take_meta();
+            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
+            data_block = data_block.add_meta(Some(Box::new(meta)))?;
+        }
+
         let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
         self.add_block(data_block)?;
 
@@ -475,10 +482,10 @@ impl NativeDeserializeDataTransform {
 
         let num_rows = fuse_part.nums_rows;
         let data_block = DataBlock::new(vec![], num_rows);
-        let data_block = if !self.block_reader.query_internal_columns() {
-            data_block
-        } else {
+        let data_block = if self.block_reader.query_internal_columns() {
             fill_internal_column_meta(data_block, fuse_part, None)?
+        } else {
+            data_block
         };
 
         self.add_block(data_block)?;
@@ -810,7 +817,14 @@ impl Processor for NativeDeserializeDataTransform {
 
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
                 block = fill_internal_column_meta(block, fuse_part, Some(offsets))?;
-            };
+            }
+
+            if self.block_reader.update_stream_columns() {
+                let inner_meta = block.take_meta();
+                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+                let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
+                block = block.add_meta(Some(Box::new(meta)))?;
+            }
 
             // Step 9: Add the block to output data
             self.offset_in_part += origin_num_rows;

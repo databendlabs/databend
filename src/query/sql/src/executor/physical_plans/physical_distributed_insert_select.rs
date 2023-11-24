@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
@@ -32,10 +31,4 @@ pub struct DistributedInsertSelect {
     pub select_schema: DataSchemaRef,
     pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,
-}
-
-impl DistributedInsertSelect {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
-    }
 }

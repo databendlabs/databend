@@ -33,29 +33,18 @@ use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::Session;
 
-// TODO(youngsofun): may need refactor later for 2 reasons:
-// 1. some can be both configured and overwritten by http query request
-// 2. maybe QueryConfig can contain it directly
-#[derive(Copy, Clone)]
-pub(crate) struct HttpQueryConfig {
-    pub(crate) result_timeout_secs: u64,
-}
-
 pub struct HttpQueryManager {
+    #[allow(clippy::type_complexity)]
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
     pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
-    pub(crate) config: HttpQueryConfig,
 }
 
 impl HttpQueryManager {
     #[async_backtrace::framed]
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
+    pub async fn init(_cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
-            config: HttpQueryConfig {
-                result_timeout_secs: cfg.query.http_handler_result_timeout_secs,
-            },
         }));
 
         Ok(())
@@ -71,7 +60,7 @@ impl HttpQueryManager {
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
     ) -> Result<Arc<HttpQuery>> {
-        let query = HttpQuery::try_create(ctx, request, self.config).await?;
+        let query = HttpQuery::try_create(ctx, request).await?;
         self.add_query(&query.id, query.clone()).await;
         Ok(query)
     }
@@ -87,21 +76,21 @@ impl HttpQueryManager {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
 
-        let timeout = self.config.result_timeout_secs;
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
         let query_clone = query.clone();
-        GlobalIORuntime::instance().spawn(async move {
+        GlobalIORuntime::instance().spawn(query_id, async move {
             loop {
                 match query_clone.check_expire().await {
                     ExpireResult::Expired => {
-                        let msg =
-                            format!("http query {} timeout after {} s", &query_id_clone, timeout);
+                        let msg = format!(
+                            "http query {} timeout after {} s",
+                            &query_id_clone, query_clone.result_timeout_secs
+                        );
                         if self_clone.remove_query(&query_id_clone).await.is_none() {
                             warn!("{msg}, but fail to remove");
                         } else {
                             warn!("{msg}");
-                            query.detach().await;
                             query.kill().await;
                         };
                         break;

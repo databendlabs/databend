@@ -95,7 +95,7 @@ impl Spiller {
             operator,
             config,
             spiller_type,
-            partition_set: vec![0, 1, 2, 3],
+            partition_set: vec![0, 1, 2, 3, 4, 5, 6, 7],
             spilled_partition_set: Default::default(),
             partition_location: Default::default(),
             columns_layout: Default::default(),
@@ -104,8 +104,12 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Spill partition set
-    pub async fn spill(&mut self, partitions: &[(u8, DataBlock)], worker_id: usize) -> Result<()> {
-        for (partition_id, partition) in partitions.iter() {
+    pub async fn spill(
+        &mut self,
+        partitions: Vec<(u8, DataBlock)>,
+        worker_id: usize,
+    ) -> Result<()> {
+        for (partition_id, partition) in partitions {
             self.spill_with_partition(partition_id, partition, worker_id)
                 .await?;
         }
@@ -116,15 +120,15 @@ impl Spiller {
     /// Spill data block with location
     pub async fn spill_with_partition(
         &mut self,
-        p_id: &u8,
-        data: &DataBlock,
+        p_id: u8,
+        data: DataBlock,
         worker_id: usize,
     ) -> Result<()> {
-        self.spilled_partition_set.insert(*p_id);
+        self.spilled_partition_set.insert(p_id);
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
         self.partition_location
-            .entry(*p_id)
+            .entry(p_id)
             .and_modify(|locs| {
                 locs.push(location.clone());
             })
@@ -155,10 +159,9 @@ impl Spiller {
             self.ctx.get_join_spill_progress().incr(&progress_val);
         }
         info!(
-            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
+            "{:?} spilled {:?} rows data, partition id is {:?}, worker id is {:?}",
             self.spiller_type,
             data.num_rows(),
-            location,
             p_id,
             worker_id
         );
@@ -170,17 +173,18 @@ impl Spiller {
     pub async fn read_spilled_data_from_partitions(
         &self,
         partitions: &HashSet<u8>,
+        worker_id: usize,
     ) -> Result<Vec<DataBlock>> {
         let mut spilled_data = Vec::with_capacity(partitions.len());
         for p_id in partitions.iter() {
-            spilled_data.append(&mut self.read_spilled_data(p_id).await?);
+            spilled_data.append(&mut self.read_spilled_data(p_id, worker_id).await?);
         }
         Ok(spilled_data)
     }
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_data(&self, p_id: &u8, worker_id: usize) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
         let files = self.partition_location.get(p_id).unwrap();
         let mut spilled_data = Vec::with_capacity(files.len());
@@ -195,17 +199,14 @@ impl Spiller {
                 begin += column_layout;
             }
             let block = DataBlock::new_from_columns(columns);
-            info!(
-                "{:?} read {:?} rows data from {:?}, partition id is {:?}",
-                self.spiller_type,
-                block.num_rows(),
-                file,
-                p_id
-            );
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }
         }
+        info!(
+            "{:?} read partition {:?}, work id: {:?}",
+            self.spiller_type, p_id, worker_id
+        );
         Ok(spilled_data)
     }
 
@@ -226,7 +227,7 @@ impl Spiller {
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0011;
+            let partition_id = *hash as u8 & 0b0000_0111;
             if spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows
@@ -248,7 +249,7 @@ impl Spiller {
                 row_indexes.len(),
             );
             // Spill block with partition id
-            self.spill_with_partition(p_id, &block, worker_id).await?;
+            self.spill_with_partition(*p_id, block, worker_id).await?;
         }
         // Return unspilled data
         let unspilled_block_row_indexes = unspilled_row_index

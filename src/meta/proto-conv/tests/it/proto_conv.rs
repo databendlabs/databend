@@ -20,6 +20,7 @@ use std::vec;
 use ce::types::decimal::DecimalSize;
 use ce::types::DecimalDataType;
 use ce::types::NumberDataType;
+use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_expression as ce;
@@ -30,6 +31,7 @@ use common_meta_app::schema as mt;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::schema::IndexType;
+use common_meta_app::schema::LockType;
 use common_meta_app::share;
 use common_meta_app::storage::StorageS3Config;
 use common_proto_conv::FromToProto;
@@ -70,7 +72,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
-        shared_by: BTreeSet::from_iter(vec![1].into_iter()),
+        shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
         owner: None,
     }
@@ -85,19 +87,19 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
         now,
     );
     let mut entries = BTreeMap::new();
-    for entry in vec![share::ShareGrantEntry::new(
+
+    let entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
         now,
-    )] {
-        entries.insert(entry.to_string().clone(), entry);
-    }
+    );
+    entries.insert(entry.to_string().clone(), entry);
 
     share::ShareMeta {
         database: Some(db_entry),
         entries,
-        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
-        share_from_db_ids: BTreeSet::from_iter(vec![1, 2].into_iter()),
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
+        share_from_db_ids: BTreeSet::from_iter(vec![1, 2]),
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
@@ -113,18 +115,18 @@ fn new_share_meta() -> share::ShareMeta {
         now,
     );
     let mut entries = BTreeMap::new();
-    for entry in vec![share::ShareGrantEntry::new(
+
+    let entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
         now,
-    )] {
-        entries.insert(entry.to_string().clone(), entry);
-    }
+    );
+    entries.insert(entry.to_string().clone(), entry);
 
     share::ShareMeta {
         database: Some(db_entry),
         entries,
-        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
         share_from_db_ids: BTreeSet::new(),
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
@@ -142,7 +144,9 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
 }
 
 fn new_lvt() -> mt::LeastVisibleTime {
-    mt::LeastVisibleTime { time: 10267 }
+    mt::LeastVisibleTime {
+        time: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+    }
 }
 
 fn new_table_meta() -> mt::TableMeta {
@@ -268,6 +272,18 @@ pub(crate) fn new_table_copied_file_info_v6() -> mt::TableCopiedFileInfo {
 
 pub(crate) fn new_empty_proto() -> mt::EmptyProto {
     mt::EmptyProto {}
+}
+
+pub(crate) fn new_lock_meta() -> mt::LockMeta {
+    mt::LockMeta {
+        user: "root".to_string(),
+        node: "node".to_string(),
+        query_id: "query".to_string(),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+        acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
+        lock_type: LockType::TABLE,
+        extra_info: BTreeMap::from([("key".to_string(), "val".to_string())]),
+    }
 }
 
 fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
@@ -462,6 +478,15 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("empty_proto:{:?}", buf);
+    }
+
+    // LockMeta
+    {
+        let table_lock_meta = new_lock_meta();
+        let p = table_lock_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
     }
 
     // schema

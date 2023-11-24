@@ -37,6 +37,8 @@ use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::version::raft_client_requires;
+use databend_meta::version::raft_server_provides;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
@@ -71,7 +73,12 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     set_panic_hook();
 
-    let _guards = init_logging("databend-meta", &conf.log);
+    // app name format: node_id@cluster_id
+    let app_name_shuffle = format!(
+        "databend-meta-{}@{}",
+        conf.raft_config.id, conf.raft_config.cluster_name
+    );
+    let _guards = init_logging(&app_name_shuffle, &conf.log);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -111,6 +118,11 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!();
     println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
     println!("Working DataVersion: {:?}", DATA_VERSION);
+    println!();
+
+    println!("Raft Feature set:");
+    println!("    Server Provide: {{ {} }}", raft_server_provides());
+    println!("    Client Require: {{ {} }}", raft_client_requires());
     println!();
 
     info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
@@ -183,7 +195,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     register_node(&meta_node, &conf).await?;
 
-    println!("Databend Metasrv starting...");
+    println!("Databend Metasrv started");
 
     stop_handler.wait_to_terminate(stop_tx).await;
     info!("Databend-meta is done shutting down");

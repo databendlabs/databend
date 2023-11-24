@@ -23,11 +23,11 @@ use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::InputPort;
+use common_pipeline_core::processors::OutputPort;
+use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sinks::SyncSenderSink;
 use common_pipeline_sources::SyncReceiverSource;
@@ -39,6 +39,7 @@ use databend_query::test_kits::create_query_context;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_always_call_on_finished() -> Result<()> {
     let settings = ExecutorSettings {
+        enable_profiling: false,
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
     };
