@@ -49,7 +49,7 @@ fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
 
 pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
     let values = comma_separated_list0(expr_or_placeholder);
-    map(rule! { ( "(" ~  #values ~ ")" ) }, |(_, v, _)| v)(i)
+    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v)(i)
 }
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
@@ -145,25 +145,6 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 
         run_pratt_parser(ExprParser, &expr_elements.into_iter(), rest, i)
     }
-}
-
-#[allow(clippy::needless_lifetimes)]
-pub fn column_id<'a>(i: Input<'a>) -> IResult<'a, ColumnID> {
-    alt((
-        map_res(rule! { ColumnPosition }, |token| {
-            let name = token.text().to_string();
-            let pos = name[1..].parse::<usize>()?;
-            if pos == 0 {
-                return Err(ErrorKind::Other("column position must be greater than 0"));
-            }
-            Ok(ColumnID::Position(crate::ast::ColumnPosition {
-                pos,
-                name,
-                span: Some(token.span),
-            }))
-        }),
-        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))(i)
 }
 
 /// A 'flattened' AST of expressions.
@@ -1172,6 +1153,41 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     )))(i)?;
 
     Ok((rest, WithSpan { span, elem }))
+}
+
+pub fn column_id(i: Input) -> IResult<ColumnID> {
+    alt((
+        map_res(rule! { ColumnPosition }, |token| {
+            let name = token.text().to_string();
+            let pos = name[1..].parse::<usize>()?;
+            if pos == 0 {
+                return Err(ErrorKind::Other("column position must be greater than 0"));
+            }
+            Ok(ColumnID::Position(crate::ast::ColumnPosition {
+                pos,
+                name,
+                span: Some(token.span),
+            }))
+        }),
+        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
+    ))(i)
+}
+
+/// Parse one to three idents separated by a dot, fulfilling from the right.
+///
+/// Example: `db.table.column`
+pub fn column_ref(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, ColumnID)> {
+    alt((
+        map(
+            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
+            |(ident1, _, ident2, _, ident3)| (Some(ident1), Some(ident2), ident3),
+        ),
+        map(
+            rule! { #ident ~ "." ~ #column_id },
+            |(ident2, _, ident3)| (None, Some(ident2), ident3),
+        ),
+        map(rule! { #column_id }, |ident3| (None, None, ident3)),
+    ))(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
