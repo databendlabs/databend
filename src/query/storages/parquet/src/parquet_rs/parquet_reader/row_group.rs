@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Buf;
 use bytes::Bytes;
 use common_base::base::tokio;
+use common_base::rangemap::RangeMerger;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
@@ -256,6 +258,44 @@ impl<'a> InMemoryRowGroup<'a> {
             let chunk_data = futures::future::try_join_all(handles).await?;
             Ok(chunk_data)
         }
+    }
+
+    fn sync_merge_io_read(&self, raw_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
+        let path = self.location.to_owned();
+        let range_merger = RangeMerger::from_iter(
+            raw_ranges,
+            read_settings.max_gap_size,
+            read_settings.max_range_size,
+        );
+        let merged_ranges = range_merger.ranges();
+
+        // Read merged range data.
+        let f = move || -> Result<HashMap<Range<u64>, Bytes>> {
+            merged_ranges
+                .into_iter()
+                .map(|range| {
+                    let data = self
+                        .op
+                        .blocking()
+                        .read_with(&location)
+                        .range(range)
+                        .call()?;
+                    Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                })
+                .collect::<Result<_>>()
+        };
+
+        let chunks = maybe_spawn_blocking(f).await?;
+        raw_ranges
+        .into_iter()
+        .map(|raw_range| {
+            let range = range_merger.get(raw_range).unwrap().1;
+            let chunk = chunks.get(&range).unwrap();
+            let start = (raw_range.start - range.start) as usize;
+            let end = (raw_range.end - range.start) as usize;
+            Ok::<_, ErrorCode>(chunk.clone().slice(start..end))
+        })
+        .collect::<Result<Vec<_>>>()
     }
 }
 
