@@ -264,8 +264,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             vectorize_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
             |a, b| {
                 let mut builder = ColumnBuilder::with_capacity(&b.generics[0], a.len());
-                for arr in a.iter() {
-                    builder.push(ScalarRef::Array(arr));
+                for a in a.iter() {
+                    builder.append_column(&a);
                 }
                 builder.build()
             }

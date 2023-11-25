@@ -253,6 +253,8 @@ select array_filter([1, 2], x -> x + 1)
 
 query TT
 select array_flatten( [ [1,2], [3,4] ] ), array_to_string(['open', 'ai'], ' love ');
+----
+[1,2,3,4]	open love ai
 
 statement ok
 DROP DATABASE array_func_test
