@@ -1251,15 +1251,16 @@ impl Column {
         }
     }
 
-    pub fn from_arrow(
+    pub fn from_arrow_by_array_type(
         arrow_col: &dyn common_arrow::arrow::array::Array,
+        array_type: &common_arrow::arrow::datatypes::DataType,
         data_type: &DataType,
     ) -> Column {
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
         let is_nullable = data_type.is_nullable();
         let data_type = data_type.remove_nullable();
-        let column = match arrow_col.data_type() {
+        let column = match array_type {
             ArrowDataType::Null => match data_type {
                 DataType::EmptyArray => Column::EmptyArray {
                     len: arrow_col.len(),
@@ -1680,117 +1681,9 @@ impl Column {
                     ),
                 }
             }
-            ArrowDataType::Extension(_name, box ty, _) => match ty {
-                ArrowDataType::Int8 => Column::Number(NumberColumn::Int8(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int8Array>()
-                        .expect("fail to read from arrow: array should be `Int8Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::Int16 => Column::Number(NumberColumn::Int16(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int16Array>()
-                        .expect("fail to read from arrow: array should be `Int16Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::Int32 => Column::Number(NumberColumn::Int32(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int32Array>()
-                        .expect("fail to read from arrow: array should be `Int32Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::Int64 => Column::Number(NumberColumn::Int64(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                        .expect("fail to read from arrow: array should be `Int64Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::UInt8 => Column::Number(NumberColumn::UInt8(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
-                        .expect("fail to read from arrow: array should be `UInt8Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::UInt16 => Column::Number(NumberColumn::UInt16(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
-                        .expect("fail to read from arrow: array should be `UInt16Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::UInt32 => Column::Number(NumberColumn::UInt32(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
-                        .expect("fail to read from arrow: array should be `UInt32Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::UInt64 => Column::Number(NumberColumn::UInt64(
-                    arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
-                        .expect("fail to read from arrow: array should be `UInt64Array`")
-                        .values()
-                        .clone(),
-                )),
-                ArrowDataType::Float32 => {
-                    let col = arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Float32Array>()
-                        .expect("fail to read from arrow: array should be `Float32Array`")
-                        .values()
-                        .clone();
-                    let col = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(col) };
-                    Column::Number(NumberColumn::Float32(col))
-                }
-                ArrowDataType::Float64 => {
-                    let col = arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Float64Array>()
-                        .expect("fail to read from arrow: array should be `Float64Array`")
-                        .values()
-                        .clone();
-                    let col = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(col) };
-                    Column::Number(NumberColumn::Float64(col))
-                }
-                ArrowType::Timestamp(uint, _) => {
-                    let values = arrow_col
-                        .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                        .expect("fail to read from arrow: array should be `Int64Array`")
-                        .values();
-                    let convert = match uint {
-                        TimeUnit::Second => (1_000_000, 1),
-                        TimeUnit::Millisecond => (1_000, 1),
-                        TimeUnit::Microsecond => (1, 1),
-                        TimeUnit::Nanosecond => (1, 1_000),
-                    };
-
-                    let values = if convert.0 == 1 && convert.1 == 1 {
-                        values.clone()
-                    } else {
-                        let values = values
-                            .iter()
-                            .map(|x| x * convert.0 / convert.1)
-                            .collect::<Vec<_>>();
-                        values.into()
-                    };
-                    Column::Timestamp(values)
-                }
-                _ => unimplemented!("unsupported arrow extension type {ty:?}"),
-            },
+            ArrowDataType::Extension(_name, box ty, _) => {
+                Self::from_arrow_by_array_type(arrow_col, ty, &data_type)
+            }
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
 
@@ -1803,6 +1696,13 @@ impl Column {
         } else {
             column
         }
+    }
+
+    pub fn from_arrow(
+        arrow_col: &dyn common_arrow::arrow::array::Array,
+        data_type: &DataType,
+    ) -> Column {
+        Self::from_arrow_by_array_type(arrow_col, arrow_col.data_type(), data_type)
     }
 
     pub fn random(ty: &DataType, len: usize) -> Self {
