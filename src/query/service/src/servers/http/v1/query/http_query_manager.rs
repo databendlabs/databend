@@ -78,20 +78,30 @@ impl HttpQueryManager {
 
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
-        let query_clone = query.clone();
+        let http_query_weak = Arc::downgrade(&query);
+        let timout_secs = query.result_timeout_secs.clone();
         GlobalIORuntime::instance().spawn(query_id, async move {
             loop {
-                match query_clone.check_expire().await {
+                let expire_res = match http_query_weak.upgrade() {
+                    None => {
+                        break;
+                    }
+                    Some(query) => query.check_expire().await,
+                };
+
+                match expire_res {
                     ExpireResult::Expired => {
                         let msg = format!(
                             "http query {} timeout after {} s",
-                            &query_id_clone, query_clone.result_timeout_secs
+                            &query_id_clone, timout_secs
                         );
                         if self_clone.remove_query(&query_id_clone).await.is_none() {
                             warn!("{msg}, but fail to remove");
                         } else {
                             warn!("{msg}");
-                            query.kill(&msg).await;
+                            if let Some(query) = http_query_weak.upgrade() {
+                                query.kill(&msg).await;
+                            }
                         };
                         break;
                     }
