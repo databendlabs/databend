@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io::Write;
 use std::time::Duration;
@@ -39,8 +40,8 @@ pub struct GlobalLogger {
 }
 
 impl GlobalLogger {
-    pub fn init(name: &str, cfg: &Config) {
-        let _guards = init_logging(name, cfg);
+    pub fn init(name: &str, cfg: &Config, labels: BTreeMap<String, String>) {
+        let _guards = init_logging(name, cfg, labels);
         GlobalInstance::set(Self { _guards });
     }
 }
@@ -69,8 +70,16 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
 }
 
 #[allow(dyn_drop)]
-pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
+pub fn init_logging(
+    name: &str,
+    cfg: &Config,
+    mut labels: BTreeMap<String, String>,
+) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
+    // use name as service name if not specified
+    if !labels.contains_key("service") {
+        labels.insert("service".to_string(), name.to_string());
+    }
 
     // Initialize tracing reporter
     if cfg.tracing.on {
@@ -128,26 +137,36 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     let mut normal_logger = fern::Dispatch::new();
     let mut query_logger = fern::Dispatch::new();
 
-    // Console logger
-    if cfg.stderr.on {
-        normal_logger = normal_logger.chain(
-            fern::Dispatch::new()
-                .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
-                .format(formatter(&cfg.stderr.format))
-                .chain(std::io::stderr()),
-        )
-    }
-
     // File logger
     if cfg.file.on {
         let (normal_log_file, flush_guard) = new_file_log_writer(&cfg.file.dir, name);
         guards.push(Box::new(flush_guard));
-        normal_logger = normal_logger.chain(
-            fern::Dispatch::new()
-                .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
-                .format(formatter(&cfg.file.format))
-                .chain(Box::new(normal_log_file) as Box<dyn Write + Send>),
-        );
+        let dispatch = fern::Dispatch::new()
+            .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
+            .format(formatter(&cfg.file.format))
+            .chain(Box::new(normal_log_file) as Box<dyn Write + Send>);
+        normal_logger = normal_logger.chain(dispatch);
+    }
+
+    // Console logger
+    if cfg.stderr.on {
+        let dispatch = fern::Dispatch::new()
+            .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
+            .format(formatter(&cfg.stderr.format))
+            .chain(std::io::stderr());
+        normal_logger = normal_logger.chain(dispatch)
+    }
+
+    // OpenTelemetry logger
+    if cfg.otlp.on {
+        let mut labels = labels.clone();
+        labels.insert("category".to_string(), "system".to_string());
+        let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
+        let dispatch = fern::Dispatch::new()
+            .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
+            .format(formatter("json"))
+            .chain(Box::new(logger) as Box<dyn Log>);
+        normal_logger = normal_logger.chain(dispatch);
     }
 
     // Log to minitrace
@@ -173,7 +192,9 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
             query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
         }
         if !cfg.query.otlp_endpoint.is_empty() {
-            let logger = new_otlp_log_writer(name, &cfg.tracing.otlp_endpoint);
+            let mut labels = labels.clone();
+            labels.insert("category".to_string(), "query".to_string());
+            let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }

@@ -22,6 +22,7 @@ use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use common_meta_types::MetaStartupError;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::OTLPConfig;
 use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
 use common_tracing::TracingConfig;
@@ -589,6 +590,7 @@ impl Into<InnerLogConfig> for LogConfig {
         InnerLogConfig {
             file: self.file.into(),
             stderr: self.stderr.into(),
+            otlp: OTLPConfig::default(),
             query: QueryLogConfig::default(),
             tracing: TracingConfig::default(),
         }

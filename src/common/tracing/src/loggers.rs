@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::io::BufWriter;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -93,11 +94,16 @@ pub(crate) struct OpenTelemetryOTLPLogWriter {
     logger: Logger,
 }
 
-pub(crate) fn new_otlp_log_writer(name: &str, endpoint: &str) -> OpenTelemetryOTLPLogWriter {
+pub(crate) fn new_otlp_log_writer(
+    endpoint: &str,
+    labels: BTreeMap<String, String>,
+) -> OpenTelemetryOTLPLogWriter {
+    let kvs = labels
+        .into_iter()
+        .map(|(k, v)| opentelemetry::KeyValue::new(k, v))
+        .collect::<Vec<_>>();
     let log_config = opentelemetry_sdk::logs::Config {
-        resource: Cow::Owned(opentelemetry::sdk::Resource::new([
-            opentelemetry::KeyValue::new("service.name", name.to_string()),
-        ])),
+        resource: Cow::Owned(opentelemetry::sdk::Resource::new(kvs)),
     };
     let export_config = opentelemetry_otlp::ExportConfig {
         endpoint: endpoint.to_string(),

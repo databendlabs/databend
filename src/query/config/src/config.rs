@@ -44,6 +44,7 @@ use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
 use common_tracing::TracingConfig as InnerTracingConfig;
@@ -1793,6 +1794,9 @@ pub struct LogConfig {
     pub stderr: StderrLogConfig,
 
     #[clap(flatten)]
+    pub otlp: OTLPLogConfig,
+
+    #[clap(flatten)]
     pub query: QueryLogConfig,
 
     #[clap(flatten)]
@@ -1838,6 +1842,13 @@ impl TryInto<InnerLogConfig> for LogConfig {
             file.dir = self.dir.to_string();
         }
 
+        let otlp: InnerOTLPLogConfig = self.otlp.try_into()?;
+        if otlp.on && otlp.endpoint.is_empty() {
+            return Err(ErrorCode::InvalidConfig(
+                "`endpoint` must be set when `otlp.on` is true".to_string(),
+            ));
+        }
+
         let mut query: InnerQueryLogConfig = self.query.try_into()?;
         if query.on && query.dir.is_empty() && query.otlp_endpoint.is_empty() {
             if file.dir.is_empty() {
@@ -1854,6 +1865,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
+            otlp,
             query,
             tracing,
         })
@@ -1867,6 +1879,7 @@ impl From<InnerLogConfig> for LogConfig {
             dir: inner.file.dir.clone(),
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+            otlp: inner.otlp.into(),
             query: inner.query.into(),
             tracing: inner.tracing.into(),
 
@@ -1991,6 +2004,56 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
+pub struct OTLPLogConfig {
+    #[clap(long = "log-otlp-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[serde(rename = "on")]
+    pub otlp_on: bool,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = "INFO")]
+    #[serde(rename = "level")]
+    pub otlp_level: String,
+
+    /// Log OpenTelemetry OTLP endpoint
+    #[clap(
+        long = "log-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = "http://127.0.0.1:4317"
+    )]
+    #[serde(rename = "endpoint")]
+    pub otlp_endpoint: String,
+}
+
+impl Default for OTLPLogConfig {
+    fn default() -> Self {
+        InnerOTLPLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerOTLPLogConfig> for OTLPLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerOTLPLogConfig> {
+        Ok(InnerOTLPLogConfig {
+            on: self.otlp_on,
+            level: self.otlp_level,
+            endpoint: self.otlp_endpoint,
+        })
+    }
+}
+
+impl From<InnerOTLPLogConfig> for OTLPLogConfig {
+    fn from(inner: InnerOTLPLogConfig) -> Self {
+        Self {
+            otlp_on: inner.on,
+            otlp_level: inner.level,
+            otlp_endpoint: inner.endpoint,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct QueryLogConfig {
     #[clap(long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
@@ -2059,7 +2122,7 @@ pub struct TracingConfig {
     #[clap(
         long = "log-tracing-otlp-endpoint",
         value_name = "VALUE",
-        default_value = "http://localhost:4317"
+        default_value = "http://127.0.0.1:4317"
     )]
     #[serde(rename = "otlp_endpoint")]
     pub tracing_otlp_endpoint: String,

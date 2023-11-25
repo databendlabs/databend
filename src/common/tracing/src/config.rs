@@ -20,6 +20,7 @@ use std::fmt::Formatter;
 pub struct Config {
     pub file: FileConfig,
     pub stderr: StderrConfig,
+    pub otlp: OTLPConfig,
     pub query: QueryLogConfig,
     pub tracing: TracingConfig,
 }
@@ -38,6 +39,11 @@ impl Config {
                 on: true,
                 level: "WARN".to_string(),
                 format: "text".to_string(),
+            },
+            otlp: OTLPConfig {
+                on: false,
+                level: "INFO".to_string(),
+                endpoint: "http://127.0.0.1:4317".to_string(),
             },
             query: QueryLogConfig {
                 on: false,
@@ -117,6 +123,33 @@ impl Default for StderrConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct OTLPConfig {
+    pub on: bool,
+    pub level: String,
+    pub endpoint: String,
+}
+
+impl Display for OTLPConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={}, level={}, endpoint={}",
+            self.on, self.level, self.endpoint
+        )
+    }
+}
+
+impl Default for OTLPConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            level: "INFO".to_string(),
+            endpoint: "http://127.0.0.1:4317".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct QueryLogConfig {
     pub on: bool,
     pub dir: String,
@@ -165,7 +198,7 @@ impl Default for TracingConfig {
         Self {
             on: false,
             capture_log_level: "INFO".to_string(),
-            otlp_endpoint: "http://localhost:4317".to_string(),
+            otlp_endpoint: "http://127.0.0.1:4317".to_string(),
         }
     }
 }
