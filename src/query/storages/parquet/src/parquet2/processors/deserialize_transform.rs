@@ -187,7 +187,7 @@ impl Parquet2DeserializeTransform {
         };
 
         for part in parts {
-            let readers = self.source_reader.row_group_readers_from_blocking_io(
+            let readers = self.source_reader.sync_read_columns_data_by_merge_io(
                 &settings,
                 &part,
                 &blocking_op,
@@ -209,14 +209,14 @@ impl Parquet2DeserializeTransform {
     fn process_row_group(
         &mut self,
         part: &Parquet2RowGroupPart,
-        readers: &mut IndexedChunks,
+        column_chunks: &mut IndexedChunks,
     ) -> Result<Option<DataBlock>> {
         let row_selection = part
             .row_selection
             .as_ref()
             .map(|sel| intervals_to_bitmap(sel, part.num_rows));
         // this means it's empty projection
-        if readers.is_empty() {
+        if column_chunks.is_empty() {
             let data_block = DataBlock::new(vec![], part.num_rows);
             return Ok(Some(data_block));
         }
@@ -228,7 +228,7 @@ impl Parquet2DeserializeTransform {
                 filter,
                 top_k,
             }) => {
-                let chunks = reader.read_from_merge_io(readers)?;
+                let chunks = reader.read_from_merge_io(column_chunks)?;
 
                 // only if there is not dictionary page, we can push down the row selection
                 let can_push_down = chunks
@@ -294,7 +294,7 @@ impl Parquet2DeserializeTransform {
                 }
 
                 // Step 6: Read remain columns.
-                let chunks = self.remain_reader.read_from_merge_io(readers)?;
+                let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
 
                 let can_push_down = chunks
                     .iter()
@@ -330,7 +330,7 @@ impl Parquet2DeserializeTransform {
             None => {
                 // for now only use current_row_group when prewhere_info is None
                 // for now only use current_row_group when prewhere_info is None
-                let chunks = self.remain_reader.read_from_merge_io(readers)?;
+                let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
                 let mut current_row_group =
                     self.remain_reader
                         .get_deserializer(part, chunks, row_selection)?;

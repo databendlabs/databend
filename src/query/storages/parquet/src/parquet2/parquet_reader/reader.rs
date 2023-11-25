@@ -32,7 +32,6 @@ use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_metrics::storage::*;
 use common_storage::ColumnNodes;
-use opendal::BlockingOperator;
 use opendal::Operator;
 
 use super::data::OneBlock;
@@ -41,7 +40,6 @@ use super::IndexedChunk;
 use super::IndexedChunks;
 use super::Parquet2PartData;
 use crate::parquet2::parquet_reader::deserialize::try_next_block;
-use crate::parquet2::parquet_reader::MergeIOReadResult;
 use crate::parquet2::parquet_table::arrow_to_table_schema;
 use crate::parquet2::projection::project_parquet_schema;
 use crate::parquet2::Parquet2RowGroupPart;
@@ -238,25 +236,20 @@ impl Parquet2Reader {
         Ok(Box::new(OneBlock(Some(block))))
     }
 
-    pub fn read_from_merge_io(&self, readers: &mut IndexedChunks) -> Result<Vec<IndexedChunk>> {
+    pub fn read_from_merge_io(
+        &self,
+        column_chunks: &mut IndexedChunks,
+    ) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read().len());
 
         for index in self.columns_to_read() {
-            let reader = readers.get_mut(index).unwrap();
-            let data = reader.to_vec();
+            let bytes = column_chunks.get_mut(index).unwrap();
+            let data = bytes.to_vec();
 
             chunks.push((*index, data));
         }
 
         Ok(chunks)
-    }
-    pub fn row_group_readers_from_blocking_io(
-        &self,
-        setting: &ReadSettings,
-        part: &Parquet2RowGroupPart,
-        operator: &BlockingOperator,
-    ) -> Result<MergeIOReadResult> {
-        self.sync_read_columns_data_by_merge_io(setting, part, operator)
     }
 
     pub fn readers_from_blocking_io(
@@ -267,7 +260,7 @@ impl Parquet2Reader {
         let part = ParquetPart::from_part(&part)?;
         match part {
             ParquetPart::Parquet2RowGroup(part) => Ok(Parquet2PartData::RowGroup(
-                self.row_group_readers_from_blocking_io(
+                self.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&ctx)?,
                     part,
                     &self.operator().blocking(),
