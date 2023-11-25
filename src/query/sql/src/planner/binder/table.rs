@@ -32,7 +32,6 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStageOptions;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
-use common_ast::ast::SetExpr;
 use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
@@ -358,9 +357,6 @@ impl Binder {
         };
 
         if let Some(fields) = fields {
-            // Delete result tuple column
-            let _ = bind_context.columns.pop();
-
             if let RelOperator::EvalScalar(plan) = (*srf_expr.plan).clone() {
                 if plan.items.len() != 1 {
                     return Err(ErrorCode::Internal(format!(
@@ -368,6 +364,8 @@ impl Binder {
                         plan.items.len()
                     )));
                 }
+                // Delete result tuple column
+                let _ = bind_context.columns.pop();
                 let scalar = &plan.items[0].scalar;
 
                 // Add tuple inner columns
@@ -411,20 +409,121 @@ impl Binder {
                 return Err(ErrorCode::Internal("Invalid table function subquery"));
             }
         }
+        // Set name for srf result column
+        bind_context.columns[0].column_name = "value".to_string();
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
         Ok((srf_expr, bind_context.clone()))
     }
 
+    /// Bind a lateral table function.
+    #[async_backtrace::framed]
+    async fn bind_lateral_table_function(
+        &mut self,
+        parent_context: &mut BindContext,
+        child: SExpr,
+        table_ref: &TableReference,
+    ) -> Result<(SExpr, BindContext)> {
+        match table_ref {
+            TableReference::TableFunction {
+                span,
+                name,
+                params,
+                named_params,
+                alias,
+                ..
+            } => {
+                let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
+                let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func_name.name)
+                    .map(|p| p.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    let args = parse_table_function_args(span, &func_name, params, named_params)?;
+
+                    // convert lateral join table function to srf function
+                    let srf = Expr::FunctionCall {
+                        span: *span,
+                        distinct: false,
+                        name: func_name.clone(),
+                        args,
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    };
+                    let srfs = vec![srf.clone()];
+                    let srf_expr = self
+                        .bind_project_set(&mut bind_context, &srfs, child)
+                        .await?;
+
+                    if let Some((_, flatten_scalar)) = bind_context.srfs.remove(&srf.to_string()) {
+                        // Add result column to metadata
+                        let data_type = flatten_scalar.data_type()?;
+                        let index = self
+                            .metadata
+                            .write()
+                            .add_derived_column(srf.to_string(), data_type.clone());
+                        let column_binding = ColumnBindingBuilder::new(
+                            srf.to_string(),
+                            index,
+                            Box::new(data_type),
+                            Visibility::Visible,
+                        )
+                        .build();
+                        bind_context.add_column_binding(column_binding);
+
+                        let eval_scalar = EvalScalar {
+                            items: vec![ScalarItem {
+                                scalar: flatten_scalar,
+                                index,
+                            }],
+                        };
+
+                        let flatten_expr =
+                            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
+
+                        let (new_expr, mut bind_context) = self
+                            .extract_srf_table_function_columns(
+                                &mut bind_context,
+                                span,
+                                &func_name,
+                                flatten_expr,
+                                alias,
+                            )
+                            .await?;
+
+                        // add left table columns.
+                        let mut new_columns = parent_context.columns.clone();
+                        new_columns.extend_from_slice(&bind_context.columns);
+                        bind_context.columns = new_columns;
+
+                        return Ok((new_expr, bind_context));
+                    } else {
+                        return Err(
+                            ErrorCode::Internal("srf flatten result is missing").set_span(*span)
+                        );
+                    }
+                } else {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "lateral join don't support `{}` function",
+                        func_name
+                    ))
+                    .set_span(*span));
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
     /// Bind a table function.
-    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn bind_table_function(
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
-        lateral: bool,
         name: &Identifier,
         params: &Vec<Expr>,
         named_params: &Vec<(String, Expr)>,
@@ -466,18 +565,8 @@ impl Binder {
                 having: None,
                 window_list: None,
             };
-            let query = Query {
-                span: *span,
-                with: None,
-                body: SetExpr::Select(Box::new(select_stmt)),
-                order_by: vec![],
-                limit: vec![],
-                offset: None,
-                ignore_result: false,
-            };
-
             let (srf_expr, mut bind_context) = self
-                .bind_subquery(bind_context, lateral, &query, &None)
+                .bind_select_stmt(bind_context, &select_stmt, &[], 0)
                 .await?;
 
             return self
@@ -690,22 +779,14 @@ impl Binder {
             }
             TableReference::TableFunction {
                 span,
-                lateral,
                 name,
                 params,
                 named_params,
                 alias,
+                ..
             } => {
-                self.bind_table_function(
-                    bind_context,
-                    span,
-                    *lateral,
-                    name,
-                    params,
-                    named_params,
-                    alias,
-                )
-                .await
+                self.bind_table_function(bind_context, span, name, params, named_params, alias)
+                    .await
             }
             TableReference::Subquery {
                 span: _,
@@ -923,20 +1004,32 @@ impl Binder {
                     result_ctx = ctx;
                 }
                 _ => {
-                    let (right_expr, right_ctx) =
-                        self.bind_single_table(&mut result_ctx, &join.right).await?;
-                    let (join_expr, ctx) = self
-                        .bind_join(
-                            current_ctx,
-                            result_ctx,
-                            right_ctx,
-                            result_expr,
-                            right_expr,
-                            join,
-                        )
-                        .await?;
-                    result_expr = join_expr;
-                    result_ctx = ctx;
+                    if join.right.is_lateral_table_function() {
+                        let (expr, ctx) = self
+                            .bind_lateral_table_function(
+                                &mut result_ctx,
+                                result_expr.clone(),
+                                &join.right,
+                            )
+                            .await?;
+                        result_expr = expr;
+                        result_ctx = ctx;
+                    } else {
+                        let (right_expr, right_ctx) =
+                            self.bind_single_table(&mut result_ctx, &join.right).await?;
+                        let (join_expr, ctx) = self
+                            .bind_join(
+                                current_ctx,
+                                result_ctx,
+                                right_ctx,
+                                result_expr,
+                                right_expr,
+                                join,
+                            )
+                            .await?;
+                        result_expr = join_expr;
+                        result_ctx = ctx;
+                    }
                 }
             }
         }

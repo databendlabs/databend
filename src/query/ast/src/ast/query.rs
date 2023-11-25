@@ -289,6 +289,13 @@ impl TableReference {
             _ => None,
         }
     }
+
+    pub fn is_lateral_table_function(&self) -> bool {
+        match self {
+            TableReference::TableFunction { lateral, .. } => *lateral,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
