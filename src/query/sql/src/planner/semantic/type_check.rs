@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use chrono::Local;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
@@ -348,8 +347,7 @@ impl<'a> TypeChecker<'a> {
                         },
                     ])
                     .await?;
-                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])
-                    .await?
+                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])?
             }
 
             Expr::InList {
@@ -471,8 +469,7 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_scalar_function_call(*span, "and", vec![], vec![
                         ge_func.clone(),
                         le_func.clone(),
-                    ])
-                    .await?
+                    ])?
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
@@ -483,8 +480,7 @@ impl<'a> TypeChecker<'a> {
                         .resolve_binary_op(*span, &BinaryOperator::Gt, expr.as_ref(), high.as_ref())
                         .await?;
 
-                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])
-                        .await?
+                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])?
                 }
             }
 
@@ -696,10 +692,7 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Literal { span, lit } => {
-                let box (value, data_type) = self.resolve_literal(lit)?;
-                Box::new((ConstantExpr { span: *span, value }.into(), data_type))
-            }
+            Expr::Literal { span, lit } => self.resolve_literal(*span, lit)?,
 
             Expr::FunctionCall {
                 span,
@@ -1238,7 +1231,7 @@ impl<'a> TypeChecker<'a> {
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
         if let Expr::Literal { lit, .. } = expr {
-            let box (value, _) = self.resolve_literal(lit)?;
+            let box (value, _) = self.resolve_constant_literal(None, lit)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -1258,6 +1251,24 @@ impl<'a> TypeChecker<'a> {
             "Only unsigned numbers are allowed in ROWS offset".to_string(),
         )
         .set_span(expr.span()))
+    }
+
+    #[inline]
+    fn resolve_constant_literal(
+        &self,
+        span: Span,
+        literal: &common_ast::ast::Literal,
+    ) -> Result<Box<(Scalar, DataType)>> {
+        let box (scalar, data_type) = self.resolve_literal(span, literal)?;
+
+        if let ScalarExpr::ConstantExpr(scalar) = scalar {
+            Ok(Box::new((scalar.value, data_type)))
+        } else {
+            Err(
+                ErrorCode::SemanticError("Expect to have constant literal".to_string())
+                    .set_span(span),
+            )
+        }
     }
 
     fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
@@ -1693,7 +1704,10 @@ impl<'a> TypeChecker<'a> {
         // Check aggregate function
         let params = params
             .iter()
-            .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
+            .map(|literal| {
+                self.resolve_constant_literal(span, literal)
+                    .map(|box (value, _)| value)
+            })
             .collect::<Result<Vec<_>>>()?;
 
         self.in_aggregate_function = true;
@@ -1827,12 +1841,10 @@ impl<'a> TypeChecker<'a> {
         };
 
         self.resolve_scalar_function_call(span, &func_name, params, args)
-            .await
     }
 
-    #[async_backtrace::framed]
-    pub async fn resolve_scalar_function_call(
-        &mut self,
+    pub fn resolve_scalar_function_call(
+        &self,
         span: Span,
         func_name: &str,
         params: Vec<usize>,
@@ -1916,19 +1928,16 @@ impl<'a> TypeChecker<'a> {
                     .resolve_binary_op(span, &positive_op, left, right)
                     .await?;
                 self.resolve_scalar_function_call(span, "not", vec![], vec![positive])
-                    .await
             }
             BinaryOperator::SoundsLike => {
                 // rewrite "expr1 SOUNDS LIKE expr2" to "SOUNDEX(expr1) = SOUNDEX(expr2)"
                 let box (left, _) = self.resolve(left).await?;
                 let box (right, _) = self.resolve(right).await?;
 
-                let (left, _) = *self
-                    .resolve_scalar_function_call(span, "soundex", vec![], vec![left])
-                    .await?;
-                let (right, _) = *self
-                    .resolve_scalar_function_call(span, "soundex", vec![], vec![right])
-                    .await?;
+                let (left, _) =
+                    *self.resolve_scalar_function_call(span, "soundex", vec![], vec![left])?;
+                let (right, _) =
+                    *self.resolve_scalar_function_call(span, "soundex", vec![], vec![right])?;
 
                 self.resolve_scalar_function_call(
                     span,
@@ -1936,7 +1945,6 @@ impl<'a> TypeChecker<'a> {
                     vec![],
                     vec![left, right],
                 )
-                .await
             }
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
@@ -2051,7 +2059,6 @@ impl<'a> TypeChecker<'a> {
         arg_types.push(interval_type);
 
         self.resolve_scalar_function_call(span, &func_name, vec![], args)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2581,20 +2588,14 @@ impl<'a> TypeChecker<'a> {
                     .resolve_function(span, "array", vec![], args)
                     .await
                     .ok()?;
-                Some(
-                    self.resolve_scalar_function_call(span, "array_max", vec![], vec![array])
-                        .await,
-                )
+                Some(self.resolve_scalar_function_call(span, "array_max", vec![], vec![array]))
             }
             ("least", args) => {
                 let (array, _) = *self
                     .resolve_function(span, "array", vec![], args)
                     .await
                     .ok()?;
-                Some(
-                    self.resolve_scalar_function_call(span, "array_min", vec![], vec![array])
-                        .await,
-                )
+                Some(self.resolve_scalar_function_call(span, "array_min", vec![], vec![array]))
             }
             _ => None,
         }
@@ -2631,14 +2632,14 @@ impl<'a> TypeChecker<'a> {
         let args = vec![trim_source, trim_scalar];
 
         self.resolve_scalar_function_call(span, func_name, vec![], args)
-            .await
     }
 
     /// Resolve literal values.
     pub fn resolve_literal(
         &self,
+        span: Span,
         literal: &common_ast::ast::Literal,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let value = match literal {
             Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
             Literal::Decimal256 {
@@ -2653,11 +2654,21 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
-            Literal::CurrentTimestamp => Scalar::Timestamp(Local::now().timestamp_micros()),
+            Literal::CurrentTimestamp => {
+                return self.resolve_scalar_function_call(
+                    None,
+                    "current_timestamp",
+                    vec![],
+                    vec![],
+                );
+            }
         };
         let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
-        Ok(Box::new((value, data_type)))
+        Ok(Box::new((
+            ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
+            data_type,
+        )))
     }
 
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
@@ -2676,7 +2687,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         self.resolve_scalar_function_call(span, "array", vec![], elems)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2689,27 +2699,18 @@ impl<'a> TypeChecker<'a> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
-            let box (key_arg, _data_type) = self.resolve_literal(key_expr)?;
-            keys.push(
-                ConstantExpr {
-                    span,
-                    value: key_arg,
-                }
-                .into(),
-            );
+            let box (key_arg, _data_type) = self.resolve_literal(span, key_expr)?;
+            keys.push(key_arg);
             let box (val_arg, _data_type) = self.resolve(val_expr).await?;
             vals.push(val_arg);
         }
-        let box (key_arg, _data_type) = self
-            .resolve_scalar_function_call(span, "array", vec![], keys)
-            .await?;
-        let box (val_arg, _data_type) = self
-            .resolve_scalar_function_call(span, "array", vec![], vals)
-            .await?;
+        let box (key_arg, _data_type) =
+            self.resolve_scalar_function_call(span, "array", vec![], keys)?;
+        let box (val_arg, _data_type) =
+            self.resolve_scalar_function_call(span, "array", vec![], vals)?;
         let args = vec![key_arg, val_arg];
 
         self.resolve_scalar_function_call(span, "map", vec![], args)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2726,7 +2727,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         self.resolve_scalar_function_call(span, "tuple", vec![], args)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2763,7 +2763,6 @@ impl<'a> TypeChecker<'a> {
                 })
                 .await?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
-                .await
         } else {
             let name = op.to_func_name();
             self.resolve_function(span, name.as_str(), vec![], &[left, right])
@@ -3122,12 +3121,7 @@ impl<'a> TypeChecker<'a> {
                 .into();
                 continue;
             }
-            let box (path_value, _) = self.resolve_literal(&path_lit)?;
-            let path_scalar: ScalarExpr = ConstantExpr {
-                span,
-                value: path_value,
-            }
-            .into();
+            let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
             if let TableDataType::Array(inner_type) = table_data_type {
                 table_data_type = *inner_type;
             }
