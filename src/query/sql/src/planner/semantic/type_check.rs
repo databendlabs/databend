@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
+use chrono::Local;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
@@ -152,7 +153,7 @@ pub struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(
+    pub fn try_create(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
@@ -160,9 +161,9 @@ impl<'a> TypeChecker<'a> {
         aliases: &'a [(String, ScalarExpr)],
         allow_pushdown: bool,
         forbid_udf: bool,
-    ) -> Self {
-        let func_ctx = ctx.get_function_context().unwrap();
-        Self {
+    ) -> Result<Self> {
+        let func_ctx = ctx.get_function_context()?;
+        Ok(Self {
             bind_context,
             ctx,
             func_ctx,
@@ -175,7 +176,7 @@ impl<'a> TypeChecker<'a> {
             in_window_function: false,
             allow_pushdown,
             forbid_udf,
-        }
+        })
     }
 
     pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {
@@ -2651,9 +2652,7 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
-            Literal::CurrentTimestamp => Err(ErrorCode::SemanticError(format!(
-                "Unsupported literal value: {literal}"
-            )))?,
+            Literal::CurrentTimestamp => Scalar::Timestamp(Local::now().timestamp_micros()),
         };
         let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
