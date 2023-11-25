@@ -233,5 +233,12 @@ fn replace_column(
                 }
             }
         }
+        ScalarExpr::UDFLambdaCall(expr) => {
+            if let Some(s) = equi_conditions_map.get(expr.scalar.as_ref()) {
+                *expr.scalar = (**s).clone();
+            } else {
+                replace_column(&mut expr.scalar, equi_conditions_map);
+            }
+        }
     }
 }
