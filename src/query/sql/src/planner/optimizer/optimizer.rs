@@ -144,10 +144,7 @@ pub fn optimize(
                     ..*plan
                 })))
             } else {
-                Ok(Plan::MergeInto(Box::new(MergeInto {
-                    input: join_sexpr,
-                    ..*plan
-                })))
+                Ok(Plan::MergeInto(plan))
             }
         }
         // Passthrough statements.
