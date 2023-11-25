@@ -2210,6 +2210,7 @@ impl<'a> TypeChecker<'a> {
             "try_to_variant",
             "greatest",
             "least",
+            "stream_has_data",
         ]
     }
 
