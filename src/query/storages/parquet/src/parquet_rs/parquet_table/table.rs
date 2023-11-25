@@ -286,6 +286,7 @@ impl Table for ParquetRSTable {
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
+            false,
         )
         .await?;
         let elapsed = now.elapsed();

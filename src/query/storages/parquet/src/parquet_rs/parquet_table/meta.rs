@@ -39,6 +39,7 @@ pub async fn read_metas_in_parallel(
     leaf_fields: Arc<Vec<TableField>>,
     num_threads: usize,
     max_memory_usage: u64,
+    is_copy: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     if file_infos.is_empty() {
         return Ok(vec![]);
@@ -66,6 +67,7 @@ pub async fn read_metas_in_parallel(
             leaf_fields,
             schema_from,
             max_memory_usage,
+            is_copy,
         ));
     }
 
@@ -108,8 +110,9 @@ async fn load_and_check_parquet_meta(
     op: Operator,
     expect: &SchemaDescriptor,
     schema_from: &str,
+    is_copy: bool,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata = read_meta_data(op, file, size).await?;
+    let metadata = read_meta_data(op, file, size, is_copy).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),
@@ -124,6 +127,7 @@ pub async fn read_meta_data(
     dal: Operator,
     location: &str,
     filesize: u64,
+    is_copy: bool,
 ) -> Result<Arc<ParquetMetaData>> {
     let reader = MetaDataReader::meta_data_reader(dal);
 
@@ -131,7 +135,7 @@ pub async fn read_meta_data(
         location: location.to_owned(),
         len_hint: Some(filesize),
         ver: 0,
-        put_cache: true,
+        put_cache: !is_copy,
     };
 
     match reader.read(&load_params).await?.as_ref() {
@@ -149,11 +153,19 @@ pub async fn read_parquet_metas_batch(
     leaf_fields: Arc<Vec<TableField>>,
     schema_from: String,
     max_memory_usage: u64,
+    is_copy: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (location, size) in file_infos {
-        let meta =
-            load_and_check_parquet_meta(&location, size, op.clone(), &expect, &schema_from).await?;
+        let meta = load_and_check_parquet_meta(
+            &location,
+            size,
+            op.clone(),
+            &expect,
+            &schema_from,
+            is_copy,
+        )
+        .await?;
         if unlikely(meta.file_metadata().num_rows() == 0) {
             // Don't collect empty files
             continue;
