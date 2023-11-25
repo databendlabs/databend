@@ -40,7 +40,7 @@ impl Binder {
         variable: &Identifier,
         value: &Expr,
     ) -> Result<Plan> {
-        let mut type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::try_create(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
@@ -48,7 +48,7 @@ impl Binder {
             &[],
             false,
             false,
-        );
+        )?;
         let variable = variable.name.clone();
 
         let (scalar, _) = *type_checker.resolve(value).await?;

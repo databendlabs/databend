@@ -83,7 +83,7 @@ impl<'a> ScalarBinder<'a> {
 
     #[async_backtrace::framed]
     pub async fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
-        let mut type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::try_create(
             self.bind_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
@@ -91,7 +91,7 @@ impl<'a> ScalarBinder<'a> {
             self.aliases,
             self.allow_pushdown,
             self.forbid_udf,
-        );
+        )?;
         type_checker.set_m_cte_bound_ctx(self.m_cte_bound_ctx.clone());
         type_checker.set_ctes_map(self.ctes_map.clone());
         Ok(*type_checker.resolve(expr).await?)
