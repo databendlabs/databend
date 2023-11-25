@@ -104,6 +104,8 @@ pub struct InMemoryRowGroup<'a> {
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
     row_count: usize,
+    max_gap_size: u64,
+    max_range_size: u64,
 }
 
 impl<'a> InMemoryRowGroup<'a> {
@@ -112,6 +114,8 @@ impl<'a> InMemoryRowGroup<'a> {
         op: Operator,
         rg: &'a RowGroupMetaData,
         page_locations: Option<&'a [Vec<PageLocation>]>,
+        max_gap_size: u64,
+        max_range_size: u64,
     ) -> Self {
         Self {
             location,
@@ -120,6 +124,8 @@ impl<'a> InMemoryRowGroup<'a> {
             page_locations,
             column_chunks: vec![None; rg.num_columns()],
             row_count: rg.num_rows() as usize,
+            max_gap_size,
+            max_range_size,
         }
     }
 
@@ -230,72 +236,53 @@ impl<'a> InMemoryRowGroup<'a> {
     }
 
     async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
-        if self.op.info().full_capability().blocking {
-            let blocking_op = self.op.blocking();
-            let ranges = ranges.to_vec();
-            let location = self.location.to_owned();
-
-            let f = move || -> Result<Vec<Bytes>> {
-                ranges
-                    .into_iter()
-                    .map(|range| {
-                        let data = blocking_op.read_with(&location).range(range).call()?;
-                        Ok::<_, ErrorCode>(Bytes::from(data))
-                    })
-                    .collect::<Result<Vec<_>>>()
-            };
-
-            maybe_spawn_blocking(f).await
-        } else {
-            let mut handles = Vec::with_capacity(ranges.len());
-            for range in ranges {
-                let fut_read = self.op.read_with(self.location);
-                handles.push(async move {
-                    let data = fut_read.range(range.start..range.end).await?;
-                    Ok::<_, ErrorCode>(Bytes::from(data))
-                });
-            }
-            let chunk_data = futures::future::try_join_all(handles).await?;
-            Ok(chunk_data)
-        }
-    }
-
-    fn sync_merge_io_read(&self, raw_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
-        let path = self.location.to_owned();
-        let range_merger = RangeMerger::from_iter(
-            raw_ranges,
-            read_settings.max_gap_size,
-            read_settings.max_range_size,
-        );
+        let raw_ranges = ranges.to_vec();
+        let range_merger =
+            RangeMerger::from_iter(raw_ranges.clone(), self.max_gap_size, self.max_range_size);
         let merged_ranges = range_merger.ranges();
+        let blocking_op = self.op.blocking();
+        let location = self.location.to_owned();
+        let chunks = match self.op.info().full_capability().blocking {
+            true => {
+                // Read merged range data.
+                let f = move || -> Result<HashMap<Range<u64>, Bytes>> {
+                    merged_ranges
+                        .into_iter()
+                        .map(|range| {
+                            let data = blocking_op
+                                .read_with(&location)
+                                .range(range.clone())
+                                .call()?;
+                            Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                        })
+                        .collect::<Result<_>>()
+                };
 
-        // Read merged range data.
-        let f = move || -> Result<HashMap<Range<u64>, Bytes>> {
-            merged_ranges
-                .into_iter()
-                .map(|range| {
-                    let data = self
-                        .op
-                        .blocking()
-                        .read_with(&location)
-                        .range(range)
-                        .call()?;
-                    Ok::<_, ErrorCode>((range, Bytes::from(data)))
-                })
-                .collect::<Result<_>>()
+                maybe_spawn_blocking(f).await?
+            }
+            false => {
+                let mut handles = Vec::with_capacity(merged_ranges.len());
+                for range in merged_ranges {
+                    let fut_read = self.op.read_with(self.location);
+                    handles.push(async move {
+                        let data = fut_read.range(range.start..range.end).await?;
+                        Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                    });
+                }
+                let chunk_data = futures::future::try_join_all(handles).await?;
+                chunk_data.into_iter().collect()
+            }
         };
-
-        let chunks = maybe_spawn_blocking(f).await?;
         raw_ranges
-        .into_iter()
-        .map(|raw_range| {
-            let range = range_merger.get(raw_range).unwrap().1;
-            let chunk = chunks.get(&range).unwrap();
-            let start = (raw_range.start - range.start) as usize;
-            let end = (raw_range.end - range.start) as usize;
-            Ok::<_, ErrorCode>(chunk.clone().slice(start..end))
-        })
-        .collect::<Result<Vec<_>>>()
+            .into_iter()
+            .map(|raw_range| {
+                let range = range_merger.get(raw_range.clone()).unwrap().1;
+                let chunk = chunks.get(&range).unwrap();
+                let start = (raw_range.start - range.start) as usize;
+                let end = (raw_range.end - range.start) as usize;
+                Ok::<_, ErrorCode>(chunk.clone().slice(start..end))
+            })
+            .collect::<Result<Vec<_>>>()
     }
 }
 

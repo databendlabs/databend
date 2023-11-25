@@ -52,12 +52,12 @@ use crate::parquet2::parquet_reader::BlockIterator;
 use crate::parquet2::parquet_reader::IndexedChunks;
 use crate::parquet2::parquet_reader::Parquet2PartData;
 use crate::parquet2::parquet_reader::Parquet2Reader;
-use crate::parquet2::parquet_reader::ReadSettings;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
 use crate::parquet2::pruning::PartitionPruner;
 use crate::parquet2::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
+use crate::ReadSettings;
 
 pub trait SmallFilePrunner: Send + Sync {
     fn prune_one_file(

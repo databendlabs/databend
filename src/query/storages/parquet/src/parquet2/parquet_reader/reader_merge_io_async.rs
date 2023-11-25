@@ -27,8 +27,8 @@ use opendal::Operator;
 use crate::parquet2::parquet_reader::MergeIOReadResult;
 use crate::parquet2::parquet_reader::OwnerMemory;
 use crate::parquet2::parquet_reader::Parquet2Reader;
-use crate::parquet2::parquet_reader::ReadSettings;
 use crate::parquet2::Parquet2RowGroupPart;
+use crate::ReadSettings;
 
 impl Parquet2Reader {
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.

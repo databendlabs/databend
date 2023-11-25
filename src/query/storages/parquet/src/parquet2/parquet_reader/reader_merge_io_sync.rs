@@ -23,8 +23,8 @@ use opendal::BlockingOperator;
 use crate::parquet2::parquet_reader::MergeIOReadResult;
 use crate::parquet2::parquet_reader::OwnerMemory;
 use crate::parquet2::parquet_reader::Parquet2Reader;
-use crate::parquet2::parquet_reader::ReadSettings;
 use crate::parquet2::Parquet2RowGroupPart;
+use crate::ReadSettings;
 
 impl Parquet2Reader {
     pub fn sync_merge_io_read(
