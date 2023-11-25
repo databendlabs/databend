@@ -232,7 +232,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
-                                let mut type_checker = TypeChecker::new(
+                                let mut type_checker = TypeChecker::try_create(
                                     &mut bind_context,
                                     ctx.clone(),
                                     &name_resolution_ctx,
@@ -240,7 +240,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                     &aliases,
                                     false,
                                     false,
-                                );
+                                )?;
 
                                 ctx.set_status_info(
                                     &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",

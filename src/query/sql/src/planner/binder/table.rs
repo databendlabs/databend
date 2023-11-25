@@ -1361,7 +1361,7 @@ impl Binder {
         match travel_point {
             TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
             TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker = TypeChecker::new(
+                let mut type_checker = TypeChecker::try_create(
                     bind_context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
@@ -1369,7 +1369,7 @@ impl Binder {
                     &[],
                     false,
                     false,
-                );
+                )?;
                 let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr()?;
 
