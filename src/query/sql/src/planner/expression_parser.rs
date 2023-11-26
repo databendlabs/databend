@@ -70,6 +70,7 @@ pub fn bind_one_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, Metada
         None,
         false,
         false,
+        false,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);

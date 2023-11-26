@@ -97,6 +97,8 @@ Functions overloads:
 1 array_distinct(Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_distinct(Array(T0)) :: Array(T0)
 3 array_distinct(Array(T0) NULL) :: Array(T0) NULL
+0 array_flatten(Array(Array(T0))) :: Array(T0)
+1 array_flatten(Array(Array(T0)) NULL) :: Array(T0) NULL
 0 array_indexof(NULL, NULL) :: NULL
 1 array_indexof(Array(T0), T0) :: UInt64
 2 array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
@@ -135,6 +137,8 @@ Functions overloads:
 0 array_stddev_pop FACTORY
 0 array_stddev_samp FACTORY
 0 array_sum FACTORY
+0 array_to_string(Array(String), String) :: String
+1 array_to_string(Array(String) NULL, String NULL) :: String NULL
 0 array_unique(Array(Nothing)) :: UInt64
 1 array_unique(Array(Nothing) NULL) :: UInt64 NULL
 2 array_unique(Array(T0)) :: UInt64
