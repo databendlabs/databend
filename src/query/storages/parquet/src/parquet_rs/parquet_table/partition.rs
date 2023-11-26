@@ -240,7 +240,7 @@ impl ParquetRSTable {
             let leaf_fields = self.leaf_fields.clone();
             let topk = topk.clone();
             let is_remote_query = matches!(self.stage_info.stage_type, StageType::External)
-                && matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
+                && matches!(ctx.get_query_kind(), QueryKind::Query);
 
             tasks.push(async move {
                 let metas = read_parquet_metas_batch(
