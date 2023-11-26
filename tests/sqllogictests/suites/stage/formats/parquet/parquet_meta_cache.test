@@ -21,3 +21,13 @@ query
 SELECT name,num_items,size  FROM system.caches where name='file_meta_data_cache';
 ----
 file_meta_data_cache    0     0 
+
+query 
+select * from  @data/parquet/multi_page/multi_page_4.parquet 
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+
+query 
+SELECT name,num_items,size  FROM system.caches where name='file_meta_data_cache';
+----
+file_meta_data_cache    0     0 
