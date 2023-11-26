@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -44,6 +45,7 @@ use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
 use common_tracing::init_logging;
 use common_tracing::FileConfig;
+use common_tracing::OTLPConfig;
 use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig;
 use common_tracing::TracingConfig;
@@ -96,18 +98,12 @@ async fn main() {
             level: "WARN".to_string(),
             format: "text".to_string(),
         },
-        query: QueryLogConfig {
-            on: false,
-            dir: "./.databend/logs/query-details".to_string(),
-        },
-        tracing: TracingConfig {
-            on: false,
-            capture_log_level: "TRACE".to_string(),
-            otlp_endpoint: "http://127.0.0.1:4317".to_string(),
-        },
+        otlp: OTLPConfig::default(),
+        query: QueryLogConfig::default(),
+        tracing: TracingConfig::default(),
     };
 
-    let _guards = init_logging("databend-metabench", &log_config);
+    let _guards = init_logging("databend-metabench", &log_config, BTreeMap::new());
 
     println!("config: {:?}", config);
     if config.grpc_api_address.is_empty() {

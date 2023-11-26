@@ -15,12 +15,14 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod grpc;
+use common_tracing::OTLPConfig;
 use common_tracing::QueryLogConfig;
 use common_tracing::TracingConfig;
 use grpc::export_meta;
 
 mod snapshot;
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use clap::Parser;
@@ -122,11 +124,12 @@ async fn main() -> anyhow::Result<()> {
             format: "text".to_string(),
         },
         stderr: StderrConfig::default(),
+        otlp: OTLPConfig::default(),
         query: QueryLogConfig::default(),
         tracing: TracingConfig::default(),
     };
 
-    let _guards = init_logging("metactl", &log_config);
+    let _guards = init_logging("metactl", &log_config, BTreeMap::new());
 
     if config.status {
         return show_status(&config).await;

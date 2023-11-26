@@ -486,16 +486,11 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn kill(&self) {
+    pub async fn kill(&self, reason: &str) {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(
-            &self.state,
-            Err(ErrorCode::AbortedQuery("killed by http")),
-            true,
-        )
-        .await;
+        Executor::stop(&self.state, Err(ErrorCode::AbortedQuery(reason)), true).await;
     }
 
     #[async_backtrace::framed]

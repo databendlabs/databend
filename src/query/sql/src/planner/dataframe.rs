@@ -96,6 +96,7 @@ impl Dataframe {
                 None,
                 false,
                 false,
+                false,
             );
 
             binder
