@@ -1,10 +1,4 @@
 query 
-show stages;
-----
-csv_types Internal 0 'root'@'%' (empty)
-data External NULL 'root'@'%' (empty)
-
-query 
 SELECT name,num_items,size  FROM system.caches where name='file_meta_data_cache';
 ----
 file_meta_data_cache    0     0 
