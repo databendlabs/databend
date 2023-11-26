@@ -78,8 +78,12 @@ impl HttpQueryManager {
 
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
-        let http_query_weak = Arc::downgrade(&query);
         let query_result_timeout_secs = query.result_timeout_secs;
+
+        // downgrade to weak reference
+        // it may cannot destroy with final or kill when we hold ref of Arc<HttpQuery>
+        let http_query_weak = Arc::downgrade(&query);
+
         GlobalIORuntime::instance().spawn(query_id, async move {
             loop {
                 let expire_res = match http_query_weak.upgrade() {
