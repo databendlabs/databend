@@ -26,6 +26,7 @@ use common_catalog::plan::TopK;
 use common_catalog::query_kind::QueryKind;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_meta_app::principal::StageType;
 use common_exception::Result;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
@@ -238,7 +239,11 @@ impl ParquetRSTable {
             let copy_status = copy_status.clone();
             let leaf_fields = self.leaf_fields.clone();
             let topk = topk.clone();
-            let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
+            let is_remote_query =
+             matches!(self.stage_info.stage_type, StageType::External) 
+             &&
+             matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
+
 
             tasks.push(async move {
                 let metas = read_parquet_metas_batch(
@@ -248,7 +253,7 @@ impl ParquetRSTable {
                     leaf_fields,
                     schema_from,
                     max_memory_usage,
-                    is_copy,
+                    is_remote_query
                 )
                 .await?;
                 prune_and_generate_partitions(&pruner, metas, columns_to_read, &topk, copy_status)
