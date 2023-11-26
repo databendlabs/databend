@@ -5,7 +5,7 @@ csv_types Internal 0 'root'@'%' (empty)
 data External NULL 'root'@'%' (empty)
 
 query 
-SELECT * FROM system.caches where name='file_meta_data_cache';
+SELECT name,num_items,size  FROM system.caches where name='file_meta_data_cache';
 ----
 file_meta_data_cache    0     0 
 
@@ -24,6 +24,6 @@ parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
 parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
 
 query 
-SELECT * FROM system.caches where name='file_meta_data_cache';
+SELECT name,num_items,size  FROM system.caches where name='file_meta_data_cache';
 ----
 file_meta_data_cache    0     0 
