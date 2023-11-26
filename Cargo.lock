@@ -3171,6 +3171,7 @@ dependencies = [
  "minitrace-opentelemetry",
  "opentelemetry",
  "opentelemetry-otlp",
+ "opentelemetry_sdk",
  "serde",
  "serde_json",
  "tonic 0.10.2",
@@ -3196,6 +3197,7 @@ dependencies = [
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
+ "enumflags2",
  "jwt-simple",
  "log",
  "p256 0.13.0",
@@ -8658,6 +8660,8 @@ dependencies = [
  "regex",
  "serde_json",
  "thiserror",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
