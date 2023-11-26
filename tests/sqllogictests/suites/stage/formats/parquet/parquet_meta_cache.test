@@ -5,6 +5,25 @@ csv_types Internal 0 'root'@'%' (empty)
 data External NULL 'root'@'%' (empty)
 
 query 
-list @data/parquet/complex.parquet;
+SELECT * FROM system.caches where name='file_meta_data_cache';
 ----
-parquet/complex.parquet | 92762 | NULL | 2023-09-24 05:35:00.589 +0000 | NULL
+file_meta_data_cache    0     0 
+
+statement ok
+drop table if exists ai
+
+statement ok
+create table ai (col_arr array(int), col_int int)
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=0) */ into ai from ( select * from  @data/parquet/multi_page/ )  PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+SELECT * FROM system.caches where name='file_meta_data_cache';
+----
+file_meta_data_cache    0     0 
