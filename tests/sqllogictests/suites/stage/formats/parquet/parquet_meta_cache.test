@@ -30,4 +30,4 @@ select * from  @data/parquet/multi_page/multi_page_4.parquet limit 1;
 query 
 SELECT name,num_items,size  FROM system.caches where name='file_meta_data_cache';
 ----
-file_meta_data_cache    0     0 
+file_meta_data_cache    0     1 
