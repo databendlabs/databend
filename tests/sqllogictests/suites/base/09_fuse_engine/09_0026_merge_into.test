@@ -871,6 +871,31 @@ WHEN MATCHED AND ss.is_delete = false THEN
     UPDATE  * WHEN NOT MATCHED THEN 
     INSERT *;
 
+statement ok
+create table orders2(a int,b string,c string);
+
+statement ok
+insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
+
+statement ok
+MERGE INTO orders2 USING (
+    SELECT o.a,o.b
+    FROM orders2 o
+             INNER JOIN (
+        SELECT a, b, AVG(a) AS avg_quantity
+        FROM orders2
+        GROUP BY a, b
+    ) a ON o.a = a.a AND o.b = a.b
+) AS joined_data ON orders2.a = joined_data.a
+    WHEN MATCHED THEN
+        UPDATE SET orders2.b = joined_data.b;
+
+query TTT
+select * from orders2;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
 
 statement ok
 set enable_distributed_merge_into = 0;

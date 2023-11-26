@@ -127,44 +127,28 @@ pub fn optimize(
             Ok(Plan::CopyIntoTable(plan))
         }
         Plan::MergeInto(plan) => {
-            // optimize source :fix issue #13733
-            // reason: if there is subquery,windowfunc exprs etc. see
-            // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
-            // get dummy index. So we need to use optimizer to solve this.
-            let right_source = optimize_query(
-                ctx.clone(),
-                opt_ctx.clone(),
-                plan.meta_data.clone(),
-                plan.input.child(1)?.clone(),
-            )?;
-            // replace right source
-            let mut join_sexpr = plan.input.clone();
-            join_sexpr = Box::new(join_sexpr.replace_children(vec![
-                Arc::new(join_sexpr.child(0)?.clone()),
-                Arc::new(right_source),
-            ]));
-
+            let merge_plan = MergeInto {
+                input: Box::new(optimize_query(
+                    ctx.clone(),
+                    opt_ctx.clone(),
+                    plan.meta_data.clone(),
+                    *plan.input.clone(),
+                )?),
+                ..*plan
+            };
             // try to optimize distributed join
             if opt_ctx.config.enable_distributed_optimization
                 && ctx.get_settings().get_enable_distributed_merge_into()?
             {
-                // Todo(JackTan25): We should use optimizer to make a decision to use
-                // left join and right join.
-                // input is a Join_SExpr
-                let merge_into_join_sexpr = optimize_distributed_query(ctx.clone(), &join_sexpr)?;
-
                 let merge_source_optimizer = MergeSourceOptimizer::create();
                 let optimized_distributed_merge_into_join_sexpr =
-                    merge_source_optimizer.optimize(&merge_into_join_sexpr)?;
+                    merge_source_optimizer.optimize(&merge_plan.input)?;
                 Ok(Plan::MergeInto(Box::new(MergeInto {
                     input: Box::new(optimized_distributed_merge_into_join_sexpr),
-                    ..*plan
+                    ..merge_plan
                 })))
             } else {
-                Ok(Plan::MergeInto(Box::new(MergeInto {
-                    input: join_sexpr,
-                    ..*plan
-                })))
+                Ok(Plan::MergeInto(Box::new(merge_plan)))
             }
         }
         // Passthrough statements.
