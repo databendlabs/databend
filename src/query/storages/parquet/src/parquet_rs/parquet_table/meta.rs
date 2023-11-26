@@ -112,8 +112,7 @@ async fn load_and_check_parquet_meta(
     schema_from: &str,
     is_remote_query: bool,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata = read_meta_data(
-        op, file, size, is_remote_query).await?;
+    let metadata = read_meta_data(op, file, size, is_remote_query).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),
