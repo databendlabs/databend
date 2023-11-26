@@ -79,7 +79,7 @@ impl HttpQueryManager {
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
         let http_query_weak = Arc::downgrade(&query);
-        let query_result_timeout_secs = query.result_timeout_secs.clone();
+        let query_result_timeout_secs = query.result_timeout_secs;
         GlobalIORuntime::instance().spawn(query_id, async move {
             loop {
                 let expire_res = match http_query_weak.upgrade() {
