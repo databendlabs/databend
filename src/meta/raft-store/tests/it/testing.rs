@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Once;
 
 use common_base::base::GlobalSequence;
@@ -67,7 +68,7 @@ fn setup_test() {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
         common_meta_sled_store::init_temp_sled_db(t);
 
-        let guards = init_logging("meta_unittests", &Config::new_testing());
+        let guards = init_logging("meta_unittests", &Config::new_testing(), BTreeMap::new());
         Box::leak(Box::new(guards));
     });
 }
