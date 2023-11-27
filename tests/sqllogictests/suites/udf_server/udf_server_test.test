@@ -328,9 +328,6 @@ statement ok
 DROP FUNCTION array_index_of;
 
 statement ok
-DROP FUNCTION map_access;
-
-statement ok
 DROP FUNCTION json_access;
 
 statement ok
@@ -359,6 +356,9 @@ update web_traffic_data set id = 2 where map_access(traffic_info, 'ip') = '192.1
 
 statement error 1065
 delete from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
+
+statement ok
+DROP FUNCTION map_access;
 
 statement ok
 DROP TABLE web_traffic_data;
