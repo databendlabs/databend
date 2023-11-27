@@ -238,31 +238,13 @@ impl AccessChecker for PrivilegeAccess {
                     if table.is_source_of_stage() {
                         match table.table().get_data_source_info() {
                             DataSourceInfo::StageSource(stage_info) => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?;
+                                self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::Parquet2Source(stage_info) => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?;
+                                self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::ParquetSource(stage_info) => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?;
+                                self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
@@ -857,14 +839,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoTable(plan) => {
                 // TODO(TCeason): need to check plan.query privileges.
-                let stage_name = &plan.stage_table_info.stage_info.stage_name;
-                self
-                    .validate_access(
-                        &GrantObject::Stage(stage_name.clone()),
-                        vec![UserPrivilegeType::Read],
-                        false,
-                    )
-                    .await?;
+                self.validate_access_stage(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                 self
                     .validate_access(
                         &GrantObject::Table(
@@ -878,26 +853,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoLocation(plan) => {
-                let stage_name = &plan.stage.stage_name;
-                self
-                    .validate_access(
-                        &GrantObject::Stage(stage_name.clone()),
-                        vec![UserPrivilegeType::Write],
-                        false,
-                    )
-                    .await?;
+                self.validate_access_stage(&plan.stage, UserPrivilegeType::Write).await?;
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
             Plan::RemoveStage(plan) => {
-                let stage_name = &plan.stage.stage_name;
-                self
-                    .validate_access(
-                        &GrantObject::Stage(stage_name.clone()),
-                        vec![UserPrivilegeType::Write],
-                        false,
-                    )
-                    .await?;
+                self.validate_access_stage(&plan.stage, UserPrivilegeType::Write).await?;
             }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
@@ -946,33 +907,11 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetSecondaryRoles(_) => {}
             Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
-                // every user can presign his own user stage like: `PRESIGN @~/tmp.txt`
-                if plan.stage.stage_type == StageType::User && plan.stage.stage_name == self.ctx.get_current_user()?.name {
-                    return Ok(());
-                }
-
-                let stage_name = &plan.stage.stage_name;
-                let action = &plan.action;
-                match action {
-                    PresignAction::Upload => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Write],
-                                false,
-                            )
-                            .await?
-                    }
-                    PresignAction::Download => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Read],
-                                false,
-                            )
-                            .await?
-                    }
-                }
+                let privilege = match &plan.action {
+                    PresignAction::Upload => UserPrivilegeType::Write,
+                    PresignAction::Download => UserPrivilegeType::Read,
+                };
+                self.validate_access_stage(&plan.stage, privilege).await?;
             }
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
