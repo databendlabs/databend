@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -44,11 +45,13 @@ impl Config {
                 on: false,
                 level: "INFO".to_string(),
                 endpoint: "http://127.0.0.1:4317".to_string(),
+                labels: BTreeMap::new(),
             },
             query: QueryLogConfig {
                 on: false,
                 dir: "".to_string(),
                 otlp_endpoint: "".to_string(),
+                labels: BTreeMap::new(),
             },
             tracing: TracingConfig {
                 on: false,
@@ -127,14 +130,21 @@ pub struct OTLPConfig {
     pub on: bool,
     pub level: String,
     pub endpoint: String,
+    pub labels: BTreeMap<String, String>,
 }
 
 impl Display for OTLPConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let labels = self
+            .labels
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
         write!(
             f,
-            "enabled={}, level={}, endpoint={}",
-            self.on, self.level, self.endpoint
+            "enabled={}, level={}, endpoint={}, labels={}",
+            self.on, self.level, self.endpoint, labels
         )
     }
 }
@@ -145,6 +155,7 @@ impl Default for OTLPConfig {
             on: false,
             level: "INFO".to_string(),
             endpoint: "http://127.0.0.1:4317".to_string(),
+            labels: BTreeMap::new(),
         }
     }
 }
@@ -154,14 +165,21 @@ pub struct QueryLogConfig {
     pub on: bool,
     pub dir: String,
     pub otlp_endpoint: String,
+    pub labels: BTreeMap<String, String>,
 }
 
 impl Display for QueryLogConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let labels = self
+            .labels
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
         write!(
             f,
-            "enabled={}, dir={}, otlp_endpoint={}",
-            self.on, self.dir, self.otlp_endpoint
+            "enabled={}, dir={}, otlp_endpoint={}, labels={}",
+            self.on, self.dir, self.otlp_endpoint, labels,
         )
     }
 }
@@ -172,6 +190,7 @@ impl Default for QueryLogConfig {
             on: false,
             dir: "".to_string(),
             otlp_endpoint: "".to_string(),
+            labels: BTreeMap::new(),
         }
     }
 }
