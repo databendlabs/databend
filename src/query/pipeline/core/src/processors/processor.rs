@@ -207,4 +207,8 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
     async fn async_process(&mut self) -> Result<()> {
         (**self).async_process().await
     }
+
+    fn details_status(&self) -> Option<String> {
+        (**self).details_status()
+    }
 }
