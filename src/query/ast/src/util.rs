@@ -161,10 +161,7 @@ fn non_reserved_keyword(
 /// Parse one to two idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `table.column`
-#[allow(clippy::needless_lifetimes)]
-pub fn dot_separated_idents_1_to_2<'a>(
-    i: Input<'a>,
-) -> IResult<'a, (Option<Identifier>, Identifier)> {
+pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Identifier)> {
     map(
         rule! {
            #ident ~ ("." ~ #ident)?
@@ -176,13 +173,12 @@ pub fn dot_separated_idents_1_to_2<'a>(
     )(i)
 }
 
-/// Parse one two three idents separated by a dot, fulfilling from the right.
+/// Parse one to three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
-#[allow(clippy::needless_lifetimes)]
-pub fn dot_separated_idents_1_to_3<'a>(
-    i: Input<'a>,
-) -> IResult<'a, (Option<Identifier>, Option<Identifier>, Identifier)> {
+pub fn dot_separated_idents_1_to_3(
+    i: Input,
+) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
     map(
         rule! {
             #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?

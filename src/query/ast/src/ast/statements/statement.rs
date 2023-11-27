@@ -267,7 +267,7 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StatementMsg {
+pub struct StatementWithFormat {
     pub(crate) stmt: Statement,
     pub(crate) format: Option<String>,
 }
