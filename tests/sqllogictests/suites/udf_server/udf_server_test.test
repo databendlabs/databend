@@ -237,9 +237,6 @@ SELECT map_access(traffic_info, 'ip') as ip_address, COUNT(*) as visits FROM web
 192.168.1.2 1
 
 statement ok
-DROP TABLE web_traffic_data;
-
-statement ok
 CREATE TABLE customer_orders(id INT64, order_data VARIANT);
 
 statement ok
@@ -362,6 +359,9 @@ update web_traffic_data set id = 2 where map_access(traffic_info, 'ip') = '192.1
 
 statement error 1065
 delete from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
+
+statement ok
+DROP TABLE web_traffic_data;
 
 ## test merge into
 statement ok
