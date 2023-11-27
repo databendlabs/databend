@@ -346,8 +346,10 @@ impl Binder {
                     }))
                 }
                 window @ ScalarExpr::WindowFunction(_) => {
+                    let mut window = window.clone();
                     let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(window)
+                    rewriter.visit(&mut window)?;
+                    Ok(window)
                 }
                 ScalarExpr::FunctionCall(func) => {
                     let arguments = func
