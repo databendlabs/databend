@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_types::MetaId;
 use common_storages_fuse::table_functions::FuseColumnTable;
 use common_storages_fuse::table_functions::FuseEncodingTable;
+use common_storages_stream::stream_status_table_func::StreamStatusTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -135,6 +136,11 @@ impl TableFunctionFactory {
         creators.insert(
             "clustering_information".to_string(),
             (next_id(), Arc::new(ClusteringInformationTable::create)),
+        );
+
+        creators.insert(
+            "stream_status".to_string(),
+            (next_id(), Arc::new(StreamStatusTable::create)),
         );
 
         creators.insert(

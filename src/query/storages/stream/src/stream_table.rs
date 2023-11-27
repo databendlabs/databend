@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -59,6 +60,11 @@ pub enum StreamMode {
     AppendOnly,
 }
 
+pub enum StreamStatus {
+    MayHaveData,
+    NoData,
+}
+
 impl FromStr for StreamMode {
     type Err = ErrorCode;
     fn from_str(s: &str) -> Result<Self> {
@@ -72,11 +78,11 @@ impl FromStr for StreamMode {
     }
 }
 
-impl ToString for StreamMode {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for StreamMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
             StreamMode::AppendOnly => MODE_APPEND_ONLY.to_string(),
-        }
+        })
     }
 }
 
@@ -303,6 +309,17 @@ impl StreamTable {
             summary,
             pruning_stats,
         )
+    }
+
+    #[minitrace::trace]
+    pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
+        let base_table = self.source_table(ctx).await?;
+        let status = if base_table.get_table_info().ident.seq == self.table_version {
+            StreamStatus::NoData
+        } else {
+            StreamStatus::MayHaveData
+        };
+        Ok(status)
     }
 }
 
