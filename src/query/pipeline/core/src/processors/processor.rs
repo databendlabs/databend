@@ -82,6 +82,10 @@ pub trait Processor: Send {
     }
 
     fn record_profile(&self, _profile: &Profile) {}
+
+    fn details_status(&self) -> Option<String> {
+        None
+    }
 }
 
 #[derive(Clone)]
@@ -167,6 +171,10 @@ impl ProcessorPtr {
             task.in_span(span).await
         }
         .boxed()
+    }
+
+    pub unsafe fn details_status(&self) -> Option<String> {
+        (*self.inner.get()).details_status()
     }
 }
 

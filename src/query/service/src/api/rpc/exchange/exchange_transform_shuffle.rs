@@ -246,6 +246,21 @@ impl Processor for ExchangeShuffleTransform {
             false => Ok(Event::NeedData),
         }
     }
+
+    fn details_status(&self) -> Option<String> {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct Display {
+            queue_status: Vec<(usize, usize)>,
+        }
+
+        let mut queue_status = vec![];
+        for (idx, queue) in self.buffer.inner.iter().enumerate() {
+            queue_status.push((idx, queue.len()));
+        }
+
+        Some(format!("{:?}", Display { queue_status }))
+    }
 }
 
 impl ExchangeShuffleTransform {
