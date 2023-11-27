@@ -173,6 +173,7 @@ impl ProcessorPtr {
         .boxed()
     }
 
+    /// # Safety
     pub unsafe fn details_status(&self) -> Option<String> {
         (*self.inner.get()).details_status()
     }
