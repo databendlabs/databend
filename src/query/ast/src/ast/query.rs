@@ -92,6 +92,8 @@ pub struct SelectStmt {
     pub having: Option<Expr>,
     // `WINDOW` clause
     pub window_list: Option<Vec<WindowDefinition>>,
+    // `QUALIFY` clause
+    pub qualify: Option<Expr>,
 }
 
 /// Group by Clause.

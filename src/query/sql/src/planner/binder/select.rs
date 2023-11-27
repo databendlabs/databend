@@ -212,6 +212,15 @@ impl Binder {
             None
         };
 
+        let qualify = if let Some(qualify) = &stmt.qualify {
+            Some(
+                self.analyze_window_qualify(&mut from_context, &aliases, qualify)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
         let order_items = self
             .analyze_order_items(
                 &mut from_context,
@@ -251,6 +260,12 @@ impl Binder {
         // window run after the HAVING clause but before the ORDER BY clause.
         for window_info in &from_context.windows.window_functions {
             s_expr = self.bind_window_function(window_info, s_expr).await?;
+        }
+
+        if let Some(qualify) = qualify {
+            s_expr = self
+                .bind_qualify(&mut from_context, qualify, span, s_expr)
+                .await?;
         }
 
         if stmt.distinct {
