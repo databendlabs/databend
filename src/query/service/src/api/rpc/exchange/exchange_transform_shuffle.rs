@@ -252,6 +252,13 @@ impl Processor for ExchangeShuffleTransform {
         #[allow(dead_code)]
         struct Display {
             queue_status: Vec<(usize, usize)>,
+            inputs: usize,
+            finished_inputs: usize,
+            outputs: usize,
+            finished_outputs: usize,
+
+            waiting_outputs: Vec<usize>,
+            waiting_inputs: VecDeque<usize>,
         }
 
         let mut queue_status = vec![];
@@ -259,7 +266,15 @@ impl Processor for ExchangeShuffleTransform {
             queue_status.push((idx, queue.len()));
         }
 
-        Some(format!("{:?}", Display { queue_status }))
+        Some(format!("{:?}", Display {
+            queue_status,
+            inputs: self.inputs.len(),
+            outputs: self.outputs.len(),
+            finished_inputs: self.finished_inputs,
+            finished_outputs: self.finished_outputs,
+            waiting_inputs: self.waiting_inputs.clone(),
+            waiting_outputs: self.waiting_outputs.clone(),
+        }))
     }
 }
 
