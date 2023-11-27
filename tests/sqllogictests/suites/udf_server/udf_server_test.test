@@ -307,9 +307,6 @@ statement ok
 DROP FUNCTION gcd;
 
 statement ok
-DROP FUNCTION split_and_join;
-
-statement ok
 DROP FUNCTION decimal_div;
 
 statement ok
@@ -375,6 +372,9 @@ set enable_experimental_merge_into = 1;
 
 statement error 1065
 merge into target_udf using source_udf on target_udf.a = source_udf.a2 when not matched then insert (a) values(split_and_join(a2));
+
+statement ok
+DROP FUNCTION split_and_join;
 
 statement ok
 set enable_experimental_merge_into = 0;
