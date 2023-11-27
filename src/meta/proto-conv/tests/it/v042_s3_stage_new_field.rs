@@ -51,6 +51,7 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
+        from_uri: true,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,

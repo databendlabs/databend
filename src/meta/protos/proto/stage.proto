@@ -74,6 +74,8 @@ message StageInfo {
   optional UserIdentity creator = 8;
 
   FileFormatParams file_format_params = 9;
+
+  bool from_uri = 10;
 }
 
 message StageFile {
