@@ -239,6 +239,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("Logging:");
     println!("    file: {}", conf.log.file);
     println!("    stderr: {}", conf.log.stderr);
+    println!("    otlp: {}", conf.log.otlp);
     println!("    query: {}", conf.log.query);
     println!("    tracing: {}", conf.log.tracing);
     println!(
