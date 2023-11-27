@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::*;
@@ -33,32 +31,15 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::AggregateUnaryFunction;
 use crate::aggregates::aggregate_unary::UnaryState;
 
-#[derive(Serialize, Deserialize)]
-pub struct SkewnessStateV2<T> {
+#[derive(Default, Serialize, Deserialize)]
+pub struct SkewnessStateV2 {
     pub n: u64,
     pub sum: f64,
     pub sum_sqr: f64,
     pub sum_cub: f64,
-    _ph: PhantomData<T>,
 }
 
-impl<T> Default for SkewnessStateV2<T>
-where
-    T: ValueType + Sync + Send,
-    T::Scalar: AsPrimitive<f64>,
-{
-    fn default() -> Self {
-        Self {
-            n: 0,
-            sum: 0.0,
-            sum_sqr: 0.0,
-            sum_cub: 0.0,
-            _ph: PhantomData,
-        }
-    }
-}
-
-impl<T> UnaryState<T, Float64Type> for SkewnessStateV2<T>
+impl<T> UnaryState<T, Float64Type> for SkewnessStateV2
 where
     T: ValueType + Sync + Send,
     T::Scalar: AsPrimitive<f64>,
@@ -85,7 +66,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut <Float64Type as ValueType>::ColumnBuilder,
+        builder: &mut Vec<F64>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.n <= 2 {
@@ -135,7 +116,7 @@ pub fn try_create_aggregate_skewness_function(
         DataType::Number(NumberDataType::NUM) => {
             let return_type = DataType::Number(NumberDataType::Float64);
             AggregateUnaryFunction::<
-                SkewnessStateV2<NumberType<NUM>>,
+                SkewnessStateV2,
                 NumberType<NUM>,
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
