@@ -131,7 +131,7 @@ impl Binder {
         if let Some(selection) = &selection {
             if !self.check_allowed_scalar_expr_with_subquery(selection)? {
                 return Err(ErrorCode::SemanticError(
-                        "selection in update statement can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
+                        "selection in update statement can't contain window|aggregate|lambda|udf functions".to_string(),
                     )
                     .set_span(selection.span()));
             }
