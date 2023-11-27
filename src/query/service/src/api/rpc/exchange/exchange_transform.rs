@@ -74,7 +74,7 @@ impl ExchangeTransform {
                 let mut nodes_source = 0;
                 let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
                 for (destination_id, receiver) in receivers {
-                    if &destination_id != &params.executor_id {
+                    if destination_id != params.executor_id {
                         nodes_source += 1;
                         items.push(create_reader_item(
                             receiver,
