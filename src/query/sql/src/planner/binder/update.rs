@@ -19,11 +19,14 @@ use common_ast::ast::UpdateStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::Finder;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
+use crate::plans::ScalarExpr;
 use crate::plans::UpdatePlan;
+use crate::plans::Visitor;
 use crate::BindContext;
 
 impl Binder {
@@ -101,9 +104,19 @@ impl Binder {
 
             // TODO(zhyass): update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
-            if !self.check_allowed_scalar_expr(&scalar)? {
+            let f = |scalar: &ScalarExpr| {
+                matches!(
+                    scalar,
+                    ScalarExpr::WindowFunction(_)
+                        | ScalarExpr::AggregateFunction(_)
+                        | ScalarExpr::SubqueryExpr(_)
+                )
+            };
+            let mut finder = Finder::new(&f);
+            finder.visit(&scalar)?;
+            if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
-                    "update_list in update statement can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
+                    "update_list in update statement can't contain subquery|window|aggregate functions".to_string(),
                 )
                 .set_span(scalar.span()));
             }
@@ -114,15 +127,6 @@ impl Binder {
         let (selection, subquery_desc) = self
             .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
-
-        if let Some(selection) = &selection {
-            if !self.check_allowed_scalar_expr(selection)? {
-                return Err(ErrorCode::SemanticError(
-                    "selection in update statement can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
-                )
-                .set_span(selection.span()));
-            }
-        }
 
         let plan = UpdatePlan {
             catalog: catalog_name,

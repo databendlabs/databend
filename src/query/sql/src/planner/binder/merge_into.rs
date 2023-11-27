@@ -35,6 +35,7 @@ use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 
 use super::wrap_cast_scalar;
+use super::Finder;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
@@ -44,6 +45,7 @@ use crate::plans::MatchedEvaluator;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::UnmatchedEvaluator;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
@@ -333,14 +335,26 @@ impl Binder {
         update_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
         target_name: &str,
     ) -> Result<MatchedEvaluator> {
+        // not supported for update clauses
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::SubqueryExpr(_)
+            )
+        };
+
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            let mut finder = Finder::new(&f);
+            finder.visit(&scalar_expr)?;
+            if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
-                    "update clause's condition can't contain subquery|window|aggregate|lambda|udf functions"
+                    "update clause's condition can't contain subquery|window|aggregate functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -394,9 +408,11 @@ impl Binder {
                         )));
                     }
 
-                    if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                    let mut finder = Finder::new(&f);
+                    finder.visit(&scalar_expr)?;
+                    if !finder.scalars().is_empty() {
                         return Err(ErrorCode::SemanticError(
-                            "update_list in update clause can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
+                            "update_list in update clause can't contain subquery|window|aggregate functions".to_string(),
                         )
                         .set_span(scalar_expr.span()));
                     }
@@ -430,13 +446,6 @@ impl Binder {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
-            }
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
-                return Err(ErrorCode::SemanticError(
-                    "update clause's condition can't contain subquery|window|aggregate|lambda|udf functions"
-                        .to_string(),
-                )
-                .set_span(scalar_expr.span()));
             }
             Some(scalar_expr)
         } else {
