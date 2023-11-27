@@ -22,14 +22,10 @@ use common_expression::DataBlock;
 use common_metrics::transform::*;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::EventCause;
-use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::TransformDummy;
 use log::info;
 
 use crate::api::rpc::flight_client::FlightReceiver;

@@ -26,7 +26,6 @@ use common_pipeline_transforms::processors::TransformDummy;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
-use crate::api::rpc::exchange::exchange_source_reader;
 use crate::api::rpc::exchange::exchange_source_reader::ExchangeSourceReader;
 use crate::api::ExchangeInjector;
 use crate::clusters::ClusterHelper;
