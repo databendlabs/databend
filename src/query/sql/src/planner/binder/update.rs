@@ -114,9 +114,9 @@ impl Binder {
             };
             let mut finder = Finder::new(&f);
             finder.visit(&scalar)?;
-            if !finder.scalars().is_empty() {
+            if !self.check_allowed_scalar_expr(&scalar)? {
                 return Err(ErrorCode::SemanticError(
-                    "update_list in update statement can't contain subquery|window|aggregate functions".to_string(),
+                    "update_list in update statement can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
                 )
                 .set_span(scalar.span()));
             }
@@ -127,6 +127,15 @@ impl Binder {
         let (selection, subquery_desc) = self
             .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
+
+        if let Some(selection) = &selection {
+            if !self.check_allowed_scalar_expr(selection)? {
+                return Err(ErrorCode::SemanticError(
+                        "selection in update statement can't contain subquery|window|aggregate|lambda|udf functions".to_string(),
+                    )
+                    .set_span(selection.span()));
+            }
+        }
 
         let plan = UpdatePlan {
             catalog: catalog_name,

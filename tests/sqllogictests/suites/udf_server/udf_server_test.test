@@ -356,3 +356,31 @@ DROP FUNCTION wait;
 
 statement ok
 DROP FUNCTION wait_concurrent;
+
+query T
+select traffic_info from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
+----
+{'ip':'192.168.1.2','url':'example.com/about'}
+
+query IT
+select max(id), map_access(traffic_info, 'ip') from web_traffic_data group by map_access(traffic_info, 'ip')
+----
+2 192.168.1.2
+3 192.168.1.1
+
+statement error 1065
+update web_traffic_data set id = 2 where map_access(traffic_info, 'ip') = '192.168.1.2'
+
+statement error 1065
+delete from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
+
+## test merge into
+statement ok
+create table target_udf(a string,b string,c string);
+
+statement ok
+create table source_udf(a2 string,b2 string,c2 string);
+
+statement error 1065
+merge into target_udf using source_udf on target_udf.a = source_udf.a when not matched then insert (a) values(split_and_join(a));
+
