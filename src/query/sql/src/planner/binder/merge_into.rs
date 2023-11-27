@@ -35,7 +35,6 @@ use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 
 use super::wrap_cast_scalar;
-use super::Finder;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
@@ -45,7 +44,6 @@ use crate::plans::MatchedEvaluator;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::UnmatchedEvaluator;
-use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
