@@ -182,7 +182,9 @@ impl AsyncSource for InferSchemaSource {
         let (stage_info, path) =
             resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let visibility_checker = self.ctx.get_visibility_checker().await?;
-        if !visibility_checker.check_stage_read_visibility(&stage_info.stage_name) {
+        if !stage_info.from_uri
+            && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+        {
             return Err(ErrorCode::PermissionDenied(format!(
                 "Permission denied, privilege READ is required on stage {} for user {}",
                 stage_info.stage_name.clone(),

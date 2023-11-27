@@ -34,3 +34,6 @@ query "copy into ii from @s_ii file_format = (type = CSV) files = ('i1.csv') pur
 query "list @s_ii"
 
 stmt "select * from ii"
+
+stmt "drop table if exists ii"
+stmt "drop stage if exists s_ii"
