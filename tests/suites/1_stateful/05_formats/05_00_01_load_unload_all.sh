@@ -53,3 +53,5 @@ test_format "CSV"
 test_format "TSV"
 
 test_format "NDJSON"
+
+echo "drop table if exists test_load_unload" | $BENDSQL_CLIENT_CONNECT
