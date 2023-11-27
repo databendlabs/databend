@@ -370,6 +370,11 @@ create table target_udf(a string,b string,c string);
 statement ok
 create table source_udf(a2 string,b2 string,c2 string);
 
+statement ok
+set enable_experimental_merge_into = 1;
+
 statement error 1065
 merge into target_udf using source_udf on target_udf.a = source_udf.a2 when not matched then insert (a) values(split_and_join(a2));
 
+statement ok
+set enable_experimental_merge_into = 0;
