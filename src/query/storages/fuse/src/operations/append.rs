@@ -80,6 +80,7 @@ impl FuseTable {
                 output,
                 self,
                 cluster_stats_gen.clone(),
+                true,
             )?;
             proc.into_processor()
         })?;

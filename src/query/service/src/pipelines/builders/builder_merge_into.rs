@@ -202,6 +202,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen,
+            false,
         )?;
 
         let pipe_items = vec![
@@ -285,6 +286,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen.clone(),
+            false,
         )?
         .get_block_builder();
 
@@ -573,6 +575,7 @@ impl PipelineBuilder {
                 OutputPort::create(),
                 table,
                 cluster_stats_gen.clone(),
+                false,
             )?;
             pipe_items.push(serialize_block_transform.into_pipe_item());
         }

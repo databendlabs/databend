@@ -26,6 +26,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use common_sql::executor::physical_plans::MutationKind;
+use common_sql::gen_mutation_stream_operator;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -167,15 +168,23 @@ impl FuseTable {
             self.change_tracking_enabled(),
             false,
         )?;
-        let schema = self.schema_with_stream();
+        let (stream_columns, stream_operators) = if self.change_tracking_enabled() {
+            gen_mutation_stream_operator(
+                self.schema_with_stream(),
+                self.get_table_info().ident.seq,
+            )?
+        } else {
+            (vec![], vec![])
+        };
         // Add source pipe.
         pipeline.add_source(
             |output| {
                 CompactSource::try_create(
                     ctx.clone(),
-                    schema.clone(),
                     self.storage_format,
                     block_reader.clone(),
+                    stream_columns.clone(),
+                    stream_operators.clone(),
                     output,
                 )
             },
@@ -193,6 +202,7 @@ impl FuseTable {
                     output,
                     self,
                     cluster_stats_gen.clone(),
+                    false,
                 )?;
                 proc.into_processor()
             },

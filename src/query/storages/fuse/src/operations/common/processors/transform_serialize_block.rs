@@ -22,7 +22,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
+use common_expression::TableSchema;
 use common_metrics::storage::*;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
@@ -74,8 +76,27 @@ impl TransformSerializeBlock {
         output: Arc<OutputPort>,
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
+        is_append: bool,
     ) -> Result<Self> {
-        let source_schema = Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
+        // remove virtual computed fields.
+        let mut fields = table
+            .schema()
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !is_append {
+            // add stream fields.
+            for stream_column in table.stream_columns().iter() {
+                fields.push(stream_column.table_field());
+            }
+        }
+        let source_schema = Arc::new(TableSchema {
+            fields,
+            ..table.schema().as_ref().clone()
+        });
+
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;

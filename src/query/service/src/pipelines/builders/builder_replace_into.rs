@@ -116,6 +116,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen,
+            false,
         )?;
         let block_builder = serialize_block_transform.get_block_builder();
 

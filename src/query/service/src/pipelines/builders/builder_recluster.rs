@@ -29,7 +29,6 @@ use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::ReclusterSink;
 use common_sql::executor::physical_plans::ReclusterSource;
 use common_sql::gen_mutation_stream_operator;
-use common_sql::TransformStreamKind;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::common::CommitSink;
 use common_storages_fuse::operations::common::MutationGenerator;
@@ -73,6 +72,7 @@ impl PipelineBuilder {
                     tbl_args: table.table_args(),
                     push_downs: None,
                     query_internal_columns: false,
+                    base_block_ids: None,
                     update_stream_columns: table.change_tracking_enabled(),
                     data_mask_policy: None,
                 };
@@ -91,16 +91,17 @@ impl PipelineBuilder {
                 let num_input_columns = schema.fields().len();
                 if table.change_tracking_enabled() {
                     let func_ctx = self.ctx.get_function_context()?;
-                    let (stream, operators) = gen_mutation_stream_operator(schema, true)?;
+                    let (stream, operators) =
+                        gen_mutation_stream_operator(schema, table_info.ident.seq)?;
                     self.main_pipeline.add_transform(
                         |transform_input_port, transform_output_port| {
                             TransformAddStreamColumns::try_create(
                                 transform_input_port,
                                 transform_output_port,
-                                TransformStreamKind::Mutation(CompoundBlockOperator {
+                                CompoundBlockOperator {
                                     operators: operators.clone(),
                                     ctx: func_ctx.clone(),
-                                }),
+                                },
                                 stream.clone(),
                             )
                         },
@@ -184,6 +185,7 @@ impl PipelineBuilder {
                             transform_output_port,
                             table,
                             cluster_stats_gen.clone(),
+                            false,
                         )?;
                         proc.into_processor()
                     })
