@@ -21,6 +21,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
+use common_meta_app::principal::StageInfo;
+use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::optimizer::get_udf_names;
@@ -121,6 +123,26 @@ impl PrivilegeAccess {
         }
 
         session.validate_privilege(object, privileges).await
+    }
+
+    async fn validate_access_stage(
+        &self,
+        stage_info: &StageInfo,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        // every user can presign his own user stage like: `PRESIGN @~/tmp.txt`
+        if stage_info.stage_type == StageType::User
+            && stage_info.stage_name == self.ctx.get_current_user()?.name
+        {
+            return Ok(());
+        }
+
+        self.validate_access(
+            &GrantObject::Stage(stage_info.stage_name.to_string()),
+            vec![privilege],
+            true,
+        )
+        .await
     }
 
     async fn check_udf_priv(&self, udf_names: HashSet<&String>) -> Result<()> {
@@ -924,6 +946,11 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetSecondaryRoles(_) => {}
             Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
+                // every user can presign his own user stage like: `PRESIGN @~/tmp.txt`
+                if plan.stage.stage_type == StageType::User && plan.stage.stage_name == self.ctx.get_current_user()?.name {
+                    return Ok(());
+                }
+
                 let stage_name = &plan.stage.stage_name;
                 let action = &plan.action;
                 match action {
