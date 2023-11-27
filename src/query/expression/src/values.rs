@@ -24,7 +24,8 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast as arrow_cast;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
@@ -943,9 +944,7 @@ impl Column {
         }
     }
 
-    pub fn arrow_field(&self) -> common_arrow::arrow::datatypes::Field {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-        use common_arrow::arrow::datatypes::Field as ArrowField;
+    pub fn arrow_field(&self) -> ArrowField {
         let dummy = "DUMMY".to_string();
         let is_nullable = matches!(&self, Column::Nullable(_));
         let arrow_type: ArrowDataType = (&self.data_type()).into();
@@ -1118,7 +1117,7 @@ impl Column {
                 let offsets: Buffer<i32> =
                     col.offsets.iter().map(|offset| *offset as i32).collect();
                 let values = match (&arrow_type, &col.values) {
-                    (ArrowType::Map(inner_field, _), Column::Tuple(fields)) => {
+                    (ArrowDataType::Map(inner_field, _), Column::Tuple(fields)) => {
                         let inner_type = inner_field.data_type.clone();
                         Box::new(
                             common_arrow::arrow::array::StructArray::try_new(
@@ -1193,9 +1192,9 @@ impl Column {
         };
 
         match arrow_array.data_type() {
-            ArrowType::Null => arrow_array.clone(),
-            ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array.clone(),
-            ArrowType::Struct(_) => {
+            ArrowDataType::Null => arrow_array.clone(),
+            ArrowDataType::Extension(_, t, _) if **t == ArrowDataType::Null => arrow_array.clone(),
+            ArrowDataType::Struct(_) => {
                 let struct_array = arrow_array
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::StructArray>()
@@ -1253,11 +1252,9 @@ impl Column {
 
     pub fn from_arrow_by_array_type(
         arrow_col: &dyn common_arrow::arrow::array::Array,
-        array_type: &common_arrow::arrow::datatypes::DataType,
+        array_type: &ArrowDataType,
         data_type: &DataType,
     ) -> Column {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-
         let is_nullable = data_type.is_nullable();
         let data_type = data_type.remove_nullable();
         let column = match array_type {
@@ -1474,7 +1471,7 @@ impl Column {
                 ))
             }
 
-            ArrowType::Timestamp(uint, _) => {
+            ArrowDataType::Timestamp(uint, _) => {
                 let values = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int64Array>()
