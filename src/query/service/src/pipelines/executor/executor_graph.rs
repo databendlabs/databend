@@ -480,15 +480,26 @@ impl RunningGraph {
             id: usize,
             name: String,
             state: String,
+            details_status: Option<String>,
         }
 
         impl Debug for NodeDisplay {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("Node")
-                    .field("name", &self.name)
-                    .field("id", &self.id)
-                    .field("state", &self.state)
-                    .finish()
+                match &self.details_status {
+                    None => f
+                        .debug_struct("Node")
+                        .field("name", &self.name)
+                        .field("id", &self.id)
+                        .field("state", &self.state)
+                        .finish(),
+                    Some(details_status) => f
+                        .debug_struct("Node")
+                        .field("name", &self.name)
+                        .field("id", &self.id)
+                        .field("state", &self.state)
+                        .field("details", details_status)
+                        .finish(),
+                }
             }
         }
 
@@ -500,6 +511,7 @@ impl RunningGraph {
                 nodes_display.push(NodeDisplay {
                     id: self.0.graph[node_index].processor.id().index(),
                     name: self.0.graph[node_index].processor.name(),
+                    details_status: self.0.graph[node_index].processor.details_status(),
                     state: String::from(match *state {
                         State::Idle => "Idle",
                         State::Processing => "Processing",
