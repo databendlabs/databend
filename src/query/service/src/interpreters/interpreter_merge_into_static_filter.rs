@@ -358,7 +358,7 @@ impl MergeIntoInterpreter {
         let mut type_checker = {
             let allow_pushdown = false;
             let forbid_udf = true;
-            TypeChecker::new(
+            TypeChecker::try_create(
                 &mut bind_context,
                 ctx.clone(),
                 &name_resolution_ctx,
@@ -366,7 +366,7 @@ impl MergeIntoInterpreter {
                 &[],
                 allow_pushdown,
                 forbid_udf,
-            )
+            )?
         };
 
         let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;

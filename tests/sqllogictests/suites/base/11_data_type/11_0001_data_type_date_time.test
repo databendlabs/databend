@@ -281,3 +281,6 @@ set timezone='UTC'
 
 statement ok
 drop database db1
+
+statement error 1078
+set timezone = 'Asia/Test'

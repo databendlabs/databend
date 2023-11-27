@@ -42,6 +42,10 @@ pub trait AsyncSink: Send {
 
     #[unboxed_simple]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool>;
+
+    fn details_status(&self) -> Option<String> {
+        None
+    }
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
@@ -161,5 +165,9 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
         }
 
         Ok(())
+    }
+
+    fn details_status(&self) -> Option<String> {
+        self.inner.as_ref().and_then(|x| x.details_status())
     }
 }

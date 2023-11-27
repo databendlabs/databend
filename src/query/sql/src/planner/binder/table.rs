@@ -148,6 +148,7 @@ impl Binder {
             None,
             false,
             false,
+            false,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -283,6 +284,7 @@ impl Binder {
                         table_alias_name,
                         false,
                         false,
+                        false,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query).await?;
@@ -317,6 +319,7 @@ impl Binder {
                     table_alias_name,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
+                    false,
                 );
 
                 let (s_expr, mut bind_context) = self
@@ -532,6 +535,7 @@ impl Binder {
                 table_alias_name,
                 false,
                 false,
+                false,
             );
 
             let (s_expr, mut bind_context) = self
@@ -596,6 +600,7 @@ impl Binder {
                 "system".to_string(),
                 table.clone(),
                 table_alias_name,
+                false,
                 false,
                 false,
             );
@@ -870,6 +875,7 @@ impl Binder {
             table_alias_name,
             false,
             false,
+            true,
         );
 
         let (s_expr, mut bind_context) = self
@@ -1293,7 +1299,7 @@ impl Binder {
         match travel_point {
             TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
             TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker = TypeChecker::new(
+                let mut type_checker = TypeChecker::try_create(
                     bind_context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
@@ -1301,7 +1307,7 @@ impl Binder {
                     &[],
                     false,
                     false,
-                );
+                )?;
                 let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr()?;
 

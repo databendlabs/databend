@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
@@ -70,7 +71,12 @@ impl GlobalServices {
         GlobalConfig::init(config.clone())?;
 
         // 2. log init.
-        GlobalLogger::init(&app_name_shuffle, &config.log);
+        let mut log_labels = BTreeMap::new();
+        log_labels.insert("service".to_string(), "databend-query".to_string());
+        log_labels.insert("tenant_id".to_string(), config.query.tenant_id.clone());
+        log_labels.insert("cluster_id".to_string(), config.query.cluster_id.clone());
+        log_labels.insert("node_id".to_string(), config.query.node_id.clone());
+        GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
 
         // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
