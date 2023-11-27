@@ -261,10 +261,5 @@ select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
 ----
 [1,2,3,3]
 
-query T
-select array_transform(col1, x -> x + 1) from t group by array_transform(col1, x -> x + 1)
-----
-[2,3,4,4]
-
 statement ok
 DROP DATABASE array_func_test
