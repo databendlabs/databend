@@ -17,3 +17,5 @@
 >>>> select * from ii
 1	1
 2	2
+>>>> drop table if exists ii
+>>>> drop stage if exists s_ii

@@ -236,6 +236,17 @@ SELECT map_access(traffic_info, 'ip') as ip_address, COUNT(*) as visits FROM web
 192.168.1.1 2
 192.168.1.2 1
 
+query T
+select traffic_info from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
+----
+{'ip':'192.168.1.2','url':'example.com/about'}
+
+query IT
+select max(id), map_access(traffic_info, 'ip') from web_traffic_data group by map_access(traffic_info, 'ip') order by map_access(traffic_info, 'ip')
+----
+3 192.168.1.1
+2 192.168.1.2
+
 statement ok
 CREATE TABLE customer_orders(id INT64, order_data VARIANT);
 

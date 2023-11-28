@@ -4014,3 +4014,66 @@ FunctionCall {
 }
 
 
+---------- Input ----------
+(current_timestamp, current_timestamp(), now())
+---------- Output ---------
+(current_timestamp(), current_timestamp(), now())
+---------- AST ------------
+Tuple {
+    span: Some(
+        0..47,
+    ),
+    exprs: [
+        FunctionCall {
+            span: Some(
+                1..18,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "current_timestamp",
+                quote: None,
+                span: None,
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        FunctionCall {
+            span: Some(
+                20..39,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "current_timestamp",
+                quote: None,
+                span: Some(
+                    20..37,
+                ),
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        FunctionCall {
+            span: Some(
+                41..46,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "now",
+                quote: None,
+                span: Some(
+                    41..44,
+                ),
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+    ],
+}
+
+

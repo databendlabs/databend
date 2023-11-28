@@ -49,7 +49,7 @@ impl FromStr for BloomIndexColumns {
             return Ok(BloomIndexColumns::None);
         }
 
-        let sql_dialect = Dialect::MySQL;
+        let sql_dialect = Dialect::PostgreSQL;
         let tokens = tokenize_sql(s)?;
         let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
 
@@ -82,7 +82,7 @@ impl BloomIndexColumns {
         let settings = Settings::create("".to_string());
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        let sql_dialect = Dialect::MySQL;
+        let sql_dialect = Dialect::PostgreSQL;
         let tokens = tokenize_sql(definition)?;
         let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
         for ident in idents.iter() {

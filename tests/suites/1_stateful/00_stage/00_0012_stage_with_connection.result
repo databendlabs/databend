@@ -12,3 +12,6 @@
 2
 4
 <<<<
+>>>> drop table if exists my_table;
+>>>> drop stage if exists my_stage;
+>>>> drop connection if exists my_conn;
