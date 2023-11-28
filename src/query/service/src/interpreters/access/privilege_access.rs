@@ -216,31 +216,37 @@ impl AccessChecker for PrivilegeAccess {
                     if table.is_source_of_stage() {
                         match table.table().get_data_source_info() {
                             DataSourceInfo::StageSource(stage_info) => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?;
+                                if !stage_info.stage_info.is_from_uri {
+                                    self
+                                        .validate_access(
+                                            &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
+                                            vec![UserPrivilegeType::Read],
+                                            false,
+                                        )
+                                        .await?;
+                                }
                             }
                             DataSourceInfo::Parquet2Source(stage_info) => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?;
+                                if !stage_info.stage_info.is_from_uri {
+                                    self
+                                        .validate_access(
+                                            &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
+                                            vec![UserPrivilegeType::Read],
+                                            false,
+                                        )
+                                        .await?;
+                                }
                             }
                             DataSourceInfo::ParquetSource(stage_info) => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?;
+                                if !stage_info.stage_info.is_from_uri {
+                                    self
+                                        .validate_access(
+                                            &GrantObject::Stage(stage_info.stage_info.stage_name.clone()),
+                                            vec![UserPrivilegeType::Read],
+                                            false,
+                                        )
+                                        .await?;
+                                }
                             }
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
@@ -835,14 +841,17 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoTable(plan) => {
                 // TODO(TCeason): need to check plan.query privileges.
-                let stage_name = &plan.stage_table_info.stage_info.stage_name;
-                self
-                    .validate_access(
-                        &GrantObject::Stage(stage_name.clone()),
-                        vec![UserPrivilegeType::Read],
-                        false,
-                    )
-                    .await?;
+                if !plan.stage_table_info.stage_info.is_from_uri {
+                    let stage_name = &plan.stage_table_info.stage_info.stage_name;
+                    self
+                        .validate_access(
+                            &GrantObject::Stage(stage_name.clone()),
+                            vec![UserPrivilegeType::Read],
+                            false,
+                        )
+                        .await?;
+                }
+
                 self
                     .validate_access(
                         &GrantObject::Table(
@@ -856,26 +865,30 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoLocation(plan) => {
-                let stage_name = &plan.stage.stage_name;
-                self
-                    .validate_access(
-                        &GrantObject::Stage(stage_name.clone()),
-                        vec![UserPrivilegeType::Write],
-                        false,
-                    )
-                    .await?;
+                if !plan.stage.is_from_uri {
+                    let stage_name = &plan.stage.stage_name;
+                    self
+                        .validate_access(
+                            &GrantObject::Stage(stage_name.clone()),
+                            vec![UserPrivilegeType::Write],
+                            false,
+                        )
+                        .await?;
+                }
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
             Plan::RemoveStage(plan) => {
-                let stage_name = &plan.stage.stage_name;
-                self
-                    .validate_access(
-                        &GrantObject::Stage(stage_name.clone()),
-                        vec![UserPrivilegeType::Write],
-                        false,
-                    )
-                    .await?;
+                if !plan.stage.is_from_uri {
+                    let stage_name = &plan.stage.stage_name;
+                    self
+                        .validate_access(
+                            &GrantObject::Stage(stage_name.clone()),
+                            vec![UserPrivilegeType::Write],
+                            false,
+                        )
+                        .await?;
+                }
             }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
@@ -924,26 +937,28 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetSecondaryRoles(_) => {}
             Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
-                let stage_name = &plan.stage.stage_name;
-                let action = &plan.action;
-                match action {
-                    PresignAction::Upload => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Write],
-                                false,
-                            )
-                            .await?
-                    }
-                    PresignAction::Download => {
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Read],
-                                false,
-                            )
-                            .await?
+                if !plan.stage.is_from_uri {
+                    let stage_name = &plan.stage.stage_name;
+                    let action = &plan.action;
+                    match action {
+                        PresignAction::Upload => {
+                            self
+                                .validate_access(
+                                    &GrantObject::Stage(stage_name.clone()),
+                                    vec![UserPrivilegeType::Write],
+                                    false,
+                                )
+                                .await?
+                        }
+                        PresignAction::Download => {
+                            self
+                                .validate_access(
+                                    &GrantObject::Stage(stage_name.clone()),
+                                    vec![UserPrivilegeType::Read],
+                                    false,
+                                )
+                                .await?
+                        }
                     }
                 }
             }

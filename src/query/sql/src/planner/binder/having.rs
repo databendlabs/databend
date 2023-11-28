@@ -29,6 +29,7 @@ use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
+use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::Binder;
 
@@ -52,9 +53,10 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (scalar, _) = scalar_binder.bind(having).await?;
+        let (mut scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        Ok((rewriter.visit(&scalar)?, having.span()))
+        rewriter.visit(&mut scalar)?;
+        Ok((scalar, having.span()))
     }
 
     #[async_backtrace::framed]
