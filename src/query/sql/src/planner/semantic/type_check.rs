@@ -752,36 +752,28 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 // check window function legal
-                if window.is_some() {
-                    let supported_window_funcs = AggregateFunctionFactory::instance()
-                        .registered_names()
-                        .into_iter()
-                        .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
-                        .collect::<Vec<String>>();
-                    let name = func_name.to_lowercase();
-                    if !supported_window_funcs.contains(&name) {
-                        return Err(ErrorCode::SemanticError(
-                            "only general and aggregate functions allowed in window syntax",
-                        )
-                        .set_span(*span));
-                    }
+                if window.is_some()
+                    && !AggregateFunctionFactory::instance().contains(func_name)
+                    && !GENERAL_WINDOW_FUNCTIONS.contains(&func_name)
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "only general and aggregate functions allowed in window syntax",
+                    )
+                    .set_span(*span));
                 }
                 // check lambda function legal
-                if lambda.is_some() {
-                    let name = func_name.to_lowercase();
-                    if !GENERAL_LAMBDA_FUNCTIONS.contains(&name.as_str()) {
-                        return Err(ErrorCode::SemanticError(
-                            "only lambda functions allowed in lambda syntax",
-                        )
-                        .set_span(*span));
-                    }
+                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                    return Err(ErrorCode::SemanticError(
+                        "only lambda functions allowed in lambda syntax",
+                    )
+                    .set_span(*span));
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
 
                 // Check assumptions if it is a set returning function
                 if BUILTIN_FUNCTIONS
-                    .get_property(&name.name)
+                    .get_property(func_name)
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
@@ -813,8 +805,7 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::Internal("Logical error, there is a bug!"));
                 }
 
-                let name = func_name.to_lowercase();
-                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -831,13 +822,13 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let func = self
-                        .resolve_general_window_function(*span, &name, &args)
+                        .resolve_general_window_function(*span, func_name, &args)
                         .await?;
                     let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, window, func)
                         .await?
-                } else if AggregateFunctionFactory::instance().contains(&name) {
+                } else if AggregateFunctionFactory::instance().contains(func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -852,7 +843,9 @@ impl<'a> TypeChecker<'a> {
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
-                        .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
+                        .resolve_aggregate_function(
+                            *span, func_name, expr, *distinct, params, &args,
+                        )
                         .await?;
                     self.in_window_function = in_window;
                     self.in_aggregate_function = in_aggregate_function;
@@ -866,7 +859,7 @@ impl<'a> TypeChecker<'a> {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
-                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&name.as_str()) {
+                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -878,7 +871,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
-                            "function {name} must have a lambda expression",
+                            "function {func_name} must have a lambda expression",
                         )));
                     }
                     let lambda = lambda.as_ref().unwrap();
@@ -915,7 +908,7 @@ impl<'a> TypeChecker<'a> {
                     let box (lambda_expr, lambda_type) =
                         parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
 
-                    let return_type = if name == "array_filter" {
+                    let return_type = if func_name == "array_filter" {
                         if lambda_type.remove_nullable() == DataType::Boolean {
                             arg_type.clone()
                         } else {
@@ -948,6 +941,7 @@ impl<'a> TypeChecker<'a> {
                             DataType::EmptyArray,
                         )),
                         _ => {
+                            // generate lambda expression
                             let lambda_field = DataField::new("0", inner_ty.clone());
                             let lambda_schema = DataSchema::new(vec![lambda_field]);
 
@@ -957,12 +951,12 @@ impl<'a> TypeChecker<'a> {
                             let (expr, _) =
                                 ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             let remote_lambda_expr = expr.as_remote_expr();
-
                             let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
+
                             Box::new((
                                 LambdaFunc {
                                     span: *span,
-                                    func_name: name.clone(),
+                                    func_name: func_name.to_string(),
                                     args: vec![arg],
                                     lambda_expr: Box::new(remote_lambda_expr),
                                     lambda_display,
