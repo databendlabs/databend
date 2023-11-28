@@ -56,8 +56,12 @@ use crate::storage::StorageParams;
 // ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
 // SIZE_LIMIT = <num>
 
-pub const COPIED_FILES_MAX_COMMIT_NUM: usize = 15000;
-pub const COPY_WITH_MAX_FILE_MSG: &str = "copy into table can commit at most 15000 paths once. Please use CopyOption 'max_files=<num>' to limit the number of files and run multi times until result is empty or use 'force=true, purge=true' to avoid committing paths if acceptable.";
+/// Maximum files per 'copy into table' commit.
+pub const COPY_MAX_FILES_PER_COMMIT: usize = 15000;
+
+/// Instruction for exceeding 'copy into table' file limit.
+pub const COPY_MAX_FILES_COMMIT_MSG: &str = 
+    "Limit for 'copy into table': 15,000 files per commit. To handle more files, adjust 'CopyOption' with 'max_files=<num>' and perform several operations until all files are processed.";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
