@@ -291,7 +291,7 @@ pub enum ExprElement {
     MapAccess {
         accessor: MapAccessor,
     },
-    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
+    /// python/rust style function call, like `a.foo(b).bar(c)` ---> `bar(foo(a, b), c)`
     ChainFunctionCall {
         name: Identifier,
         args: Vec<Expr>,
