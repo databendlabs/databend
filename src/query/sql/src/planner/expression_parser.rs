@@ -18,7 +18,6 @@ use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;

@@ -17,7 +17,6 @@ use common_ast::ast::CopyIntoLocationStmt;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;

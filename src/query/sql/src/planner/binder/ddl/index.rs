@@ -26,7 +26,6 @@ use common_ast::ast::TableReference;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_statement_mut;
-
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;

@@ -39,7 +39,6 @@ use common_ast::ast::TimeTravelPoint;
 use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;

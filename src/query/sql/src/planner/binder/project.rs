@@ -23,7 +23,6 @@ use common_ast::ast::SelectTarget;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-
 use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
