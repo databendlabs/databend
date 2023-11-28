@@ -128,7 +128,7 @@ impl PipelineBuilder {
             ExtractHashTableByRowNumber::create(
                 join_state,
                 self.probe_data_fields.clone().unwrap(),
-                matches!(merge_type, MergeIntoType::InsertOnly),
+                merge_type,
             )?
             .into_pipe_item(),
             create_dummy_item(),
