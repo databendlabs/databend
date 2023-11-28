@@ -161,6 +161,7 @@ pub fn init_logging(
     if cfg.otlp.on {
         let mut labels = labels.clone();
         labels.insert("category".to_string(), "system".to_string());
+        labels.extend(cfg.otlp.labels.clone());
         let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
         let dispatch = fern::Dispatch::new()
             .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
@@ -194,6 +195,7 @@ pub fn init_logging(
         if !cfg.query.otlp_endpoint.is_empty() {
             let mut labels = labels.clone();
             labels.insert("category".to_string(), "query".to_string());
+            labels.extend(cfg.query.labels.clone());
             let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
