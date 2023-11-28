@@ -32,6 +32,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
+use common_sql::binder::MergeIntoType;
 
 use super::hash_join::HashJoinBuildState;
 use super::processor_deduplicate_row_number::get_row_number;
@@ -44,14 +45,14 @@ pub struct ExtractHashTableByRowNumber {
     hashstate: Arc<HashJoinBuildState>,
     // if insert only, we don't need to
     // fill null BlockEntries
-    is_insert_only: bool,
+    merge_type: MergeIntoType,
 }
 
 impl ExtractHashTableByRowNumber {
     pub fn create(
         hashstate: Arc<HashJoinBuildState>,
         probe_data_fields: Vec<DataField>,
-        is_insert_only: bool,
+        merge_type: MergeIntoType,
     ) -> Result<Self> {
         Ok(Self {
             input_port: InputPort::create(),
@@ -60,7 +61,7 @@ impl ExtractHashTableByRowNumber {
             probe_data_fields,
             input_data: None,
             output_data: Vec::new(),
-            is_insert_only,
+            merge_type,
         })
     }
 
@@ -145,7 +146,7 @@ impl Processor for ExtractHashTableByRowNumber {
                         }
                     }
                     let filtered_block = block.clone().filter_with_bitmap(&bitmap.into())?;
-                    let res_block = if self.is_insert_only {
+                    let res_block = if let MergeIntoType::InsertOnly = self.merge_type {
                         filtered_block
                     } else {
                         // Create null chunk for unmatched rows in probe side
