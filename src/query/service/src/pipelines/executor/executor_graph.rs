@@ -23,6 +23,7 @@ use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::processors::EventCause;
 use common_pipeline_core::Pipeline;
@@ -35,9 +36,8 @@ use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
-use petgraph::Direction;
 use petgraph::stable_graph::Neighbors;
-use common_expression::Expr;
+use petgraph::Direction;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorTasksQueue;
@@ -282,8 +282,15 @@ impl ExecutingGraph {
                 if !rt_filters.is_empty() {
                     // probe node
                     // Push down runtime filters to source node
-                    let neighbors = locker.graph.neighbors_directed(schedule_index, Direction::Incoming);
-                    ExecutingGraph::find_source_node(locker, schedule_index.clone(), &rt_filters, neighbors)?;
+                    let neighbors = locker
+                        .graph
+                        .neighbors_directed(schedule_index, Direction::Incoming);
+                    ExecutingGraph::find_source_node(
+                        locker,
+                        schedule_index.clone(),
+                        &rt_filters,
+                        neighbors,
+                    )?;
                 }
 
                 let node = &locker.graph[schedule_index];
@@ -325,17 +332,26 @@ impl ExecutingGraph {
         Ok(())
     }
 
-    unsafe fn find_source_node(locker: &StateLockGuard, current_node: NodeIndex, rt_filters: &[Expr], neighbors: Neighbors<EdgeInfo>) -> Result<()> {
+    unsafe fn find_source_node(
+        locker: &StateLockGuard,
+        current_node: NodeIndex,
+        rt_filters: &[Expr],
+        neighbors: Neighbors<EdgeInfo>,
+    ) -> Result<()> {
         if neighbors.clone().next().is_none() {
             // Source node
             dbg!("find source node");
             let source_node = locker.graph[current_node].clone();
-            source_node.processor.add_runtime_filter(rt_filters.to_vec())?;
+            source_node
+                .processor
+                .add_runtime_filter(rt_filters.to_vec())?;
         }
         for neighbor in neighbors {
             let current_node = locker.graph[neighbor].clone();
             dbg!(&current_node.processor.name());
-            let nodes = locker.graph.neighbors_directed(neighbor, Direction::Incoming);
+            let nodes = locker
+                .graph
+                .neighbors_directed(neighbor, Direction::Incoming);
             ExecutingGraph::find_source_node(locker, neighbor, rt_filters, nodes)?;
         }
         Ok(())

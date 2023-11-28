@@ -18,14 +18,18 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_exception::{ErrorCode, Span};
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{DataBlock, Expr, RemoteExpr, Scalar};
+use common_exception::Span;
+use common_expression::types::DataType;
+use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
 use log::info;
-use common_expression::types::DataType;
 
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
