@@ -1,4 +1,7 @@
 statement ok
+set max_threads = 1;
+
+statement ok
 set max_block_size = 1;
 
 query I
@@ -478,3 +481,6 @@ select unnest(parse_json('"a"'))
 
 statement ok
 set max_block_size = 65535;
+
+statement ok
+set max_threads = 16;
