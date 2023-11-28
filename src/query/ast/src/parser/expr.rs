@@ -1019,6 +1019,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
 
+    let current_timestamp = value(
+        ExprElement::FunctionCall {
+            distinct: false,
+            name: Identifier::from_name("current_timestamp"),
+            args: vec![],
+            params: vec![],
+            window: None,
+            lambda: None,
+        },
+        rule! { CURRENT_TIMESTAMP },
+    );
+
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
         rule!(
@@ -1058,6 +1070,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
+            | #current_timestamp: "CURRENT_TIMESTAMP"
             | #array : "`[...]`"
             | #map_expr : "`{...}`"
         ),
@@ -1170,14 +1183,12 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
     let boolean = map(literal_bool, Literal::Boolean);
-    let current_timestamp = value(Literal::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
     let null = value(Literal::Null, rule! { NULL });
 
     rule!(
         #string
         | #boolean
         | #literal_number
-        | #current_timestamp
         | #null
     )(i)
 }
