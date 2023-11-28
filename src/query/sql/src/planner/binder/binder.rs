@@ -602,7 +602,7 @@ impl<'a> Binder {
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::Databend)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {

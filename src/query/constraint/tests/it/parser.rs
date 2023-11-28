@@ -31,7 +31,7 @@ use common_constraint::mir::MirUnaryOperator;
 
 pub fn parse_mir_expr(text: &str, variables: &HashMap<String, MirDataType>) -> MirExpr {
     let tokens = tokenize_sql(text).unwrap();
-    let expr = parse_expr(&tokens, Dialect::Databend).unwrap();
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
     sql_ast_to_mir(expr, variables).unwrap()
 }
 

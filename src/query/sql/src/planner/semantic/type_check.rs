@@ -246,7 +246,7 @@ impl<'a> TypeChecker<'a> {
                     NameResolutionResult::Column(column) => {
                         if let Some(virtual_computed_expr) = column.virtual_computed_expr {
                             let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, Dialect::Databend)?;
+                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
                             return self.resolve(&expr).await;
                         } else {
                             let data_type = *column.data_type.clone();

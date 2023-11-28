@@ -316,7 +316,7 @@ impl Binder {
                     self.ctes_map.clone(),
                 );
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                let expr = parse_expr(&sql_tokens, Dialect::Databend)?;
+                let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
 
                 let (scalar, _) = scalar_binder.bind(&expr).await?;
                 scalar

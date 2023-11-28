@@ -117,7 +117,7 @@ impl Binder {
                     let mut s_exprs = Vec::with_capacity(indexes.len());
                     for (index_id, _, index_meta) in indexes {
                         let tokens = tokenize_sql(&index_meta.query)?;
-                        let (stmt, _) = parse_sql(&tokens, Dialect::Databend)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
@@ -272,7 +272,7 @@ impl Binder {
         segment_locs: Option<Vec<Location>>,
     ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
-        let (mut stmt, _) = parse_sql(&tokens, Dialect::Databend)?;
+        let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
 
         // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,

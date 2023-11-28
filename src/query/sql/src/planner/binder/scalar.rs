@@ -108,7 +108,7 @@ impl<'a> ScalarBinder<'a> {
     ) -> Result<common_expression::Expr> {
         if let Some(default_expr) = field.default_expr() {
             let tokens = tokenize_sql(default_expr)?;
-            let ast = parse_expr(&tokens, Dialect::Databend)?;
+            let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
             let (mut scalar, _) = self.bind(&ast).await?;
             scalar = wrap_cast(&scalar, field.data_type());
 

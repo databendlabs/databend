@@ -214,7 +214,7 @@ impl Settings {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
             "postgresql" => Ok(Dialect::PostgreSQL),
-            _ => Ok(Dialect::Databend),
+            _ => Ok(Dialect::PostgreSQL),
         }
     }
 

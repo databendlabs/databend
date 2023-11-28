@@ -272,7 +272,7 @@ impl Binder {
                     .get(QUERY)
                     .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                 let tokens = tokenize_sql(query.as_str())?;
-                let (stmt, _) = parse_sql(&tokens, Dialect::Databend)?;
+                let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 new_bind_context.view_info = Some((database.clone(), table_name));

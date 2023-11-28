@@ -445,7 +445,7 @@ async fn plan_sql(
         metadata,
     );
     let tokens = tokenize_sql(sql)?;
-    let (stmt, _) = parse_sql(&tokens, Dialect::Databend)?;
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
     let plan = binder.bind(&stmt).await?;
     if let Plan::Query {
         s_expr,

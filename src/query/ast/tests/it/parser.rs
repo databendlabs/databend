@@ -36,7 +36,7 @@ macro_rules! run_parser {
         let backtrace = Backtrace::new();
         let parser = $parser;
         let mut parser = rule! { #parser ~ &EOI };
-        match parser.parse(Input(&tokens, Dialect::Databend, &backtrace)) {
+        match parser.parse(Input(&tokens, Dialect::PostgreSQL, &backtrace)) {
             Ok((i, (output, _))) => {
                 assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
@@ -528,7 +528,7 @@ fn test_statement() {
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let (stmt, fmt) = parse_sql(&tokens, Dialect::Databend).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -616,7 +616,7 @@ fn test_statement_error() {
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let err = parse_sql(&tokens, Dialect::Databend).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();

@@ -226,7 +226,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
                                 let body = &policy.body;
                                 let tokens = tokenize_sql(body)?;
-                                let ast_expr = parse_expr(&tokens, Dialect::Databend)?;
+                                let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
                                 let mut bind_context = BindContext::new();
                                 let settings = Settings::create("".to_string());
                                 let name_resolution_ctx =

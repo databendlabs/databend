@@ -296,7 +296,6 @@ pub enum ExprElement {
     Map {
         kvs: Vec<(Literal, Expr)>,
     },
-    CurrentTimestamp,
     Interval {
         expr: Expr,
         unit: IntervalKind,
@@ -540,15 +539,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 unit,
                 date: Box::new(date),
-            },
-            ExprElement::CurrentTimestamp => Expr::FunctionCall {
-                span: transform_span(elem.span.0),
-                distinct: false,
-                name: Identifier::from_name("current_timestamp"),
-                args: vec![],
-                params: vec![],
-                window: None,
-                lambda: None,
             },
             _ => unreachable!(),
         };
@@ -1029,7 +1019,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
 
-    let current_timestamp = value(ExprElement::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
+    let current_timestamp = value(
+        ExprElement::FunctionCall {
+            distinct: false,
+            name: Identifier::from_name("current_timestamp"),
+            args: vec![],
+            params: vec![],
+            window: None,
+            lambda: None,
+        },
+        rule! { CURRENT_TIMESTAMP },
+    );
 
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
