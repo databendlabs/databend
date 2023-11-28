@@ -76,6 +76,11 @@ impl<T: BlockingTransform + 'static> Processor for BlockingTransformer<T> {
             return Ok(Event::NeedConsume);
         }
 
+        if let Some(output) = self.output_data.take() {
+            self.output.push_data(Ok(output));
+            return Ok(Event::NeedConsume);
+        }
+
         if !self.need_data {
             // There is data needed to be transformed.
             return Ok(Event::Sync);
