@@ -53,7 +53,6 @@ use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Dialect;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -302,7 +301,7 @@ impl Binder {
         };
 
         let tokens = tokenize_sql(query.as_str())?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
         self.bind_statement(bind_context, &stmt).await
     }
 

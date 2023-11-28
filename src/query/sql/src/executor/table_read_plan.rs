@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -226,7 +225,8 @@ impl ToReadDataSourcePlan for dyn Table {
 
                                 let body = &policy.body;
                                 let tokens = tokenize_sql(body)?;
-                                let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                                let ast_expr =
+                                    parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
                                 let settings = Settings::create("".to_string());
                                 let name_resolution_ctx =

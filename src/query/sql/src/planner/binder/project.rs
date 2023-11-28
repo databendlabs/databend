@@ -23,7 +23,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Dialect;
+
 use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -316,7 +316,7 @@ impl Binder {
                     self.ctes_map.clone(),
                 );
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+                let expr = parse_expr(&sql_tokens, self.dialect)?;
 
                 let (scalar, _) = scalar_binder.bind(&expr).await?;
                 scalar

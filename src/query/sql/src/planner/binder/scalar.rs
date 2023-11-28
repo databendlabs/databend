@@ -41,6 +41,7 @@ use crate::MetadataRef;
 pub struct ScalarBinder<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
+    dialect: Dialect,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
@@ -60,9 +61,12 @@ impl<'a> ScalarBinder<'a> {
         m_cte_bound_ctx: HashMap<IndexType, BindContext>,
         ctes_map: Box<IndexMap<String, CteInfo>>,
     ) -> Self {
+        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+
         ScalarBinder {
             bind_context,
             ctx,
+            dialect,
             name_resolution_ctx,
             metadata,
             m_cte_bound_ctx,
@@ -108,7 +112,7 @@ impl<'a> ScalarBinder<'a> {
     ) -> Result<common_expression::Expr> {
         if let Some(default_expr) = field.default_expr() {
             let tokens = tokenize_sql(default_expr)?;
-            let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
+            let ast = parse_expr(&tokens, self.dialect)?;
             let (mut scalar, _) = self.bind(&ast).await?;
             scalar = wrap_cast(&scalar, field.data_type());
 

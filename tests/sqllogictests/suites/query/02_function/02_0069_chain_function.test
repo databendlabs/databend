@@ -1,5 +1,5 @@
 statement ok
-set dialect = 'experimental';
+set sql_dialect = 'experimental';
 
 query IIII
 select (3).add(4), 3 + {'k1': 4 }.k1, (3).add({'k1': 4 }.k1),  '3'.plus(4)
