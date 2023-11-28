@@ -406,13 +406,36 @@ where
     }
 }
 
-macro_rules! check_experimental_feature {
-    ($name: expr, $input: expr) => {
-        if !matches!($input.1, Dialect::Experimental) {
-            return Err(ErrorKind::Other(concat!(
-                $name,
-                " only works in experimental dialect"
-            )));
+macro_rules! declare_experimental_feature {
+    ($feature_name: ident, $verbose_name: literal) => {
+        pub fn $feature_name<'a, O, F>(
+            is_exclusive: bool,
+            mut parser: F,
+        ) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+        where
+            F: nom::Parser<Input<'a>, O, Error<'a>>,
+        {
+            move |input: Input| {
+                parser.parse(input).and_then(|(i, res)| {
+                    if input.1.is_experimental() {
+                        Ok((i, res))
+                    } else {
+                        i.2.clear();
+                        let error = Error::from_error_kind(
+                            input,
+                            ErrorKind::Other(concat!($verbose_name, " only works in experimental dialect, try `set sql_dialect = experimental`")
+                            ),
+                        );
+                        if is_exclusive {
+                            Err(nom::Err::Failure(error))
+                        } else {
+                            Err(nom::Err::Error(error))
+                        }
+                    }
+                })
+            }
         }
     };
 }
+
+declare_experimental_feature!(check_experimental_chain_function, "chain function");

@@ -63,10 +63,14 @@ error:
 a.add(b)
 ---------- Output ---------
 error: 
-  --> SQL:1:6
+  --> SQL:1:2
   |
 1 | a.add(b)
-  |      ^ unexpected `(`
+  | -^
+  | ||
+  | |chain function only works in experimental dialect, try `set sql_dialect = experimental`
+  | |while parsing x.func(...)
+  | while parsing expression
 
 
 ---------- Input ----------

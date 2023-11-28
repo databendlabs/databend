@@ -17,6 +17,8 @@ use std::ops::RangeFrom;
 use std::ops::RangeFull;
 use std::ops::RangeTo;
 
+use enum_as_inner::EnumAsInner;
+
 use crate::parser::token::Token;
 use crate::Backtrace;
 
@@ -78,7 +80,7 @@ pub struct WithSpan<'a, T> {
     pub(crate) elem: T,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumAsInner)]
 pub enum Dialect {
     #[default]
     PostgreSQL,

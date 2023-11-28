@@ -33,7 +33,6 @@ use crate::parser::unescape::unescape_at_string;
 use crate::parser::unescape::unescape_string;
 use crate::rule;
 use crate::util::*;
-use crate::Dialect;
 use crate::Error;
 use crate::ErrorKind;
 
@@ -868,7 +867,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let function_call = map(
+    let trival_function_call = map(
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
@@ -882,7 +881,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
-
     let function_call_with_lambda = map(
         rule! {
             #function_name
@@ -900,7 +898,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             }),
         },
     );
-
     let function_call_with_window = map(
         rule! {
             #function_name
@@ -916,7 +913,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
-
     let function_call_with_params = map(
         rule! {
             #function_name
@@ -932,6 +928,13 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
+
+    let function_call = alt((
+        function_call_with_params,
+        function_call_with_window,
+        function_call_with_lambda,
+        trival_function_call,
+    ));
 
     let case = map(
         rule! {
@@ -989,38 +992,39 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, key)| ExprElement::DotAccess { key },
     );
 
-    let chain_function_call = alt((
-        map_res(
-            rule! {
-                "." ~ #function_name
-                ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
-            },
-            |(_, name, _, param, _, expr, _)| {
-                check_experimental_feature! {"Function chaining", i};
-                Ok(ExprElement::ChainFunctionCall {
-                    name,
-                    args: vec![],
-                    lambda: Some(Lambda {
-                        params: vec![param],
-                        expr: Box::new(expr),
-                    }),
-                })
-            },
-        ),
-        map_res(
-            rule! {
-                "." ~ #function_name ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ^")"
-            },
-            |(_, name, _, args, _)| {
-                check_experimental_feature! {"Function chaining", i};
-                Ok(ExprElement::ChainFunctionCall {
-                    name,
-                    args,
-                    lambda: None,
-                })
-            },
-        ),
-    ));
+    let chain_function_call = check_experimental_chain_function(
+        true,
+        alt((
+            map_res(
+                rule! {
+                    "." ~ #function_name
+                    ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+                },
+                |(_, name, _, param, _, expr, _)| {
+                    Ok(ExprElement::ChainFunctionCall {
+                        name,
+                        args: vec![],
+                        lambda: Some(Lambda {
+                            params: vec![param],
+                            expr: Box::new(expr),
+                        }),
+                    })
+                },
+            ),
+            map_res(
+                rule! {
+                    "." ~ #function_name ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ^")"
+                },
+                |(_, name, _, args, _)| {
+                    Ok(ExprElement::ChainFunctionCall {
+                        name,
+                        args,
+                        lambda: None,
+                    })
+                },
+            ),
+        )),
+    );
 
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
@@ -1153,11 +1157,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #chain_function_call : "<chain_function_call>"
+            | #chain_function_call : "x.func(...)"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call_with_lambda : "<function>"
-            | #function_call_with_window : "<function>"
-            | #function_call_with_params : "<function>"
             | #function_call : "<function>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
