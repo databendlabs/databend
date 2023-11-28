@@ -107,7 +107,7 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
 #[test]
 fn test_normalize_identifiers_in_expr() {
     let tokens = tokenize_sql("exists(select func(\"T\".A+1) as B)").unwrap();
-    let mut expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+    let mut expr = parse_expr(&tokens, Dialect::Databend).unwrap();
 
     let ctx = NameResolutionContext::default();
     let mut normalizer = IdentifierNormalizer { ctx: &ctx };

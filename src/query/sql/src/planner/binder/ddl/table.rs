@@ -302,7 +302,7 @@ impl Binder {
         };
 
         let tokens = tokenize_sql(query.as_str())?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::Databend)?;
         self.bind_statement(bind_context, &stmt).await
     }
 

@@ -213,7 +213,8 @@ impl Settings {
         match self.try_get_string("sql_dialect")?.as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
-            _ => Ok(Dialect::PostgreSQL),
+            "postgresql" => Ok(Dialect::PostgreSQL),
+            _ => Ok(Dialect::Databend),
         }
     }
 
