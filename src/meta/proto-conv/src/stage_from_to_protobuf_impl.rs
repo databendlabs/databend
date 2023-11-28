@@ -207,6 +207,7 @@ impl FromToProto for mt::principal::StageInfo {
                     reason: "StageInfo.stage_params cannot be None".to_string(),
                 },
             )?)?,
+            is_from_uri: false,
             file_format_params,
             copy_options: mt::principal::CopyOptions::from_pb(p.copy_options.ok_or_else(
                 || Incompatible {
