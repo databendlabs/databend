@@ -838,6 +838,22 @@ WHEN NOT MATCHED THEN
 
 ## test issue #13733
 statement ok
+CREATE TABLE transactions CLUSTER BY (to_yyyymmddhh(transaction_time), user_id) AS SELECT
+    number % 1000000 AS transaction_id,
+    number % 100000 AS user_id,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'deposit'
+    WHEN (rand() * 10)::int % 3 = 1 THEN 'withdrawal'
+    ELSE 'trade'
+END AS transaction_type,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+         WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+         ELSE 'XRP'
+END AS asset_type,
+    (rand() * 100)::decimal(18, 8) AS quantity,
+    date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS transaction_time
+FROM numbers(1000000);
+
+statement ok
 MERGE INTO orders AS tt USING
 (
     SELECT
@@ -871,6 +887,19 @@ WHEN MATCHED AND ss.is_delete = false THEN
     UPDATE  * WHEN NOT MATCHED THEN 
     INSERT *;
 
+## unsupport complex exprs for now.
+## #13798 we need to support non-correlated-subquery for unmatched values exprs
+statement error 1065
+MERGE INTO orders USING (
+    SELECT t.user_id, t.asset_type, 'buy' AS synthetic_order_type, SUM(t.quantity) AS total_quantity, today() AS synthetic_date
+    FROM transactions t
+    WHERE t.transaction_type = 'deposit'
+    GROUP BY t.user_id, t.asset_type
+    HAVING SUM(t.quantity) > 100
+) AS synthetic_orders ON orders.user_id = synthetic_orders.user_id AND orders.asset_type = synthetic_orders.asset_type
+WHEN NOT MATCHED THEN 
+    INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
+    VALUES ((SELECT MAX(order_id) FROM orders) + 1, synthetic_orders.user_id, synthetic_orders.synthetic_order_type, synthetic_orders.asset_type, synthetic_orders.total_quantity, 0, 'pending', synthetic_orders.synthetic_date, synthetic_orders.synthetic_date);
 
 statement ok
 set enable_distributed_merge_into = 0;

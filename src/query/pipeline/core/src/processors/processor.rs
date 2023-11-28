@@ -82,6 +82,10 @@ pub trait Processor: Send {
     }
 
     fn record_profile(&self, _profile: &Profile) {}
+
+    fn details_status(&self) -> Option<String> {
+        None
+    }
 }
 
 #[derive(Clone)]
@@ -168,6 +172,11 @@ impl ProcessorPtr {
         }
         .boxed()
     }
+
+    /// # Safety
+    pub unsafe fn details_status(&self) -> Option<String> {
+        (*self.inner.get()).details_status()
+    }
 }
 
 #[async_trait::async_trait]
@@ -198,5 +207,9 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     async fn async_process(&mut self) -> Result<()> {
         (**self).async_process().await
+    }
+
+    fn details_status(&self) -> Option<String> {
+        (**self).details_status()
     }
 }
