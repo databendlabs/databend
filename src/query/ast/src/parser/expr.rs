@@ -867,7 +867,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let trival_function_call = map(
+    let trivial_function_call = map(
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
@@ -933,7 +933,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         function_call_with_params,
         function_call_with_window,
         function_call_with_lambda,
-        trival_function_call,
+        trivial_function_call,
     ));
 
     let case = map(
