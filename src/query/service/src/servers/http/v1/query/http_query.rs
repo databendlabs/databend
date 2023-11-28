@@ -289,7 +289,9 @@ impl HttpQuery {
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
-            ctx.get_settings().set_deduplicate_label(label.clone())?;
+            unsafe {
+                ctx.get_settings().set_deduplicate_label(label.clone())?;
+            }
         }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
@@ -456,8 +458,9 @@ impl HttpQuery {
 
         let settings = session_state
             .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .as_ref()
+            .into_iter()
+            .map(|item| (item.name.to_string(), item.user_value.as_string()))
             .collect::<BTreeMap<_, _>>();
         let database = session_state.current_database.clone();
         let role = session_state.current_role.clone();
