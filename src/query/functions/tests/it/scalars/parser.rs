@@ -556,7 +556,6 @@ pub fn transform_literal(lit: ASTLiteral) -> Scalar {
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
         ASTLiteral::Float64(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),
-        _ => unimplemented!("{lit}"),
     };
 
     shrink_scalar(scalar)
