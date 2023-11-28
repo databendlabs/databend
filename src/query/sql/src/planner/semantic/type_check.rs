@@ -1231,7 +1231,7 @@ impl<'a> TypeChecker<'a> {
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
         if let Expr::Literal { lit, .. } = expr {
-            let box (value, _) = self.resolve_constant_literal(None, lit)?;
+            let box (value, _) = self.resolve_literal_scalar(lit)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -1254,21 +1254,15 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[inline]
-    fn resolve_constant_literal(
+    fn resolve_literal(
         &self,
         span: Span,
         literal: &common_ast::ast::Literal,
-    ) -> Result<Box<(Scalar, DataType)>> {
-        let box (scalar, data_type) = self.resolve_literal(span, literal)?;
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (value, data_type) = self.resolve_literal_scalar(literal)?;
 
-        if let ScalarExpr::ConstantExpr(scalar) = scalar {
-            Ok(Box::new((scalar.value, data_type)))
-        } else {
-            Err(
-                ErrorCode::SemanticError("Expect to have constant literal".to_string())
-                    .set_span(span),
-            )
-        }
+        let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
+        Ok(Box::new((scalar_expr, data_type)))
     }
 
     fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
@@ -1705,7 +1699,7 @@ impl<'a> TypeChecker<'a> {
         let params = params
             .iter()
             .map(|literal| {
-                self.resolve_constant_literal(span, literal)
+                self.resolve_literal_scalar(literal)
                     .map(|box (value, _)| value)
             })
             .collect::<Result<Vec<_>>>()?;
@@ -2635,11 +2629,10 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve literal values.
-    pub fn resolve_literal(
+    pub fn resolve_literal_scalar(
         &self,
-        span: Span,
         literal: &common_ast::ast::Literal,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<Box<(Scalar, DataType)>> {
         let value = match literal {
             Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
             Literal::Decimal256 {
@@ -2654,21 +2647,10 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
-            Literal::CurrentTimestamp => {
-                return self.resolve_scalar_function_call(
-                    None,
-                    "current_timestamp",
-                    vec![],
-                    vec![],
-                );
-            }
         };
         let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
-        Ok(Box::new((
-            ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
-            data_type,
-        )))
+        Ok(Box::new((value, data_type)))
     }
 
     // TODO(leiysky): use an array builder function instead, since we should allow declaring

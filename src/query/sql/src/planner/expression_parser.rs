@@ -129,7 +129,7 @@ pub fn parse_exprs(
         false,
     )?;
 
-    let sql_dialect = Dialect::MySQL;
+    let sql_dialect = Dialect::PostgreSQL;
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs
