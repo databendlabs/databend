@@ -407,8 +407,8 @@ where
 }
 
 macro_rules! declare_experimental_feature {
-    ($feature_name: ident, $verbose_name: literal) => {
-        pub fn $feature_name<'a, O, F>(
+    ($check_fn_name: ident, $feature_name: literal) => {
+        pub fn $check_fn_name<'a, O, F>(
             is_exclusive: bool,
             mut parser: F,
         ) -> impl FnMut(Input<'a>) -> IResult<'a, O>
@@ -423,7 +423,11 @@ macro_rules! declare_experimental_feature {
                         i.2.clear();
                         let error = Error::from_error_kind(
                             input,
-                            ErrorKind::Other(concat!($verbose_name, " only works in experimental dialect, try `set sql_dialect = experimental`")
+                            ErrorKind::Other(
+                                concat!(
+                                    $feature_name,
+                                    " only works in experimental dialect, try `set sql_dialect = experimental`"
+                                )
                             ),
                         );
                         if is_exclusive {
