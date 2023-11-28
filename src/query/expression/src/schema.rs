@@ -1403,12 +1403,16 @@ impl From<&ArrowField> for TableDataType {
                     fields_type,
                 }
             }
-            ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
+            ArrowDataType::Extension(custom_name, data_type, _) => match custom_name.as_str() {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
                 ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
-                _ => unimplemented!("data_type: {:?}", f.data_type()),
+                _ => {
+                    let a =
+                        ArrowField::new(custom_name, data_type.as_ref().to_owned(), f.is_nullable);
+                    (&a).into()
+                }
             },
             // this is safe, because we define the datatype firstly
             _ => {
