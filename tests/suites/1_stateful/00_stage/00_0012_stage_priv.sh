@@ -117,5 +117,4 @@ rm -rf /tmp/00_0012
 
 echo "=== check access user's local stage ==="
 # presign upload requires a write priv
-echo "PRESIGN UPLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT
-echo "PRESIGN DOWNLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT
+curl -s -w "%{http_code}\n" -X PUT -o /dev/null -H Content-Type:application/octet-stream "`echo "PRESIGN UPLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT`"

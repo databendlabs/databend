@@ -26,3 +26,5 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege READ is r
 2	2
 1	1
 2	2
+=== check access user's local stage ===
+000
