@@ -38,6 +38,7 @@ mod input;
 pub use input::Dialect;
 pub use input::Input;
 
+#[macro_use]
 mod util;
 pub use util::match_text;
 pub use util::match_token;

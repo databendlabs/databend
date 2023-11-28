@@ -84,6 +84,7 @@ pub enum Dialect {
     PostgreSQL,
     MySQL,
     Hive,
+    Experimental,
 }
 
 impl Dialect {
@@ -92,7 +93,7 @@ impl Dialect {
             Dialect::MySQL => c == '`',
             Dialect::Hive => c == '`',
             // TODO: remove '`' quote support once mysql handler correctly set mysql dialect.
-            Dialect::PostgreSQL => c == '"' || c == '`',
+            Dialect::Experimental | Dialect::PostgreSQL => c == '"' || c == '`',
         }
     }
 
@@ -100,7 +101,7 @@ impl Dialect {
         match self {
             Dialect::MySQL => c == '\'' || c == '"',
             Dialect::Hive => c == '\'' || c == '"',
-            Dialect::PostgreSQL => c == '\'',
+            Dialect::Experimental | Dialect::PostgreSQL => c == '\'',
         }
     }
 
@@ -108,7 +109,7 @@ impl Dialect {
         match self {
             Dialect::MySQL => false,
             Dialect::Hive => false,
-            Dialect::PostgreSQL => true,
+            Dialect::Experimental | Dialect::PostgreSQL => true,
         }
     }
 
@@ -116,7 +117,7 @@ impl Dialect {
         match self {
             Dialect::MySQL => false,
             Dialect::Hive => true,
-            Dialect::PostgreSQL => false,
+            Dialect::Experimental | Dialect::PostgreSQL => false,
         }
     }
 }

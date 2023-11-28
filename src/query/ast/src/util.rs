@@ -405,3 +405,14 @@ where
         Ok((rest, expr))
     }
 }
+
+macro_rules! check_experimental_feature {
+    ($name: expr, $input: expr) => {
+        if !matches!($input.1, Dialect::Experimental) {
+            return Err(ErrorKind::Other(concat!(
+                $name,
+                " only works in experimental dialect"
+            )));
+        }
+    };
+}

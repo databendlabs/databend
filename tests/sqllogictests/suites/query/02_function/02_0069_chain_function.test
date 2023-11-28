@@ -1,3 +1,6 @@
+statement ok
+set dialect = 'experimental';
+
 query IIII
 select (3).add(4), 3 + {'k1': 4 }.k1, (3).add({'k1': 4 }.k1),  '3'.plus(4)
 ----
@@ -18,4 +21,3 @@ with t(f) as (select '11|open|22|ai|33|is nothing without sam'.split('|')
 
 statement error 1008
 SELECT t.a::String.lowe() FROM numbers(1) t(a)
-

@@ -33,6 +33,7 @@ use crate::parser::unescape::unescape_at_string;
 use crate::parser::unescape::unescape_string;
 use crate::rule;
 use crate::util::*;
+use crate::Dialect;
 use crate::Error;
 use crate::ErrorKind;
 
@@ -989,28 +990,34 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
 
     let chain_function_call = alt((
-        map(
+        map_res(
             rule! {
                 "." ~ #function_name
                 ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
             },
-            |(_, name, _, param, _, expr, _)| ExprElement::ChainFunctionCall {
-                name,
-                args: vec![],
-                lambda: Some(Lambda {
-                    params: vec![param],
-                    expr: Box::new(expr),
-                }),
+            |(_, name, _, param, _, expr, _)| {
+                check_experimental_feature! {"Function chaining", i};
+                Ok(ExprElement::ChainFunctionCall {
+                    name,
+                    args: vec![],
+                    lambda: Some(Lambda {
+                        params: vec![param],
+                        expr: Box::new(expr),
+                    }),
+                })
             },
         ),
-        map(
+        map_res(
             rule! {
                 "." ~ #function_name ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ^")"
             },
-            |(_, name, _, args, _)| ExprElement::ChainFunctionCall {
-                name,
-                args,
-                lambda: None,
+            |(_, name, _, args, _)| {
+                check_experimental_feature! {"Function chaining", i};
+                Ok(ExprElement::ChainFunctionCall {
+                    name,
+                    args,
+                    lambda: None,
+                })
             },
         ),
     ));
