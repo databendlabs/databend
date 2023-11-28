@@ -115,4 +115,7 @@ echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
 rm -rf /tmp/00_0012
 
-
+echo "=== check access user's local stage ==="
+# presign upload requires a write priv
+echo "PRESIGN UPLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT
+echo "PRESIGN DOWNLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT
