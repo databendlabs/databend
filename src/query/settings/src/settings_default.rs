@@ -163,8 +163,8 @@ impl DefaultSettings {
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
-                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\", and \"Hive\".",
-                    possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
+                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
+                    possible_values: Some(vec!["PostgreSQL", "MySQL",  "Experimental", "Hive"]),
                     mode: SettingMode::Both,
                 }),
                 ("enable_dphyp", DefaultSettingValue {

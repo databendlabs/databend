@@ -567,7 +567,7 @@ pub async fn resolve_file_location(
                     "copy from insecure storage is not allowed",
                 ))
             } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, &path);
+                let stage_info = StageInfo::new_external_stage(storage_params, &path, true);
                 Ok((stage_info, path))
             }
         }
