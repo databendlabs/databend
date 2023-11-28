@@ -157,7 +157,8 @@ where TablesTable<T>: HistoryAware
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
                     Err(err) => {
-                        // swallow the errors related with remote database or tables, these databases might be:
+                        // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
+                        // these databases might be:
                         // - sharing database
                         // - hive database
                         // - iceberg database
