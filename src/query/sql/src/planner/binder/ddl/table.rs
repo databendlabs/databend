@@ -69,6 +69,7 @@ use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
+use common_storages_iceberg::IcebergTable;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use log::debug;
@@ -495,9 +496,24 @@ impl Binder {
                 Self::validate_create_table_schema(&source_schema)?;
                 (source_schema, source_comments)
             }
-            _ => Err(ErrorCode::BadArguments(
-                "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
-            ))?,
+            _ => {
+                if engine == Engine::Iceberg {
+                    if let Some(sp) = &storage_params {
+                        let dop = DataOperator::try_new(sp)?;
+                        let table = IcebergTable::load_iceberg_table(dop).await?;
+                        let table_schema = IcebergTable::get_schema(&table).await?;
+                        (Arc::new(table_schema), vec![])
+                    } else {
+                        Err(ErrorCode::BadArguments(
+                            "Incorrect CREATE query: required location for ICEBERG table engine",
+                        ))?
+                    }
+                } else {
+                    Err(ErrorCode::BadArguments(
+                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG table engine",
+                    ))?
+                }
+            }
         };
 
         // for fuse engine, we will insert database_id, so if we check it in execute phase,

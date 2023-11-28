@@ -619,6 +619,7 @@ pub enum Engine {
     Fuse,
     View,
     Random,
+    Iceberg,
 }
 
 impl Display for Engine {
@@ -629,6 +630,7 @@ impl Display for Engine {
             Engine::Fuse => write!(f, "FUSE"),
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
+            Engine::Iceberg => write!(f, "ICEBERG"),
         }
     }
 }
