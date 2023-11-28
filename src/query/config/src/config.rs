@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
 use std::fmt;
@@ -2022,6 +2023,11 @@ pub struct OTLPLogConfig {
     )]
     #[serde(rename = "endpoint")]
     pub otlp_endpoint: String,
+
+    /// Log Labels
+    #[clap(skip)]
+    #[serde(rename = "labels")]
+    pub otlp_labels: BTreeMap<String, String>,
 }
 
 impl Default for OTLPLogConfig {
@@ -2038,6 +2044,7 @@ impl TryInto<InnerOTLPLogConfig> for OTLPLogConfig {
             on: self.otlp_on,
             level: self.otlp_level,
             endpoint: self.otlp_endpoint,
+            labels: self.otlp_labels,
         })
     }
 }
@@ -2048,6 +2055,7 @@ impl From<InnerOTLPLogConfig> for OTLPLogConfig {
             otlp_on: inner.on,
             otlp_level: inner.level,
             otlp_endpoint: inner.endpoint,
+            otlp_labels: inner.labels,
         }
     }
 }
@@ -2072,6 +2080,11 @@ pub struct QueryLogConfig {
     )]
     #[serde(rename = "otlp_endpoint")]
     pub log_query_otlp_endpoint: String,
+
+    /// Query Log Labels
+    #[clap(skip)]
+    #[serde(rename = "labels")]
+    pub log_query_otlp_labels: BTreeMap<String, String>,
 }
 
 impl Default for QueryLogConfig {
@@ -2088,6 +2101,7 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
             on: self.log_query_on,
             dir: self.log_query_dir,
             otlp_endpoint: self.log_query_otlp_endpoint,
+            labels: self.log_query_otlp_labels,
         })
     }
 }
@@ -2098,6 +2112,7 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
             log_query_on: inner.on,
             log_query_dir: inner.dir,
             log_query_otlp_endpoint: inner.otlp_endpoint,
+            log_query_otlp_labels: inner.labels,
         }
     }
 }

@@ -107,19 +107,26 @@ impl PhysicalPlanBuilder {
                         .map(|arg| {
                             match arg {
                                 ScalarExpr::BoundColumnRef(col) => {
-                                    let index = input_schema
-                                        .index_of(&col.column.index.to_string())
-                                        .unwrap();
+                                    let index = match input_schema.index_of(&col.column.index.to_string()) {
+                                        Ok(index) => index,
+                                        Err(_) => {
+                                            // the argument of lambda function may be another lambda function
+                                            match lambda_index_map.get(&col.column.column_name) {
+                                                Some(index) => *index,
+                                                None => {
+                                                    return Err(ErrorCode::Internal(format!(
+                                                        "Unable to get lambda function's argument \"{}\".",
+                                                        col.column.column_name
+                                                    )))
+                                                }
+                                            }
+                                        }
+                                    };
                                     Ok(index)
-                                }
-                                ScalarExpr::LambdaFunction(inner_func) => {
-                                    // nested lambda function as an argument of parent lambda function
-                                    let index = lambda_index_map.get(&inner_func.display_name).unwrap();
-                                    Ok(*index)
                                 }
                                 _ => {
                                     Err(ErrorCode::Internal(
-                                        "lambda function's argument must be a BoundColumnRef or LambdaFunction"
+                                        "Lambda function's argument must be a BoundColumnRef"
                                             .to_string(),
                                     ))
                                 }
