@@ -274,7 +274,6 @@ pub enum Literal {
     // Quoted string literal value
     String(String),
     Boolean(bool),
-    CurrentTimestamp,
     Null,
 }
 
@@ -911,9 +910,6 @@ impl Display for Literal {
                 } else {
                     write!(f, "FALSE")
                 }
-            }
-            Literal::CurrentTimestamp => {
-                write!(f, "CURRENT_TIMESTAMP")
             }
             Literal::Null => {
                 write!(f, "NULL")
