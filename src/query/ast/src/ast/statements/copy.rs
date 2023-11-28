@@ -25,7 +25,7 @@ use common_base::base::mask_string;
 use common_exception::ErrorCode;
 use common_meta_app::principal::CopyOptions;
 use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
+use common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use itertools::Itertools;
 use url::Url;
 
@@ -143,11 +143,10 @@ impl CopyIntoTableStmt {
             copy_options.max_files = self.max_files;
         }
 
-        if !(copy_options.purge && self.force)
-            && copy_options.max_files > COPIED_FILES_MAX_COMMIT_NUM
+        if !(copy_options.purge && self.force) && copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
         {
             return Err(ErrorCode::InvalidArgument(format!(
-                "max_files {} is too large, max_files should be less than {COPIED_FILES_MAX_COMMIT_NUM}",
+                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
                 copy_options.max_files
             )));
         }

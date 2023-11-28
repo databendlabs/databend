@@ -57,8 +57,8 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
-use common_meta_app::principal::COPY_WITH_MAX_FILE_MSG;
+use common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
+use common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
@@ -761,8 +761,8 @@ impl TableContext for QueryContext {
                     if result_size == max_files {
                         return Ok(results);
                     }
-                    if result_size > COPIED_FILES_MAX_COMMIT_NUM {
-                        return Err(ErrorCode::Internal(COPY_WITH_MAX_FILE_MSG));
+                    if result_size > COPY_MAX_FILES_PER_COMMIT {
+                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
                     }
                 }
             }

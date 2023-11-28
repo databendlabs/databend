@@ -29,8 +29,8 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_meta_app::principal::COPIED_FILES_MAX_COMMIT_NUM;
-use common_meta_app::principal::COPY_WITH_MAX_FILE_MSG;
+use common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
+use common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use common_meta_app::schema::CatalogInfo;
 use common_metrics::storage::*;
 use common_storage::init_stage_operator;
@@ -154,9 +154,9 @@ impl CopyIntoTablePlan {
 
         let need_copy_file_infos = if self.force {
             if !self.stage_table_info.stage_info.copy_options.purge
-                && all_source_file_infos.len() > COPIED_FILES_MAX_COMMIT_NUM
+                && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
             {
-                return Err(ErrorCode::Internal(COPY_WITH_MAX_FILE_MSG));
+                return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
                 "force mode, ignore file filtering. ({}.{})",
