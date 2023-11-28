@@ -137,6 +137,7 @@ where TablesTable<T>: HistoryAware
                         if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
                             dbs.push(database);
                         }
+                        // TODO(liyz): return the warnings if get_database() failed.
                     }
                 }
             }
@@ -156,14 +157,15 @@ where TablesTable<T>: HistoryAware
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
                     Err(err) => {
-                        // Swallow the errors related with sharing. Listing tables in a shared database
-                        // is easy to get errors with invalid configs, but system.tables is better not
-                        // to be affected by it.
-                        if db.get_db_info().meta.from_share.is_some() {
-                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
-                            continue;
-                        }
-                        return Err(err);
+                        // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
+                        // these databases might be:
+                        // - sharing database
+                        // - hive database
+                        // - iceberg database
+                        // - others
+                        // TODO(liyz): return the warnings in the HTTP query protocol.
+                        warn!("list tables failed on db: {}: {}", db.name(), err);
+                        continue;
                     }
                 };
 
