@@ -256,13 +256,13 @@ impl Dataframe {
         }
 
         if let Some(having) = &having {
-            let (having, _) = self
+            let having = self
                 .binder
                 .analyze_aggregate_having(&mut self.bind_context, &aliases, having)
                 .await?;
             self.s_expr = self
                 .binder
-                .bind_having(&mut self.bind_context, having, None, self.s_expr)
+                .bind_having(&mut self.bind_context, having, self.s_expr)
                 .await?;
         }
 

@@ -244,10 +244,8 @@ impl Binder {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
         }
 
-        if let Some((having, span)) = having {
-            s_expr = self
-                .bind_having(&mut from_context, having, span, s_expr)
-                .await?;
+        if let Some(having) = having {
+            s_expr = self.bind_having(&mut from_context, having, s_expr).await?;
         }
 
         // bind window
