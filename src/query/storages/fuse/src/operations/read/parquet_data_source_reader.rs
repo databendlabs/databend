@@ -21,7 +21,8 @@ use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{DataBlock, Expr};
+use common_expression::DataBlock;
+use common_expression::Expr;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -174,7 +175,7 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     fn can_add_runtime_filter(&self) -> bool {
-       true
+        true
     }
 
     fn event(&mut self) -> Result<Event> {
