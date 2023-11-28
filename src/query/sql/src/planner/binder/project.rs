@@ -155,8 +155,9 @@ impl Binder {
                         index: item.index,
                     })
                 } else {
-                    let window_checker = WindowChecker::new(bind_context);
-                    let scalar = window_checker.resolve(&item.scalar)?;
+                    let mut scalar = item.scalar.clone();
+                    let mut window_checker = WindowChecker::new(bind_context);
+                    window_checker.visit(&mut scalar)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,

@@ -218,8 +218,8 @@ impl Binder {
                         let mut group_checker = GroupingChecker::new(from_context);
                         group_checker.visit(&mut scalar)?;
                     } else if !from_context.windows.window_functions.is_empty() {
-                        let window_checker = WindowChecker::new(from_context);
-                        scalar = window_checker.resolve(&scalar)?;
+                        let mut window_checker = WindowChecker::new(from_context);
+                        window_checker.visit(&mut scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }

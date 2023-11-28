@@ -50,8 +50,8 @@ impl Binder {
                     let mut group_checker = GroupingChecker::new(bind_context);
                     group_checker.visit(&mut scalar)?;
                 } else if !bind_context.windows.window_functions.is_empty() {
-                    let window_checker = WindowChecker::new(bind_context);
-                    scalar = window_checker.resolve(&scalar)?;
+                    let mut window_checker = WindowChecker::new(bind_context);
+                    window_checker.visit(&mut scalar)?;
                 }
                 Ok(ScalarItem {
                     scalar,
