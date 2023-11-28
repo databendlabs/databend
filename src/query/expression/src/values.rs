@@ -1250,456 +1250,468 @@ impl Column {
         }
     }
 
-    pub fn from_arrow_by_array_type(
-        arrow_col: &dyn common_arrow::arrow::array::Array,
-        array_type: &ArrowDataType,
-        data_type: &DataType,
-    ) -> Column {
-        let is_nullable = data_type.is_nullable();
-        let data_type = data_type.remove_nullable();
-        let column = match array_type {
-            ArrowDataType::Null => match data_type {
-                DataType::EmptyArray => Column::EmptyArray {
-                    len: arrow_col.len(),
-                },
-                DataType::EmptyMap => Column::EmptyMap {
-                    len: arrow_col.len(),
-                },
-                _ => Column::Null {
-                    len: arrow_col.len(),
-                },
-            },
-            ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_ARRAY => {
-                Column::EmptyArray {
-                    len: arrow_col.len(),
-                }
-            }
-            ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_MAP => {
-                Column::EmptyMap {
-                    len: arrow_col.len(),
-                }
-            }
-            ArrowDataType::UInt8 => Column::Number(NumberColumn::UInt8(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
-                    .expect("fail to read from arrow: array should be `UInt8Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::UInt16 => Column::Number(NumberColumn::UInt16(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
-                    .expect("fail to read from arrow: array should be `UInt16Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::UInt32 => Column::Number(NumberColumn::UInt32(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
-                    .expect("fail to read from arrow: array should be `UInt32Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::UInt64 => Column::Number(NumberColumn::UInt64(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
-                    .expect("fail to read from arrow: array should be `UInt64Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int8 => Column::Number(NumberColumn::Int8(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int8Array>()
-                    .expect("fail to read from arrow: array should be `Int8Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int16 => Column::Number(NumberColumn::Int16(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int16Array>()
-                    .expect("fail to read from arrow: array should be `Int16Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int32 => Column::Number(NumberColumn::Int32(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int32Array>()
-                    .expect("fail to read from arrow: array should be `Int32Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int64 => Column::Number(NumberColumn::Int64(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                    .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Float32 => {
-                let col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Float32Array>()
-                    .expect("fail to read from arrow: array should be `Float32Array`")
-                    .values()
-                    .clone();
-                let col = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(col) };
-                Column::Number(NumberColumn::Float32(col))
-            }
-            ArrowDataType::Float64 => {
-                let col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Float64Array>()
-                    .expect("fail to read from arrow: array should be `Float64Array`")
-                    .values()
-                    .clone();
-                let col = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(col) };
-                Column::Number(NumberColumn::Float64(col))
-            }
-            ArrowDataType::Boolean => Column::Boolean(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BooleanArray>()
-                    .expect("fail to read from arrow: array should be `BooleanArray`")
-                    .values()
-                    .clone(),
-            ),
-            ArrowDataType::LargeBinary => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col.offsets().clone().into_inner();
-
-                let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                // LargeBinary may be Extension data type variant and bitmap
-                match data_type {
-                    DataType::Variant => {
-                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                    }
-                    DataType::Bitmap => {
-                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
-                    }
-                    _ => Column::String(StringColumn::new(arrow_col.values().clone(), offsets)),
-                }
-            }
-            // TODO: deprecate it and use LargeBinary instead
-            ArrowDataType::Binary => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                // Binary may be Extension data type variant and bitmap
-                match data_type {
-                    DataType::Variant => Column::Variant(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    )),
-                    DataType::Bitmap => Column::Bitmap(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    )),
-                    _ => Column::String(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    )),
-                }
-            }
-
-            ArrowDataType::FixedSizeBinary(size) => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::FixedSizeBinaryArray>()
-                    .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
-
-                let offsets = (0..arrow_col.len() as u64 + 1)
-                    .map(|x| x * (*size) as u64)
-                    .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-
-            // TODO: deprecate it and use LargeBinary instead
-            ArrowDataType::Utf8 => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Utf8Array<i32>>()
-                    .expect("fail to read from arrow: array should be `Utf8Array<i32>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-            // TODO: deprecate it and use LargeBinary instead
-            ArrowDataType::LargeUtf8 => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Utf8Array<i64>>()
-                    .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-
-            ArrowDataType::Timestamp(uint, _) => {
-                let values = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                    .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values();
-                let convert = match uint {
-                    TimeUnit::Second => (1_000_000, 1),
-                    TimeUnit::Millisecond => (1_000, 1),
-                    TimeUnit::Microsecond => (1, 1),
-                    TimeUnit::Nanosecond => (1, 1_000),
-                };
-
-                let values = if convert.0 == 1 && convert.1 == 1 {
-                    values.clone()
-                } else {
-                    let values = values
-                        .iter()
-                        .map(|x| x * convert.0 / convert.1)
-                        .collect::<Vec<_>>();
-                    values.into()
-                };
-                Column::Timestamp(values)
-            }
-            ArrowDataType::Date32 => Column::Date(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int32Array>()
-                    .expect("fail to read from arrow: array should be `Int32Array`")
-                    .values()
-                    .clone(),
-            ),
-            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_VARIANT => {
-                match ty {
-                    ArrowDataType::LargeBinary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                        let offsets = arrow_col.offsets().clone().into_inner();
-
-                        let offsets =
-                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-
-                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                    }
-                    ArrowDataType::Binary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
-                        let offsets = arrow_col
-                            .offsets()
-                            .buffer()
-                            .iter()
-                            .map(|x| *x as u64)
-                            .collect::<Vec<_>>();
-                        Column::Variant(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        ))
-                    }
-                    _ => unreachable!(
-                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
-                    ),
-                }
-            }
-            ArrowDataType::List(f) => {
-                let array_list = arrow_cast::cast(
-                    arrow_col,
-                    &ArrowDataType::LargeList(f.clone()),
-                    arrow_cast::CastOptions {
-                        wrapped: true,
-                        partial: true,
-                    },
-                )
-                .expect("list to large list cast should be ok");
-
-                let values_col = array_list
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
-                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
-
-                let array_type = data_type.as_array().unwrap();
-                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
-                let offsets = values_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Array(Box::new(ArrayColumn {
-                    values,
-                    offsets: offsets.into(),
-                }))
-            }
-            ArrowDataType::LargeList(_) => {
-                let values_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
-                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
-
-                let array_type = data_type.as_array().unwrap();
-                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
-                let offsets = values_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Array(Box::new(ArrayColumn {
-                    values,
-                    offsets: offsets.into(),
-                }))
-            }
-            ArrowDataType::Map(_, _) => {
-                let map_type = data_type.as_map().unwrap();
-                let map_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::MapArray>()
-                    .expect("fail to read from arrow: array should be `MapArray`");
-
-                let values = Column::from_arrow(&**map_col.field(), map_type.as_ref());
-                let offsets = map_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Map(Box::new(ArrayColumn {
-                    values,
-                    offsets: offsets.into(),
-                }))
-            }
-            ArrowDataType::Struct(_) => {
-                let struct_type = data_type.as_tuple().unwrap();
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
-                    .expect("fail to read from arrow: array should be `StructArray`");
-                let fields = arrow_col
-                    .values()
-                    .iter()
-                    .zip(struct_type.iter())
-                    .map(|(field, dt)| Column::from_arrow(&**field, dt))
-                    .collect::<Vec<_>>();
-                Column::Tuple(fields)
-            }
-            ArrowDataType::Decimal(precision, scale) => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<i128>>()
-                    .expect("fail to read from arrow: array should be `DecimalArray`");
-                Column::Decimal(DecimalColumn::Decimal128(
-                    arrow_col.values().clone(),
-                    DecimalSize {
-                        precision: *precision as u8,
-                        scale: *scale as u8,
-                    },
-                ))
-            }
-            ArrowDataType::Decimal256(precision, scale) => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
-                    .expect("fail to read from arrow: array should be `DecimalArray`");
-
-                let values = unsafe { std::mem::transmute(arrow_col.values().clone()) };
-                Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                }))
-            }
-            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_BITMAP => {
-                match ty {
-                    ArrowDataType::LargeBinary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                        let offsets = arrow_col.offsets().clone().into_inner();
-
-                        let offsets =
-                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
-                    }
-                    ArrowDataType::Binary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
-                        let offsets = arrow_col
-                            .offsets()
-                            .buffer()
-                            .iter()
-                            .map(|x| *x as u64)
-                            .collect::<Vec<_>>();
-                        Column::Bitmap(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        ))
-                    }
-                    _ => unreachable!(
-                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
-                    ),
-                }
-            }
-            ArrowDataType::Extension(_name, box ty, _) => {
-                Self::from_arrow_by_array_type(arrow_col, ty, &data_type)
-            }
-            ty => unimplemented!("unsupported arrow type {ty:?}"),
-        };
-
-        if is_nullable {
-            let validity = arrow_col
-                .validity()
-                .cloned()
-                .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
-            Column::Nullable(Box::new(NullableColumn { column, validity }))
-        } else {
-            column
-        }
-    }
-
     pub fn from_arrow(
         arrow_col: &dyn common_arrow::arrow::array::Array,
         data_type: &DataType,
     ) -> Column {
-        Self::from_arrow_by_array_type(arrow_col, arrow_col.data_type(), data_type)
+        fn from_arrow_by_array_type(
+            arrow_col: &dyn common_arrow::arrow::array::Array,
+            array_type: &ArrowDataType,
+            data_type: &DataType,
+        ) -> Column {
+            let is_nullable = data_type.is_nullable();
+            let data_type = data_type.remove_nullable();
+            let column = match array_type {
+                ArrowDataType::Null => match data_type {
+                    DataType::EmptyArray => Column::EmptyArray {
+                        len: arrow_col.len(),
+                    },
+                    DataType::EmptyMap => Column::EmptyMap {
+                        len: arrow_col.len(),
+                    },
+                    _ => Column::Null {
+                        len: arrow_col.len(),
+                    },
+                },
+                ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_ARRAY => {
+                    Column::EmptyArray {
+                        len: arrow_col.len(),
+                    }
+                }
+                ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_MAP => {
+                    Column::EmptyMap {
+                        len: arrow_col.len(),
+                    }
+                }
+                ArrowDataType::UInt8 => Column::Number(NumberColumn::UInt8(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
+                        .expect("fail to read from arrow: array should be `UInt8Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::UInt16 => Column::Number(NumberColumn::UInt16(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
+                        .expect("fail to read from arrow: array should be `UInt16Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::UInt32 => Column::Number(NumberColumn::UInt32(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
+                        .expect("fail to read from arrow: array should be `UInt32Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::UInt64 => Column::Number(NumberColumn::UInt64(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
+                        .expect("fail to read from arrow: array should be `UInt64Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::Int8 => Column::Number(NumberColumn::Int8(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Int8Array>()
+                        .expect("fail to read from arrow: array should be `Int8Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::Int16 => Column::Number(NumberColumn::Int16(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Int16Array>()
+                        .expect("fail to read from arrow: array should be `Int16Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::Int32 => Column::Number(NumberColumn::Int32(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Int32Array>()
+                        .expect("fail to read from arrow: array should be `Int32Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::Int64 => Column::Number(NumberColumn::Int64(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                        .expect("fail to read from arrow: array should be `Int64Array`")
+                        .values()
+                        .clone(),
+                )),
+                ArrowDataType::Float32 => {
+                    let col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Float32Array>()
+                        .expect("fail to read from arrow: array should be `Float32Array`")
+                        .values()
+                        .clone();
+                    let col = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(col) };
+                    Column::Number(NumberColumn::Float32(col))
+                }
+                ArrowDataType::Float64 => {
+                    let col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Float64Array>()
+                        .expect("fail to read from arrow: array should be `Float64Array`")
+                        .values()
+                        .clone();
+                    let col = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(col) };
+                    Column::Number(NumberColumn::Float64(col))
+                }
+                ArrowDataType::Boolean => Column::Boolean(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::BooleanArray>()
+                        .expect("fail to read from arrow: array should be `BooleanArray`")
+                        .values()
+                        .clone(),
+                ),
+                ArrowDataType::LargeBinary => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                        .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                    let offsets = arrow_col.offsets().clone().into_inner();
+
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    // LargeBinary may be Extension data type variant and bitmap
+                    match data_type {
+                        DataType::Variant => {
+                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Bitmap => {
+                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        _ => Column::String(StringColumn::new(arrow_col.values().clone(), offsets)),
+                    }
+                }
+                // TODO: deprecate it and use LargeBinary instead
+                ArrowDataType::Binary => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                        .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    // Binary may be Extension data type variant and bitmap
+                    match data_type {
+                        DataType::Variant => Column::Variant(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        )),
+                        DataType::Bitmap => Column::Bitmap(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        )),
+                        _ => Column::String(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        )),
+                    }
+                }
+
+                ArrowDataType::FixedSizeBinary(size) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::FixedSizeBinaryArray>()
+                        .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
+
+                    let offsets = (0..arrow_col.len() as u64 + 1)
+                        .map(|x| x * (*size) as u64)
+                        .collect::<Vec<_>>();
+
+                    Column::String(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+
+                // TODO: deprecate it and use LargeBinary instead
+                ArrowDataType::Utf8 => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Utf8Array<i32>>()
+                        .expect("fail to read from arrow: array should be `Utf8Array<i32>`");
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+
+                    Column::String(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                // TODO: deprecate it and use LargeBinary instead
+                ArrowDataType::LargeUtf8 => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Utf8Array<i64>>()
+                        .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::String(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+
+                ArrowDataType::Timestamp(uint, _) => {
+                    let values = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                        .expect("fail to read from arrow: array should be `Int64Array`")
+                        .values();
+                    let convert = match uint {
+                        TimeUnit::Second => (1_000_000, 1),
+                        TimeUnit::Millisecond => (1_000, 1),
+                        TimeUnit::Microsecond => (1, 1),
+                        TimeUnit::Nanosecond => (1, 1_000),
+                    };
+
+                    let values = if convert.0 == 1 && convert.1 == 1 {
+                        values.clone()
+                    } else {
+                        let values = values
+                            .iter()
+                            .map(|x| x * convert.0 / convert.1)
+                            .collect::<Vec<_>>();
+                        values.into()
+                    };
+                    Column::Timestamp(values)
+                }
+                ArrowDataType::Date32 => Column::Date(
+                    arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::Int32Array>()
+                        .expect("fail to read from arrow: array should be `Int32Array`")
+                        .values()
+                        .clone(),
+                ),
+                ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_VARIANT => {
+                    match ty {
+                        ArrowDataType::LargeBinary => {
+                            let arrow_col = arrow_col
+                                .as_any()
+                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                                .expect(
+                                    "fail to read from arrow: array should be `BinaryArray<i64>`",
+                                );
+                            let offsets = arrow_col.offsets().clone().into_inner();
+
+                            let offsets =
+                                unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+
+                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        ArrowDataType::Binary => {
+                            let arrow_col = arrow_col
+                                .as_any()
+                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                                .expect(
+                                    "fail to read from arrow: array should be `BinaryArray<i32>`",
+                                );
+                            let offsets = arrow_col
+                                .offsets()
+                                .buffer()
+                                .iter()
+                                .map(|x| *x as u64)
+                                .collect::<Vec<_>>();
+                            Column::Variant(StringColumn::new(
+                                arrow_col.values().clone(),
+                                offsets.into(),
+                            ))
+                        }
+                        _ => unreachable!(
+                            "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                        ),
+                    }
+                }
+                ArrowDataType::List(f) => {
+                    let array_list = arrow_cast::cast(
+                        arrow_col,
+                        &ArrowDataType::LargeList(f.clone()),
+                        arrow_cast::CastOptions {
+                            wrapped: true,
+                            partial: true,
+                        },
+                    )
+                    .expect("list to large list cast should be ok");
+
+                    let values_col = array_list
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                        .expect("fail to read from arrow: array should be `ListArray<i64>`");
+
+                    let array_type = data_type.as_array().unwrap();
+                    let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
+                    let offsets = values_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Array(Box::new(ArrayColumn {
+                        values,
+                        offsets: offsets.into(),
+                    }))
+                }
+                ArrowDataType::LargeList(_) => {
+                    let values_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                        .expect("fail to read from arrow: array should be `ListArray<i64>`");
+
+                    let array_type = data_type.as_array().unwrap();
+                    let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
+                    let offsets = values_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Array(Box::new(ArrayColumn {
+                        values,
+                        offsets: offsets.into(),
+                    }))
+                }
+                ArrowDataType::Map(_, _) => {
+                    let map_type = data_type.as_map().unwrap();
+                    let map_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::MapArray>()
+                        .expect("fail to read from arrow: array should be `MapArray`");
+
+                    let values = Column::from_arrow(&**map_col.field(), map_type.as_ref());
+                    let offsets = map_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Map(Box::new(ArrayColumn {
+                        values,
+                        offsets: offsets.into(),
+                    }))
+                }
+                ArrowDataType::Struct(_) => {
+                    let struct_type = data_type.as_tuple().unwrap();
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::StructArray>()
+                        .expect("fail to read from arrow: array should be `StructArray`");
+                    let fields = arrow_col
+                        .values()
+                        .iter()
+                        .zip(struct_type.iter())
+                        .map(|(field, dt)| Column::from_arrow(&**field, dt))
+                        .collect::<Vec<_>>();
+                    Column::Tuple(fields)
+                }
+                ArrowDataType::Decimal(precision, scale) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<i128>>()
+                        .expect("fail to read from arrow: array should be `DecimalArray`");
+                    Column::Decimal(DecimalColumn::Decimal128(
+                        arrow_col.values().clone(),
+                        DecimalSize {
+                            precision: *precision as u8,
+                            scale: *scale as u8,
+                        },
+                    ))
+                }
+                ArrowDataType::Decimal256(precision, scale) => {
+                    let arrow_col =
+                        arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<
+                                common_arrow::arrow::types::i256,
+                            >>()
+                            .expect("fail to read from arrow: array should be `DecimalArray`");
+
+                    let values = unsafe { std::mem::transmute(arrow_col.values().clone()) };
+                    Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
+                        precision: *precision as u8,
+                        scale: *scale as u8,
+                    }))
+                }
+                ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_BITMAP => {
+                    match ty {
+                        ArrowDataType::LargeBinary => {
+                            let arrow_col = arrow_col
+                                .as_any()
+                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                                .expect(
+                                    "fail to read from arrow: array should be `BinaryArray<i64>`",
+                                );
+                            let offsets = arrow_col.offsets().clone().into_inner();
+
+                            let offsets =
+                                unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        ArrowDataType::Binary => {
+                            let arrow_col = arrow_col
+                                .as_any()
+                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                                .expect(
+                                    "fail to read from arrow: array should be `BinaryArray<i32>`",
+                                );
+                            let offsets = arrow_col
+                                .offsets()
+                                .buffer()
+                                .iter()
+                                .map(|x| *x as u64)
+                                .collect::<Vec<_>>();
+                            Column::Bitmap(StringColumn::new(
+                                arrow_col.values().clone(),
+                                offsets.into(),
+                            ))
+                        }
+                        _ => unreachable!(
+                            "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                        ),
+                    }
+                }
+                ArrowDataType::Extension(_name, box ty, _) => {
+                    from_arrow_by_array_type(arrow_col, ty, &data_type)
+                }
+                ty => unimplemented!("unsupported arrow type {ty:?}"),
+            };
+
+            if is_nullable {
+                let validity = arrow_col
+                    .validity()
+                    .cloned()
+                    .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
+                Column::Nullable(Box::new(NullableColumn { column, validity }))
+            } else {
+                column
+            }
+        }
+
+        from_arrow_by_array_type(arrow_col, arrow_col.data_type(), data_type)
     }
 
     pub fn random(ty: &DataType, len: usize) -> Self {
