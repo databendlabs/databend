@@ -2173,6 +2173,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     copied_files: None,
                     deduplicated_label: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 
@@ -2194,6 +2195,7 @@ impl SchemaApiTestSuite {
                         new_table_meta: new_table_meta.clone(),
                         copied_files: None,
                         deduplicated_label: None,
+                        update_stream_meta: vec![],
                     })
                     .await;
 
@@ -2235,6 +2237,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     copied_files: Some(upsert_source_table),
                     deduplicated_label: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 
@@ -2274,6 +2277,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     copied_files: Some(upsert_source_table),
                     deduplicated_label: None,
+                    update_stream_meta: vec![],
                 })
                 .await?;
 
@@ -2314,6 +2318,7 @@ impl SchemaApiTestSuite {
                         new_table_meta: new_table_meta.clone(),
                         copied_files: Some(upsert_source_table),
                         deduplicated_label: None,
+                        update_stream_meta: vec![],
                     })
                     .await;
                 let err = result.unwrap_err();
@@ -3138,6 +3143,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta.clone(),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -3294,6 +3300,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: create_table_meta.clone(),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -4666,6 +4673,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -4703,6 +4711,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -6090,6 +6099,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -6136,6 +6146,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let result = mt.update_table_meta(req).await;
@@ -6179,6 +6190,7 @@ impl SchemaApiTestSuite {
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             mt.update_table_meta(req).await?;
@@ -6361,6 +6373,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             new_table_meta: self.table_meta(),
             copied_files: Some(req),
             deduplicated_label: None,
+            update_stream_meta: vec![],
         };
 
         self.mt.update_table_meta(req).await?;

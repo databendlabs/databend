@@ -37,6 +37,7 @@ use common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
 
+use super::Finder;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -60,6 +61,7 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -136,7 +138,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         hints: &Hint,
     ) -> Result<()> {
-        let mut type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::try_create(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
@@ -144,7 +146,7 @@ impl<'a> Binder {
             &[],
             false,
             false,
-        );
+        )?;
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;
@@ -569,6 +571,13 @@ impl<'a> Binder {
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
             }
+
+            // Streams
+            Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
+            Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
+            Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
+            Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
+
             Statement::CreatePipe(_) => {
                 todo!()
             }
@@ -645,5 +654,39 @@ impl<'a> Binder {
         self.eq_scalars
             .iter()
             .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
+    }
+
+    pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::LambdaFunction(_)
+                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::SubqueryExpr(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
+    pub(crate) fn check_allowed_scalar_expr_with_subquery(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::LambdaFunction(_)
+                    | ScalarExpr::UDFServerCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
     }
 }

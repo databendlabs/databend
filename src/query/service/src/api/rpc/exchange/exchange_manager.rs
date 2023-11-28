@@ -391,7 +391,10 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_flight_receiver(&self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
+    pub fn get_flight_receiver(
+        &self,
+        params: &ExchangeParams,
+    ) -> Result<Vec<(String, FlightReceiver)>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -548,31 +551,37 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn get_flight_receiver(&mut self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
+    pub fn get_flight_receiver(
+        &mut self,
+        params: &ExchangeParams,
+    ) -> Result<Vec<(String, FlightReceiver)>> {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
                 .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
-                .map(|(_, v)| v.convert_to_receiver())
+                .map(|((source, _, _), v)| (source.clone(), v.convert_to_receiver()))
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
                 let mut exchanges = Vec::with_capacity(params.destination_ids.len());
 
                 for destination in &params.destination_ids {
-                    exchanges.push(match destination == &params.executor_id {
-                        true => Ok(FlightReceiver::create(async_channel::bounded(1).1)),
-                        false => match self.fragment_exchanges.remove(&(
-                            destination.clone(),
-                            params.fragment_id,
-                            FLIGHT_RECEIVER,
-                        )) {
-                            Some(v) => Ok(v.convert_to_receiver()),
-                            _ => Err(ErrorCode::UnknownFragmentExchange(format!(
-                                "Unknown fragment flight receiver, {}, {}",
-                                destination, params.fragment_id
-                            ))),
-                        },
-                    }?);
+                    exchanges.push((
+                        destination.clone(),
+                        match destination == &params.executor_id {
+                            true => Ok(FlightReceiver::create(async_channel::bounded(1).1)),
+                            false => match self.fragment_exchanges.remove(&(
+                                destination.clone(),
+                                params.fragment_id,
+                                FLIGHT_RECEIVER,
+                            )) {
+                                Some(v) => Ok(v.convert_to_receiver()),
+                                _ => Err(ErrorCode::UnknownFragmentExchange(format!(
+                                    "Unknown fragment flight receiver, {}, {}",
+                                    destination, params.fragment_id
+                                ))),
+                            },
+                        }?,
+                    ));
                 }
 
                 Ok(exchanges)

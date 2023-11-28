@@ -181,6 +181,9 @@ impl PipelineBuilder {
             PhysicalPlan::ReclusterSink(recluster_sink) => {
                 self.build_recluster_sink(recluster_sink)
             }
+
+            // Update.
+            PhysicalPlan::UpdateSource(update) => self.build_update_source(update),
         }
     }
 }

@@ -171,6 +171,7 @@ where TablesTable<T>: HistoryAware
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                     if visibility_checker.check_table_visibility(ctl_name, db.name(), table.name())
+                        && table.engine() != "STREAM"
                     {
                         catalogs.push(ctl_name.as_bytes().to_vec());
                         databases.push(name.as_bytes().to_vec());

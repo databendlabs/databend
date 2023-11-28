@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -78,7 +79,12 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         "databend-meta-{}@{}",
         conf.raft_config.id, conf.raft_config.cluster_name
     );
-    let _guards = init_logging(&app_name_shuffle, &conf.log);
+    let mut log_labels = BTreeMap::new();
+    log_labels.insert(
+        "cluster_name".to_string(),
+        conf.raft_config.cluster_name.clone(),
+    );
+    let _guards = init_logging(&app_name_shuffle, &conf.log, log_labels);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -139,6 +145,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
+    println!("    OTLP: {}", conf.log.otlp);
     println!("    Tracing: {}", conf.log.tracing);
     println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);

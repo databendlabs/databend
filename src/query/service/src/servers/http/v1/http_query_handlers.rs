@@ -267,7 +267,7 @@ async fn query_cancel_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id).await {
             Some(query) => {
-                query.kill().await;
+                query.kill("http query cancel by handler").await;
                 http_query_manager.remove_query(&query_id).await;
                 StatusCode::OK
             }

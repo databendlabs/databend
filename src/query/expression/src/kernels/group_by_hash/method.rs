@@ -60,7 +60,7 @@ pub trait KeyAccessor {
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key;
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key;
 }
 
 pub trait HashMethod: Clone + Sync + Send + 'static {

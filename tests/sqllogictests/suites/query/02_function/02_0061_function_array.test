@@ -251,5 +251,15 @@ select array_filter(col1, a -> a % 2 = 1), array_filter(col2, b -> b = 'x') from
 statement error 1065
 select array_filter([1, 2], x -> x + 1)
 
+query TT
+select array_flatten( [ [1,2], [3,4] ] ), array_to_string(['open', 'ai'], ' love ');
+----
+[1,2,3,4]	open love ai
+
+query T
+select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
+----
+[1,2,3,3]
+
 statement ok
 DROP DATABASE array_func_test

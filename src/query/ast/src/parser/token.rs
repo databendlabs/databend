@@ -897,6 +897,10 @@ pub enum TokenKind {
     STATUS,
     #[token("STORED", ignore(ascii_case))]
     STORED,
+    #[token("STREAM", ignore(ascii_case))]
+    STREAM,
+    #[token("STREAMS", ignore(ascii_case))]
+    STREAMS,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -1053,8 +1057,6 @@ pub enum TokenKind {
     WRITE,
     #[token("UDF", ignore(ascii_case))]
     UDF,
-    #[token("USAGEUDF", ignore(ascii_case))]
-    USAGEUDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
@@ -1190,7 +1192,7 @@ impl TokenKind {
             // | TokenKind::CURRENT_DATE
             // | TokenKind::CURRENT_ROLE
             // | TokenKind::CURRENT_TIME
-            | TokenKind::CURRENT_TIMESTAMP
+            // | TokenKind::CURRENT_TIMESTAMP
             // | TokenKind::CURRENT_USER
             // | TokenKind::DEC
             // | TokenKind::DECIMAL
@@ -1436,6 +1438,7 @@ impl TokenKind {
             | TokenKind::POLICY
             | TokenKind::TASK
             | TokenKind::PIPE
+            | TokenKind::STREAM
             if !after_as => true,
             _ => false
         }

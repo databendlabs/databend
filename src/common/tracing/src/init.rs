@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fmt;
-use std::io;
-use std::io::BufWriter;
 use std::io::Write;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -27,11 +26,10 @@ use log::LevelFilter;
 use log::Log;
 use minitrace::prelude::*;
 use serde_json::Map;
-use tracing_appender::non_blocking::NonBlocking;
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling::RollingFileAppender;
-use tracing_appender::rolling::Rotation;
 
+use crate::loggers::new_file_log_writer;
+use crate::loggers::new_otlp_log_writer;
+use crate::loggers::MinitraceLogger;
 use crate::Config;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
@@ -42,8 +40,8 @@ pub struct GlobalLogger {
 }
 
 impl GlobalLogger {
-    pub fn init(name: &str, cfg: &Config) {
-        let _guards = init_logging(name, cfg);
+    pub fn init(name: &str, cfg: &Config, labels: BTreeMap<String, String>) {
+        let _guards = init_logging(name, cfg, labels);
         GlobalInstance::set(Self { _guards });
     }
 }
@@ -72,8 +70,16 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
 }
 
 #[allow(dyn_drop)]
-pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
+pub fn init_logging(
+    name: &str,
+    cfg: &Config,
+    mut labels: BTreeMap<String, String>,
+) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
+    // use name as service name if not specified
+    if !labels.contains_key("service") {
+        labels.insert("service".to_string(), name.to_string());
+    }
 
     // Initialize tracing reporter
     if cfg.tracing.on {
@@ -131,28 +137,37 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     let mut normal_logger = fern::Dispatch::new();
     let mut query_logger = fern::Dispatch::new();
 
-    // Console logger
-    if cfg.stderr.on {
-        normal_logger = normal_logger.chain(
-            fern::Dispatch::new()
-                .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
-                .format(formatter(&cfg.stderr.format))
-                .chain(std::io::stderr()),
-        )
-    }
-
     // File logger
     if cfg.file.on {
         let (normal_log_file, flush_guard) = new_file_log_writer(&cfg.file.dir, name);
-
         guards.push(Box::new(flush_guard));
+        let dispatch = fern::Dispatch::new()
+            .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
+            .format(formatter(&cfg.file.format))
+            .chain(Box::new(normal_log_file) as Box<dyn Write + Send>);
+        normal_logger = normal_logger.chain(dispatch);
+    }
 
-        normal_logger = normal_logger.chain(
-            fern::Dispatch::new()
-                .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
-                .format(formatter(&cfg.file.format))
-                .chain(Box::new(normal_log_file) as Box<dyn Write + Send>),
-        );
+    // Console logger
+    if cfg.stderr.on {
+        let dispatch = fern::Dispatch::new()
+            .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
+            .format(formatter(&cfg.stderr.format))
+            .chain(std::io::stderr());
+        normal_logger = normal_logger.chain(dispatch)
+    }
+
+    // OpenTelemetry logger
+    if cfg.otlp.on {
+        let mut labels = labels.clone();
+        labels.insert("category".to_string(), "system".to_string());
+        labels.extend(cfg.otlp.labels.clone());
+        let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
+        let dispatch = fern::Dispatch::new()
+            .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
+            .format(formatter("json"))
+            .chain(Box::new(logger) as Box<dyn Log>);
+        normal_logger = normal_logger.chain(dispatch);
     }
 
     // Log to minitrace
@@ -172,11 +187,18 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // Query logger
     if cfg.query.on {
-        let (query_log_file, flush_guard) = new_file_log_writer(&cfg.query.dir, name);
-
-        guards.push(Box::new(flush_guard));
-
-        query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
+        if !cfg.query.dir.is_empty() {
+            let (query_log_file, flush_guard) = new_file_log_writer(&cfg.query.dir, name);
+            guards.push(Box::new(flush_guard));
+            query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
+        }
+        if !cfg.query.otlp_endpoint.is_empty() {
+            let mut labels = labels.clone();
+            labels.insert("category".to_string(), "query".to_string());
+            labels.extend(cfg.query.labels.clone());
+            let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
+            query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
+        }
     }
 
     let logger = fern::Dispatch::new()
@@ -194,7 +216,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // Set global logger
     if logger.apply().is_err() {
-        eprint!("logger has already been set");
+        eprintln!("logger has already been set");
         return Vec::new();
     }
 
@@ -295,63 +317,4 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
             Ok(())
         }
     }
-}
-
-struct MinitraceLogger;
-
-impl Log for MinitraceLogger {
-    fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
-        true
-    }
-
-    fn log(&self, record: &log::Record<'_>) {
-        if record.key_values().count() == 0 {
-            minitrace::Event::add_to_local_parent(record.level().as_str(), || {
-                [("message".into(), format!("{}", record.args()).into())]
-            });
-        } else {
-            minitrace::Event::add_to_local_parent(record.level().as_str(), || {
-                let mut pairs = Vec::with_capacity(record.key_values().count() + 1);
-                pairs.push(("message".into(), format!("{}", record.args()).into()));
-                let mut visitor = KvCollector { fields: &mut pairs };
-                record.key_values().visit(&mut visitor).ok();
-                pairs
-            });
-        }
-
-        struct KvCollector<'a> {
-            fields: &'a mut Vec<(Cow<'static, str>, Cow<'static, str>)>,
-        }
-
-        impl<'a, 'kvs> log::kv::Visitor<'kvs> for KvCollector<'a> {
-            fn visit_pair(
-                &mut self,
-                key: log::kv::Key<'kvs>,
-                value: log::kv::Value<'kvs>,
-            ) -> Result<(), log::kv::Error> {
-                self.fields
-                    .push((key.as_str().to_string().into(), value.to_string().into()));
-                Ok(())
-            }
-        }
-    }
-
-    fn flush(&self) {}
-}
-
-/// Create a `BufWriter<NonBlocking>` for a rolling file logger.
-///
-/// `BufWriter` collects log segments into a whole before sending to underlying writer.
-/// `NonBlocking` sends log to another thread to execute the write IO to avoid blocking the thread
-/// that calls `log`.
-///
-/// Note that `NonBlocking` will discard logs if there are too many `io::Write::write(NonBlocking)`,
-/// especially when `fern` sends log segments one by one to the `Writer`.
-/// Therefore a `BufWriter` is used to reduce the number of `io::Write::write(NonBlocking)`.
-fn new_file_log_writer(dir: &str, name: impl ToString) -> (BufWriter<NonBlocking>, WorkerGuard) {
-    let rolling = RollingFileAppender::new(Rotation::HOURLY, dir, name.to_string());
-    let (non_blocking, flush_guard) = tracing_appender::non_blocking(rolling);
-    let buffered_non_blocking = io::BufWriter::with_capacity(64 * 1024 * 1024, non_blocking);
-
-    (buffered_non_blocking, flush_guard)
 }

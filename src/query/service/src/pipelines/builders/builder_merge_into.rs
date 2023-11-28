@@ -512,7 +512,10 @@ impl PipelineBuilder {
                 }
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
-            };
+            } else if !need_match && need_unmatch {
+                // insert-only, there are only row_numbers
+                self.main_pipeline.try_resize(1)?;
+            }
         }
 
         let fill_default_len = if !*distributed {

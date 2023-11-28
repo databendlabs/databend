@@ -19,6 +19,8 @@ use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::BindContext;
 use crate::ScalarExpr;
@@ -51,15 +53,21 @@ impl<'a> WindowChecker<'a> {
                 .into())
             }
             ScalarExpr::LambdaFunction(lambda) => {
-                if let Some(column_ref) = self
-                    .bind_context
-                    .lambda_info
-                    .lambda_functions_map
-                    .get(&lambda.display_name)
-                {
-                    return Ok(column_ref.clone().into());
+                let new_args = lambda
+                    .args
+                    .iter()
+                    .map(|arg| self.resolve(arg))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+                Ok(LambdaFunc {
+                    span: lambda.span,
+                    func_name: lambda.func_name.clone(),
+                    display_name: lambda.display_name.clone(),
+                    args: new_args,
+                    params: lambda.params.clone(),
+                    lambda_expr: lambda.lambda_expr.clone(),
+                    return_type: lambda.return_type.clone(),
                 }
-                Err(ErrorCode::Internal("Window Check: Invalid lambda function"))
+                .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
                 span: cast.span,
@@ -112,6 +120,15 @@ impl<'a> WindowChecker<'a> {
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: new_args,
+                }
+                .into())
+            }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let new_scalar = self.resolve(&udf.scalar)?;
+                Ok(UDFLambdaCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    scalar: Box::new(new_scalar),
                 }
                 .into())
             }

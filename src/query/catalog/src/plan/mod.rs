@@ -20,6 +20,7 @@ mod partition_statistics;
 mod projection;
 mod pruning_statistics;
 mod pushdown;
+mod stream_column;
 
 pub use agg_index::*;
 pub use datasource::*;
@@ -29,3 +30,4 @@ pub use partition_statistics::PartStatistics;
 pub use projection::Projection;
 pub use pruning_statistics::PruningStatistics;
 pub use pushdown::*;
+pub use stream_column::*;

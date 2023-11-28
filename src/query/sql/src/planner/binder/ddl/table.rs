@@ -363,7 +363,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn check_database_exist(
+    pub async fn check_database_exist(
         &mut self,
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
