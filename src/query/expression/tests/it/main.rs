@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 extern crate core;
 
 mod block;
+mod column;
 mod common;
 mod decimal;
 mod group_by;

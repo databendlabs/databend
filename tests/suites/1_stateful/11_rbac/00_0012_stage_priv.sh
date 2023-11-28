@@ -93,9 +93,26 @@ echo "select 1 from infer_schema(location => '@s3')" | $TEST_USER_CONNECT
 echo "select 1 from list_stage(location => '@s3')" | $TEST_USER_CONNECT
 echo "select 1 from inspect_parquet('@s3')" | $TEST_USER_CONNECT
 
+echo "=== check external location ==="
+rm -rf /tmp/00_0012
+mkdir -p /tmp/00_0012
+cat << EOF > /tmp/00_0012/i0.csv
+1,1
+2,2
+EOF
+
+echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
+echo "select \$1, \$2 from 'fs:///tmp/00_0012/' (FILE_FORMAT => 'CSV')"  | $TEST_USER_CONNECT
+echo "create table t(c1 int, c2 int)" | $BENDSQL_CLIENT_CONNECT
+echo "grant select, insert on default.t to u1" | $BENDSQL_CLIENT_CONNECT
+echo "copy into t from 'fs:///tmp/00_0012/' FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
+echo "select * from t" | $BENDSQL_CLIENT_CONNECT
+
 ## Drop table.
 echo "drop stage if exists presign_stage" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
+rm -rf /tmp/00_0012
 
 

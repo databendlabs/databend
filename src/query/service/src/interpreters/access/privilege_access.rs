@@ -130,6 +130,11 @@ impl PrivilegeAccess {
         stage_info: &StageInfo,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
+        // skip check the temp stage from uri like `COPY INTO tbl FROM 'http://xxx'`
+        if stage_info.is_from_uri {
+            return Ok(());
+        }
+
         // every user can presign his own user stage like: `PRESIGN @~/tmp.txt`
         if stage_info.stage_type == StageType::User
             && stage_info.stage_name == self.ctx.get_current_user()?.name

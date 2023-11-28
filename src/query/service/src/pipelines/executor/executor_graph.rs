@@ -481,6 +481,8 @@ impl RunningGraph {
             name: String,
             state: String,
             details_status: Option<String>,
+            inputs_status: Vec<(&'static str, &'static str, &'static str)>,
+            outputs_status: Vec<(&'static str, &'static str, &'static str)>,
         }
 
         impl Debug for NodeDisplay {
@@ -491,12 +493,16 @@ impl RunningGraph {
                         .field("name", &self.name)
                         .field("id", &self.id)
                         .field("state", &self.state)
+                        .field("inputs_status", &self.inputs_status)
+                        .field("outputs_status", &self.outputs_status)
                         .finish(),
                     Some(details_status) => f
                         .debug_struct("Node")
                         .field("name", &self.name)
                         .field("id", &self.id)
                         .field("state", &self.state)
+                        .field("inputs_status", &self.inputs_status)
+                        .field("outputs_status", &self.outputs_status)
                         .field("details", details_status)
                         .finish(),
                 }
@@ -508,7 +514,55 @@ impl RunningGraph {
         for node_index in self.0.graph.node_indices() {
             unsafe {
                 let state = self.0.graph[node_index].state.lock().unwrap();
+                let inputs_status = self.0.graph[node_index]
+                    .inputs_port
+                    .iter()
+                    .map(|x| {
+                        let finished = match x.is_finished() {
+                            true => "Finished",
+                            false => "Unfinished",
+                        };
+
+                        let has_data = match x.has_data() {
+                            true => "HasData",
+                            false => "Nodata",
+                        };
+
+                        let need_data = match x.is_need_data() {
+                            true => "NeedData",
+                            false => "UnNeeded",
+                        };
+
+                        (finished, has_data, need_data)
+                    })
+                    .collect::<Vec<_>>();
+
+                let outputs_status = self.0.graph[node_index]
+                    .outputs_port
+                    .iter()
+                    .map(|x| {
+                        let finished = match x.is_finished() {
+                            true => "Finished",
+                            false => "Unfinished",
+                        };
+
+                        let has_data = match x.has_data() {
+                            true => "HasData",
+                            false => "Nodata",
+                        };
+
+                        let need_data = match x.is_need_data() {
+                            true => "NeedData",
+                            false => "UnNeeded",
+                        };
+
+                        (finished, has_data, need_data)
+                    })
+                    .collect::<Vec<_>>();
+
                 nodes_display.push(NodeDisplay {
+                    inputs_status,
+                    outputs_status,
                     id: self.0.graph[node_index].processor.id().index(),
                     name: self.0.graph[node_index].processor.name(),
                     details_status: self.0.graph[node_index].processor.details_status(),

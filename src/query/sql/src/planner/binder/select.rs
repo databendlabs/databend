@@ -48,8 +48,10 @@ use log::warn;
 use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::join::JoinConditions;
+use crate::binder::lambda::LambdaRewriter;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::udf::UdfRewriter;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
@@ -168,9 +170,6 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
-        // analyze lambda
-        self.analyze_lambda(&mut from_context, &mut select_list)?;
-
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -239,10 +238,6 @@ impl Binder {
             )?;
         }
 
-        if !from_context.lambda_info.lambda_functions.is_empty() {
-            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
-        }
-
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
@@ -285,8 +280,13 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
+        // rewrite lambda
+        let mut lambda_rewriter = LambdaRewriter::new(self.metadata.clone());
+        s_expr = lambda_rewriter.rewrite(&s_expr)?;
+
         // rewrite udf
-        s_expr = self.rewrite_udf(&s_expr)?;
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
