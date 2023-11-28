@@ -18,13 +18,14 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
+use common_exception::{ErrorCode, Span};
 use common_exception::Result;
-use common_expression::DataBlock;
+use common_expression::{DataBlock, Expr, RemoteExpr, Scalar};
 use common_expression::FunctionContext;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
 use log::info;
+use common_expression::types::DataType;
 
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
@@ -257,6 +258,17 @@ impl Processor for TransformHashJoinProbe {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_runtime_filter(&self) -> Result<Vec<Expr>> {
+        // Create a false Expr
+        dbg!("call this");
+        let expr = Expr::Constant {
+            span: Span::default(),
+            data_type: DataType::Boolean,
+            scalar: Scalar::Boolean(false),
+        };
+        Ok(vec![expr])
     }
 
     fn event(&mut self) -> Result<Event> {

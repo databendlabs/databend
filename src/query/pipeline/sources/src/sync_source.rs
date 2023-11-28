@@ -19,7 +19,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataBlock;
+use common_expression::{DataBlock, Expr};
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -41,6 +41,8 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
     output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
     scan_progress: Arc<Progress>,
+
+    runtime_filters: Vec<Expr>,
 }
 
 impl<T: 'static + SyncSource> SyncSourcer<T> {
@@ -56,6 +58,7 @@ impl<T: 'static + SyncSource> SyncSourcer<T> {
             scan_progress,
             is_finish: false,
             generated_data: None,
+            runtime_filters: vec![],
         })))
     }
 }
@@ -68,6 +71,15 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
+        dbg!("come here");
+        Ok(self.runtime_filters.extend(filters))
+    }
+
+    fn can_add_runtime_filter(&self) -> bool {
+        true
     }
 
     fn event(&mut self) -> Result<Event> {
@@ -94,6 +106,7 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     }
 
     fn process(&mut self) -> Result<()> {
+        dbg!(self.runtime_filters.clone());
         match self.inner.generate()? {
             None => self.is_finish = true,
             Some(data_block) => {

@@ -36,6 +36,8 @@ use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
+use petgraph::stable_graph::Neighbors;
+use common_expression::Expr;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorTasksQueue;
@@ -58,7 +60,7 @@ enum State {
     Finished,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct EdgeInfo {
     input_index: usize,
     output_index: usize,
@@ -274,6 +276,16 @@ impl ExecutingGraph {
             }
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
+                let current_node = locker.graph[schedule_index].clone();
+                let rt_filters = current_node.processor.get_runtime_filter()?;
+                dbg!(rt_filters.len());
+                if !rt_filters.is_empty() {
+                    // probe node
+                    // Push down runtime filters to source node
+                    let neighbors = locker.graph.neighbors_directed(schedule_index, Direction::Incoming);
+                    ExecutingGraph::find_source_node(locker, schedule_index.clone(), &rt_filters, neighbors)?;
+                }
+
                 let node = &locker.graph[schedule_index];
 
                 if state_guard_cache.is_none() {
@@ -310,6 +322,22 @@ impl ExecutingGraph {
             }
         }
 
+        Ok(())
+    }
+
+    unsafe fn find_source_node(locker: &StateLockGuard, current_node: NodeIndex, rt_filters: &[Expr], neighbors: Neighbors<EdgeInfo>) -> Result<()> {
+        if neighbors.clone().next().is_none() {
+            // Source node
+            dbg!("find source node");
+            let source_node = locker.graph[current_node].clone();
+            source_node.processor.add_runtime_filter(rt_filters.to_vec())?;
+        }
+        for neighbor in neighbors {
+            let current_node = locker.graph[neighbor].clone();
+            dbg!(&current_node.processor.name());
+            let nodes = locker.graph.neighbors_directed(neighbor, Direction::Incoming);
+            ExecutingGraph::find_source_node(locker, neighbor, rt_filters, nodes)?;
+        }
         Ok(())
     }
 }

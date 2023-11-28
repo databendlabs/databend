@@ -21,7 +21,7 @@ use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
+use common_expression::{DataBlock, Expr};
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -50,6 +50,8 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+
+    runtime_filters: Vec<Expr>,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
@@ -75,6 +77,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 partitions,
                 index_reader,
                 virtual_reader,
+                runtime_filters: vec![],
             })
         } else {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
@@ -89,6 +92,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 partitions,
                 index_reader,
                 virtual_reader,
+                runtime_filters: vec![],
             })))
         }
     }
@@ -165,6 +169,14 @@ impl Processor for ReadParquetDataSource<false> {
         self
     }
 
+    fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
+        Ok(self.runtime_filters.extend(filters))
+    }
+
+    fn can_add_runtime_filter(&self) -> bool {
+       true
+    }
+
     fn event(&mut self) -> Result<Event> {
         if self.finished {
             self.output.finish();
@@ -191,6 +203,7 @@ impl Processor for ReadParquetDataSource<false> {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
+        dbg!(&self.runtime_filters);
         let parts = self.partitions.steal(self.id, self.batch_size);
 
         if !parts.is_empty() {
