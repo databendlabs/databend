@@ -437,6 +437,24 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
                 }
                 write!(f, ")")
             }
+            RawExpr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_display,
+                ..
+            } => {
+                write!(f, "{name}")?;
+                write!(f, "(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{arg}")?;
+                }
+                write!(f, ", ")?;
+                write!(f, "{lambda_display}")?;
+                write!(f, ")")
+            }
         }
     }
 }
@@ -640,6 +658,24 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 }
                 write!(f, ")")
             }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_display,
+                ..
+            } => {
+                write!(f, "{name}")?;
+                write!(f, "(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{arg}")?;
+                }
+                write!(f, ", ")?;
+                write!(f, "{lambda_display}")?;
+                write!(f, ")")
+            }
         }
     }
 }
@@ -772,6 +808,26 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s
                     }
                 },
+                Expr::LambdaFunctionCall {
+                    name,
+                    args,
+                    lambda_display,
+                    ..
+                } => {
+                    let mut s = String::new();
+                    s += &name;
+                    s += "(";
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 {
+                            s += ", ";
+                        }
+                        s += &arg.sql_display();
+                    }
+                    s += ", ";
+                    s += &lambda_display;
+                    s += ")";
+                    s
+                }
             }
         }
 

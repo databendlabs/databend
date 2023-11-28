@@ -63,6 +63,14 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         params: Vec<usize>,
         args: Vec<RawExpr<Index>>,
     },
+    LambdaFunctionCall {
+        span: Span,
+        name: String,
+        args: Vec<RawExpr<Index>>,
+        lambda_expr: RemoteExpr,
+        lambda_display: String,
+        return_type: DataType,
+    },
 }
 
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
@@ -100,6 +108,15 @@ pub enum Expr<Index: ColumnIndex = usize> {
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr<Index>>,
+        return_type: DataType,
+    },
+    LambdaFunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        span: Span,
+        name: String,
+        args: Vec<Expr<Index>>,
+        lambda_expr: RemoteExpr,
+        lambda_display: String,
         return_type: DataType,
     },
 }
@@ -141,6 +158,15 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         args: Vec<RemoteExpr<Index>>,
         return_type: DataType,
     },
+    LambdaFunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        span: Span,
+        name: String,
+        args: Vec<RemoteExpr<Index>>,
+        lambda_expr: Box<RemoteExpr>,
+        lambda_display: String,
+        return_type: DataType,
+    },
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
@@ -151,8 +177,11 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                     buf.insert(id.clone(), data_type.clone());
                 }
                 RawExpr::Cast { expr, .. } => walk(expr, buf),
-                RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 RawExpr::Constant { .. } => (),
+                RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                RawExpr::LambdaFunctionCall { args, .. } => {
+                    args.iter().for_each(|expr| walk(expr, buf))
+                }
             }
         }
 
@@ -203,6 +232,21 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 params: params.clone(),
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
             },
+            RawExpr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => RawExpr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }
@@ -214,6 +258,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::ColumnRef { span, .. } => *span,
             Expr::Cast { span, .. } => *span,
             Expr::FunctionCall { span, .. } => *span,
+            Expr::LambdaFunctionCall { span, .. } => *span,
         }
     }
 
@@ -223,6 +268,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::ColumnRef { data_type, .. } => data_type,
             Expr::Cast { dest_type, .. } => dest_type,
             Expr::FunctionCall { return_type, .. } => return_type,
+            Expr::LambdaFunctionCall { return_type, .. } => return_type,
         }
     }
 
@@ -233,8 +279,11 @@ impl<Index: ColumnIndex> Expr<Index> {
                     buf.insert(id.clone(), data_type.clone());
                 }
                 Expr::Cast { expr, .. } => walk(expr, buf),
-                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 Expr::Constant { .. } => (),
+                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                Expr::LambdaFunctionCall { args, .. } => {
+                    args.iter().for_each(|expr| walk(expr, buf))
+                }
             }
         }
 
@@ -294,6 +343,21 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
                 return_type: return_type.clone(),
             },
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 
@@ -344,6 +408,21 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(Expr::as_remote_expr).collect(),
                 return_type: return_type.clone(),
             },
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => RemoteExpr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(Expr::as_remote_expr).collect(),
+                lambda_expr: Box::new(lambda_expr.clone()),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 
@@ -358,6 +437,9 @@ impl<Index: ColumnIndex> Expr<Index> {
                     .unwrap()
                     .non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic(registry))
+            }
+            Expr::LambdaFunctionCall { args, .. } => {
+                args.iter().all(|arg| arg.is_deterministic(registry))
             }
         }
     }
@@ -414,6 +496,21 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                     return_type: return_type.clone(),
                 }
             }
+            RemoteExpr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
+                lambda_expr: *lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }

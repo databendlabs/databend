@@ -38,10 +38,10 @@ use crate::FunctionContext;
 use crate::Scalar;
 
 pub fn check<Index: ColumnIndex>(
-    ast: &RawExpr<Index>,
+    expr: &RawExpr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
-    match ast {
+    match expr {
         RawExpr::Constant { span, scalar } => Ok(Expr::Constant {
             span: *span,
             scalar: scalar.clone(),
@@ -125,6 +125,28 @@ pub fn check<Index: ColumnIndex>(
             }
 
             check_function(*span, name, params, &args_expr, fn_registry)
+        }
+        RawExpr::LambdaFunctionCall {
+            span,
+            name,
+            args,
+            lambda_expr,
+            lambda_display,
+            return_type,
+        } => {
+            let args: Vec<_> = args
+                .iter()
+                .map(|arg| check(arg, fn_registry))
+                .try_collect()?;
+
+            Ok(Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args,
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            })
         }
     }
 }

@@ -317,7 +317,6 @@ impl MergeIntoInterpreter {
             RelOperator::Window(_) => {}
             RelOperator::ProjectSet(_) => {}
             RelOperator::MaterializedCte(_) => {}
-            RelOperator::Lambda(_) => {}
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
             RelOperator::AddRowNumber(_) => {}
