@@ -286,7 +286,7 @@ impl MergeIntoInterpreter {
                     database: database.clone(),
                     table: match target_alias {
                         None => table_name.clone(),
-                        Some(alias) => alias.name.to_string(),
+                        Some(alias) => alias.name.to_string().to_lowercase(),
                     },
                     update_list: update_list.clone(),
                     bind_context: bind_context.clone(),
