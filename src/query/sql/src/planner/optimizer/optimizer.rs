@@ -217,13 +217,6 @@ pub fn optimize_query(
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
         opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
-    // Add runtime filter related nodes after cbo
-    // Because cbo may change join order and we don't want to
-    // break optimizer due to new added nodes by runtime filter.
-    // Currently, we only support standalone.
-    if !enable_distributed_query && ctx.get_settings().get_runtime_filter()? {
-        result = try_add_runtime_filter_nodes(&result)?;
-    }
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }

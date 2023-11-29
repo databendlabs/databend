@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -264,15 +266,13 @@ impl Processor for TransformHashJoinProbe {
         self
     }
 
-    fn get_runtime_filter(&self) -> Result<Vec<Expr>> {
-        // Create a false Expr
-        let expr = Expr::Constant {
-            span: Span::default(),
-            data_type: DataType::Boolean,
-            scalar: Scalar::Boolean(false),
-        };
-        // Todo: clear runtime filters
-        Ok(vec![expr])
+    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
+        Ok(self
+            .join_probe_state
+            .hash_join_state
+            .runtime_filters
+            .read()
+            .clone())
     }
 
     fn event(&mut self) -> Result<Event> {

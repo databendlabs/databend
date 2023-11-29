@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI8;
@@ -23,17 +24,27 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::Receiver;
 use common_base::base::tokio::sync::watch::Sender;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::ColumnId;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
+use common_expression::RawExpr;
+use common_expression::RemoteExpr;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
+use common_sql::TypeCheck;
 use ethnum::U256;
 use parking_lot::RwLock;
 
@@ -74,6 +85,7 @@ pub enum HashJoinHashTable {
 /// It will like a bridge to connect build and probe.
 /// Such as build side will pass hash table to probe side by it
 pub struct HashJoinState {
+    pub(crate) ctx: Arc<QueryContext>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
     /// It will be increased by 1 when a new hash join build processor is created.
@@ -115,6 +127,9 @@ pub struct HashJoinState {
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
     pub(crate) partition_id: AtomicI8,
+
+    /// Runtime filters
+    pub(crate) runtime_filters: RwLock<HashMap<ColumnId, Expr>>,
 }
 
 impl HashJoinState {
@@ -137,6 +152,7 @@ impl HashJoinState {
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         Ok(Arc::new(HashJoinState {
+            ctx: ctx.clone(),
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             hash_table_builders: AtomicUsize::new(0),
             build_done_watcher,
@@ -151,6 +167,7 @@ impl HashJoinState {
             continue_build_watcher,
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
+            runtime_filters: Default::default(),
         }))
     }
 
@@ -236,5 +253,87 @@ impl HashJoinState {
             build_state.mark_scan_map.clear();
         }
         build_state.generation_state.is_build_projected = true;
+    }
+
+    // Generate runtime filters
+    pub(crate) fn generate_runtime_filters(&self) -> Result<()> {
+        let func_ctx = self.ctx.get_function_context()?;
+        let data_blocks = &mut unsafe { &mut *self.build_state.get() }.build_chunks;
+        let mut runtime_filters = self.runtime_filters.write();
+        for (build_key, probe_key) in self
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .zip(self.hash_join_desc.probe_keys.iter())
+        {
+            // Only support key is a column
+            if let Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } = probe_key
+            {
+                let column_id: usize = self.hash_join_desc.probe_schema.fields[*id]
+                    .name()
+                    .parse()
+                    .unwrap();
+                let raw_probe_key = RawExpr::ColumnRef {
+                    span: span.clone(),
+                    id: column_id,
+                    data_type: data_type.clone(),
+                    display_name: display_name.clone(),
+                };
+                let mut columns = Vec::with_capacity(data_blocks.len());
+                for block in data_blocks.iter() {
+                    if block.num_columns() == 0 {
+                        continue;
+                    }
+                    let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+                    let column = evaluator
+                        .run(build_key)?
+                        .convert_to_full_column(build_key.data_type(), block.num_rows());
+                    columns.push(column);
+                }
+                // Generate inlist using build column
+                let build_key_column = Column::concat_columns(columns.into_iter())?;
+                let mut list = Vec::with_capacity(build_key_column.len());
+                for value in build_key_column.iter() {
+                    list.push(RawExpr::Constant {
+                        span: None,
+                        scalar: value.to_owned(),
+                    })
+                }
+                let array = RawExpr::FunctionCall {
+                    span: None,
+                    name: "array".to_string(),
+                    params: vec![],
+                    args: list,
+                };
+                let distinct_list = RawExpr::FunctionCall {
+                    span: None,
+                    name: "array_distinct".to_string(),
+                    params: vec![],
+                    args: vec![array],
+                };
+
+                let args = vec![distinct_list, raw_probe_key];
+                // Make contain function
+                let contain_func = RawExpr::FunctionCall {
+                    span: None,
+                    name: "contains".to_string(),
+                    params: vec![],
+                    args,
+                };
+                runtime_filters.insert(
+                    column_id as ColumnId,
+                    contain_func.type_check(self.hash_join_desc.probe_schema.as_ref())?,
+                );
+            }
+        }
+
+        data_blocks.clear();
+
+        Ok(())
     }
 }

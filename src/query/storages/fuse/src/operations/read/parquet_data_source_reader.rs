@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -21,6 +22,7 @@ use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_pipeline_core::processors::Event;
@@ -52,7 +54,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
-    runtime_filters: Vec<Expr>,
+    runtime_filters: HashMap<ColumnId, Expr>,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
@@ -78,7 +80,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 partitions,
                 index_reader,
                 virtual_reader,
-                runtime_filters: vec![],
+                runtime_filters: HashMap::new(),
             })
         } else {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
@@ -93,7 +95,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 partitions,
                 index_reader,
                 virtual_reader,
-                runtime_filters: vec![],
+                runtime_filters: HashMap::new(),
             })))
         }
     }
@@ -103,6 +105,7 @@ impl SyncSource for ReadParquetDataSource<true> {
     const NAME: &'static str = "SyncReadParquetDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
+        dbg!(&self.runtime_filters);
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
@@ -147,7 +150,6 @@ impl SyncSource for ReadParquetDataSource<true> {
 
                 // Todo: using runtime filter to check if need to read this part.
 
-
                 let source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
                     &part,
@@ -163,10 +165,10 @@ impl SyncSource for ReadParquetDataSource<true> {
     }
 
     fn can_add_runtime_filter(&self) -> bool {
-       true
+        true
     }
 
-    fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
+    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
         Ok(self.runtime_filters.extend(filters))
     }
 }
@@ -181,7 +183,7 @@ impl Processor for ReadParquetDataSource<false> {
         self
     }
 
-    fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
+    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
         Ok(self.runtime_filters.extend(filters))
     }
 

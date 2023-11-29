@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -23,6 +24,7 @@ use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::Expr;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::processors::EventCause;
@@ -277,7 +279,7 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let current_node = locker.graph[schedule_index].clone();
-                let rt_filters = current_node.processor.get_runtime_filter()?;
+                let rt_filters = current_node.processor.get_runtime_filters()?;
                 dbg!(rt_filters.len());
                 if !rt_filters.is_empty() {
                     // probe node
@@ -335,7 +337,7 @@ impl ExecutingGraph {
     unsafe fn find_source_node(
         locker: &StateLockGuard,
         current_node: NodeIndex,
-        rt_filters: &[Expr],
+        rt_filters: &HashMap<ColumnId, Expr>,
         neighbors: Neighbors<EdgeInfo>,
     ) -> Result<()> {
         if neighbors.clone().next().is_none() {
@@ -344,7 +346,8 @@ impl ExecutingGraph {
             let source_node = locker.graph[current_node].clone();
             source_node
                 .processor
-                .add_runtime_filter(rt_filters.to_vec())?;
+                .add_runtime_filters(rt_filters.clone())?;
+            return Ok(());
         }
         for neighbor in neighbors {
             let current_node = locker.graph[neighbor].clone();
