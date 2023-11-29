@@ -162,45 +162,6 @@ function install_openssl {
 	esac
 }
 
-function install_sccache {
-	PACKAGE_MANAGER=$1
-
-	if sccache --version; then
-		echo "==> sccache is already installed"
-		return
-	fi
-	echo "==> installing sccache..."
-
-	case "$PACKAGE_MANAGER" in
-	brew)
-		install_pkg sccache "$PACKAGE_MANAGER"
-		;;
-	*)
-
-		arch=$(uname -m)
-		case "$arch" in
-		amd64)
-			arch="x86_64"
-			;;
-		arm64)
-			arch="aarch64"
-			;;
-		esac
-		download_version="v0.5.3"
-		download_target="sccache-${download_version}-${arch}-unknown-linux-musl"
-		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
-		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
-		tar -xzf sccache.tar.gz
-		"${PRE_COMMAND[@]}" cp "${download_target}/sccache" /usr/local/bin/
-		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/sccache
-		rm -rf "${download_target}"
-		rm sccache.tar.gz
-		;;
-	esac
-
-	sccache --version
-}
-
 function install_protobuf {
 	PACKAGE_MANAGER=$1
 
@@ -568,16 +529,15 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
-
-	# Install tools that needed in build
-	install_sccache "$PACKAGE_MANAGER"
+	cargo install cargo-quickinstall
+	cargo quickinstall cargo-binstall
+	cargo binstall -y sccache
+	cargo binstall -y cargo-zigbuild
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
-		cargo install cargo-quickinstall
-		cargo quickinstall cargo-binstall
 		while read -r tool; do
 			cargo binstall -y "$tool"
 		done <scripts/setup/rust-tools.txt
