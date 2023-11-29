@@ -35,7 +35,7 @@ use crate::sql::ScalarExpr;
 ///
 /// Returns a `Result` containing a `bool` indicating whether specific duplicate label exists (`true`) or not (`false`).
 pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool> {
-    match ctx.get_settings().get_deduplicate_label()? {
+    match unsafe { ctx.get_settings().get_deduplicate_label()? } {
         None => Ok(false),
         Some(deduplicate_label) => {
             let kv_store = UserApiProvider::instance().get_meta_store_client();

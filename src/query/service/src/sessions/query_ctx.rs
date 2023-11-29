@@ -65,7 +65,6 @@ use common_meta_app::schema::TableInfo;
 use common_metrics::storage::*;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
 use common_storage::CopyStatus;
@@ -581,12 +580,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_changed_settings();
+        if !self.query_settings.is_changed() {
             unsafe {
-                self.query_settings.unchecked_apply_changes(session_change);
+                self.query_settings
+                    .unchecked_apply_changes(&self.shared.get_settings());
             }
         }
+
         self.query_settings.clone()
     }
 
@@ -661,20 +661,6 @@ impl TableContext for QueryContext {
             return Some(m);
         }
         None
-    }
-
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.shared.apply_changed_settings(changes)
-    }
-
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_changed_settings();
-            unsafe {
-                self.query_settings.unchecked_apply_changes(session_change);
-            }
-        }
-        self.query_settings.get_changes()
     }
 
     // Get the storage data accessor operator from the session manager.
@@ -819,9 +805,11 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        self.get_settings()
-            .get_enterprise_license()
-            .unwrap_or_default()
+        unsafe {
+            self.get_settings()
+                .get_enterprise_license()
+                .unwrap_or_default()
+        }
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
