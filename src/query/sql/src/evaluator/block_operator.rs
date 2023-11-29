@@ -16,10 +16,11 @@ use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
+use common_expression::build_select_expr;
+use common_expression::filter::SelectStrategy;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableColumnBuilder;
-use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::VariantType;
 use common_expression::BlockEntry;
@@ -33,6 +34,8 @@ use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
+use common_expression::SelectExpr;
+use common_expression::SelectOp;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::InputPort;
@@ -40,6 +43,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::Transform;
 use common_pipeline_transforms::processors::Transformer;
+use itertools::Itertools;
 
 use crate::executor::physical_plans::LambdaFunctionDesc;
 use crate::optimizer::ColumnSet;
@@ -117,9 +121,37 @@ impl BlockOperator {
                     Ok(input.project_with_agg_index(projections, num_evals))
                 } else {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
+                    let (select_expr, has_or) = build_select_expr(expr);
+                    // TODO(Dousir9): reuse the selection buffer
+                    let mut true_selection = vec![0; input.num_rows()];
+                    let mut false_selection = if has_or {
+                        vec![0; input.num_rows()]
+                    } else {
+                        vec![]
+                    };
+                    let mut true_idx = 0;
+                    let mut false_idx = 0;
+                    let count = evaluator.process_selection(
+                        &select_expr,
+                        None,
+                        &mut true_selection,
+                        (&mut false_selection, false),
+                        &mut true_idx,
+                        &mut false_idx,
+                        SelectStrategy::ALL,
+                        input.num_rows(),
+                    )?;
                     let data_block = input.project(projections);
-                    data_block.filter_boolean_value(&filter)
+                    if count == data_block.num_rows() {
+                        return Ok(data_block);
+                    } else {
+                        data_block.take(&true_selection[0..count], &mut None)
+                    }
+
+                    // let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                    // let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
+                    // let data_block = input.project(projections);
+                    // data_block.filter_boolean_value(&filter)
                 }
             }
 

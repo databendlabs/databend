@@ -12,22 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod concat;
-mod filter;
-mod group_by;
-mod group_by_hash;
-mod scatter;
-mod sort;
-mod take;
-mod take_chunks;
-mod take_compact;
-mod topk;
-mod utils;
+mod select;
+mod select_columns;
+mod select_scalar_column;
 
-pub use group_by::*;
-pub use group_by_hash::*;
-pub use sort::*;
-pub use take::*;
-pub use take_chunks::*;
-pub use topk::*;
-pub use utils::*;
+pub use select::build_select_expr;
+pub use select::select_values;
+pub use select::selection_op;
+pub use select::selection_op_ref;
+pub use select::update_selection_by_default_result;
+pub use select::SelectExpr;
+pub use select::SelectOp;
+pub use select::SelectStrategy;
+pub use select_columns::select_columns;
+pub use select_scalar_column::select_scalar_and_column;

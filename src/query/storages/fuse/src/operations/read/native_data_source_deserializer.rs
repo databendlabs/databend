@@ -32,6 +32,8 @@ use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::eval_function;
+use common_expression::filter::build_select_expr;
+use common_expression::filter::SelectStrategy;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -57,6 +59,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use itertools::Itertools;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
@@ -713,14 +716,29 @@ impl Processor for NativeDeserializeDataTransform {
 
                         let evaluator =
                             Evaluator::new(&prewhere_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let filter = evaluator
-                            .run(filter)
-                            .map_err(|e| e.add_message("eval prewhere filter failed:"))?
-                            .try_downcast::<BooleanType>()
-                            .unwrap();
+                        let (select_expr, has_or) = build_select_expr(filter);
+                        // TODO(Dousir9): reuse the selection buffer
+                        let mut true_selection = vec![0; prewhere_block.num_rows()];
+                        let mut false_selection = if has_or {
+                            vec![0; prewhere_block.num_rows()]
+                        } else {
+                            vec![]
+                        };
+                        let mut true_idx = 0;
+                        let mut false_idx = 0;
+                        let count = evaluator.process_selection(
+                            &select_expr,
+                            None,
+                            &mut true_selection,
+                            (&mut false_selection, false),
+                            &mut true_idx,
+                            &mut false_idx,
+                            SelectStrategy::ALL,
+                            prewhere_block.num_rows(),
+                        )?;
 
                         // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
-                        if FilterHelpers::is_all_unset(&filter) {
+                        if count == 0 {
                             self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
@@ -738,12 +756,20 @@ impl Processor for NativeDeserializeDataTransform {
                                 .as_column()
                                 .unwrap();
 
-                            let mut bitmap =
-                                FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
+                            // TODO(Dousir9): better way to get the bitmap
+                            let mut bitmap = FilterHelpers::selection_to_mutable_bitmap(
+                                &true_selection[0..count],
+                                prewhere_block.num_rows(),
+                            );
                             sorter.push_column(top_k_column, &mut bitmap);
                             Value::Column(bitmap.into())
                         } else {
-                            filter
+                            // TODO(Dousir9): better way to get the bitmap
+                            let bitmap = FilterHelpers::selection_to_bitmap(
+                                &true_selection[0..count],
+                                prewhere_block.num_rows(),
+                            );
+                            Value::Column(bitmap)
                         };
 
                         if FilterHelpers::is_all_unset(&filter) {
