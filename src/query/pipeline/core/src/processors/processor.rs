@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cell::UnsafeCell;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -95,6 +96,14 @@ pub trait Processor: Send {
 struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
 unsafe impl Sync for UnsafeSyncCelledProcessor {}
 
+impl Deref for UnsafeSyncCelledProcessor {
+    type Target = UnsafeCell<Box<(dyn Processor)>>;
+
+    fn deref(&self) -> &Self::Target {
+        &(self.0)
+    }
+}
+
 #[derive(Clone)]
 pub struct ProcessorPtr {
     id: Arc<UnsafeCell<NodeIndex>>,
@@ -121,7 +130,7 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn as_any(&mut self) -> &mut dyn Any {
-        (*self.inner.0.get()).as_any()
+        (*self.inner.get()).as_any()
     }
 
     /// # Safety
@@ -136,27 +145,27 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn name(&self) -> String {
-        (*self.inner.0.get()).name()
+        (*self.inner.get()).name()
     }
 
     /// # Safety
     pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
-        (*self.inner.0.get()).event_with_cause(cause)
+        (*self.inner.get()).event_with_cause(cause)
     }
 
     /// # Safety
     pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
-        (*self.inner.0.get()).un_reacted(cause, self.id().index())
+        (*self.inner.get()).un_reacted(cause, self.id().index())
     }
 
     /// # Safety
     pub unsafe fn record_profile(&self, profile: &Profile) {
-        (*self.inner.0.get()).record_profile(profile)
+        (*self.inner.get()).record_profile(profile)
     }
 
     /// # Safety
     pub unsafe fn interrupt(&self) {
-        (*self.inner.0.get()).interrupt()
+        (*self.inner.get()).interrupt()
     }
 
     /// # Safety
@@ -166,7 +175,7 @@ impl ProcessorPtr {
         let _span = LocalSpan::enter_with_local_parent(name)
             .with_property(|| ("graph-node-id", self.id().index().to_string()));
 
-        (*self.inner.0.get()).process()
+        (*self.inner.get()).process()
     }
 
     /// # Safety
@@ -175,7 +184,7 @@ impl ProcessorPtr {
         let mut name = self.name();
         name.push_str("::async_process");
 
-        let task = (*self.inner.0.get()).async_process();
+        let task = (*self.inner.get()).async_process();
 
         // The `task` may have reference to the `Processor` that hold in `self.inner`,
         // so we need to move a clone of `self.inner` into the following async closure to keep the
@@ -200,7 +209,7 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn details_status(&self) -> Option<String> {
-        (*self.inner.0.get()).details_status()
+        (*self.inner.get()).details_status()
     }
 }
 
