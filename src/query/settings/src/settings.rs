@@ -146,7 +146,7 @@ impl<'a> Iterator for SettingsIter<'a> {
         loop {
             return match self.inner.next() {
                 None => None,
-                Some((key, default_value)) if matches!(default_value.mode, SettingMode::Write) => {
+                Some((_, value)) if matches!(value.mode, SettingMode::Write) => {
                     continue;
                 }
                 Some((key, default_value)) => Some(match self.settings.changes.get(&key) {

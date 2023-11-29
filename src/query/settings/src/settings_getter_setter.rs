@@ -234,6 +234,7 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
+    /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
@@ -346,14 +347,17 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
+    /// # Safety
     pub unsafe fn get_enterprise_license(&self) -> Result<String> {
         self.unchecked_try_get_string("enterprise_license")
     }
 
+    /// # Safety
     pub unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
         self.unchecked_set_setting("enterprise_license".to_string(), val)
     }
 
+    /// # Safety
     pub unsafe fn get_deduplicate_label(&self) -> Result<Option<String>> {
         let deduplicate_label = self.unchecked_try_get_string("deduplicate_label")?;
         if deduplicate_label.is_empty() {
@@ -363,6 +367,7 @@ impl Settings {
         }
     }
 
+    /// # Safety
     pub unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
         self.unchecked_set_setting("deduplicate_label".to_string(), val)
     }
