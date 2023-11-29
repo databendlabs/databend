@@ -132,6 +132,7 @@ use crate::Visibility;
 pub struct TypeChecker<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
+    dialect: Dialect,
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -162,9 +163,11 @@ impl<'a> TypeChecker<'a> {
         forbid_udf: bool,
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
+        let dialect = ctx.get_settings().get_sql_dialect()?;
         Ok(Self {
             bind_context,
             ctx,
+            dialect,
             func_ctx,
             name_resolution_ctx,
             metadata,
@@ -246,7 +249,7 @@ impl<'a> TypeChecker<'a> {
                     NameResolutionResult::Column(column) => {
                         if let Some(virtual_computed_expr) = column.virtual_computed_expr {
                             let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+                            let expr = parse_expr(&sql_tokens, self.dialect)?;
                             return self.resolve(&expr).await;
                         } else {
                             let data_type = *column.data_type.clone();
@@ -1044,9 +1047,7 @@ impl<'a> TypeChecker<'a> {
                             }
                             lit.clone()
                         }
-                        MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
-                            Literal::String(key.name.clone())
-                        }
+                        MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(

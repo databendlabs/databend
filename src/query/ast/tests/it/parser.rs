@@ -32,11 +32,17 @@ use nom::Parser;
 
 macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
+        run_parser_with_dialect!($file, $parser, Dialect::PostgreSQL, $source)
+    };
+}
+
+macro_rules! run_parser_with_dialect {
+    ($file:expr, $parser:expr, $dialect:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
         let parser = $parser;
         let mut parser = rule! { #parser ~ &EOI };
-        match parser.parse(Input(&tokens, Dialect::PostgreSQL, &backtrace)) {
+        match parser.parse(Input(&tokens, $dialect, &backtrace)) {
             Ok((i, (output, _))) => {
                 assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
@@ -799,6 +805,26 @@ fn test_expr() {
 }
 
 #[test]
+fn test_experimental_expr() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("experimental_expr.txt").unwrap();
+
+    let cases = &[
+        r#"a"#,
+        r#"a.add(b)"#,
+        r#"a.sub(b).add(e)"#,
+        r#"a.sub(b).add(e)"#,
+        r#"1 + {'k1': 4}.k1"#,
+        r#"'3'.plus(4)"#,
+        r#"(3).add({'k1': 4 }.k1)"#,
+    ];
+
+    for case in cases {
+        run_parser_with_dialect!(file, expr, Dialect::Experimental, case);
+    }
+}
+
+#[test]
 fn test_expr_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("expr-error.txt").unwrap();
@@ -809,6 +835,7 @@ fn test_expr_error() {
         r#"CAST(col1 AS foo)"#,
         r#"1 a"#,
         r#"CAST(col1)"#,
+        r#"a.add(b)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
                 AND 1 + col3 DIV sum(col4)"#,

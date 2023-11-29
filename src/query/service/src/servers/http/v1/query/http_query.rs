@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use super::RemoveReason;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -219,7 +220,9 @@ impl HttpQuery {
                             "last query on the session not finished",
                         ));
                     } else {
-                        http_query_manager.remove_query(&query_id).await;
+                        let _ = http_query_manager
+                            .remove_query(&query_id, RemoveReason::Canceled)
+                            .await;
                     }
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session

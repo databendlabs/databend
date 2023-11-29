@@ -18,5 +18,17 @@ ignore = [
     "RUSTSEC-2021-0139",
     # buf_redux
     # buf_redux is Unmaintained
-    "RUSTSEC-2023-0028"
+    "RUSTSEC-2023-0028",
+    # rsa
+    # Marvin Attack: potential key recovery through timing sidechannels
+    "RUSTSEC-2023-0071",
+    # mach
+    # mach is Unmaintained
+    "RUSTSEC-2020-0168",
+    # atty
+    # Potential unaligned read
+    "RUSTSEC-2021-0145",
+    # borsh
+    # Parsing borsh messages with ZST which are not-copy/clone is unsound
+    "RUSTSEC-2023-0033"
 ]
