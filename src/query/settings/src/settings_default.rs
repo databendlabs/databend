@@ -508,6 +508,12 @@ impl DefaultSettings {
                     possible_values: Some(vec!["rounding", "truncating"]),
                     display_in_show_settings: true,
                 }),
+                ("experiment_enable_stage_udf_priv_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting disables stage and udf privilege check(disable by default).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
