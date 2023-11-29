@@ -903,10 +903,20 @@ WHEN NOT MATCHED THEN
 
 ## issue #13810: rewrite rule test
 statement ok
-create table rule_target(a int,b string,c string);
+DROP TABLE IF EXISTS orders;
 
 statement ok
-truncate table orders;
+CREATE TABLE orders (
+                        order_id      INT          NOT NULL,
+                        user_id       INT          NOT NULL,
+                        order_type    VARCHAR      NOT NULL,
+                        asset_type    VARCHAR      NOT NULL,
+                        quantity      DECIMAL(18,8) NOT NULL,
+                        price         DECIMAL(18,8) NOT NULL,
+                        status        VARCHAR      NOT NULL,
+                        created_at    DATE         NOT NULL,
+                        updated_at    DATE         NOT NULL
+) row_per_block=5113;
 
 statement ok
 insert into orders values(200007,7,'buy','BTC',4.81412194,48.14121943,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
