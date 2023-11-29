@@ -769,7 +769,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                             // TODO(Dousir9): better way to get the bitmap
                             let mut bitmap = FilterHelpers::selection_to_mutable_bitmap(
-                                &true_selection,
+                                &true_selection[0..count],
                                 prewhere_block.num_rows(),
                             );
                             sorter.push_column(top_k_column, &mut bitmap);
@@ -777,7 +777,7 @@ impl Processor for NativeDeserializeDataTransform {
                         } else {
                             // TODO(Dousir9): better way to get the bitmap
                             let bitmap = FilterHelpers::selection_to_bitmap(
-                                &true_selection,
+                                &true_selection[0..count],
                                 prewhere_block.num_rows(),
                             );
                             Value::Column(bitmap)

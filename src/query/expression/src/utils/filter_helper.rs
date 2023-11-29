@@ -53,17 +53,29 @@ impl FilterHelpers {
         let mut builder_len = 0;
         let mut value = 0;
         let mut unset_bits = 0;
-        let mut idx = 0;
 
         unsafe {
             let mut i = 0;
-            while i < rows {
-                if i as u32 == selection[idx] {
-                    value |= BIT_MASK[i % 8];
-                    idx += 1;
-                } else {
+            for idx in selection {
+                while (i as u32) < *idx {
                     unset_bits += 1;
+                    i += 1;
+                    if i % 8 == 0 {
+                        *builder.get_unchecked_mut(builder_len) = value;
+                        builder_len += 1;
+                        value = 0;
+                    }
                 }
+                value |= BIT_MASK[i % 8];
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+            while i < rows {
+                unset_bits += 1;
                 i += 1;
                 if i % 8 == 0 {
                     *builder.get_unchecked_mut(builder_len) = value;
@@ -96,6 +108,37 @@ impl FilterHelpers {
         let mut idx = 0;
 
         unsafe {
+            let mut i = 0;
+            for idx in selection {
+                while (i as u32) < *idx {
+                    i += 1;
+                    if i % 8 == 0 {
+                        *builder.get_unchecked_mut(builder_len) = value;
+                        builder_len += 1;
+                        value = 0;
+                    }
+                }
+                value |= BIT_MASK[i % 8];
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+            while i < rows {
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+            if i % 8 != 0 {
+                *builder.get_unchecked_mut(builder_len) = value;
+                builder_len += 1;
+            }
+
             let mut i = 0;
             while i < rows {
                 if i as u32 == selection[idx] {
