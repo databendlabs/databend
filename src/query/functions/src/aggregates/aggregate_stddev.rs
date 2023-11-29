@@ -16,9 +16,17 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::decimal::Decimal;
+use common_expression::types::decimal::Decimal128Type;
+use common_expression::types::decimal::Decimal256Type;
+use common_expression::types::decimal::DecimalType;
+use common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
+use common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use common_expression::types::number::Number;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::DecimalSize;
 use common_expression::types::Float64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
@@ -26,6 +34,7 @@ use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
 use common_expression::Scalar;
 use num_traits::AsPrimitive;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -40,15 +49,17 @@ use crate::aggregates::AggregateFunction;
 
 const POP: u8 = 0;
 const SAMP: u8 = 1;
+const VARIANCE_SCALE: u8 = 10;
+const OVERFLOW_PRECISION: u8 = 18;
 
 #[derive(Default, Serialize, Deserialize)]
-struct AggregateStddevState<const TYPE: u8> {
+struct NumberAggregateStddevState<const TYPE: u8> {
     pub sum: f64,
     pub count: u64,
     pub variance: f64,
 }
 
-impl<T, const TYPE: u8> UnaryState<T, Float64Type> for AggregateStddevState<TYPE>
+impl<T, const TYPE: u8> UnaryState<T, Float64Type> for NumberAggregateStddevState<TYPE>
 where
     T: ValueType,
     T::Scalar: Number + AsPrimitive<f64>,
@@ -105,6 +116,169 @@ where
     }
 }
 
+impl<T, const TYPE: u8, S> UnaryState<T, DecimalType<S>> for NumberAggregateStddevState<TYPE>
+where
+    T: ValueType,
+    S: Decimal,
+    T::Scalar: AsPrimitive<S>,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        let value = T::to_owned_scalar(other).as_();
+        let value = value.to_float64(5);
+        self.sum += value;
+        self.count += 1;
+        if self.count > 1 {
+            let t = self.count as f64 * value - self.sum;
+            self.variance += (t * t) / (self.count * (self.count - 1)) as f64;
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, other: &Self) -> Result<()> {
+        if other.count == 0 {
+            return Ok(());
+        }
+        if self.count == 0 {
+            self.count = other.count;
+            self.sum = other.sum;
+            self.variance = other.variance;
+            return Ok(());
+        }
+
+        let t = (other.count as f64 / self.count as f64) * self.sum - other.sum;
+        self.variance += other.variance
+            + ((self.count as f64 / other.count as f64) / (self.count as f64 + other.count as f64))
+                * t
+                * t;
+        self.count += other.count;
+        self.sum += other.sum;
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut Vec<S>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let variance = self.variance / (self.count - TYPE as u64) as f64;
+        builder.push(S::from_float(variance.sqrt()));
+        Ok(())
+    }
+
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        serialize_state(writer, self)
+    }
+
+    fn deserialize(reader: &mut &[u8]) -> Result<Self>
+    where Self: Sized {
+        deserialize_state(reader)
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct DecimalNumberAggregateStddevState<const OVERFLOW: bool, T, const TYPE: u8>
+where
+    T: ValueType,
+    T::Scalar: Decimal,
+{
+    pub sum: T::Scalar,
+    pub count: u64,
+    pub variance: f64,
+}
+
+impl<const OVERFLOW: bool, T, const TYPE: u8> Default
+    for DecimalNumberAggregateStddevState<OVERFLOW, T, TYPE>
+where
+    T: ValueType,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            sum: T::Scalar::zero(),
+            count: 0,
+            variance: 0.0,
+        }
+    }
+}
+
+impl<const OVERFLOW: bool, T, const TYPE: u8> UnaryState<T, T>
+    for DecimalNumberAggregateStddevState<OVERFLOW, T, TYPE>
+where
+    T: ValueType,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        let value = T::to_owned_scalar(other);
+        self.sum += value;
+        if OVERFLOW && (self.sum > T::Scalar::MAX || self.sum < T::Scalar::MIN) {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {:?} not in [{}, {}]",
+                self.sum,
+                T::Scalar::MIN,
+                T::Scalar::MAX,
+            )));
+        }
+        self.count += 1;
+        if self.count > 1 {
+            let t = self.count as f64 * value.to_float64(VARIANCE_SCALE)
+                - self.sum.to_float64(VARIANCE_SCALE);
+            self.variance += (t * t) / (self.count * (self.count - 1)) as f64;
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, other: &Self) -> Result<()> {
+        if other.count == 0 {
+            return Ok(());
+        }
+        if self.count == 0 {
+            self.count = other.count;
+            self.sum = other.sum;
+            self.variance = other.variance;
+            return Ok(());
+        }
+
+        let t = (other.count as f64 / self.count as f64) * self.sum.to_float64(VARIANCE_SCALE)
+            - other.sum.to_float64(VARIANCE_SCALE);
+        self.variance += other.variance
+            + ((self.count as f64 / other.count as f64) / (self.count as f64 + other.count as f64))
+                * t
+                * t;
+        self.count += other.count;
+        self.sum += other.sum;
+        if OVERFLOW && (self.sum > T::Scalar::MAX || self.sum < T::Scalar::MIN) {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {:?} not in [{}, {}]",
+                self.sum,
+                T::Scalar::MIN,
+                T::Scalar::MAX,
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut T::ColumnBuilder,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let variance = self.variance / (self.count - TYPE as u64) as f64;
+        let value = T::Scalar::from_float(variance.sqrt());
+        T::push_item(builder, T::to_scalar_ref(&value));
+        Ok(())
+    }
+
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        serialize_state(writer, self)
+    }
+
+    fn deserialize(reader: &mut &[u8]) -> Result<Self>
+    where Self: Sized {
+        deserialize_state(reader)
+    }
+}
+
 pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
@@ -115,10 +289,60 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
         DataType::Number(NumberDataType::NUM_TYPE) => {
             let return_type = DataType::Number(NumberDataType::Float64);
             AggregateUnaryFunction::<
-                AggregateStddevState<TYPE>,
+                NumberAggregateStddevState<TYPE>,
                 NumberType<NUM_TYPE>,
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+        }
+        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+            let decimal_size = DecimalSize {
+                precision: MAX_DECIMAL128_PRECISION,
+                scale: s.scale.max(4),
+            };
+            let overflow = s.precision > OVERFLOW_PRECISION;
+            let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            if overflow {
+                AggregateUnaryFunction::<
+                    DecimalNumberAggregateStddevState<true, Decimal128Type, TYPE>,
+                    Decimal128Type,
+                    Decimal128Type,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
+                )
+            } else {
+                AggregateUnaryFunction::<
+                    DecimalNumberAggregateStddevState<false, Decimal128Type, TYPE>,
+                    Decimal128Type,
+                    Decimal128Type,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
+                )
+            }
+        }
+        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+            let decimal_size = DecimalSize {
+                precision: MAX_DECIMAL256_PRECISION,
+                scale: s.scale.max(4),
+            };
+            let overflow = s.precision > OVERFLOW_PRECISION;
+            let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            if overflow {
+                AggregateUnaryFunction::<
+                    DecimalNumberAggregateStddevState<true, Decimal256Type, TYPE>,
+                    Decimal256Type,
+                    Decimal256Type,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
+                )
+            } else {
+                AggregateUnaryFunction::<
+                    DecimalNumberAggregateStddevState<false, Decimal256Type, TYPE>,
+                    Decimal256Type,
+                    Decimal256Type,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
+                )
+            }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",

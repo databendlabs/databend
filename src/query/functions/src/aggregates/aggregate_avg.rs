@@ -239,7 +239,7 @@ pub fn try_create_aggregate_avg_function(
 
             if overflow {
                 let func = AggregateUnaryFunction::<
-                    DecimalAvgState<false, Decimal128Type>,
+                    DecimalAvgState<true, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create(
@@ -249,7 +249,7 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             } else {
                 let func = AggregateUnaryFunction::<
-                    DecimalAvgState<true, Decimal128Type>,
+                    DecimalAvgState<false, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create(
@@ -272,7 +272,7 @@ pub fn try_create_aggregate_avg_function(
 
             if overflow {
                 let func = AggregateUnaryFunction::<
-                    DecimalAvgState<false, Decimal256Type>,
+                    DecimalAvgState<true, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(
@@ -282,7 +282,7 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             } else {
                 let func = AggregateUnaryFunction::<
-                    DecimalSumState<true, Decimal256Type>,
+                    DecimalSumState<false, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(
