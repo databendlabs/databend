@@ -10,7 +10,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: The tag to release
+        description: Tag to release
         required: true
         type: string
 
