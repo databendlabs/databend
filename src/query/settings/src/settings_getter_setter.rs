@@ -297,6 +297,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
     }
 
+    pub fn get_enable_stage_udf_priv_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("experiment_enable_stage_udf_priv_check")? != 0)
+    }
+
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
         self.try_get_u64("table_lock_expire_secs")
     }
