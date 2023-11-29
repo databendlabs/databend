@@ -13,5 +13,4 @@
 //  limitations under the License.W
 
 mod ai_to_sql;
-mod flatten;
 mod numbers_table;
