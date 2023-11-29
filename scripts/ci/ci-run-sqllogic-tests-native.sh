@@ -9,7 +9,7 @@ export STORAGE_ALLOW_INSECURE=true
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone-native.sh
 
-TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
+TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""

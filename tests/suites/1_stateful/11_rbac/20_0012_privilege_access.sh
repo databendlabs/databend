@@ -6,6 +6,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
+echo "set global experiment_enable_stage_udf_priv_check=1" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists 'test-role1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists 'test-role2'" | $BENDSQL_CLIENT_CONNECT
@@ -176,3 +178,5 @@ echo "select count(1) from information_schema.tables where table_schema not in (
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
 echo "drop database grant_db" |  $BENDSQL_CLIENT_CONNECT
+
+echo "unset experiment_enable_stage_udf_priv_check" | $BENDSQL_CLIENT_CONNECT
