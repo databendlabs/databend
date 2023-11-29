@@ -41,6 +41,7 @@ pub use input::Input;
 mod util;
 pub use util::match_text;
 pub use util::match_token;
+pub use util::IResult;
 
 pub mod ast;
 pub mod parser;
