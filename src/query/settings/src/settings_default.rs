@@ -517,7 +517,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting disables stage and udf privilege check(disable by default).",
                     possible_values: None,
-                    display_in_show_settings: true,
+                    mode: SettingMode::Both,
                 }),
             ]);
 
