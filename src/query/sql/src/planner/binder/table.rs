@@ -41,8 +41,6 @@ use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnType;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::statistics::BasicColumnStatistics;
@@ -97,8 +95,8 @@ use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
-use crate::binder::InternalColumnBinding;
 use crate::binder::Visibility;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
@@ -1304,18 +1302,26 @@ impl Binder {
             .map(|col| col.index())
             .collect::<HashSet<_>>();
         if let Some(origin_block_id) = origin_block_id {
-            let base_block_ids = InternalColumnBinding {
-                database_name: Some(database_name.to_string()),
-                table_name: Some(table_name.to_string()),
-                internal_column: InternalColumn {
-                    column_name: BASE_BLOCK_IDS_COL_NAME.to_string(),
-                    column_type: InternalColumnType::BaseBlockIds,
-                },
-            };
-            let base_block_ids =
-                bind_context.add_internal_column_binding(&base_block_ids, self.metadata.clone())?;
+            let column_index = self.metadata.write().add_internal_column(
+                table_index,
+                INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(BASE_BLOCK_IDS_COL_NAME)
+                    .unwrap(),
+            );
+            let column = self.metadata.read().column(column_index).clone();
+            let base_block_ids = ColumnBindingBuilder::new(
+                column.name(),
+                column_index,
+                Box::new(column.data_type()),
+                Visibility::InVisible,
+            )
+            .table_name(Some(table_name.to_string()))
+            .database_name(Some(database_name.to_string()))
+            .table_index(Some(table_index))
+            .build();
 
             columns.insert(base_block_ids.index);
+
             let predicate = ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "contains".to_string(),

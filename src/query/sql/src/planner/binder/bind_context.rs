@@ -558,7 +558,7 @@ impl BindContext {
             column.name(),
             column_index,
             Box::new(column.data_type()),
-            Visibility::InVisible,
+            Visibility::Visible,
         )
         .database_name(Some(table.database().to_string()))
         .table_name(Some(table.name().to_string()))
