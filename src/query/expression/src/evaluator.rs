@@ -225,683 +225,6 @@ impl<'a> Evaluator<'a> {
         result
     }
 
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_others(
-        &self,
-        expr: &Expr,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let count = match expr {
-            Expr::FunctionCall {
-                function,
-                generics,
-                args,
-                return_type,
-                ..
-            } => {
-                debug_assert!(
-                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
-                );
-                let args = args
-                    .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.input_columns.num_rows(),
-                    validity,
-                    errors: None,
-                    func_ctx: self.func_ctx,
-                };
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                update_selection_by_default_result(
-                    result,
-                    return_type,
-                    true_selection,
-                    false_selection,
-                    true_idx,
-                    false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
-            _ => unreachable!(),
-        };
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_compare(
-        &self,
-        select_op: &SelectOp,
-        exprs: &Vec<Expr>,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let childs = self.get_childs(exprs, validity)?;
-        let left = childs[0].clone();
-        let right = childs[1].clone();
-        let count = select_values(
-            *select_op,
-            left.0.clone(),
-            right.0.clone(),
-            left.1.clone(),
-            right.1.clone(),
-            true_selection,
-            false_selection,
-            true_idx,
-            false_idx,
-            select_strategy,
-            count,
-        );
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_selection(
-        &self,
-        select_expr: &SelectExpr,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let count = match select_expr {
-            SelectExpr::And(exprs) => self.process_and(
-                exprs,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Or(exprs) => self.process_or(
-                exprs,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Compare((select_op, exprs)) => self.process_compare(
-                select_op,
-                exprs,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Others(expr) => self.process_others(
-                expr,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Constant(constant) => {
-                // TODO(Dousir9): support constant
-                if *constant {
-                    count
-                } else {
-                    0
-                };
-                unimplemented!()
-            }
-        };
-
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    fn get_select_child(
-        &self,
-        expr: &Expr,
-        validity: Option<Bitmap>,
-    ) -> Result<(Value<AnyType>, DataType)> {
-        debug_assert!(
-            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
-        );
-
-        #[cfg(debug_assertions)]
-        self.check_expr(expr);
-
-        let result = match expr {
-            Expr::Constant { scalar, .. } => {
-                Ok((Value::Scalar(scalar.clone()), scalar.data_type()))
-            }
-            Expr::ColumnRef { id, .. } => {
-                let entry = self.input_columns.get_by_offset(*id);
-                Ok((entry.value.clone(), entry.data_type.clone()))
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => {
-                let value = self.get_select_child(expr, validity.clone())?.0;
-                if *is_try {
-                    Ok((
-                        self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
-                        dest_type.clone(),
-                    ))
-                } else {
-                    Ok((
-                        self.run_cast(*span, expr.data_type(), dest_type, value, validity)?,
-                        dest_type.clone(),
-                    ))
-                }
-            }
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } if function.signature.name == "if" => Ok((
-                self.eval_if(args, generics, validity)?,
-                function.signature.return_type.clone(),
-            )),
-
-            Expr::FunctionCall { function, args, .. }
-                if function.signature.name == "and_filters" =>
-            {
-                Ok((self.eval_and_filters(args, validity)?, DataType::Boolean))
-            }
-
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } => {
-                let args = args
-                    .iter()
-                    .map(|expr| self.get_select_child(expr, validity.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match &val.0 {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-
-                let cols_ref = args
-                    .iter()
-                    .map(|(val, _)| Value::as_ref(val))
-                    .collect::<Vec<_>>();
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.input_columns.num_rows(),
-                    validity,
-                    errors: None,
-                    func_ctx: self.func_ctx,
-                };
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                Ok((result, function.signature.return_type.clone()))
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        if result.is_err() {
-            use std::sync::atomic::AtomicBool;
-            use std::sync::atomic::Ordering;
-
-            static RECURSING: AtomicBool = AtomicBool::new(false);
-            if RECURSING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                assert_eq!(
-                    ConstantFolder::fold_with_domain(
-                        expr,
-                        &self
-                            .input_columns
-                            .domains()
-                            .into_iter()
-                            .enumerate()
-                            .collect(),
-                        self.func_ctx,
-                        self.fn_registry
-                    )
-                    .1,
-                    None,
-                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                    result.unwrap_err()
-                );
-                RECURSING.store(false, Ordering::SeqCst);
-            }
-        }
-        result
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_others(
-        &self,
-        expr: &Expr,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let count = match expr {
-            Expr::FunctionCall {
-                function,
-                generics,
-                args,
-                return_type,
-                ..
-            } => {
-                debug_assert!(
-                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
-                );
-                let args = args
-                    .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.input_columns.num_rows(),
-                    validity,
-                    errors: None,
-                    func_ctx: self.func_ctx,
-                };
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                update_selection_by_default_result(
-                    result,
-                    return_type,
-                    true_selection,
-                    false_selection,
-                    true_idx,
-                    false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
-            _ => unreachable!(),
-        };
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn get_childs(
-        &self,
-        args: &Vec<Expr>,
-        validity: Option<Bitmap>,
-    ) -> Result<Vec<(Value<AnyType>, DataType)>> {
-        let childs = args
-            .iter()
-            .map(|expr| self.get_select_child(expr, validity.clone()))
-            .collect::<Result<Vec<_>>>()?;
-        assert!(
-            childs
-                .iter()
-                .filter_map(|val| match &val.0 {
-                    Value::Column(col) => Some(col.len()),
-                    Value::Scalar(_) => None,
-                })
-                .all_equal()
-        );
-        Ok(childs)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_and(
-        &self,
-        exprs: &Vec<SelectExpr>,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        _false_idx: &mut usize,
-        mut select_strategy: SelectStrategy,
-        mut count: usize,
-    ) -> Result<usize> {
-        let mut temp_true_idx = *true_idx;
-        let mut temp_false_idx = 0;
-        let exprs_len = exprs.len();
-        for (i, expr) in exprs.iter().enumerate() {
-            let true_count = self.process_selection(
-                expr,
-                validity.clone(),
-                true_selection,
-                (false_selection.0, false_selection.1),
-                &mut temp_true_idx,
-                &mut temp_false_idx,
-                select_strategy,
-                count,
-            )?;
-            count = true_count;
-            if count == 0 {
-                break;
-            }
-            select_strategy = SelectStrategy::True;
-            if i != exprs_len - 1 {
-                temp_true_idx = *true_idx;
-            } else {
-                *true_idx = temp_true_idx;
-            }
-        }
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_or(
-        &self,
-        exprs: &Vec<SelectExpr>,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        _true_idx: &mut usize,
-        false_idx: &mut usize,
-        mut select_strategy: SelectStrategy,
-        mut count: usize,
-    ) -> Result<usize> {
-        let mut temp_true_idx = 0;
-        let mut temp_false_idx = *false_idx;
-        let exprs_len = exprs.len();
-        for (i, expr) in exprs.iter().enumerate() {
-            let true_count = self.process_selection(
-                expr,
-                validity.clone(),
-                true_selection,
-                (false_selection.0, true),
-                &mut temp_true_idx,
-                &mut temp_false_idx,
-                select_strategy,
-                count,
-            )?;
-            count -= true_count;
-            if count == 0 {
-                break;
-            }
-            select_strategy = SelectStrategy::False;
-            if i != exprs_len - 1 {
-                temp_false_idx = *false_idx;
-            } else {
-                *false_idx = temp_false_idx;
-            }
-        }
-        // *true_idx = 0;
-        Ok(temp_true_idx)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_compare(
-        &self,
-        select_op: &SelectOp,
-        exprs: &Vec<Expr>,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let childs = self.get_childs(exprs, validity)?;
-        let left = childs[0].clone();
-        let right = childs[1].clone();
-        let count = select_values(
-            *select_op,
-            left.0.clone(),
-            right.0.clone(),
-            left.1.clone(),
-            right.1.clone(),
-            true_selection,
-            false_selection,
-            true_idx,
-            false_idx,
-            select_strategy,
-            count,
-        );
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    pub fn process_selection(
-        &self,
-        select_expr: &SelectExpr,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let count = match select_expr {
-            SelectExpr::And(exprs) => self.process_and(
-                exprs,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Or(exprs) => self.process_or(
-                exprs,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Compare((select_op, exprs)) => self.process_compare(
-                select_op,
-                exprs,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Others(expr) => self.process_others(
-                expr,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            )?,
-            SelectExpr::Constant(constant) => {
-                // TODO(Dousir9): support constant
-                if *constant {
-                    count
-                } else {
-                    0
-                };
-                unimplemented!()
-            }
-        };
-
-        Ok(count)
-    }
-
-    // TODO(Dousir9): move this to a more appropriate place
-    fn get_select_child(
-        &self,
-        expr: &Expr,
-        validity: Option<Bitmap>,
-    ) -> Result<(Value<AnyType>, DataType)> {
-        debug_assert!(
-            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
-        );
-
-        #[cfg(debug_assertions)]
-        self.check_expr(expr);
-
-        let result = match expr {
-            Expr::Constant { scalar, .. } => {
-                Ok((Value::Scalar(scalar.clone()), scalar.data_type()))
-            }
-            Expr::ColumnRef { id, .. } => {
-                let entry = self.input_columns.get_by_offset(*id);
-                Ok((entry.value.clone(), entry.data_type.clone()))
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => {
-                let value = self.get_select_child(expr, validity.clone())?.0;
-                if *is_try {
-                    Ok((
-                        self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
-                        dest_type.clone(),
-                    ))
-                } else {
-                    Ok((
-                        self.run_cast(*span, expr.data_type(), dest_type, value, validity)?,
-                        dest_type.clone(),
-                    ))
-                }
-            }
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } if function.signature.name == "if" => Ok((
-                self.eval_if(args, generics, validity)?,
-                function.signature.return_type.clone(),
-            )),
-
-            Expr::FunctionCall { function, args, .. }
-                if function.signature.name == "and_filters" =>
-            {
-                Ok((self.eval_and_filters(args, validity)?, DataType::Boolean))
-            }
-
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } => {
-                let args = args
-                    .iter()
-                    .map(|expr| self.get_select_child(expr, validity.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match &val.0 {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-
-                let cols_ref = args
-                    .iter()
-                    .map(|(val, _)| Value::as_ref(val))
-                    .collect::<Vec<_>>();
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.input_columns.num_rows(),
-                    validity,
-                    errors: None,
-                    func_ctx: self.func_ctx,
-                };
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                Ok((result, function.signature.return_type.clone()))
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        if result.is_err() {
-            use std::sync::atomic::AtomicBool;
-            use std::sync::atomic::Ordering;
-
-            static RECURSING: AtomicBool = AtomicBool::new(false);
-            if RECURSING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                assert_eq!(
-                    ConstantFolder::fold_with_domain(
-                        expr,
-                        &self
-                            .input_columns
-                            .domains()
-                            .into_iter()
-                            .enumerate()
-                            .collect(),
-                        self.func_ctx,
-                        self.fn_registry
-                    )
-                    .1,
-                    None,
-                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                    result.unwrap_err()
-                );
-                RECURSING.store(false, Ordering::SeqCst);
-            }
-        }
-        result
-    }
-
     fn run_cast(
         &self,
         span: Span,
@@ -1688,6 +1011,421 @@ impl<'a> Evaluator<'a> {
                 Ok(col)
             }
         }
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    pub fn process_selection(
+        &self,
+        select_expr: &SelectExpr,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        true_idx: &mut usize,
+        false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let count = match select_expr {
+            SelectExpr::And(exprs) => self.process_and(
+                exprs,
+                validity,
+                true_selection,
+                false_selection,
+                true_idx,
+                false_idx,
+                select_strategy,
+                count,
+            )?,
+            SelectExpr::Or(exprs) => self.process_or(
+                exprs,
+                validity,
+                true_selection,
+                false_selection,
+                true_idx,
+                false_idx,
+                select_strategy,
+                count,
+            )?,
+            SelectExpr::Compare((select_op, exprs)) => self.process_compare(
+                select_op,
+                exprs,
+                validity,
+                true_selection,
+                false_selection,
+                true_idx,
+                false_idx,
+                select_strategy,
+                count,
+            )?,
+            SelectExpr::Others(expr) => self.process_others(
+                expr,
+                validity,
+                true_selection,
+                false_selection,
+                true_idx,
+                false_idx,
+                select_strategy,
+                count,
+            )?,
+            SelectExpr::Constant(constant) => {
+                // TODO(Dousir9): support constant
+                if *constant {
+                    count
+                } else {
+                    0
+                };
+                unimplemented!()
+            }
+        };
+
+        Ok(count)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    pub fn process_and(
+        &self,
+        exprs: &Vec<SelectExpr>,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        true_idx: &mut usize,
+        _false_idx: &mut usize,
+        mut select_strategy: SelectStrategy,
+        mut count: usize,
+    ) -> Result<usize> {
+        let mut temp_true_idx = *true_idx;
+        let mut temp_false_idx = 0;
+        let exprs_len = exprs.len();
+        for (i, expr) in exprs.iter().enumerate() {
+            let true_count = self.process_selection(
+                expr,
+                validity.clone(),
+                true_selection,
+                (false_selection.0, false_selection.1),
+                &mut temp_true_idx,
+                &mut temp_false_idx,
+                select_strategy,
+                count,
+            )?;
+            count = true_count;
+            if count == 0 {
+                break;
+            }
+            select_strategy = SelectStrategy::True;
+            if i != exprs_len - 1 {
+                temp_true_idx = *true_idx;
+            } else {
+                *true_idx = temp_true_idx;
+            }
+        }
+        Ok(count)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    pub fn process_or(
+        &self,
+        exprs: &Vec<SelectExpr>,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        _true_idx: &mut usize,
+        false_idx: &mut usize,
+        mut select_strategy: SelectStrategy,
+        mut count: usize,
+    ) -> Result<usize> {
+        let mut temp_true_idx = 0;
+        let mut temp_false_idx = *false_idx;
+        let exprs_len = exprs.len();
+        for (i, expr) in exprs.iter().enumerate() {
+            let true_count = self.process_selection(
+                expr,
+                validity.clone(),
+                true_selection,
+                (false_selection.0, true),
+                &mut temp_true_idx,
+                &mut temp_false_idx,
+                select_strategy,
+                count,
+            )?;
+            count -= true_count;
+            if count == 0 {
+                break;
+            }
+            select_strategy = SelectStrategy::False;
+            if i != exprs_len - 1 {
+                temp_false_idx = *false_idx;
+            } else {
+                *false_idx = temp_false_idx;
+            }
+        }
+        // *true_idx = 0;
+        Ok(temp_true_idx)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    pub fn process_compare(
+        &self,
+        select_op: &SelectOp,
+        exprs: &Vec<Expr>,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        true_idx: &mut usize,
+        false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let childs = self.get_childs(exprs, validity)?;
+        let left = childs[0].clone();
+        let right = childs[1].clone();
+        let count = select_values(
+            *select_op,
+            left.0.clone(),
+            right.0.clone(),
+            left.1.clone(),
+            right.1.clone(),
+            true_selection,
+            false_selection,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        );
+        Ok(count)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    pub fn process_others(
+        &self,
+        expr: &Expr,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        true_idx: &mut usize,
+        false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let count = match expr {
+            Expr::FunctionCall {
+                function,
+                generics,
+                args,
+                return_type,
+                ..
+            } => {
+                debug_assert!(
+                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
+                );
+                let args = args
+                    .iter()
+                    .map(|expr| self.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+                let mut ctx = EvalContext {
+                    generics,
+                    num_rows: self.input_columns.num_rows(),
+                    validity,
+                    errors: None,
+                    func_ctx: self.func_ctx,
+                };
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                update_selection_by_default_result(
+                    result,
+                    return_type,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                )
+            }
+            _ => unreachable!(),
+        };
+        Ok(count)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    pub fn get_childs(
+        &self,
+        args: &[Expr],
+        validity: Option<Bitmap>,
+    ) -> Result<Vec<(Value<AnyType>, DataType)>> {
+        let childs = args
+            .iter()
+            .map(|expr| self.get_select_child(expr, validity.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        assert!(
+            childs
+                .iter()
+                .filter_map(|val| match &val.0 {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
+        Ok(childs)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    fn get_select_child(
+        &self,
+        expr: &Expr,
+        validity: Option<Bitmap>,
+    ) -> Result<(Value<AnyType>, DataType)> {
+        debug_assert!(
+            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
+        );
+
+        #[cfg(debug_assertions)]
+        self.check_expr(expr);
+
+        let result = match expr {
+            Expr::Constant { scalar, .. } => {
+                Ok((Value::Scalar(scalar.clone()), scalar.data_type()))
+            }
+            Expr::ColumnRef { id, .. } => {
+                let entry = self.input_columns.get_by_offset(*id);
+                Ok((entry.value.clone(), entry.data_type.clone()))
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => {
+                let value = self.get_select_child(expr, validity.clone())?.0;
+                if *is_try {
+                    Ok((
+                        self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
+                        dest_type.clone(),
+                    ))
+                } else {
+                    Ok((
+                        self.run_cast(*span, expr.data_type(), dest_type, value, validity)?,
+                        dest_type.clone(),
+                    ))
+                }
+            }
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "if" => Ok((
+                self.eval_if(args, generics, validity)?,
+                function.signature.return_type.clone(),
+            )),
+
+            Expr::FunctionCall { function, args, .. }
+                if function.signature.name == "and_filters" =>
+            {
+                Ok((self.eval_and_filters(args, validity)?, DataType::Boolean))
+            }
+
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.get_select_child(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match &val.0 {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                let cols_ref = args
+                    .iter()
+                    .map(|(val, _)| Value::as_ref(val))
+                    .collect::<Vec<_>>();
+                let mut ctx = EvalContext {
+                    generics,
+                    num_rows: self.input_columns.num_rows(),
+                    validity,
+                    errors: None,
+                    func_ctx: self.func_ctx,
+                };
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
+                Ok((result, function.signature.return_type.clone()))
+            }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_expr,
+                return_type,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                Ok((
+                    self.run_lambda(name, args, lambda_expr)?,
+                    return_type.clone(),
+                ))
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        if result.is_err() {
+            use std::sync::atomic::AtomicBool;
+            use std::sync::atomic::Ordering;
+
+            static RECURSING: AtomicBool = AtomicBool::new(false);
+            if RECURSING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                assert_eq!(
+                    ConstantFolder::fold_with_domain(
+                        expr,
+                        &self
+                            .input_columns
+                            .domains()
+                            .into_iter()
+                            .enumerate()
+                            .collect(),
+                        self.func_ctx,
+                        self.fn_registry
+                    )
+                    .1,
+                    None,
+                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                    result.unwrap_err()
+                );
+                RECURSING.store(false, Ordering::SeqCst);
+            }
+        }
+        result
     }
 }
 

@@ -714,11 +714,9 @@ where
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -733,11 +731,9 @@ where
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -760,11 +756,9 @@ where
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -779,11 +773,9 @@ where
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -803,11 +795,9 @@ where
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -821,11 +811,9 @@ where
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -876,11 +864,9 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -895,11 +881,9 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -922,11 +906,9 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -941,11 +923,9 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -965,11 +945,9 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -983,11 +961,9 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1038,11 +1014,9 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1057,11 +1031,9 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1084,11 +1056,9 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1103,11 +1073,9 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1127,11 +1095,9 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1145,11 +1111,9 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1200,11 +1164,9 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1219,11 +1181,9 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1246,11 +1206,9 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1265,11 +1223,9 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1289,11 +1245,9 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }
@@ -1307,11 +1261,9 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                                 true_selection[true_idx] = idx;
                                 true_idx += 1;
                             }
-                        } else {
-                            if FALSE {
-                                false_selection[false_idx] = idx;
-                                false_idx += 1;
-                            }
+                        } else if FALSE {
+                            false_selection[false_idx] = idx;
+                            false_idx += 1;
                         }
                     }
                 }

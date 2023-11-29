@@ -489,13 +489,11 @@ pub fn update_selection_by_scalar<const TRUE: bool, const FALSE: bool>(
                         true_idx += 1;
                     }
                 }
-            } else {
-                if FALSE {
-                    for i in start..end {
-                        let idx = true_selection[i];
-                        false_selection[false_idx] = idx;
-                        false_idx += 1;
-                    }
+            } else if FALSE {
+                for i in start..end {
+                    let idx = true_selection[i];
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
                 }
             }
         }
@@ -510,13 +508,11 @@ pub fn update_selection_by_scalar<const TRUE: bool, const FALSE: bool>(
                         true_idx += 1;
                     }
                 }
-            } else {
-                if FALSE {
-                    for i in start..end {
-                        let idx = false_selection[i];
-                        false_selection[false_idx] = idx;
-                        false_idx += 1;
-                    }
+            } else if FALSE {
+                for i in start..end {
+                    let idx = false_selection[i];
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
                 }
             }
         }
@@ -528,12 +524,10 @@ pub fn update_selection_by_scalar<const TRUE: bool, const FALSE: bool>(
                         true_idx += 1;
                     }
                 }
-            } else {
-                if FALSE {
-                    for idx in 0u32..count as u32 {
-                        false_selection[false_idx] = idx;
-                        false_idx += 1;
-                    }
+            } else if FALSE {
+                for idx in 0u32..count as u32 {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
                 }
             }
         }
@@ -571,11 +565,9 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
                         true_selection[true_idx] = idx;
                         true_idx += 1;
                     }
-                } else {
-                    if FALSE {
-                        false_selection[false_idx] = idx;
-                        false_idx += 1;
-                    }
+                } else if FALSE {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
                 }
             }
         }
@@ -589,11 +581,9 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
                         true_selection[true_idx] = idx;
                         true_idx += 1;
                     }
-                } else {
-                    if FALSE {
-                        false_selection[false_idx] = idx;
-                        false_idx += 1;
-                    }
+                } else if FALSE {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
                 }
             }
         }
@@ -604,11 +594,9 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
                         true_selection[true_idx] = idx;
                         true_idx += 1;
                     }
-                } else {
-                    if FALSE {
-                        false_selection[false_idx] = idx;
-                        false_idx += 1;
-                    }
+                } else if FALSE {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
                 }
             }
         }
