@@ -158,15 +158,27 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn async_process(self) -> BoxFuture<'static, Result<()>> {
+        let id = self.id();
+        let mut name = self.name();
+        name.push_str("::async_process");
+
+        let task = (*self.inner.get()).async_process();
+
+        // The `task` may have reference to the `Processor` that hold in `self.inner`,
+        // so we need to move `self` into the following async closure to keep the
+        // `Processor` from being dropped before `task` is done.
+        //
+        // Technically, moving a clone of `self.inner` into the following is enough,
+        // unfortunately, the type of `self.inner` is `Arc<UnsafeCell<Box<(dyn Processor + 'static)>>>`,
+        // which is not `Send` (required by `boxed` method).
         async move {
-            let id = self.id();
-            let mut name = self.name();
-            name.push_str("::async_process");
-            let task = (*self.inner.get()).async_process();
             let span = Span::enter_with_local_parent(name)
                 .with_property(|| ("graph-node-id", id.index().to_string()));
+            task.in_span(span).await?;
 
-            task.in_span(span).await
+            // drop self after `task` is done
+            drop(self);
+            Ok(())
         }
         .boxed()
     }
