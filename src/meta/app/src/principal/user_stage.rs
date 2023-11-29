@@ -561,7 +561,7 @@ pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
-    pub is_from_uri: bool,
+    pub is_temporary: bool,
     pub file_format_params: FileFormatParams,
     pub copy_options: CopyOptions,
     pub comment: String,
@@ -580,11 +580,11 @@ impl StageInfo {
         }
     }
 
-    pub fn new_external_stage(storage: StorageParams, path: &str, from_uri: bool) -> StageInfo {
+    pub fn new_external_stage(storage: StorageParams, path: &str, is_temporary: bool) -> StageInfo {
         StageInfo {
             stage_name: format!("{storage},path={path}"),
             stage_type: StageType::External,
-            is_from_uri: from_uri,
+            is_temporary,
             stage_params: StageParams { storage },
             ..Default::default()
         }

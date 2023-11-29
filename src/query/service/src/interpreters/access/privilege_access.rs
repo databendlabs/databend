@@ -24,6 +24,7 @@ use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::optimizer::get_udf_names;
+use common_sql::plans::InsertInputSource;
 use common_sql::plans::PresignAction;
 use common_sql::plans::RewriteKind;
 use common_users::RoleCacheManager;
@@ -217,7 +218,6 @@ impl AccessChecker for PrivilegeAccess {
                 let metadata = metadata.read().clone();
 
                 for table in metadata.tables() {
-
                         if enable_stage_udf_priv_check && table.is_source_of_stage() {
                             match table.table().get_data_source_info() {
                                 DataSourceInfo::StageSource(stage_info) => {
@@ -390,13 +390,15 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::CreateTable(plan) => {
-                // TODO(TCeason): as_select need check privilege.
                 self.validate_access(
                     &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                     vec![UserPrivilegeType::Create],
                     true,
                 )
                     .await?;
+                if let Some(query) = &plan.as_select {
+                    self.check(ctx, query).await?;
+                }
             }
             Plan::DropTable(plan) => {
                 self.validate_access(
@@ -598,7 +600,6 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
-                //TODO(TCeason): source need to check privileges.
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -609,9 +610,20 @@ impl AccessChecker for PrivilegeAccess {
                     true,
                 )
                     .await?;
+                match &plan.source {
+                    InsertInputSource::SelectPlan(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::Stage(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::StreamingWithFormat(..)
+                    | InsertInputSource::StreamingWithFileFormat {..}
+                    | InsertInputSource::Values {..} => {}
+                }
             }
             Plan::Replace(plan) => {
-                //TODO(TCeason): source and delete_when need to check privileges.
+                //plan.delete_when is Expr no need to check privileges.
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -622,6 +634,17 @@ impl AccessChecker for PrivilegeAccess {
                     true,
                 )
                     .await?;
+                match &plan.source {
+                    InsertInputSource::SelectPlan(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::Stage(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::StreamingWithFormat(..)
+                    | InsertInputSource::StreamingWithFileFormat {..}
+                    | InsertInputSource::Values {..} => {}
+                }
             }
             Plan::MergeInto(plan) => {
                 if enable_stage_udf_priv_check {
@@ -850,8 +873,6 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                // TODO(TCeason): need to check plan.query privileges.
-
                     if enable_stage_udf_priv_check && !plan.stage_table_info.stage_info.is_from_uri {
                         let stage_name = &plan.stage_table_info.stage_info.stage_name;
                         self
@@ -862,7 +883,6 @@ impl AccessChecker for PrivilegeAccess {
                             )
                             .await?;
                     }
-
 
                 self
                     .validate_access(
@@ -875,9 +895,11 @@ impl AccessChecker for PrivilegeAccess {
                         true,
                     )
                     .await?;
+                if let Some(query) = &plan.query {
+                    self.check(ctx, query).await?;
+                }
             }
             Plan::CopyIntoLocation(plan) => {
-
                     if enable_stage_udf_priv_check && !plan.stage.is_from_uri {
                         let stage_name = &plan.stage.stage_name;
                         self
@@ -888,12 +910,10 @@ impl AccessChecker for PrivilegeAccess {
                             )
                             .await?;
                     }
-
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
             Plan::RemoveStage(plan) => {
-
                     if enable_stage_udf_priv_check && !plan.stage.is_from_uri {
                         let stage_name = &plan.stage.stage_name;
                         self
@@ -904,7 +924,6 @@ impl AccessChecker for PrivilegeAccess {
                             )
                             .await?;
                     }
-
             }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
