@@ -6,6 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export TEST_USER_NAME="u1"
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=u1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
 
@@ -120,6 +121,28 @@ echo "drop stage if exists presign_stage" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
+
+echo "drop user if exists b" |  $BENDSQL_CLIENT_CONNECT
+echo "create user b identified by '$TEST_USER_PASSWORD'" |  $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
+echo "create table t(id int)" | $BENDSQL_CLIENT_CONNECT
+
+echo "grant insert, delete on default.t to b" | $BENDSQL_CLIENT_CONNECT
+
+cat << EOF > /tmp/00_0012/i1.csv
+1
+2
+EOF
+
+#err: need select privilege on system.stage
+echo "insert into t select \$1 from 'fs:///tmp/00_0020/' (FILE_FORMAT => 'CSV');" | $USER_B_CONNECT
+
+echo "grant select on system.* to b" | $BENDSQL_CLIENT_CONNECT
+
+echo "insert into t select \$1 from 'fs:///tmp/00_0020/' (FILE_FORMAT => 'CSV');" | $USER_B_CONNECT
+
+echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists b" |  $BENDSQL_CLIENT_CONNECT
 rm -rf /tmp/00_0012
 
 echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT
