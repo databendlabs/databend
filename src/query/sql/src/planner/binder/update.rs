@@ -19,14 +19,11 @@ use common_ast::ast::UpdateStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::Finder;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
-use crate::plans::ScalarExpr;
 use crate::plans::UpdatePlan;
-use crate::plans::Visitor;
 use crate::BindContext;
 
 impl Binder {
