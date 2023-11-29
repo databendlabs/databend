@@ -178,7 +178,7 @@ impl ProcessorPtr {
         let task = (*self.inner.0.get()).async_process();
 
         // The `task` may have reference to the `Processor` that hold in `self.inner`,
-        // so we need to move `self` into the following async closure to keep the
+        // so we need to move a clone of `self.inner` into the following async closure to keep the
         // `Processor` from being dropped before `task` is done.
 
         // e.g.
