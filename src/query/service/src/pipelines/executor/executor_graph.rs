@@ -386,13 +386,13 @@ impl ScheduleQueue {
         unsafe {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
-            let process_future = proc.clone().async_process();
+            let process_future = proc.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
                 TrackedFuture::create(ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
-                    proc,
+                    proc.clone(),
                     global_queue,
                     workers_condvar,
                     weak_executor,

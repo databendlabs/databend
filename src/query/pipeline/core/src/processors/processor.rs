@@ -88,10 +88,23 @@ pub trait Processor: Send {
     }
 }
 
+// To keep ProcessPtr::async_process taking &self, instead of self,
+// we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
+// so that later an Arc of it could be moved into the async closure,
+// which async_process returns.
+struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
+unsafe impl Sync for UnsafeSyncCelledProcessor {}
+
 #[derive(Clone)]
 pub struct ProcessorPtr {
     id: Arc<UnsafeCell<NodeIndex>>,
-    inner: Arc<UnsafeCell<Box<dyn Processor>>>,
+    inner: Arc<UnsafeSyncCelledProcessor>,
+}
+
+impl From<UnsafeCell<Box<(dyn Processor)>>> for UnsafeSyncCelledProcessor {
+    fn from(value: UnsafeCell<Box<(dyn Processor)>>) -> Self {
+        Self(value)
+    }
 }
 
 unsafe impl Send for ProcessorPtr {}
@@ -102,13 +115,13 @@ impl ProcessorPtr {
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
         ProcessorPtr {
             id: Arc::new(UnsafeCell::new(node_index(0))),
-            inner: Arc::new(UnsafeCell::new(inner)),
+            inner: Arc::new(UnsafeCell::new(inner).into()),
         }
     }
 
     /// # Safety
     pub unsafe fn as_any(&mut self) -> &mut dyn Any {
-        (*self.inner.get()).as_any()
+        (*self.inner.0.get()).as_any()
     }
 
     /// # Safety
@@ -123,27 +136,27 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn name(&self) -> String {
-        (*self.inner.get()).name()
+        (*self.inner.0.get()).name()
     }
 
     /// # Safety
     pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
-        (*self.inner.get()).event_with_cause(cause)
+        (*self.inner.0.get()).event_with_cause(cause)
     }
 
     /// # Safety
     pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
-        (*self.inner.get()).un_reacted(cause, self.id().index())
+        (*self.inner.0.get()).un_reacted(cause, self.id().index())
     }
 
     /// # Safety
     pub unsafe fn record_profile(&self, profile: &Profile) {
-        (*self.inner.get()).record_profile(profile)
+        (*self.inner.0.get()).record_profile(profile)
     }
 
     /// # Safety
     pub unsafe fn interrupt(&self) {
-        (*self.inner.get()).interrupt()
+        (*self.inner.0.get()).interrupt()
     }
 
     /// # Safety
@@ -153,31 +166,33 @@ impl ProcessorPtr {
         let _span = LocalSpan::enter_with_local_parent(name)
             .with_property(|| ("graph-node-id", self.id().index().to_string()));
 
-        (*self.inner.get()).process()
+        (*self.inner.0.get()).process()
     }
 
     /// # Safety
-    pub unsafe fn async_process(self) -> BoxFuture<'static, Result<()>> {
+    pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
         let id = self.id();
         let mut name = self.name();
         name.push_str("::async_process");
 
-        let task = (*self.inner.get()).async_process();
+        let task = (*self.inner.0.get()).async_process();
 
         // The `task` may have reference to the `Processor` that hold in `self.inner`,
         // so we need to move `self` into the following async closure to keep the
         // `Processor` from being dropped before `task` is done.
-        //
-        // Technically, moving a clone of `self.inner` into the following is enough,
-        // unfortunately, the type of `self.inner` is `Arc<UnsafeCell<Box<(dyn Processor + 'static)>>>`,
-        // which is not `Send` (required by `boxed` method).
+
+        // e.g.
+        // There may be scenarios where the 'ExecutingGraph' has already been dropped,
+        // but the async task returned by async_process is still running; in this case,
+        // there could be illegal memory access.
+
+        let inner = self.inner.clone();
         async move {
             let span = Span::enter_with_local_parent(name)
                 .with_property(|| ("graph-node-id", id.index().to_string()));
             task.in_span(span).await?;
 
-            // drop self after `task` is done
-            drop(self);
+            drop(inner);
             Ok(())
         }
         .boxed()
@@ -185,7 +200,7 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn details_status(&self) -> Option<String> {
-        (*self.inner.get()).details_status()
+        (*self.inner.0.get()).details_status()
     }
 }
 
