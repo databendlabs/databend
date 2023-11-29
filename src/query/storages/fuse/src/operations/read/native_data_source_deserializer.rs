@@ -60,7 +60,6 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use itertools::Itertools;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
@@ -750,6 +749,11 @@ impl Processor for NativeDeserializeDataTransform {
                             return self.finish_process_skip_page();
                         }
 
+                        // TODO(Dousir9): need a better way to handle the case that the filter is not all true
+                        if count != true_selection.len() {
+                            true_selection[count] = 0;
+                        }
+
                         // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
                         let filter = if let Some((_, sorter, index)) = &mut self.top_k {
                             let index_prewhere = self
@@ -765,7 +769,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                             // TODO(Dousir9): better way to get the bitmap
                             let mut bitmap = FilterHelpers::selection_to_mutable_bitmap(
-                                &true_selection[0..count],
+                                &true_selection,
                                 prewhere_block.num_rows(),
                             );
                             sorter.push_column(top_k_column, &mut bitmap);
@@ -773,7 +777,7 @@ impl Processor for NativeDeserializeDataTransform {
                         } else {
                             // TODO(Dousir9): better way to get the bitmap
                             let bitmap = FilterHelpers::selection_to_bitmap(
-                                &true_selection[0..count],
+                                &true_selection,
                                 prewhere_block.num_rows(),
                             );
                             Value::Column(bitmap)
