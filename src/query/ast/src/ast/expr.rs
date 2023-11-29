@@ -274,7 +274,6 @@ pub enum Literal {
     // Quoted string literal value
     String(String),
     Boolean(bool),
-    CurrentTimestamp,
     Null,
 }
 
@@ -285,8 +284,6 @@ impl Literal {}
 pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
-    /// `.a.b`
-    Dot { key: Identifier },
     /// `.1`
     DotNumber { key: u64 },
     /// `:a:b`
@@ -912,9 +909,6 @@ impl Display for Literal {
                     write!(f, "FALSE")
                 }
             }
-            Literal::CurrentTimestamp => {
-                write!(f, "CURRENT_TIMESTAMP")
-            }
             Literal::Null => {
                 write!(f, "NULL")
             }
@@ -1251,7 +1245,6 @@ impl Display for Expr {
                 write!(f, "{}", expr)?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                    MapAccessor::Dot { key } => write!(f, ".{key}")?,
                     MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }

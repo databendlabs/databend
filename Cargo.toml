@@ -66,6 +66,7 @@ members = [
     "src/query/storages/random",
     "src/query/storages/share",
     "src/query/storages/stage",
+    "src/query/storages/stream",
     "src/query/storages/system",
     "src/query/storages/view",
     "src/query/storages/parquet",
@@ -76,6 +77,7 @@ members = [
     "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
+    "src/query/ee_features/stream_handler",
     # databend-query
     "src/query/service",
     # enterprise

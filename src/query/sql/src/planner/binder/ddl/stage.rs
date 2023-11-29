@@ -97,7 +97,8 @@ impl Binder {
                     ))
                 })?;
 
-                StageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
+                StageInfo::new_external_stage(stage_storage, &path, true)
+                    .with_stage_name(stage_name)
             }
         };
 

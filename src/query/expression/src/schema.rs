@@ -45,20 +45,44 @@ pub type ColumnId = u32;
 // Index of TableSchema.fields array
 pub type FieldIndex = usize;
 
+// internal column id.
 pub const ROW_ID_COLUMN_ID: u32 = u32::MAX;
 pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
-
+// internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
 pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
 
+// stream column id.
+pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
+pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
+pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
+// stream column name.
+pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
+pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
+pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
+
+#[inline]
+pub fn all_stream_columns() -> HashSet<String> {
+    HashSet::from([
+        ORIGIN_VERSION_COL_NAME.to_string(),
+        ORIGIN_BLOCK_ID_COL_NAME.to_string(),
+        ORIGIN_BLOCK_ROW_NUM_COL_NAME.to_string(),
+    ])
+}
+
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
     column_id >= SNAPSHOT_NAME_COLUMN_ID
+}
+
+#[inline]
+pub fn is_stream_column_id(column_id: ColumnId) -> bool {
+    (ORIGIN_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1379,12 +1403,16 @@ impl From<&ArrowField> for TableDataType {
                     fields_type,
                 }
             }
-            ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
+            ArrowDataType::Extension(custom_name, data_type, _) => match custom_name.as_str() {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
                 ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
-                _ => unimplemented!("data_type: {:?}", f.data_type()),
+                _ => {
+                    let a =
+                        ArrowField::new(custom_name, data_type.as_ref().to_owned(), f.is_nullable);
+                    (&a).into()
+                }
             },
             // this is safe, because we define the datatype firstly
             _ => {

@@ -128,7 +128,7 @@ impl KeyAccessor for DicKeyAccessor {
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key {
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
         self.data.get_unchecked(index)
     }
 }

@@ -41,6 +41,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::UDFServerCall;
+use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
 use crate::WindowChecker;
@@ -321,8 +322,10 @@ impl Binder {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
                 aggregate @ ScalarExpr::AggregateFunction(_) => {
+                    let mut aggregate = aggregate.clone();
                     let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(aggregate)
+                    rewriter.visit(&mut aggregate)?;
+                    Ok(aggregate)
                 }
                 ScalarExpr::LambdaFunction(lambda_func) => {
                     let args = lambda_func
@@ -335,16 +338,17 @@ impl Binder {
                     Ok(ScalarExpr::LambdaFunction(LambdaFunc {
                         span: lambda_func.span,
                         func_name: lambda_func.func_name.clone(),
-                        display_name: lambda_func.display_name.clone(),
                         args,
-                        params: lambda_func.params.clone(),
                         lambda_expr: lambda_func.lambda_expr.clone(),
+                        lambda_display: lambda_func.lambda_display.clone(),
                         return_type: lambda_func.return_type.clone(),
                     }))
                 }
                 window @ ScalarExpr::WindowFunction(_) => {
+                    let mut window = window.clone();
                     let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(window)
+                    rewriter.visit(&mut window)?;
+                    Ok(window)
                 }
                 ScalarExpr::FunctionCall(func) => {
                     let arguments = func

@@ -213,6 +213,7 @@ impl Settings {
         match self.try_get_string("sql_dialect")?.as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
+            "experimental" => Ok(Dialect::Experimental),
             _ => Ok(Dialect::PostgreSQL),
         }
     }

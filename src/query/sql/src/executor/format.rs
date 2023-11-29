@@ -37,7 +37,6 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::Project;
@@ -199,10 +198,10 @@ fn to_format_tree(
         PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
         PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
         PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::UpdateSource(_) => Ok(FormatTreeNode::new("UpdateSource".to_string())),
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, profs)
@@ -1123,48 +1122,6 @@ fn project_set_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "ProjectSet".to_string(),
-        children,
-    ))
-}
-
-fn lambda_to_format_tree(
-    plan: &Lambda,
-    metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
-) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![FormatTreeNode::new(format!(
-        "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata, true)
-    ))];
-
-    if let Some(info) = &plan.stat_info {
-        let items = plan_stats_info_to_format_tree(info);
-        children.extend(items);
-    }
-
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
-
-    children.extend(vec![FormatTreeNode::new(format!(
-        "lambda functions: {}",
-        plan.lambda_funcs
-            .iter()
-            .map(|func| {
-                let arg_exprs = func.arg_exprs.join(", ");
-                let params = func.params.join(", ");
-                let lambda_expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
-                format!(
-                    "{}({}, {} -> {})",
-                    func.func_name, arg_exprs, params, lambda_expr
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    ))]);
-
-    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
-
-    Ok(FormatTreeNode::with_children(
-        "Lambda".to_string(),
         children,
     ))
 }

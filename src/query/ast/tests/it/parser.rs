@@ -32,11 +32,17 @@ use nom::Parser;
 
 macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
+        run_parser_with_dialect!($file, $parser, Dialect::PostgreSQL, $source)
+    };
+}
+
+macro_rules! run_parser_with_dialect {
+    ($file:expr, $parser:expr, $dialect:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
         let parser = $parser;
         let mut parser = rule! { #parser ~ &EOI };
-        match parser.parse(Input(&tokens, Dialect::PostgreSQL, &backtrace)) {
+        match parser.parse(Input(&tokens, $dialect, &backtrace)) {
             Ok((i, (output, _))) => {
                 assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
@@ -119,6 +125,10 @@ fn test_statement() {
         r#"drop view v;"#,
         r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
+        r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
+        r#"show full streams from default.test2 like 's%';"#,
+        r#"describe stream test2.s2;"#,
+        r#"drop stream if exists test2.s2;"#,
         r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
@@ -443,6 +453,11 @@ fn test_statement() {
         r#"GRANT all ON stage s1 TO a;"#,
         r#"GRANT read ON stage s1 TO a;"#,
         r#"GRANT write ON stage s1 TO a;"#,
+        r#"REVOKE write ON stage s1 FROM a;"#,
+        r#"GRANT all ON UDF a TO 'test-grant';"#,
+        r#"GRANT usage ON UDF a TO 'test-grant';"#,
+        r#"REVOKE usage ON UDF a FROM 'test-grant';"#,
+        r#"REVOKE all ON UDF a FROM 'test-grant';"#,
         r#"REVOKE USAGE ON DATABASE db1 FROM SHARE a;"#,
         r#"REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;"#,
         r#"ALTER SHARE a ADD TENANTS = b,c;"#,
@@ -564,8 +579,7 @@ fn test_statement_error() {
         r#"GRANT ROLE 'test' TO ROLE test-user;"#,
         r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.c TO 'test-grant';"#,
-        r#"GRANT all ON UDF a TO 'test-grant';"#,
-        r#"GRANT usage ON UDF a TO 'test-grant';"#,
+        r#"GRANT select ON UDF a TO 'test-grant';"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
         r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
@@ -782,10 +796,31 @@ fn test_expr() {
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
         r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
+        r#"(current_timestamp, current_timestamp(), now())"#,
     ];
 
     for case in cases {
         run_parser!(file, expr, case);
+    }
+}
+
+#[test]
+fn test_experimental_expr() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("experimental_expr.txt").unwrap();
+
+    let cases = &[
+        r#"a"#,
+        r#"a.add(b)"#,
+        r#"a.sub(b).add(e)"#,
+        r#"a.sub(b).add(e)"#,
+        r#"1 + {'k1': 4}.k1"#,
+        r#"'3'.plus(4)"#,
+        r#"(3).add({'k1': 4 }.k1)"#,
+    ];
+
+    for case in cases {
+        run_parser_with_dialect!(file, expr, Dialect::Experimental, case);
     }
 }
 
@@ -800,6 +835,7 @@ fn test_expr_error() {
         r#"CAST(col1 AS foo)"#,
         r#"1 a"#,
         r#"CAST(col1)"#,
+        r#"a.add(b)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
                 AND 1 + col3 DIV sum(col4)"#,

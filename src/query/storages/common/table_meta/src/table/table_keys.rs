@@ -23,6 +23,7 @@ pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_ENGINE: &str = "engine";
 pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
+pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";

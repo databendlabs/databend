@@ -258,6 +258,38 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry
+        .register_passthrough_nullable_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
+            "array_flatten",
+            |_, _| FunctionDomain::Full,
+            vectorize_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
+            |a, b| {
+                let mut builder = ColumnBuilder::with_capacity(&b.generics[0], a.len());
+                for a in a.iter() {
+                    builder.append_column(&a);
+                }
+                builder.build()
+            }
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, StringType, _, _>(
+            "array_to_string",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<ArrayType<StringType>, StringType, StringType>(
+                |lhs, rhs, output, _| {
+                    for (i, d) in lhs.iter().enumerate() {
+                        if i != 0 {
+                            output.put_slice(rhs);
+                        }
+                        output.put_slice(d);
+                    }
+                    output.commit_row();
+                },
+            ),
+        );
+
+    registry
         .register_passthrough_nullable_2_arg::<EmptyArrayType, UInt64Type, EmptyArrayType, _, _>(
             "slice",
             |_, _, _| FunctionDomain::Full,

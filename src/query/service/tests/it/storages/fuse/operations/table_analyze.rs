@@ -118,8 +118,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     if let Plan::Update(update) = plan {
-        let table = fixture.latest_default_table().await?;
-        do_update(ctx.clone(), table, *update).await?;
+        do_update(ctx.clone(), *update).await?;
     }
 
     // check summary after update

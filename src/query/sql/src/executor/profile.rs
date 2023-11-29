@@ -21,7 +21,6 @@ use common_profile::EvalScalarAttribute;
 use common_profile::ExchangeAttribute;
 use common_profile::FilterAttribute;
 use common_profile::JoinAttribute;
-use common_profile::LambdaAttribute;
 use common_profile::LimitAttribute;
 use common_profile::OperatorAttribute;
 use common_profile::OperatorProfile;
@@ -163,33 +162,6 @@ fn flatten_plan_node_profile(
                         .srf_exprs
                         .iter()
                         .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .join(", "),
-                }),
-            };
-            plan_node_profs.push(prof);
-        }
-        PhysicalPlan::Lambda(lambda) => {
-            flatten_plan_node_profile(metadata, &lambda.input, profs, plan_node_profs)?;
-            let proc_prof = profs.get(&lambda.plan_id).copied().unwrap_or_default();
-            let prof = OperatorProfile {
-                id: lambda.plan_id,
-                operator_type: OperatorType::Lambda,
-                execution_info: proc_prof.into(),
-                children: vec![lambda.input.get_id()],
-                attribute: OperatorAttribute::Lambda(LambdaAttribute {
-                    scalars: lambda
-                        .lambda_funcs
-                        .iter()
-                        .map(|func| {
-                            let arg_exprs = func.arg_exprs.join(", ");
-                            let params = func.params.join(", ");
-                            let lambda_expr =
-                                func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
-                            format!(
-                                "{}({}, {} -> {})",
-                                func.func_name, arg_exprs, params, lambda_expr
-                            )
-                        })
                         .join(", "),
                 }),
             };
@@ -539,7 +511,8 @@ fn flatten_plan_node_profile(
         | PhysicalPlan::ReplaceInto(_)
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::ReclusterSource(_)
-        | PhysicalPlan::ReclusterSink(_) => unreachable!(),
+        | PhysicalPlan::ReclusterSink(_)
+        | PhysicalPlan::UpdateSource(_) => unreachable!(),
     }
 
     Ok(())

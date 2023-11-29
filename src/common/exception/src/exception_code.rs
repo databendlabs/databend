@@ -315,6 +315,13 @@ build_exceptions! {
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
 
+    // Stream error codes.
+    UnknownStream(2730),
+    UnknownStreamId(2731),
+    StreamAlreadyExists(2732),
+    IllegalStream(2733),
+    StreamVersionMismatched(2734),
+
     // Variable error codes.
     UnknownVariable(2801),
     OnlySupportAsciiChars(2802),

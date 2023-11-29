@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::gen_mutation_stream_meta;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
@@ -224,16 +225,22 @@ impl Processor for DeserializeDataTransform {
                     };
                     self.scan_progress.incr(&progress_values);
 
-                    let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+                    let mut data_block =
+                        data_block.resort(&self.src_schema, &self.output_schema)?;
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     if self.block_reader.query_internal_columns() {
-                        let data_block = fill_internal_column_meta(data_block, part, None)?;
-                        self.output_data = Some(data_block);
-                    } else {
-                        self.output_data = Some(data_block);
-                    };
+                        data_block = fill_internal_column_meta(data_block, part, None)?;
+                    }
+
+                    if self.block_reader.update_stream_columns() {
+                        let inner_meta = data_block.take_meta();
+                        let meta = gen_mutation_stream_meta(inner_meta, &part.location)?;
+                        data_block = data_block.add_meta(Some(Box::new(meta)))?;
+                    }
+
+                    self.output_data = Some(data_block);
                 }
             }
         }

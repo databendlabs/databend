@@ -47,6 +47,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
@@ -294,7 +295,8 @@ impl SubqueryRewriter {
                         .build(),
                 });
 
-                let scalar = if flatten_info.from_count_func {
+                let scalar = if flatten_info.from_count_func && subquery.typ == SubqueryType::Scalar
+                {
                     // convert count aggregate function to `if(count() is not null, count(), 0)`
                     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
@@ -357,6 +359,20 @@ impl SubqueryRewriter {
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: args,
+                }
+                .into();
+
+                Ok((expr, s_expr))
+            }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let mut s_expr = s_expr.clone();
+                let res = self.try_rewrite_subquery(&udf.scalar, &s_expr, false)?;
+                s_expr = res.1;
+
+                let expr: ScalarExpr = UDFLambdaCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    scalar: Box::new(res.0),
                 }
                 .into();
 

@@ -47,7 +47,6 @@ use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
@@ -369,27 +368,7 @@ impl<'a> Binder {
         if !stmt.file_format.is_empty() {
             stage.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
-
-        // Copy options.
-        {
-            // on_error.
-            stage.copy_options.on_error =
-                OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
-
-            // size_limit.
-            if stmt.size_limit != 0 {
-                stage.copy_options.size_limit = stmt.size_limit;
-            }
-            if stmt.max_files != 0 {
-                stage.copy_options.max_files = stmt.max_files;
-            }
-            stage.copy_options.split_size = stmt.split_size;
-            stage.copy_options.purge = stmt.purge;
-            stage.copy_options.disable_variant_check = stmt.disable_variant_check;
-            stage.copy_options.return_failed_only = stmt.return_failed_only;
-        }
-
-        Ok(())
+        stmt.apply_to_copy_option(&mut stage.copy_options)
     }
 
     #[async_backtrace::framed]
@@ -567,7 +546,7 @@ pub async fn resolve_file_location(
                     "copy from insecure storage is not allowed",
                 ))
             } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, &path);
+                let stage_info = StageInfo::new_external_stage(storage_params, &path, true);
                 Ok((stage_info, path))
             }
         }

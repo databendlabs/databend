@@ -24,6 +24,7 @@ use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::arrow::and_validities;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -90,7 +91,7 @@ pub struct HashJoinBuildState {
     pub(crate) build_projections: ColumnSet,
     pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
-    pub(crate) build_hash_table_tasks: RwLock<VecDeque<(usize, usize)>>,
+    pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
     pub(crate) mutex: Mutex<()>,
 
     /// Spill related states
@@ -113,7 +114,12 @@ impl HashJoinBuildState {
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
+            .map(|expr| {
+                expr.as_expr(&BUILTIN_FUNCTIONS)
+                    .data_type()
+                    .clone()
+                    .remove_nullable()
+            })
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
@@ -323,236 +329,330 @@ impl HashJoinBuildState {
 
     /// Divide the finalize phase into multiple tasks.
     pub fn generate_finalize_task(&self) -> Result<()> {
-        let chunks_len = unsafe { &*self.hash_join_state.build_state.get() }
+        let task_num = unsafe { &*self.hash_join_state.build_state.get() }
             .generation_state
             .chunks
             .len();
-        if chunks_len == 0 {
+        if task_num == 0 {
             return Ok(());
         }
-
-        let worker_num = self.build_worker_num.load(Ordering::Relaxed) as usize;
-        let (task_size, task_num) = if chunks_len >= worker_num {
-            (chunks_len / worker_num, worker_num)
-        } else {
-            (1, chunks_len)
-        };
-
-        let mut build_hash_table_tasks = self.build_hash_table_tasks.write();
-        for idx in 0..task_num - 1 {
-            let task = (idx * task_size, (idx + 1) * task_size);
-            build_hash_table_tasks.push_back(task);
-        }
-        let last_task = ((task_num - 1) * task_size, chunks_len);
-        build_hash_table_tasks.push_back(last_task);
-
+        let tasks = (0..task_num).collect_vec();
+        *self.build_hash_table_tasks.write() = tasks.into();
         Ok(())
     }
 
     /// Get the finalize task and using the `chunks` in `hash_join_state.row_space` to build hash table in parallel.
-    pub(crate) fn finalize(&self, task: (usize, usize)) -> Result<()> {
+    pub(crate) fn finalize(&self, task: usize) -> Result<()> {
         let entry_size = self.entry_size.load(Ordering::Relaxed);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
 
         macro_rules! insert_key {
-            ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
-                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
+                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
-                let mut local_space: Vec<u8> = Vec::with_capacity($chunk.num_rows() * entry_size);
+                let valid_num = match &$valids {
+                    Some(valids) => valids.len() - valids.unset_bits(),
+                    None => $chunk.num_rows(),
+                };
+                let mut local_space: Vec<u8> = Vec::with_capacity(valid_num * entry_size);
                 let mut raw_entry_ptr = unsafe {
                     std::mem::transmute::<*mut u8, *mut RawEntry<$t>>(local_space.as_mut_ptr())
                 };
 
-                for (row_index, key) in build_keys_iter.enumerate() {
-                    let row_ptr = RowPtr {
-                        chunk_index: $chunk_index,
-                        row_index: row_index as u32,
-                    };
+                match $valids {
+                    Some(valids) => {
+                        for (row_index, (key, valid)) in
+                            build_keys_iter.zip(valids.iter()).enumerate()
+                        {
+                            if !valid {
+                                continue;
+                            }
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
 
-                    // # Safety
-                    // The memory address of `raw_entry_ptr` is valid.
-                    unsafe {
-                        *raw_entry_ptr = RawEntry {
-                            row_ptr,
-                            key: *key,
-                            next: 0,
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            unsafe {
+                                *raw_entry_ptr = RawEntry {
+                                    row_ptr,
+                                    key: *key,
+                                    next: 0,
+                                }
+                            }
+                            $table.insert(*key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
-                    $table.insert(*key, raw_entry_ptr);
-                    raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                    None => {
+                        for (row_index, key) in build_keys_iter.enumerate() {
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
+
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            unsafe {
+                                *raw_entry_ptr = RawEntry {
+                                    row_ptr,
+                                    key: *key,
+                                    next: 0,
+                                }
+                            }
+                            $table.insert(*key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                        }
+                    }
                 }
+
                 local_raw_entry_spaces.push(local_space);
             }};
         }
 
         macro_rules! insert_string_key {
-            ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
+                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::String(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::String(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
-                    // must return `KeysState::Column(Column::String)`.
+                    // must return `Column::String` | `Column::Variant` | `Column::Bitmap`.
                     _ => unreachable!(),
                 };
+                let valid_num = match &$valids {
+                    Some(valids) => valids.len() - valids.unset_bits(),
+                    None => $chunk.num_rows(),
+                };
                 let mut entry_local_space: Vec<u8> =
-                    Vec::with_capacity($chunk.num_rows() * entry_size);
+                    Vec::with_capacity(valid_num * entry_size);
                 let mut string_local_space: Vec<u8> =
                     Vec::with_capacity(*space_size as usize);
                 let mut raw_entry_ptr = unsafe { std::mem::transmute::<*mut u8, *mut StringRawEntry>(entry_local_space.as_mut_ptr()) };
                 let mut string_local_space_ptr = string_local_space.as_mut_ptr();
 
-                for (row_index, key) in build_keys_iter.enumerate() {
-                    let row_ptr = RowPtr {
-                        chunk_index: $chunk_index,
-                        row_index: row_index as u32,
-                    };
+                match $valids {
+                    Some(valids) => {
+                        for (row_index, (key, valid)) in build_keys_iter.zip(valids.iter()).enumerate() {
+                            if !valid {
+                                continue;
+                            }
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
 
-                    // # Safety
-                    // The memory address of `raw_entry_ptr` is valid.
-                    // string_offset + key.len() <= space_size.
-                    unsafe {
-                        (*raw_entry_ptr).row_ptr = row_ptr;
-                        (*raw_entry_ptr).length = key.len() as u32;
-                        (*raw_entry_ptr).next = 0;
-                        (*raw_entry_ptr).key = string_local_space_ptr;
-                        // The size of `early` is 4.
-                        std::ptr::copy_nonoverlapping(
-                            key.as_ptr(),
-                            (*raw_entry_ptr).early.as_mut_ptr(),
-                            std::cmp::min(STRING_EARLY_SIZE, key.len()),
-                        );
-                        std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
-                        string_local_space_ptr = string_local_space_ptr.add(key.len());
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            // string_offset + key.len() <= space_size.
+                            unsafe {
+                                (*raw_entry_ptr).row_ptr = row_ptr;
+                                (*raw_entry_ptr).length = key.len() as u32;
+                                (*raw_entry_ptr).next = 0;
+                                (*raw_entry_ptr).key = string_local_space_ptr;
+                                // The size of `early` is 4.
+                                std::ptr::copy_nonoverlapping(
+                                    key.as_ptr(),
+                                    (*raw_entry_ptr).early.as_mut_ptr(),
+                                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
+                                );
+                                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                                string_local_space_ptr = string_local_space_ptr.add(key.len());
+                            }
+
+                            $table.insert(key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                        }
                     }
+                    None => {
+                        for (row_index, key) in build_keys_iter.enumerate() {
+                            let row_ptr = RowPtr {
+                                chunk_index: $chunk_index,
+                                row_index: row_index as u32,
+                            };
 
-                    $table.insert(key, raw_entry_ptr);
-                    raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                            // # Safety
+                            // The memory address of `raw_entry_ptr` is valid.
+                            // string_offset + key.len() <= space_size.
+                            unsafe {
+                                (*raw_entry_ptr).row_ptr = row_ptr;
+                                (*raw_entry_ptr).length = key.len() as u32;
+                                (*raw_entry_ptr).next = 0;
+                                (*raw_entry_ptr).key = string_local_space_ptr;
+                                // The size of `early` is 4.
+                                std::ptr::copy_nonoverlapping(
+                                    key.as_ptr(),
+                                    (*raw_entry_ptr).early.as_mut_ptr(),
+                                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
+                                );
+                                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                                string_local_space_ptr = string_local_space_ptr.add(key.len());
+                            }
+
+                            $table.insert(key, raw_entry_ptr);
+                            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+                        }
+                    }
                 }
+
                 local_raw_entry_spaces.push(entry_local_space);
                 local_raw_entry_spaces.push(string_local_space);
             }};
         }
 
-        let mut has_null = false;
-        for chunk_index in task.0..task.1 {
-            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
 
-            let chunk = &mut build_state.generation_state.chunks[chunk_index];
+        let chunk_index = task;
+        let chunk = &mut build_state.generation_state.chunks[chunk_index];
 
-            let mut _nullable_chunk = None;
-            let evaluator = if matches!(
-                self.hash_join_state.hash_join_desc.join_type,
-                JoinType::Left | JoinType::LeftSingle | JoinType::Full
-            ) {
-                let validity = Bitmap::new_constant(true, chunk.num_rows());
-                let nullable_columns = chunk
-                    .columns()
-                    .iter()
-                    .map(|c| wrap_true_validity(c, chunk.num_rows(), &validity))
-                    .collect::<Vec<_>>();
-                _nullable_chunk = Some(DataBlock::new(nullable_columns, chunk.num_rows()));
-                Evaluator::new(
-                    _nullable_chunk.as_ref().unwrap(),
-                    &self.func_ctx,
-                    &BUILTIN_FUNCTIONS,
-                )
-            } else {
-                Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
-            };
-            let columns: Vec<(Column, DataType)> = self
-                .hash_join_state
-                .hash_join_desc
-                .build_keys
+        let mut _has_null = false;
+        let mut _nullable_chunk = None;
+        let evaluator = if matches!(
+            self.hash_join_state.hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+        ) {
+            let validity = Bitmap::new_constant(true, chunk.num_rows());
+            let nullable_columns = chunk
+                .columns()
                 .iter()
-                .map(|expr| {
-                    let return_type = expr.data_type();
-                    Ok((
-                        evaluator
-                            .run(expr)?
-                            .convert_to_full_column(return_type, chunk.num_rows()),
-                        return_type.clone(),
-                    ))
-                })
-                .collect::<Result<_>>()?;
+                .map(|c| wrap_true_validity(c, chunk.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            _nullable_chunk = Some(DataBlock::new(nullable_columns, chunk.num_rows()));
+            Evaluator::new(
+                _nullable_chunk.as_ref().unwrap(),
+                &self.func_ctx,
+                &BUILTIN_FUNCTIONS,
+            )
+        } else {
+            Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
+        };
+        let mut build_keys: Vec<(Column, DataType)> = self
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .map(|expr| {
+                let return_type = expr.data_type();
+                Ok((
+                    evaluator
+                        .run(expr)?
+                        .convert_to_full_column(return_type, chunk.num_rows()),
+                    return_type.clone(),
+                ))
+            })
+            .collect::<Result<_>>()?;
 
-            let column_nums = chunk.num_columns();
-            let mut block_entries = Vec::with_capacity(self.build_projections.len());
-            for index in 0..column_nums {
-                if !self.build_projections.contains(&index) {
-                    continue;
-                }
-                block_entries.push(chunk.get_by_offset(index).clone());
+        let column_nums = chunk.num_columns();
+        let mut block_entries = Vec::with_capacity(self.build_projections.len());
+        for index in 0..column_nums {
+            if !self.build_projections.contains(&index) {
+                continue;
             }
-            if block_entries.is_empty() {
-                build_state.generation_state.is_build_projected = false;
-            }
-            *chunk = DataBlock::new(block_entries, chunk.num_rows());
+            block_entries.push(chunk.get_by_offset(index).clone());
+        }
+        if block_entries.is_empty() {
+            build_state.generation_state.is_build_projected = false;
+        }
+        *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
-            match self.hash_join_state.hash_join_desc.join_type {
-                JoinType::LeftMark => {
-                    let markers = &mut build_state.mark_scan_map[chunk_index];
-                    self.hash_join_state
-                        .init_markers(&columns, chunk.num_rows(), markers);
+        let mut valids = None;
+        if build_keys
+            .iter()
+            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
+        {
+            for (col, _) in build_keys.iter() {
+                let (is_all_null, tmp_valids) = col.validity();
+                if is_all_null {
+                    valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
+                    break;
+                } else {
+                    valids = and_validities(valids, tmp_valids.cloned());
                 }
-                JoinType::RightMark => {
-                    if !has_null && !columns.is_empty() {
-                        if let Some(validity) = columns[0].0.validity().1 {
-                            if validity.unset_bits() > 0 {
-                                has_null = true;
-                                let mut has_null_ref = self
-                                    .hash_join_state
-                                    .hash_join_desc
-                                    .marker_join_desc
-                                    .has_null
-                                    .write();
-                                *has_null_ref = true;
-                            }
+            }
+        }
+
+        valids = match valids {
+            Some(valids) => {
+                if valids.unset_bits() == valids.len() {
+                    return Ok(());
+                } else if valids.unset_bits() == 0 {
+                    None
+                } else {
+                    Some(valids)
+                }
+            }
+            None => None,
+        };
+
+        match self.hash_join_state.hash_join_desc.join_type {
+            JoinType::LeftMark => {
+                let markers = &mut build_state.mark_scan_map[chunk_index];
+                self.hash_join_state
+                    .init_markers(&build_keys, chunk.num_rows(), markers);
+            }
+            JoinType::RightMark => {
+                if !_has_null && !build_keys.is_empty() {
+                    if let Some(validity) = build_keys[0].0.validity().1 {
+                        if validity.unset_bits() > 0 {
+                            _has_null = true;
+                            let mut has_null_ref = self
+                                .hash_join_state
+                                .hash_join_desc
+                                .marker_join_desc
+                                .has_null
+                                .write();
+                            *has_null_ref = true;
                         }
                     }
                 }
-                _ => {}
-            };
+            }
+            _ => {}
+        };
 
-            match hashtable {
-                HashJoinHashTable::Serializer(table) => insert_string_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
-                },
-                HashJoinHashTable::SingleString(table) => insert_string_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
-                },
-                HashJoinHashTable::KeysU8(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
-                },
-                HashJoinHashTable::KeysU16(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
-                },
-                HashJoinHashTable::KeysU32(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
-                },
-                HashJoinHashTable::KeysU64(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
-                },
-                HashJoinHashTable::KeysU128(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
-                },
-                HashJoinHashTable::KeysU256(table) => insert_key! {
-                  &mut table.hash_table, &table.hash_method, chunk, columns, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
-                },
-                HashJoinHashTable::Null => {
-                    return Err(ErrorCode::AbortedQuery(
-                        "Aborted query, because the hash table is uninitialized.",
-                    ));
-                }
+        for (col, ty) in build_keys.iter_mut() {
+            *col = col.remove_nullable();
+            *ty = ty.remove_nullable();
+        }
+
+        match hashtable {
+            HashJoinHashTable::Serializer(table) => insert_string_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+            },
+            HashJoinHashTable::SingleString(table) => insert_string_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+            },
+            HashJoinHashTable::KeysU8(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
+            },
+            HashJoinHashTable::KeysU16(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
+            },
+            HashJoinHashTable::KeysU32(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
+            },
+            HashJoinHashTable::KeysU64(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
+            },
+            HashJoinHashTable::KeysU128(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
+            },
+            HashJoinHashTable::KeysU256(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
+            },
+            HashJoinHashTable::Null => {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the hash table is uninitialized.",
+                ));
             }
         }
 
@@ -564,7 +664,7 @@ impl HashJoinBuildState {
     }
 
     /// Get one build hash table task.
-    pub fn finalize_task(&self) -> Option<(usize, usize)> {
+    pub fn finalize_task(&self) -> Option<usize> {
         let mut tasks = self.build_hash_table_tasks.write();
         tasks.pop_front()
     }

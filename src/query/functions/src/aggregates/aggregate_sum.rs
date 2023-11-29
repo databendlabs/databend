@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -68,30 +66,25 @@ pub trait SumState: Serialize + DeserializeOwned + Send + Sync + Default + 'stat
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct NumberSumState<T, R>
+pub struct NumberSumState<R>
 where R: ValueType
 {
     pub value: R::Scalar,
-    #[serde(skip)]
-    _t: PhantomData<T>,
 }
 
-impl<T, R> Default for NumberSumState<T, R>
+impl<R> Default for NumberSumState<R>
 where
-    T: ValueType + Sync + Send,
     R: ValueType,
-    T::Scalar: Number + AsPrimitive<R::Scalar>,
     R::Scalar: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
 {
     fn default() -> Self {
-        NumberSumState::<T, R> {
+        NumberSumState::<R> {
             value: R::Scalar::default(),
-            _t: PhantomData,
         }
     }
 }
 
-impl<T, R> UnaryState<T, R> for NumberSumState<T, R>
+impl<T, R> UnaryState<T, R> for NumberSumState<R>
 where
     T: ValueType + Sync + Send,
     R: ValueType,
@@ -124,10 +117,7 @@ where
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
         let value = deserialize_state(reader)?;
-        Ok(Self {
-            value,
-            _t: PhantomData,
-        })
+        Ok(Self { value })
     }
 }
 
@@ -212,7 +202,7 @@ pub fn try_create_aggregate_sum_function(
             type TSum = <NUM as ResultTypeOfUnary>::Sum;
             let return_type = NumberType::<TSum>::data_type();
             AggregateUnaryFunction::<
-                NumberSumState<NumberType<NUM>, NumberType<TSum>>,
+                NumberSumState<NumberType<TSum>>,
                 NumberType<NUM>,
                 NumberType<TSum>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
@@ -275,8 +265,8 @@ pub fn try_create_aggregate_sum_function(
             }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "AggregateSumFunction does not support type '{:?}'",
-            arguments[0]
+            "{} does not support type '{:?}'",
+            display_name, arguments[0]
         ))),
     })
 }

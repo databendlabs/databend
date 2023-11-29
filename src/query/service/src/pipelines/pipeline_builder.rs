@@ -130,7 +130,6 @@ impl PipelineBuilder {
                 self.build_distributed_insert_select(insert_select)
             }
             PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
-            PhysicalPlan::Lambda(lambda) => self.build_lambda(lambda),
             PhysicalPlan::Udf(udf) => self.build_udf(udf),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
@@ -181,6 +180,9 @@ impl PipelineBuilder {
             PhysicalPlan::ReclusterSink(recluster_sink) => {
                 self.build_recluster_sink(recluster_sink)
             }
+
+            // Update.
+            PhysicalPlan::UpdateSource(update) => self.build_update_source(update),
         }
     }
 }

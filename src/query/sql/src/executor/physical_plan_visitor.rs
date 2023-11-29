@@ -32,7 +32,6 @@ use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
@@ -54,6 +53,7 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
+use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
 pub trait PhysicalPlanReplacer {
@@ -78,7 +78,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
-            PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
             PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
@@ -98,6 +97,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
+            PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
         }
     }
@@ -398,6 +398,10 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
     }
 
+    fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
+    }
+
     fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
@@ -478,16 +482,6 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_lambda(&mut self, plan: &Lambda) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Lambda(Lambda {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            lambda_funcs: plan.lambda_funcs.clone(),
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
     fn replace_runtime_filter_source(
         &mut self,
         plan: &RuntimeFilterSource,
@@ -531,7 +525,8 @@ impl PhysicalPlan {
                 | PhysicalPlan::ReclusterSource(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::DeleteSource(_) => {}
+                | PhysicalPlan::DeleteSource(_)
+                | PhysicalPlan::UpdateSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -580,9 +575,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ProjectSet(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
-                }
-                PhysicalPlan::Lambda(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {

@@ -58,11 +58,11 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         long
     }
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }
 
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
         *scalar
     }
 
@@ -70,7 +70,7 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_scalar(scalar.as_decimal()?)
     }
 
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         let down_col = Num::try_downcast_column(col);
         if let Some(col) = down_col {
             Some(col.0)
@@ -83,10 +83,16 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_domain(domain.as_decimal()?)
     }
 
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         Num::try_downcast_builder(builder)
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        Num::try_downcast_owned_builder(builder)
+    }
+
+    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        None
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -101,26 +107,23 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::upcast_domain(domain, Num::default_decimal_size())
     }
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize {
+    fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
     }
 
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter().cloned()
     }
 
@@ -289,7 +292,9 @@ pub trait Decimal:
     fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U>;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
-    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>>;
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>>;
 
     fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self>;
     fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>>;
@@ -470,7 +475,14 @@ impl Decimal for i128 {
         }
     }
 
-    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
         match builder {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
             _ => None,
@@ -623,7 +635,14 @@ impl Decimal for i256 {
         }
     }
 
-    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
         match builder {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
             _ => None,

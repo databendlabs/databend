@@ -69,6 +69,12 @@ impl Files {
 
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
+        // temporary fix for https://github.com/datafuselabs/databend/issues/13804
+        let locations = locations
+            .into_iter()
+            .map(|loc| loc.trim_start_matches('/').to_owned())
+            .filter(|loc| !loc.is_empty())
+            .collect::<Vec<_>>();
         info!("deleting files: {:?}", &locations);
         op.remove(locations).await?;
         Ok(())

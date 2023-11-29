@@ -85,6 +85,7 @@ fn test_format() {
         None,
         false,
         false,
+        false,
     );
     let col1 = metadata.add_base_table_column(
         "col1".to_string(),

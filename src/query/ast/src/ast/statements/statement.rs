@@ -140,6 +140,12 @@ pub enum Statement {
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
 
+    // Streams
+    CreateStream(CreateStreamStmt),
+    DropStream(DropStreamStmt),
+    ShowStreams(ShowStreamsStmt),
+    DescribeStream(DescribeStreamStmt),
+
     // Indexes
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
@@ -261,7 +267,7 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StatementMsg {
+pub struct StatementWithFormat {
     pub(crate) stmt: Statement,
     pub(crate) format: Option<String>,
 }
@@ -450,6 +456,10 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
+            Statement::DropStream(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,

@@ -24,6 +24,7 @@ use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::gen_mutation_stream_meta;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
@@ -454,11 +455,17 @@ impl NativeDeserializeDataTransform {
                 data_block.add_column(column);
             }
         }
-        let data_block = if !self.block_reader.query_internal_columns() {
-            data_block
-        } else {
-            fill_internal_column_meta(data_block, fuse_part, None)?
-        };
+
+        if self.block_reader.query_internal_columns() {
+            data_block = fill_internal_column_meta(data_block, fuse_part, None)?;
+        }
+
+        if self.block_reader.update_stream_columns() {
+            let inner_meta = data_block.take_meta();
+            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
+            data_block = data_block.add_meta(Some(Box::new(meta)))?;
+        }
+
         let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
         self.add_block(data_block)?;
 
@@ -478,10 +485,10 @@ impl NativeDeserializeDataTransform {
 
         let num_rows = fuse_part.nums_rows;
         let data_block = DataBlock::new(vec![], num_rows);
-        let data_block = if !self.block_reader.query_internal_columns() {
-            data_block
-        } else {
+        let data_block = if self.block_reader.query_internal_columns() {
             fill_internal_column_meta(data_block, fuse_part, None)?
+        } else {
+            data_block
         };
 
         self.add_block(data_block)?;
@@ -836,7 +843,14 @@ impl Processor for NativeDeserializeDataTransform {
 
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
                 block = fill_internal_column_meta(block, fuse_part, Some(offsets))?;
-            };
+            }
+
+            if self.block_reader.update_stream_columns() {
+                let inner_meta = block.take_meta();
+                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+                let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
+                block = block.add_meta(Some(Box::new(meta)))?;
+            }
 
             // Step 9: Add the block to output data
             self.offset_in_part += origin_num_rows;

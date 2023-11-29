@@ -156,8 +156,8 @@ impl DefaultSettings {
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
-                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\", and \"Hive\".",
-                    possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
+                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
+                    possible_values: Some(vec!["PostgreSQL", "MySQL",  "Experimental", "Hive"]),
                     display_in_show_settings: true,
                 }),
                 ("enable_dphyp", DefaultSettingValue {
@@ -404,7 +404,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",
                     possible_values: None,
                     display_in_show_settings: true,

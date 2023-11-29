@@ -829,6 +829,8 @@ impl_register_arith_functions!(register_add_functions, "add", unsigned_ident);
 impl_register_arith_functions!(register_sub_functions, "subtract", signed_ident);
 
 fn register_real_time_functions(registry: &mut FunctionRegistry) {
+    registry.register_aliases("now", &["current_timestamp"]);
+
     registry.properties.insert(
         "now".to_string(),
         FunctionProperty::default().non_deterministic(),

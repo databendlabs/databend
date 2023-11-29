@@ -26,7 +26,6 @@ use common_ast::ast::TableReference;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_statement_mut;
-use common_ast::Dialect;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -98,7 +97,7 @@ impl Binder {
                     .get_enable_aggregating_index_scan()?
                 && !bind_context.planning_agg_index
                 && table.support_index()
-                && table.engine() != "VIEW"
+                && !matches!(table.engine(), "VIEW" | "STREAM")
             {
                 let license_manager = get_license_manager();
                 if license_manager
@@ -117,7 +116,7 @@ impl Binder {
                     let mut s_exprs = Vec::with_capacity(indexes.len());
                     for (index_id, _, index_meta) in indexes {
                         let tokens = tokenize_sql(&index_meta.query)?;
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
@@ -272,7 +271,7 @@ impl Binder {
         segment_locs: Option<Vec<Location>>,
     ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
-        let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (mut stmt, _) = parse_sql(&tokens, self.dialect)?;
 
         // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,

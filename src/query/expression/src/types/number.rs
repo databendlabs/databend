@@ -107,11 +107,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
         long
     }
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }
 
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
         *scalar
     }
 
@@ -119,7 +119,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Num::try_downcast_scalar(scalar.as_number()?)
     }
 
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         Num::try_downcast_column(col.as_number()?)
     }
 
@@ -127,13 +127,22 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Num::try_downcast_domain(domain.as_number()?)
     }
 
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Number(num) => Num::try_downcast_owned_builder(num),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Num::try_upcast_column_builder(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -148,26 +157,23 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Domain::Number(Num::upcast_domain(domain))
     }
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize {
+    fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
     }
 
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter().cloned()
     }
 
@@ -757,6 +763,10 @@ pub trait Number:
     fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self>;
     fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>>;
     fn try_downcast_builder(col: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>>;
+
+    fn try_downcast_owned_builder(col: NumberColumnBuilder) -> Option<Vec<Self>>;
+
+    fn try_upcast_column_builder(builder: Vec<Self>) -> Option<ColumnBuilder>;
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>>;
     fn upcast_scalar(scalar: Self) -> NumberScalar;
     fn upcast_column(col: Buffer<Self>) -> NumberColumn;
@@ -787,6 +797,17 @@ impl Number for u8 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int8_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt8(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt8(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -826,6 +847,17 @@ impl Number for u16 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int16_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt16(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt16(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -868,6 +900,17 @@ impl Number for u32 {
         builder.as_u_int32_mut()
     }
 
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt32(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt32(v)))
+    }
+
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
         domain.as_u_int32().cloned()
     }
@@ -906,6 +949,17 @@ impl Number for u64 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int64_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt64(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt64(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -948,6 +1002,17 @@ impl Number for i8 {
         builder.as_int8_mut()
     }
 
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int8(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int8(v)))
+    }
+
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
         domain.as_int8().cloned()
     }
@@ -986,6 +1051,17 @@ impl Number for i16 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_int16_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int16(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int16(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -1028,6 +1104,17 @@ impl Number for i32 {
         builder.as_int32_mut()
     }
 
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int32(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int32(v)))
+    }
+
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
         domain.as_int32().cloned()
     }
@@ -1068,6 +1155,17 @@ impl Number for i64 {
         builder.as_int64_mut()
     }
 
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int64(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int64(v)))
+    }
+
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
         domain.as_int64().cloned()
     }
@@ -1106,6 +1204,17 @@ impl Number for F32 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_float32_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Float32(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Float32(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -1154,6 +1263,17 @@ impl Number for F64 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_float64_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Float64(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Float64(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {

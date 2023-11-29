@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -127,23 +126,24 @@ impl ToReadDataSourcePlan for dyn Table {
         }
 
         let source_info = self.get_data_source_info();
-
-        let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
         let mut output_schema = match (self.support_column_projection(), &push_downs) {
-            (true, Some(push_downs)) => match &push_downs.prewhere {
-                Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
-                _ => {
-                    if let Some(output_columns) = &push_downs.output_columns {
-                        Arc::new(output_columns.project_schema(schema))
-                    } else if let Some(projection) = &push_downs.projection {
-                        Arc::new(projection.project_schema(schema))
-                    } else {
-                        schema.clone()
+            (true, Some(push_downs)) => {
+                let schema = &self.schema_with_stream();
+                match &push_downs.prewhere {
+                    Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
+                    _ => {
+                        if let Some(output_columns) = &push_downs.output_columns {
+                            Arc::new(output_columns.project_schema(schema))
+                        } else if let Some(projection) = &push_downs.projection {
+                            Arc::new(projection.project_schema(schema))
+                        } else {
+                            schema.clone()
+                        }
                     }
                 }
-            },
-            _ => schema.clone(),
+            }
+            _ => self.schema(),
         };
 
         if let Some(ref push_downs) = push_downs {
@@ -225,13 +225,14 @@ impl ToReadDataSourcePlan for dyn Table {
 
                                 let body = &policy.body;
                                 let tokens = tokenize_sql(body)?;
-                                let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                                let ast_expr =
+                                    parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
                                 let settings = Settings::create("".to_string());
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
-                                let mut type_checker = TypeChecker::new(
+                                let mut type_checker = TypeChecker::try_create(
                                     &mut bind_context,
                                     ctx.clone(),
                                     &name_resolution_ctx,
@@ -239,7 +240,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                     &aliases,
                                     false,
                                     false,
-                                );
+                                )?;
 
                                 ctx.set_status_info(
                                     &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
@@ -278,6 +279,7 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            update_stream_columns: false,
             data_mask_policy,
         })
     }

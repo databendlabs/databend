@@ -86,7 +86,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut <Float64Type as ValueType>::ColumnBuilder,
+        builder: &mut Vec<F64>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value = self.value.as_() / (self.count as f64);
@@ -293,8 +293,8 @@ pub fn try_create_aggregate_avg_function(
             }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "AggregateSumFunction does not support type '{:?}'",
-            arguments[0]
+            "{} does not support type '{:?}'",
+            display_name, arguments[0]
         ))),
     })
 }

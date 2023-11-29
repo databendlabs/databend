@@ -279,6 +279,7 @@ impl MergeIntoInterpreter {
             ScalarExpr::CastExpr(x) => format!("{:?}", x),
             ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
             ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
+            ScalarExpr::UDFLambdaCall(x) => format!("{:?}", x),
         }
     }
 
@@ -316,7 +317,6 @@ impl MergeIntoInterpreter {
             RelOperator::Window(_) => {}
             RelOperator::ProjectSet(_) => {}
             RelOperator::MaterializedCte(_) => {}
-            RelOperator::Lambda(_) => {}
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
             RelOperator::AddRowNumber(_) => {}
@@ -353,7 +353,7 @@ impl MergeIntoInterpreter {
         let mut type_checker = {
             let allow_pushdown = false;
             let forbid_udf = true;
-            TypeChecker::new(
+            TypeChecker::try_create(
                 &mut bind_context,
                 ctx.clone(),
                 &name_resolution_ctx,
@@ -361,7 +361,7 @@ impl MergeIntoInterpreter {
                 &[],
                 allow_pushdown,
                 forbid_udf,
-            )
+            )?
         };
 
         let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;

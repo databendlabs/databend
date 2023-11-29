@@ -34,3 +34,7 @@
 2
 <<<<
 >>>> drop connection my_conn;
+>>>> drop table if exists table_from;
+>>>> drop table if exists table_from2;
+>>>> drop table if exists table_to;
+>>>> drop table if exists table_to2;

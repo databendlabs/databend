@@ -26,6 +26,7 @@ use super::walk_mut::walk_select_target_mut;
 use super::walk_mut::walk_set_expr_mut;
 use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
+use super::walk_stream_point_mut;
 use super::walk_time_travel_point_mut;
 use crate::ast::*;
 use crate::visitors::walk_column_id_mut;
@@ -503,6 +504,14 @@ pub trait VisitorMut: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
+    fn visit_create_stream(&mut self, _stmt: &mut CreateStreamStmt) {}
+
+    fn visit_drop_stream(&mut self, _stmt: &mut DropStreamStmt) {}
+
+    fn visit_show_streams(&mut self, _stmt: &mut ShowStreamsStmt) {}
+
+    fn visit_describe_stream(&mut self, _stmt: &mut DescribeStreamStmt) {}
+
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
@@ -696,6 +705,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint) {
         walk_time_travel_point_mut(self, time);
+    }
+
+    fn visit_stream_point(&mut self, stream: &mut StreamPoint) {
+        walk_stream_point_mut(self, stream);
     }
 
     fn visit_join(&mut self, join: &mut Join) {

@@ -137,6 +137,7 @@ where TablesTable<T>: HistoryAware
                         if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
                             dbs.push(database);
                         }
+                        // TODO(liyz): return the warnings if get_database() failed.
                     }
                 }
             }
@@ -156,14 +157,15 @@ where TablesTable<T>: HistoryAware
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
                     Err(err) => {
-                        // Swallow the errors related with sharing. Listing tables in a shared database
-                        // is easy to get errors with invalid configs, but system.tables is better not
-                        // to be affected by it.
-                        if db.get_db_info().meta.from_share.is_some() {
-                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
-                            continue;
-                        }
-                        return Err(err);
+                        // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
+                        // these databases might be:
+                        // - sharing database
+                        // - hive database
+                        // - iceberg database
+                        // - others
+                        // TODO(liyz): return the warnings in the HTTP query protocol.
+                        warn!("list tables failed on db: {}: {}", db.name(), err);
+                        continue;
                     }
                 };
 
@@ -171,6 +173,7 @@ where TablesTable<T>: HistoryAware
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                     if visibility_checker.check_table_visibility(ctl_name, db.name(), table.name())
+                        && table.engine() != "STREAM"
                     {
                         catalogs.push(ctl_name.as_bytes().to_vec());
                         databases.push(name.as_bytes().to_vec());

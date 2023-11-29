@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use clap::Parser;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_sled_store::init_sled_db;
@@ -61,7 +63,11 @@ impl Default for RaftConfig {
 async fn upgrade_09() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_logging("databend-meta-upgrade-09", &LogConfig::default());
+    let _guards = init_logging(
+        "databend-meta-upgrade-09",
+        &LogConfig::default(),
+        BTreeMap::new(),
+    );
 
     eprintln!("config: {}", pretty(&config)?);
 
