@@ -40,5 +40,10 @@ pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
                 }
             }
         }
+        Expr::LambdaFunctionCall { args, .. } => {
+            for arg in args {
+                find_eq_filter(arg, visitor)
+            }
+        }
     }
 }

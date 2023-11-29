@@ -1118,7 +1118,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            40..45,
+                            40..42,
                         ),
                         database: None,
                         table: Some(
@@ -1171,7 +1171,7 @@ Query {
                     op: Gt,
                     left: ColumnRef {
                         span: Some(
-                            61..66,
+                            61..63,
                         ),
                         database: None,
                         table: Some(
@@ -1333,7 +1333,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            53..58,
+                            53..55,
                         ),
                         database: None,
                         table: Some(
@@ -1386,7 +1386,7 @@ Query {
                     op: Gt,
                     left: ColumnRef {
                         span: Some(
-                            74..79,
+                            74..76,
                         ),
                         database: None,
                         table: Some(
@@ -1540,7 +1540,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            36..40,
+                            36..38,
                         ),
                         database: None,
                         table: Some(
@@ -1593,7 +1593,7 @@ Query {
                     op: Gt,
                     left: ColumnRef {
                         span: Some(
-                            56..60,
+                            56..58,
                         ),
                         database: None,
                         table: Some(
@@ -1937,7 +1937,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            128..133,
+                            128..130,
                         ),
                         database: None,
                         table: Some(
@@ -1964,7 +1964,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            135..139,
+                            135..137,
                         ),
                         database: None,
                         table: Some(
@@ -1991,7 +1991,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            141..145,
+                            141..143,
                         ),
                         database: None,
                         table: Some(
@@ -2080,7 +2080,7 @@ Query {
                     op: Gt,
                     left: ColumnRef {
                         span: Some(
-                            168..173,
+                            168..170,
                         ),
                         database: None,
                         table: Some(
@@ -2305,7 +2305,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            75..80,
+                            75..77,
                         ),
                         database: None,
                         table: Some(
@@ -2491,7 +2491,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            54..57,
+                            54..55,
                         ),
                         database: None,
                         table: Some(
@@ -2518,7 +2518,7 @@ Query {
                 AliasedExpr {
                     expr: ColumnRef {
                         span: Some(
-                            59..62,
+                            59..60,
                         ),
                         database: None,
                         table: Some(
@@ -6138,7 +6138,7 @@ Query {
                             "input",
                             ColumnRef {
                                 span: Some(
-                                    42..47,
+                                    42..43,
                                 ),
                                 database: None,
                                 table: Some(

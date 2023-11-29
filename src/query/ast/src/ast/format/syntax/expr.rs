@@ -343,7 +343,6 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             MapAccessor::Bracket { key } => RcDoc::text("[")
                 .append(RcDoc::text(key.to_string()))
                 .append(RcDoc::text("]")),
-            MapAccessor::Dot { key } => RcDoc::text(".").append(RcDoc::text(key.to_string())),
             MapAccessor::DotNumber { key } => RcDoc::text(".").append(RcDoc::text(key.to_string())),
             MapAccessor::Colon { key } => RcDoc::text(":").append(RcDoc::text(key.to_string())),
         }),

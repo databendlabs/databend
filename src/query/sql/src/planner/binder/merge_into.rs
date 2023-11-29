@@ -414,7 +414,7 @@ impl Binder {
 
             if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "update clause's condition can't contain subquery|window|aggregate|lambda|udf functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|udf functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -440,7 +440,7 @@ impl Binder {
                     let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
                     if !self.check_allowed_scalar_expr(&scalar_expr)? {
                         return Err(ErrorCode::SemanticError(
-                            "update clause's condition can't contain subquery|window|aggregate|lambda|udf functions"
+                            "update clause's can't contain subquery|window|aggregate|udf functions"
                                 .to_string(),
                         )
                         .set_span(scalar_expr.span()));
@@ -474,12 +474,6 @@ impl Binder {
                             field.name()
                         )));
                     }
-                    if !self.check_allowed_scalar_expr(&scalar_expr)? {
-                        return Err(ErrorCode::SemanticError(
-                            "update_list in update clause can't contain subquery|window|aggregate functions".to_string(),
-                        )
-                        .set_span(scalar_expr.span()));
-                    }
 
                     update_columns.insert(index, scalar_expr.clone());
                 }
@@ -510,7 +504,7 @@ impl Binder {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "update clause's condition can't contain subquery|window|aggregate|lambda|udf functions"
+                    "unmatched clause's condition can't contain subquery|window|aggregate|udf functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -565,7 +559,7 @@ impl Binder {
                 let (mut scalar_expr, _) = scalar_binder.bind(expr).await?;
                 if !self.check_allowed_scalar_expr(&scalar_expr)? {
                     return Err(ErrorCode::SemanticError(
-                        "update clause's condition can't contain subquery|window|aggregate|lambda|udf functions"
+                        "insert clause's can't contain subquery|window|aggregate|udf functions"
                             .to_string(),
                     )
                     .set_span(scalar_expr.span()));

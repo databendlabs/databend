@@ -164,6 +164,10 @@ pub enum ExprElement {
         table: Option<Identifier>,
         column: ColumnID,
     },
+    /// `.a.b` after column ref, currently it'll be taken as column reference
+    DotAccess {
+        key: ColumnID,
+    },
     /// `IS [NOT] NULL` expression
     IsNull {
         not: bool,
@@ -286,6 +290,12 @@ pub enum ExprElement {
     MapAccess {
         accessor: MapAccessor,
     },
+    /// python/rust style function call, like `a.foo(b).bar(c)` ---> `bar(foo(a, b), c)`
+    ChainFunctionCall {
+        name: Identifier,
+        args: Vec<Expr>,
+        lambda: Option<Lambda>,
+    },
     /// An expression between parentheses
     Group(Expr),
     /// `[1, 2, 3]`
@@ -325,7 +335,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
         let affix = match &elem.elem {
-            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(25)),
+            ExprElement::ChainFunctionCall { .. } => Affix::Postfix(Precedence(61)),
+            ExprElement::DotAccess { .. } => Affix::Postfix(Precedence(60)),
+            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(60)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::IsDistinctFrom { .. } => {
@@ -589,7 +601,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
     fn postfix(
         &mut self,
-        lhs: Expr,
+        mut lhs: Expr,
         elem: WithSpan<'a, ExprElement>,
     ) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
@@ -597,6 +609,48 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 accessor,
+            },
+            // Lift level up the identifier
+            ExprElement::DotAccess { key } => {
+                let mut is_map_access = true;
+                if let Expr::ColumnRef {
+                    database,
+                    table,
+                    column,
+                    ..
+                } = &mut lhs
+                {
+                    if let ColumnID::Name(name) = column {
+                        is_map_access = false;
+                        *database = table.take();
+                        *table = Some(name.clone());
+                        *column = key.clone();
+                    }
+                }
+
+                if is_map_access {
+                    match key {
+                        ColumnID::Name(id) => Expr::MapAccess {
+                            span: transform_span(elem.span.0),
+                            expr: Box::new(lhs),
+                            accessor: MapAccessor::Colon { key: id },
+                        },
+                        _ => {
+                            return Err("dot access position must be after ident");
+                        }
+                    }
+                } else {
+                    lhs
+                }
+            }
+            ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
+                span: transform_span(elem.span.0),
+                distinct: false,
+                name,
+                args: [vec![lhs], args].concat(),
+                params: vec![],
+                window: None,
+                lambda,
             },
             ExprElement::IsNull { not } => Expr::IsNull {
                 span: transform_span(elem.span.0),
@@ -640,13 +694,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
-    let column_ref = map(column_ref, |(database, table, column)| {
-        ExprElement::ColumnRef {
-            database,
-            table,
-            column,
-        }
+    let column_ref = map(rule! {  #column_id }, |column| ExprElement::ColumnRef {
+        database: None,
+        table: None,
+        column,
     });
+
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
@@ -814,7 +867,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let function_call = map(
+    let trivial_function_call = map(
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
@@ -828,7 +881,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
-
     let function_call_with_lambda = map(
         rule! {
             #function_name
@@ -846,7 +898,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             }),
         },
     );
-
     let function_call_with_window = map(
         rule! {
             #function_name
@@ -862,7 +913,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
-
     let function_call_with_params = map(
         rule! {
             #function_name
@@ -878,6 +928,13 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
+
+    let function_call = alt((
+        function_call_with_lambda,
+        function_call_with_window,
+        function_call_with_params,
+        trivial_function_call,
+    ));
 
     let case = map(
         rule! {
@@ -928,6 +985,47 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    let dot_access = map(
+        rule! {
+           "." ~ #column_id
+        },
+        |(_, key)| ExprElement::DotAccess { key },
+    );
+
+    let chain_function_call = check_experimental_chain_function(
+        true,
+        alt((
+            map_res(
+                rule! {
+                    "." ~ #function_name
+                    ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+                },
+                |(_, name, _, param, _, expr, _)| {
+                    Ok(ExprElement::ChainFunctionCall {
+                        name,
+                        args: vec![],
+                        lambda: Some(Lambda {
+                            params: vec![param],
+                            expr: Box::new(expr),
+                        }),
+                    })
+                },
+            ),
+            map_res(
+                rule! {
+                    "." ~ #function_name ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ^")"
+                },
+                |(_, name, _, args, _)| {
+                    Ok(ExprElement::ChainFunctionCall {
+                        name,
+                        args,
+                        lambda: None,
+                    })
+                },
+            ),
+        )),
+    );
+
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
@@ -1059,15 +1157,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+            | #chain_function_call : "x.func(...)"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call_with_lambda : "<function>"
-            | #function_call_with_window : "<function>"
-            | #function_call_with_params : "<function>"
             | #function_call : "<function>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
             | #column_ref : "<column>"
+            | #dot_access : "<dot_access>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
             | #current_timestamp: "CURRENT_TIMESTAMP"
@@ -1504,12 +1601,6 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         },
         |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
     );
-    let dot = map(
-        rule! {
-           "." ~ #ident
-        },
-        |(_, key)| MapAccessor::Dot { key },
-    );
     let dot_number = map_res(
         rule! {
            LiteralFloat
@@ -1532,7 +1623,6 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
-        | #dot
         | #dot_number
         | #colon
     )(i)
