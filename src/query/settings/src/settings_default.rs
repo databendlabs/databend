@@ -23,10 +23,16 @@ use once_cell::sync::OnceCell;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
 
+// Settings for readability and writability of tags.
+// we will not be able to safely get its value when set to only write.
+// we will not be able to safely set its value when set to only read.
 #[derive(Copy, Clone, Debug)]
 pub enum SettingMode {
+    // they can be set, unset, or select
     Both,
+    // they only can be select
     Read,
+    // they only can be set or unset
     Write,
 }
 
@@ -164,7 +170,7 @@ impl DefaultSettings {
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
                     desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
-                    possible_values: Some(vec!["PostgreSQL", "MySQL",  "Experimental", "Hive"]),
+                    possible_values: Some(vec!["PostgreSQL", "MySQL", "Experimental", "Hive"]),
                     mode: SettingMode::Both,
                 }),
                 ("enable_dphyp", DefaultSettingValue {
