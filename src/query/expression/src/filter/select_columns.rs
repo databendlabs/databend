@@ -28,6 +28,7 @@ use crate::Column;
 use crate::SelectOp;
 use crate::SelectStrategy;
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_columns(
     op: SelectOp,
     mut left: Column,
@@ -395,6 +396,7 @@ pub fn select_columns(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_primitive_adapt<T>(
     op: SelectOp,
     left: Buffer<T>,
@@ -454,6 +456,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_string_adapt(
     op: SelectOp,
     left: StringColumn,
@@ -510,6 +513,7 @@ pub fn select_string_adapt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_boolean_adapt(
     op: SelectOp,
     left: Bitmap,
@@ -566,6 +570,7 @@ pub fn select_boolean_adapt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_array_adapt(
     op: SelectOp,
     left: ArrayColumn<AnyType>,
@@ -622,6 +627,7 @@ pub fn select_array_adapt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_tuple_adapt(
     op: SelectOp,
     left: &[Column],
@@ -678,6 +684,7 @@ pub fn select_tuple_adapt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_primitive<T, const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: Buffer<T>,
@@ -703,37 +710,36 @@ where
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.get_unchecked(idx as usize),
                                 right.get_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(
                             left.get_unchecked(idx as usize),
                             right.get_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -745,37 +751,36 @@ where
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.get_unchecked(idx as usize),
                                 right.get_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(
                             left.get_unchecked(idx as usize),
                             right.get_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -785,35 +790,34 @@ where
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.get_unchecked(idx as usize),
                                 right.get_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(
+                        let ret = op(
                             left.get_unchecked(idx as usize),
                             right.get_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -831,6 +835,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_string<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: StringColumn,
@@ -853,37 +858,36 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.index_unchecked(idx as usize),
                                 right.index_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(
                             left.index_unchecked(idx as usize),
                             right.index_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -895,37 +899,36 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.index_unchecked(idx as usize),
                                 right.index_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(
                             left.index_unchecked(idx as usize),
                             right.index_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -935,35 +938,34 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.index_unchecked(idx as usize),
                                 right.index_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(
+                        let ret = op(
                             left.index_unchecked(idx as usize),
                             right.index_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -981,6 +983,7 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: Bitmap,
@@ -1003,37 +1006,36 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.get_bit_unchecked(idx as usize),
                                 right.get_bit_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(
                             left.get_bit_unchecked(idx as usize),
                             right.get_bit_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1045,37 +1047,36 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.get_bit_unchecked(idx as usize),
                                 right.get_bit_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(
                             left.get_bit_unchecked(idx as usize),
                             right.get_bit_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1085,35 +1086,34 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.get_bit_unchecked(idx as usize),
                                 right.get_bit_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(
+                        let ret = op(
                             left.get_bit_unchecked(idx as usize),
                             right.get_bit_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1131,6 +1131,7 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_array<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: ArrayColumn<AnyType>,
@@ -1153,37 +1154,36 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.index_unchecked(idx as usize),
                                 right.index_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(
                             left.index_unchecked(idx as usize),
                             right.index_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1195,37 +1195,36 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.index_unchecked(idx as usize),
                                 right.index_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(
                             left.index_unchecked(idx as usize),
                             right.index_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1235,35 +1234,34 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
+                        let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 left.index_unchecked(idx as usize),
                                 right.index_unchecked(idx as usize),
-                            )
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(
+                        let ret = op(
                             left.index_unchecked(idx as usize),
                             right.index_unchecked(idx as usize),
-                        ) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        );
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1281,6 +1279,7 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_tuple<const TRUE: bool, const FALSE: bool>(
     _op: SelectOp,
     _left: &[Column],

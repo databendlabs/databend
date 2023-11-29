@@ -28,6 +28,7 @@ use crate::Scalar;
 use crate::SelectOp;
 use crate::SelectStrategy;
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_scalar_and_column(
     op: SelectOp,
     scalar: Scalar,
@@ -383,7 +384,8 @@ pub fn select_scalar_and_column(
     }
 }
 
-pub fn select_primitive_scalar_and_column_adapt<T>(
+#[allow(clippy::too_many_arguments)]
+pub fn select_primitive_scalar_and_column_adapt<T: Copy>(
     op: SelectOp,
     scalar: T,
     column: Buffer<T>,
@@ -442,6 +444,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_string_scalar_and_column_adapt(
     op: SelectOp,
     scalar: &[u8],
@@ -498,6 +501,7 @@ pub fn select_string_scalar_and_column_adapt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_boolean_scalar_and_column_adapt(
     op: SelectOp,
     scalar: bool,
@@ -554,6 +558,7 @@ pub fn select_boolean_scalar_and_column_adapt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_array_scalar_and_column_adapt(
     op: SelectOp,
     scalar: &Column,
@@ -610,7 +615,8 @@ pub fn select_array_scalar_and_column_adapt(
     }
 }
 
-pub fn select_primitive_scalar_and_column<T, const TRUE: bool, const FALSE: bool>(
+#[allow(clippy::too_many_arguments)]
+pub fn select_primitive_scalar_and_column<T: Copy, const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: T,
     column: Buffer<T>,
@@ -625,7 +631,7 @@ pub fn select_primitive_scalar_and_column<T, const TRUE: bool, const FALSE: bool
 where
     T: std::cmp::PartialOrd + std::fmt::Display,
 {
-    let op = selection_op_ref::<T>(op);
+    let op = selection_op::<T>(op);
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
@@ -635,31 +641,30 @@ where
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(&scalar, column.get_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, *column.get_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(&scalar, column.get_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(scalar, *column.get_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -671,31 +676,30 @@ where
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(&scalar, column.get_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, *column.get_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(&scalar, column.get_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(scalar, *column.get_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -705,29 +709,28 @@ where
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(&scalar, column.get_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, *column.get_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(&scalar, column.get_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let ret = op(scalar, *column.get_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -745,6 +748,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: &[u8],
@@ -767,31 +771,30 @@ pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, column.index_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, column.index_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(scalar, column.index_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(scalar, column.index_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -803,31 +806,30 @@ pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, column.index_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, column.index_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(scalar, column.index_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(scalar, column.index_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -837,29 +839,28 @@ pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, column.index_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, column.index_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(scalar, column.index_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
-                            false_selection[false_idx] = idx;
-                            false_idx += 1;
+                        let ret = op(scalar, column.index_unchecked(idx as usize));
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -877,6 +878,7 @@ pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: bool,
@@ -899,31 +901,30 @@ pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, column.get_bit_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, column.get_bit_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(scalar, column.get_bit_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(scalar, column.get_bit_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -935,31 +936,30 @@ pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, column.get_bit_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, column.get_bit_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(scalar, column.get_bit_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(scalar, column.get_bit_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -969,29 +969,28 @@ pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, column.get_bit_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, column.get_bit_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(scalar, column.get_bit_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let ret = op(scalar, column.get_bit_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1009,6 +1008,7 @@ pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: &Column,
@@ -1031,31 +1031,30 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, &column.index_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, &column.index_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = true_selection[i];
-                        if op(scalar, &column.index_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *true_selection.get_unchecked(i);
+                        let ret = op(scalar, &column.index_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1067,31 +1066,30 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, &column.index_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, &column.index_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for i in start..end {
-                        let idx = false_selection[i];
-                        if op(scalar, &column.index_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let idx = *false_selection.get_unchecked(i);
+                        let ret = op(scalar, &column.index_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
@@ -1101,29 +1099,28 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        if validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, &column.index_unchecked(idx as usize))
-                        {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let ret = validity.get_bit_unchecked(idx as usize)
+                            && op(scalar, &column.index_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        if op(scalar, &column.index_unchecked(idx as usize)) {
-                            if TRUE {
-                                true_selection[true_idx] = idx;
-                                true_idx += 1;
-                            }
-                        } else if FALSE {
+                        let ret = op(scalar, &column.index_unchecked(idx as usize));
+                        if TRUE {
+                            true_selection[true_idx] = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
                             false_selection[false_idx] = idx;
-                            false_idx += 1;
+                            false_idx += !ret as usize;
                         }
                     }
                 }

@@ -230,6 +230,7 @@ where T: std::cmp::PartialOrd {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_values(
     op: SelectOp,
     left: Value<AnyType>,
@@ -297,6 +298,7 @@ pub fn select_values(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_selection_by_default_result(
     result: Value<AnyType>,
     result_type: &DataType,
@@ -466,44 +468,44 @@ pub fn update_selection_by_scalar<const TRUE: bool, const FALSE: bool>(
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
-        SelectStrategy::True => {
+        SelectStrategy::True => unsafe {
             let start = *true_start_idx;
             let end = *true_start_idx + count;
             if scalar {
                 if TRUE {
                     for i in start..end {
-                        let idx = true_selection[i];
+                        let idx = *true_selection.get_unchecked(i);
                         true_selection[true_idx] = idx;
                         true_idx += 1;
                     }
                 }
             } else if FALSE {
                 for i in start..end {
-                    let idx = true_selection[i];
+                    let idx = *true_selection.get_unchecked(i);
                     false_selection[false_idx] = idx;
                     false_idx += 1;
                 }
             }
-        }
-        SelectStrategy::False => {
+        },
+        SelectStrategy::False => unsafe {
             let start = *false_start_idx;
             let end = *false_start_idx + count;
             if scalar {
                 if TRUE {
                     for i in start..end {
-                        let idx = false_selection[i];
+                        let idx = *false_selection.get_unchecked(i);
                         true_selection[true_idx] = idx;
                         true_idx += 1;
                     }
                 }
             } else if FALSE {
                 for i in start..end {
-                    let idx = false_selection[i];
+                    let idx = *false_selection.get_unchecked(i);
                     false_selection[false_idx] = idx;
                     false_idx += 1;
                 }
             }
-        }
+        },
         SelectStrategy::ALL => {
             if scalar {
                 if TRUE {
@@ -543,12 +545,12 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
-        SelectStrategy::True => {
+        SelectStrategy::True => unsafe {
             let start = *true_start_idx;
             let end = *true_start_idx + count;
             for i in start..end {
-                let idx = true_selection[i];
-                if unsafe { column.get_bit_unchecked(idx as usize) } {
+                let idx = *true_selection.get_unchecked(i);
+                if column.get_bit_unchecked(idx as usize) {
                     if TRUE {
                         true_selection[true_idx] = idx;
                         true_idx += 1;
@@ -558,13 +560,13 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
                     false_idx += 1;
                 }
             }
-        }
-        SelectStrategy::False => {
+        },
+        SelectStrategy::False => unsafe {
             let start = *false_start_idx;
             let end = *false_start_idx + count;
             for i in start..end {
-                let idx = false_selection[i];
-                if unsafe { column.get_bit_unchecked(idx as usize) } {
+                let idx = *false_selection.get_unchecked(i);
+                if column.get_bit_unchecked(idx as usize) {
                     if TRUE {
                         true_selection[true_idx] = idx;
                         true_idx += 1;
@@ -574,10 +576,10 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
                     false_idx += 1;
                 }
             }
-        }
-        SelectStrategy::ALL => {
+        },
+        SelectStrategy::ALL => unsafe {
             for idx in 0u32..count as u32 {
-                if unsafe { column.get_bit_unchecked(idx as usize) } {
+                if column.get_bit_unchecked(idx as usize) {
                     if TRUE {
                         true_selection[true_idx] = idx;
                         true_idx += 1;
@@ -587,7 +589,7 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
                     false_idx += 1;
                 }
             }
-        }
+        },
     }
     let true_count = true_idx - *true_start_idx;
     let false_count = false_idx - *false_start_idx;
@@ -600,7 +602,7 @@ pub fn update_selection_by_column<const TRUE: bool, const FALSE: bool>(
     }
 }
 
-fn get_some_test_data_types() -> Vec<DataType> {
+fn _get_some_test_data_types() -> Vec<DataType> {
     vec![
         // DataType::Null,
         // DataType::EmptyArray,
@@ -639,8 +641,8 @@ fn get_some_test_data_types() -> Vec<DataType> {
     ]
 }
 
-fn rand_block_for_some_types(num_rows: usize) -> DataBlock {
-    let types = get_some_test_data_types();
+fn _rand_block_for_some_types(num_rows: usize) -> DataBlock {
+    let types = _get_some_test_data_types();
     let mut columns = Vec::with_capacity(types.len());
     for data_type in types.iter() {
         columns.push(Column::random(data_type, num_rows));
@@ -667,16 +669,16 @@ pub fn test_operation() -> common_exception::Result<()> {
         let slice_start = rng.gen_range(0..len - 1);
         let slice_end = rng.gen_range(slice_start..len);
 
-        let random_block_1 = rand_block_for_some_types(len);
-        let random_block_2 = rand_block_for_some_types(len);
+        let random_block_1 = _rand_block_for_some_types(len);
+        let random_block_2 = _rand_block_for_some_types(len);
 
         let random_block_1 = random_block_1.slice(slice_start..slice_end);
         let random_block_2 = random_block_2.slice(slice_start..slice_end);
 
         let len = slice_end - slice_start;
 
-        let mut selection = vec![0u32, len];
-        let mut false_selection = vec![0u32, len];
+        let mut selection = vec![0u32; len];
+        let mut false_selection = vec![0u32; len];
         let mut count = len;
 
         for (left, right) in random_block_1
@@ -686,7 +688,7 @@ pub fn test_operation() -> common_exception::Result<()> {
         {
             let op = SelectOp::Gt;
             let number_scalar = Scalar::Number(NumberScalar::UInt8(100));
-            let right_scalar = Value::<AnyType>::Scalar(number_scalar);
+            let _right_scalar = Value::<AnyType>::Scalar(number_scalar);
             let mut true_idx = 0;
             let mut false_idx = 0;
             count = select_values(
@@ -708,9 +710,8 @@ pub fn test_operation() -> common_exception::Result<()> {
 
         if count > 0 {
             let count = count + ((count < len) as usize);
-            let selection = selection[0..count].iter().map(|x| *x as u32).collect_vec();
-            let left = random_block_1.take(&selection, &mut None)?;
-            let right = random_block_2.take(&selection, &mut None)?;
+            let left = random_block_1.take(&selection[0..count], &mut None)?;
+            let right = random_block_2.take(&selection[0..count], &mut None)?;
             println!("left = \n{:?}\nright = \n{:?}\n", left, right);
         }
     }
@@ -718,12 +719,13 @@ pub fn test_operation() -> common_exception::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn select_scalar(
     op: SelectOp,
     left: Scalar,
     right: Scalar,
-    left_data_type: DataType,
-    right_data_type: DataType,
+    _left_data_type: DataType,
+    _right_data_type: DataType,
     true_selection: &mut [u32],
     false_selection: (&mut [u32], bool),
     true_idx: &mut usize,

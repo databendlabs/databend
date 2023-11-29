@@ -1014,6 +1014,7 @@ impl<'a> Evaluator<'a> {
     }
 
     // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
     pub fn process_selection(
         &self,
         select_expr: &SelectExpr,
@@ -1082,6 +1083,7 @@ impl<'a> Evaluator<'a> {
     }
 
     // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
     pub fn process_and(
         &self,
         exprs: &Vec<SelectExpr>,
@@ -1122,6 +1124,7 @@ impl<'a> Evaluator<'a> {
     }
 
     // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
     pub fn process_or(
         &self,
         exprs: &Vec<SelectExpr>,
@@ -1163,10 +1166,11 @@ impl<'a> Evaluator<'a> {
     }
 
     // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
     pub fn process_compare(
         &self,
         select_op: &SelectOp,
-        exprs: &Vec<Expr>,
+        exprs: &[Expr],
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
@@ -1195,6 +1199,7 @@ impl<'a> Evaluator<'a> {
     }
 
     // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
     pub fn process_others(
         &self,
         expr: &Expr,
