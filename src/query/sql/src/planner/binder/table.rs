@@ -120,7 +120,7 @@ impl Binder {
         select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in select_list {
-            if let SelectTarget::QualifiedName {
+            if let SelectTarget::StarColumns {
                 qualified: names, ..
             } = select_target
             {

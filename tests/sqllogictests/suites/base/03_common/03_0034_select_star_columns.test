@@ -54,10 +54,10 @@ statement ok
 insert into default.t1 values(2, (200,200))
 
 
-query I
-select * exclude c1 from db.t
+query II
+select * exclude c1,  columns(* exclude c1) from db.t
 ----
-1
+1 1
 
 
 query T
@@ -172,6 +172,18 @@ query T
 select c.* exclude (ID) from db.t as c
 ----
 (0,0)
+
+
+query ITIT
+select columns(* exclude c1), columns(* exclude id) from db.t
+----
+1 (0,0)
+
+
+query ITIT
+select columns(a -> length(a) = 2), columns('i.*'), columns(a -> a like '%c%') from db.t
+----
+1 (0,0) 1 (0, 0)
 
 
 statement error 1065
