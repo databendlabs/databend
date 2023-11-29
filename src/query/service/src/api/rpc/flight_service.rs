@@ -166,10 +166,7 @@ impl FlightService for DatabendQueryFlightService {
                     unsafe {
                         // Keep settings
                         settings.unchecked_apply_changes(
-                            init_query_fragments_plan
-                                .executor_packet
-                                .changed_settings
-                                .clone(),
+                            &init_query_fragments_plan.executor_packet.changed_settings,
                         );
                     }
                     let session =
@@ -279,7 +276,7 @@ impl FlightService for DatabendQueryFlightService {
                 ])) as FlightStream<ActionType>
             ))
         }
-        .in_span(root)
-        .await
+            .in_span(root)
+            .await
     }
 }
