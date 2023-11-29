@@ -39,7 +39,6 @@ use common_ast::ast::TimeTravelPoint;
 use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
@@ -272,7 +271,7 @@ impl Binder {
                     .get(QUERY)
                     .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                 let tokens = tokenize_sql(query.as_str())?;
-                let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 new_bind_context.view_info = Some((database.clone(), table_name));

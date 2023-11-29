@@ -80,6 +80,7 @@ use crate::Visibility;
 /// - Build `Metadata`
 pub struct Binder {
     pub ctx: Arc<dyn TableContext>,
+    pub dialect: Dialect,
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
@@ -102,8 +103,10 @@ impl<'a> Binder {
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
     ) -> Self {
+        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         Binder {
             ctx,
+            dialect,
             catalogs,
             name_resolution_ctx,
             metadata,
@@ -602,7 +605,7 @@ impl<'a> Binder {
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
