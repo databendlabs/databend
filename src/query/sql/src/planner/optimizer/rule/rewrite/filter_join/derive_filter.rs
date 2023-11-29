@@ -133,14 +133,12 @@ fn replace_column(
             if let Some(e) = self.equi_conditions_map.get(expr) {
                 *expr = (**e).clone();
                 return Ok(());
-            } else {
-                if let ScalarExpr::BoundColumnRef(col) = expr {
-                    for (key, val) in self.equi_conditions_map.iter() {
-                        if let ScalarExpr::BoundColumnRef(key_col) = key {
-                            if key_col.column.index == col.column.index {
-                                *expr = (**val).clone();
-                                return Ok(());
-                            }
+            } else if let ScalarExpr::BoundColumnRef(col) = expr {
+                for (key, val) in self.equi_conditions_map.iter() {
+                    if let ScalarExpr::BoundColumnRef(key_col) = key {
+                        if key_col.column.index == col.column.index {
+                            *expr = (**val).clone();
+                            return Ok(());
                         }
                     }
                 }
