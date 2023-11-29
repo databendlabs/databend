@@ -1175,9 +1175,9 @@ impl<'a> Evaluator<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let childs = self.get_childs(exprs, validity)?;
-        let left = childs[0].clone();
-        let right = childs[1].clone();
+        let children = self.get_children(exprs, validity)?;
+        let left = children[0].clone();
+        let right = children[1].clone();
         let count = select_values(
             *select_op,
             left.0.clone(),
@@ -1256,17 +1256,17 @@ impl<'a> Evaluator<'a> {
     }
 
     // TODO(Dousir9): move this to a more appropriate place
-    pub fn get_childs(
+    pub fn get_children(
         &self,
         args: &[Expr],
         validity: Option<Bitmap>,
     ) -> Result<Vec<(Value<AnyType>, DataType)>> {
-        let childs = args
+        let children = args
             .iter()
             .map(|expr| self.get_select_child(expr, validity.clone()))
             .collect::<Result<Vec<_>>>()?;
         assert!(
-            childs
+            children
                 .iter()
                 .filter_map(|val| match &val.0 {
                     Value::Column(col) => Some(col.len()),
@@ -1274,7 +1274,7 @@ impl<'a> Evaluator<'a> {
                 })
                 .all_equal()
         );
-        Ok(childs)
+        Ok(children)
     }
 
     // TODO(Dousir9): move this to a more appropriate place
