@@ -107,11 +107,6 @@ pub enum SelectOp {
     Gte,
     // Less or equal "<="
     Lte,
-
-    IsTrue,
-    And,
-    Or,
-    AndFilters,
 }
 
 impl SelectOp {
@@ -123,10 +118,6 @@ impl SelectOp {
             "lt" => Some(Self::Lt),
             "gte" => Some(Self::Gte),
             "lte" => Some(Self::Lte),
-            "is_true" => Some(Self::IsTrue),
-            "and" => Some(Self::And),
-            "or" => Some(Self::Or),
-            "and_filters" => Some(Self::AndFilters),
             _ => None,
         }
     }
@@ -139,7 +130,6 @@ impl SelectOp {
             SelectOp::Lt => SelectOp::Gt,
             SelectOp::Gte => SelectOp::Lte,
             SelectOp::Lte => SelectOp::Gte,
-            _ => unreachable!(),
         }
     }
 }
@@ -189,7 +179,6 @@ where T: std::cmp::PartialOrd {
         SelectOp::Gte => greater_than_equal::<T>,
         SelectOp::Lt => less_than::<T>,
         SelectOp::Lte => less_than_equal::<T>,
-        _ => unreachable!(),
     }
 }
 
@@ -238,7 +227,6 @@ where T: std::cmp::PartialOrd {
         SelectOp::Gte => greater_than_equal_ref::<T>,
         SelectOp::Lt => less_than_ref::<T>,
         SelectOp::Lte => less_than_equal_ref::<T>,
-        _ => unreachable!(),
     }
 }
 
