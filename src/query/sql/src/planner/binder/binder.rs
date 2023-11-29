@@ -665,7 +665,6 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::LambdaFunction(_)
                     | ScalarExpr::UDFServerCall(_)
                     | ScalarExpr::SubqueryExpr(_)
             )
@@ -684,7 +683,6 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::LambdaFunction(_)
                     | ScalarExpr::UDFServerCall(_)
             )
         };

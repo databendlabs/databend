@@ -338,10 +338,9 @@ impl Binder {
                     Ok(ScalarExpr::LambdaFunction(LambdaFunc {
                         span: lambda_func.span,
                         func_name: lambda_func.func_name.clone(),
-                        display_name: lambda_func.display_name.clone(),
                         args,
-                        params: lambda_func.params.clone(),
                         lambda_expr: lambda_func.lambda_expr.clone(),
+                        lambda_display: lambda_func.lambda_display.clone(),
                         return_type: lambda_func.return_type.clone(),
                     }))
                 }

@@ -48,7 +48,6 @@ use log::warn;
 use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::join::JoinConditions;
-use crate::binder::lambda::LambdaRewriter;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::udf::UdfRewriter;
@@ -279,10 +278,6 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
-
-        // rewrite lambda
-        let mut lambda_rewriter = LambdaRewriter::new(self.metadata.clone());
-        s_expr = lambda_rewriter.rewrite(&s_expr)?;
 
         // rewrite udf
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
