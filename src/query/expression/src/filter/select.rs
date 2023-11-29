@@ -697,7 +697,7 @@ pub fn test_operation() -> common_exception::Result<()> {
                 left.data_type.clone(),
                 right.data_type.clone(),
                 &mut selection,
-                &mut false_selection,
+                (&mut false_selection, false),
                 &mut true_idx,
                 &mut false_idx,
                 SelectStrategy::ALL,
