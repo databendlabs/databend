@@ -15,8 +15,8 @@
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::Expr;
-use crate::FusePartInfo;
 
+use crate::FusePartInfo;
 
 pub fn runtime_filter_pruner(part: &PartInfoPtr, filters: &[Expr]) -> Result<bool> {
     if filters.is_empty() {

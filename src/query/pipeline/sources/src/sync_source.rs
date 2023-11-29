@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_pipeline_core::processors::Event;
@@ -38,7 +41,7 @@ pub trait SyncSource: Send {
         false
     }
 
-    fn add_runtime_filter(&mut self, _filters: Vec<Expr>) -> Result<()>{
+    fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
         todo!()
     }
 }
@@ -79,8 +82,8 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         self
     }
 
-    fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
-        self.inner.add_runtime_filter(filters)
+    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
+        self.inner.add_runtime_filters(filters)
     }
 
     fn can_add_runtime_filter(&self) -> bool {
