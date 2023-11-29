@@ -430,18 +430,21 @@ impl Binder {
 
         if let Some(database) = database {
             if !match_database {
-                return Err(ErrorCode::UnknownDatabase(
-                    format!("Unknown database `{}`", database,),
-                )
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Unknown database `{}` from bind context",
+                    database,
+                ))
                 .set_span(span));
             }
         }
 
         if let Some(table) = &table {
             if !match_table {
-                return Err(
-                    ErrorCode::UnknownTable(format!("Unknown table `{}`", table,)).set_span(span),
-                );
+                return Err(ErrorCode::UnknownTable(format!(
+                    "Unknown table `{}` from bind context",
+                    table,
+                ))
+                .set_span(span));
             }
         }
 
