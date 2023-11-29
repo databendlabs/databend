@@ -435,6 +435,31 @@ pub trait VisitorMut: Sized {
         if let MergeSource::Select { query, .. } = &mut merge_into.source {
             self.visit_query(query)
         }
+        self.visit_expr(&mut merge_into.join_expr);
+        for operation in &mut merge_into.merge_options {
+            match operation {
+                MergeOption::Match(match_operation) => {
+                    if let Some(expr) = &mut match_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    if let MatchOperation::Update { update_list, .. } =
+                        &mut match_operation.operation
+                    {
+                        for update in update_list {
+                            self.visit_expr(&mut update.expr)
+                        }
+                    }
+                }
+                MergeOption::Unmatch(unmatch_operation) => {
+                    if let Some(expr) = &mut unmatch_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    for expr in &mut unmatch_operation.insert_operation.values {
+                        self.visit_expr(expr)
+                    }
+                }
+            }
+        }
     }
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 

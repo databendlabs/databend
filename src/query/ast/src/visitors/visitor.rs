@@ -418,7 +418,34 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
     fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}
-    fn visit_merge_into(&mut self, _merge_into: &'ast MergeIntoStmt) {}
+    fn visit_merge_into(&mut self, merge_into: &'ast MergeIntoStmt) {
+        if let MergeSource::Select { query, .. } = &merge_into.source {
+            self.visit_query(query)
+        }
+        self.visit_expr(&merge_into.join_expr);
+        for operation in &merge_into.merge_options {
+            match operation {
+                MergeOption::Match(match_operation) => {
+                    if let Some(expr) = &match_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    if let MatchOperation::Update { update_list, .. } = &match_operation.operation {
+                        for update in update_list {
+                            self.visit_expr(&update.expr)
+                        }
+                    }
+                }
+                MergeOption::Unmatch(unmatch_operation) => {
+                    if let Some(expr) = &unmatch_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    for expr in &unmatch_operation.insert_operation.values {
+                        self.visit_expr(expr)
+                    }
+                }
+            }
+        }
+    }
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource) {}
 
     fn visit_delete(&mut self, _delete: &'ast DeleteStmt) {}
