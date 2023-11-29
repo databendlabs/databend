@@ -18,9 +18,6 @@ use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
 use common_expression::build_select_expr;
 use common_expression::filter::SelectStrategy;
-use common_expression::types::array::ArrayColumn;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
@@ -29,18 +26,12 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::SelectExpr;
-use common_expression::SelectOp;
-use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::Transform;
 use common_pipeline_transforms::processors::Transformer;
-use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
 
@@ -130,7 +121,7 @@ impl BlockOperator {
                     )?;
                     let data_block = input.project(projections);
                     if count == data_block.num_rows() {
-                        return Ok(data_block);
+                        Ok(data_block)
                     } else {
                         data_block.take(&true_selection[0..count], &mut None)
                     }

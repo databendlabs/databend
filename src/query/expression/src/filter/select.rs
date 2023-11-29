@@ -656,7 +656,6 @@ fn _rand_block_for_some_types(num_rows: usize) -> DataBlock {
 
 #[test]
 pub fn test_operation() -> common_exception::Result<()> {
-    use itertools::Itertools;
     use rand::Rng;
 
     use crate::types::NumberScalar;
