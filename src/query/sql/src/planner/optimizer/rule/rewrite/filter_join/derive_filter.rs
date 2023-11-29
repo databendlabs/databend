@@ -23,7 +23,6 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::VisitorMut;
-use crate::plans::WindowFuncType;
 use crate::ScalarExpr;
 
 /// Derive filter to push down
