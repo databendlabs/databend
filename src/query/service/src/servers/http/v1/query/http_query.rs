@@ -463,6 +463,7 @@ impl HttpQuery {
             .settings
             .as_ref()
             .into_iter()
+            .filter(|item| item.default_value != item.user_value)
             .map(|item| (item.name.to_string(), item.user_value.as_string()))
             .collect::<BTreeMap<_, _>>();
         let database = session_state.current_database.clone();
