@@ -236,7 +236,7 @@ impl Metadata {
         source_column_index: IndexType,
         column_name: String,
         data_type: TableDataType,
-        paths: Vec<Scalar>,
+        key_paths: Scalar,
     ) -> IndexType {
         let column_index = self.columns.len();
         self.columns.push(ColumnEntry::VirtualColumn(VirtualColumn {
@@ -246,7 +246,7 @@ impl Metadata {
             column_index,
             column_name,
             data_type,
-            paths,
+            key_paths,
         }));
         column_index
     }
@@ -522,7 +522,7 @@ pub struct VirtualColumn {
     pub data_type: TableDataType,
 
     /// Paths to generate virtual column from source column
-    pub paths: Vec<Scalar>,
+    pub key_paths: Scalar,
 }
 
 #[derive(Clone, Debug)]

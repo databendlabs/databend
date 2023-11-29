@@ -249,7 +249,6 @@ impl ToReadDataSourcePlan for dyn Table {
                                     metadata,
                                     &aliases,
                                     false,
-                                    false,
                                 )?;
 
                                 ctx.set_status_info(

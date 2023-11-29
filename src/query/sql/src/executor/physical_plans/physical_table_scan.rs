@@ -113,28 +113,12 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        // add virtual columns to scan
-        let mut virtual_columns = ColumnSet::new();
-        for column in self
-            .metadata
-            .read()
-            .virtual_columns_by_table_index(scan.table_index)
-            .iter()
-        {
-            match column {
-                ColumnEntry::VirtualColumn(virtual_column) => {
-                    virtual_columns.insert(virtual_column.column_index);
-                }
-                _ => unreachable!(),
-            }
-        }
-
         // Some table may not have any column,
         // e.g. `system.sync_crash_me`
-        let scan = if scan.columns.is_empty() && virtual_columns.is_empty() {
+        let scan = if scan.columns.is_empty() {
             scan.clone()
         } else {
-            let columns = scan.columns.union(&virtual_columns).cloned().collect();
+            let columns = scan.columns.clone();
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
             if let Some(ref mut pw) = prewhere {
@@ -508,7 +492,7 @@ impl PhysicalPlanBuilder {
                 let virtual_column_info = VirtualColumnInfo {
                     source_name: virtual_column.source_column_name.clone(),
                     name: virtual_column.column_name.clone(),
-                    paths: virtual_column.paths.clone(),
+                    key_paths: virtual_column.key_paths.clone(),
                     data_type: Box::new(virtual_column.data_type.clone()),
                 };
                 virtual_column_infos.push(virtual_column_info);

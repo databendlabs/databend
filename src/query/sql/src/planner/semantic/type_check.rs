@@ -67,14 +67,14 @@ use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
-use common_license::license::Feature::VirtualColumn;
-use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::LambdaUDF;
 use common_meta_app::principal::UDFDefinition;
 use common_meta_app::principal::UDFServer;
 use common_users::UserApiProvider;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use jsonb::keypath::KeyPath;
+use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
@@ -82,7 +82,6 @@ use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
@@ -121,7 +120,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::Visibility;
 
 /// A helper for type checking.
 ///
@@ -151,7 +149,6 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
-    allow_pushdown: bool,
     forbid_udf: bool,
 }
 
@@ -162,7 +159,6 @@ impl<'a> TypeChecker<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
-        allow_pushdown: bool,
         forbid_udf: bool,
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
@@ -179,7 +175,6 @@ impl<'a> TypeChecker<'a> {
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
-            allow_pushdown,
             forbid_udf,
         })
     }
@@ -2447,60 +2442,6 @@ impl<'a> TypeChecker<'a> {
                     Err(e) => Err(e),
                 })
             }
-            // Try convert get function of Variant data type into a virtual column
-            ("get", args) => {
-                if !self.allow_pushdown {
-                    return None;
-                }
-                let mut paths = VecDeque::new();
-                let mut get_args = args.to_vec();
-                loop {
-                    if get_args.len() != 2 {
-                        break;
-                    }
-                    if let Expr::Literal { lit, .. } = get_args[1] {
-                        match lit {
-                            Literal::UInt64(_) | Literal::String(_) => {
-                                paths.push_front((span, lit.clone()));
-                            }
-                            _ => {
-                                break;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                    if let Expr::FunctionCall { name, args, .. } = get_args[0] {
-                        if name.name != "get" {
-                            return None;
-                        }
-                        get_args = args.iter().collect();
-                        continue;
-                    } else if let Expr::ColumnRef { .. } = get_args[0] {
-                        let box (scalar, data_type) = self.resolve(get_args[0]).await.ok()?;
-                        if let DataType::Variant = data_type.remove_nullable() {
-                            if let ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                ref column, ..
-                            }) = scalar
-                            {
-                                let column_entry =
-                                    self.metadata.read().column(column.index).clone();
-                                if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                                    return self
-                                        .resolve_variant_map_access_pushdown(
-                                            column.clone(),
-                                            base_column,
-                                            &mut paths,
-                                        )
-                                        .await;
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-                None
-            }
             ("array_sort", args) => {
                 if args.is_empty() || args.len() > 3 {
                     return None;
@@ -3040,20 +2981,21 @@ impl<'a> TypeChecker<'a> {
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (mut scalar, data_type) = self.resolve(expr).await?;
+        if data_type.remove_nullable() == DataType::Variant {
+            return self.resolve_variant_map_access(scalar, &mut paths).await;
+        }
+
         let mut table_data_type = infer_schema_type(&data_type)?;
         // If it is a tuple column, convert it to the internal column specified by the paths.
-        // If it is a variant column, try convert it to a virtual column.
         // For other types of columns, convert it to get functions.
-        if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
-                column_entry
-            {
-                table_data_type = data_type.clone();
-            }
-            if self.allow_pushdown {
-                match table_data_type.remove_nullable() {
-                    TableDataType::Tuple { .. } => {
+        if let TableDataType::Tuple { .. } = table_data_type {
+            if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                    column_entry
+                {
+                    table_data_type = data_type.clone();
+                    if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
                         let box (inner_scalar, _inner_data_type) = self
                             .resolve_tuple_map_access_pushdown(
                                 expr.span(),
@@ -3064,21 +3006,6 @@ impl<'a> TypeChecker<'a> {
                             .await?;
                         scalar = inner_scalar;
                     }
-                    TableDataType::Variant => {
-                        if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                            if let Some(result) = self
-                                .resolve_variant_map_access_pushdown(
-                                    column.clone(),
-                                    base_column,
-                                    &mut paths,
-                                )
-                                .await
-                            {
-                                return result;
-                            }
-                        }
-                    }
-                    _ => {}
                 }
             }
         }
@@ -3318,88 +3245,39 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    async fn resolve_variant_map_access_pushdown(
+    async fn resolve_variant_map_access(
         &mut self,
-        column: ColumnBinding,
-        base_column: BaseTableColumn,
+        scalar: ScalarExpr,
         paths: &mut VecDeque<(Span, Literal)>,
-    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self
-            .metadata
-            .read()
-            .table(base_column.table_index)
-            .table()
-            .support_virtual_columns()
-        {
-            return None;
-        }
-
-        let license_manager = get_license_manager();
-        if license_manager
-            .manager
-            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)
-            .is_err()
-        {
-            return None;
-        }
-
-        let mut name = String::new();
-        name.push_str(&base_column.column_name);
-        let mut json_paths = Vec::with_capacity(paths.len());
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // convert to get_by_keypath
+        let mut key_paths = Vec::with_capacity(paths.len());
         for (_, path) in paths.iter() {
-            let json_path = match path {
-                Literal::UInt64(idx) => {
-                    name.push('[');
-                    name.push_str(&idx.to_string());
-                    name.push(']');
-                    Scalar::Number(NumberScalar::UInt64(*idx))
-                }
-                Literal::String(field) => {
-                    name.push(':');
-                    name.push_str(field.as_ref());
-                    Scalar::String(field.clone().into_bytes())
-                }
+            let key_path = match path {
+                Literal::UInt64(idx) => KeyPath::Index(*idx as i32),
+                Literal::String(field) => KeyPath::Name(std::borrow::Cow::Borrowed(field)),
                 _ => unreachable!(),
             };
-            json_paths.push(json_path);
+            key_paths.push(key_path);
         }
+        let keypaths = KeyPaths { paths: key_paths };
 
-        let mut index = 0;
-        // Check for duplicate virtual columns
-        for table_column in self
-            .metadata
-            .read()
-            .virtual_columns_by_table_index(base_column.table_index)
-        {
-            if table_column.name() == name {
-                index = table_column.index();
-                break;
-            }
-        }
-
-        if index == 0 {
-            return None;
-        }
-
-        paths.clear();
-
-        let data_type = DataType::Nullable(Box::new(DataType::Variant));
-        let virtual_column = ColumnBindingBuilder::new(
-            name,
-            index,
-            Box::new(data_type.clone()),
-            Visibility::InVisible,
-        )
-        .database_name(column.database_name.clone())
-        .table_name(column.table_name.clone())
-        .table_index(Some(base_column.table_index))
-        .build();
-        let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+        let keypaths_str = format!("{}", keypaths);
+        let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
             span: None,
-            column: virtual_column,
+            value: Scalar::String(keypaths_str.into_bytes()),
         });
+        let args = vec![scalar, path_scalar];
 
-        Some(Ok(Box::new((scalar, data_type))))
+        Ok(Box::new((
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "get_by_keypath".to_string(),
+                params: vec![],
+                arguments: args,
+            }),
+            DataType::Nullable(Box::new(DataType::Variant)),
+        )))
     }
 
     #[allow(clippy::only_used_in_recursion)]

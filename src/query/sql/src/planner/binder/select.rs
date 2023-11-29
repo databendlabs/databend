@@ -51,6 +51,7 @@ use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::udf::UdfRewriter;
+use crate::binder::virtual_column::VirtualColumnRewriter;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
@@ -299,6 +300,11 @@ impl Binder {
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
+        // rewrite virtual column
+        let mut virtual_column_rewriter =
+            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
+        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
 
@@ -435,7 +441,6 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
 
         let f = |scalar: &ScalarExpr| {

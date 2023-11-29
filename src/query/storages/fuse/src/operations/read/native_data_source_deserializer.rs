@@ -36,8 +36,6 @@ use common_expression::eval_function;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
@@ -317,27 +315,22 @@ impl NativeDeserializeDataTransform {
                 }
                 let index = schema.index_of(&virtual_column.source_name).unwrap();
                 let source = block.get_by_offset(index);
-                let mut src_arg = (source.value.clone(), source.data_type.clone());
-                for path in virtual_column.paths.iter() {
-                    let path_arg = match path {
-                        Scalar::String(_) => (Value::Scalar(path.clone()), DataType::String),
-                        Scalar::Number(NumberScalar::UInt64(_)) => (
-                            Value::Scalar(path.clone()),
-                            DataType::Number(NumberDataType::UInt64),
-                        ),
-                        _ => unreachable!(),
-                    };
-                    let (value, data_type) = eval_function(
-                        None,
-                        "get",
-                        [src_arg, path_arg],
-                        &self.func_ctx,
-                        block.num_rows(),
-                        &BUILTIN_FUNCTIONS,
-                    )?;
-                    src_arg = (value, data_type);
-                }
-                let column = BlockEntry::new(DataType::from(&*virtual_column.data_type), src_arg.0);
+                let src_arg = (source.value.clone(), source.data_type.clone());
+                let path_arg = (
+                    Value::Scalar(virtual_column.key_paths.clone()),
+                    DataType::String,
+                );
+
+                let (value, data_type) = eval_function(
+                    None,
+                    "get_by_keypath",
+                    [src_arg, path_arg],
+                    &self.func_ctx,
+                    block.num_rows(),
+                    &BUILTIN_FUNCTIONS,
+                )?;
+
+                let column = BlockEntry::new(data_type, value);
                 block.add_column(column);
             }
         }

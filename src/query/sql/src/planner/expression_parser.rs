@@ -126,7 +126,6 @@ pub fn parse_exprs(
         metadata,
         &[],
         false,
-        false,
     )?;
 
     let tokens = tokenize_sql(sql)?;
@@ -221,7 +220,6 @@ pub fn parse_computed_expr(
         Arc::new(RwLock::new(metadata)),
         &[],
         false,
-        false,
     )?;
 
     let tokens = tokenize_sql(sql)?;
@@ -255,7 +253,6 @@ pub fn parse_default_expr_to_string(
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
         false,
     )?;
 
@@ -329,7 +326,6 @@ pub fn parse_computed_expr_to_string(
         Arc::new(RwLock::new(metadata)),
         &[],
         false,
-        false,
     )?;
 
     let (scalar, data_type) =
@@ -398,7 +394,6 @@ pub fn parse_lambda_expr(
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
         false,
     )?;
 
