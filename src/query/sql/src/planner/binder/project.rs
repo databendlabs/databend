@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_ast::ast::ColumnFilter;
@@ -319,20 +320,26 @@ impl Binder {
         column_filter: &Option<ColumnFilter>,
         output: &mut SelectList<'a>,
     ) -> Result<()> {
-        let mut match_database = false;
-        let mut match_table = false;
-
         let excludes = column_filter.as_ref().and_then(|c| c.get_excludes());
-        let excludes: Option<Vec<String>> = excludes.map(|e| {
-            e.iter()
-                .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                .collect()
-        });
+        let mut to_exclude_columns = HashSet::new();
+        if let Some(excludes) = excludes {
+            for ex in excludes.iter() {
+                let exclude = normalize_identifier(ex, &self.name_resolution_ctx).name;
+                if to_exclude_columns.contains(&exclude) {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Duplicate entry `{exclude}` in EXCLUDE list"
+                    )));
+                }
+                to_exclude_columns.insert(exclude);
+            }
+        }
+
+        let mut excluded_columns = HashSet::new();
+
         let lambda = column_filter.as_ref().and_then(|c| c.get_lambda());
 
         let mut database = None;
         let mut table = None;
-
         if names.len() == 2 {
             if let Indirection::Identifier(ident) = &names[0] {
                 table = Some(normalize_identifier(ident, &self.name_resolution_ctx).name);
@@ -346,6 +353,8 @@ impl Binder {
             }
         }
 
+        let mut match_database = false;
+        let mut match_table = false;
         let star = table.is_none();
         let stream_columns = all_stream_columns();
         let mut column_ids = Vec::new();
@@ -358,7 +367,7 @@ impl Binder {
                 continue;
             }
 
-            // exclude the stream cols for select *
+            // TODO: zhyass refactor it with InVisible
             if stream_columns.contains(&column_binding.column_name) {
                 continue;
             }
@@ -367,7 +376,7 @@ impl Binder {
                 (Some(t1), Some(t2)) if t1 != t2 => {
                     continue;
                 }
-                (Some(_), _) => continue,
+                (Some(_), None) => continue,
                 _ => {}
             }
 
@@ -377,27 +386,26 @@ impl Binder {
                 (Some(t1), Some(t2)) if !compare_table_name(t1, t2, &self.name_resolution_ctx) => {
                     continue;
                 }
-                (Some(_), _) => continue,
+                (Some(_), None) => continue,
                 _ => {}
             }
 
             match_table = true;
 
-            if let Some(excludes) = &excludes {
-                if excludes.contains(&column_binding.column_name) {
-                    continue;
-                }
+            if to_exclude_columns.contains(&column_binding.column_name) {
+                excluded_columns.insert(column_binding.column_name.clone());
+                continue;
             }
 
-            if star {
-                if column_binding.column_name.starts_with("_$")
-                    && column_binding.database_name == Some("system".to_string())
-                    && column_binding.table_name == Some("stage".to_string())
-                {
-                    return Err(ErrorCode::SemanticError(
-                        "select * from file only support parquet format",
-                    ));
-                }
+            // TODO: yangxiufeng refactor it with InVisible
+            if star
+                && column_binding.column_name.starts_with("_$")
+                && column_binding.database_name == Some("system".to_string())
+                && column_binding.table_name == Some("stage".to_string())
+            {
+                return Err(ErrorCode::SemanticError(
+                    "select * from file only support parquet format",
+                ));
             }
 
             if lambda.is_some() {
@@ -409,6 +417,14 @@ impl Binder {
                     .await?;
                 output.items.push(item);
                 adds += 1;
+            }
+        }
+
+        for exclude in to_exclude_columns {
+            if !excluded_columns.contains(&exclude) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Column `{exclude}` in EXCLUDE list not found in FROM clause"
+                )));
             }
         }
 
@@ -498,7 +514,7 @@ impl Binder {
                     }
                 }
                 _ => {
-                    return Err(ErrorCode::SyntaxException(format!(
+                    return Err(ErrorCode::SemanticError(format!(
                         "Column lambda expression must be constant folded: {:?}",
                         new_expr
                     ))

@@ -15,7 +15,7 @@
 #![feature(box_patterns)]
 // TODO(xuanwo): Add crate level documents here.
 #![allow(clippy::uninlined_format_args)]
-
+#![allow(clippy::type_complexity)]
 mod error;
 pub use error::display_parser_error;
 pub use error::Backtrace;

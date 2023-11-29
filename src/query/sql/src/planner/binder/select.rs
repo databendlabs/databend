@@ -1098,7 +1098,7 @@ impl<'a> SelectRewriter<'a> {
         let unpivot = stmt.from[0].unpivot().unwrap();
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(unpivot.names.iter().map(|ident| ident.clone()).collect());
+            star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
             Self::ident_from_string("unnest"),
