@@ -902,6 +902,20 @@ WHEN NOT MATCHED THEN
     VALUES ((SELECT MAX(order_id) FROM orders) + 1, synthetic_orders.user_id, synthetic_orders.synthetic_order_type, synthetic_orders.asset_type, synthetic_orders.total_quantity, 0, 'pending', synthetic_orders.synthetic_date, synthetic_orders.synthetic_date);
 
 statement ok
+create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json);
+
+statement ok
+create table tmp_01 like tb_01;
+
+statement ok
+insert into tmp_01 values(1,'abc',now(),parse_json('{"a":1}'));
+
+statement ok
+merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
+
+
+
+statement ok
 set enable_distributed_merge_into = 0;
 
 statement ok
