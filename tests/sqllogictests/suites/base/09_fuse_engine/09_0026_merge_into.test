@@ -913,7 +913,10 @@ insert into tmp_01 values(1,'abc',now(),parse_json('{"a":1}'));
 statement ok
 merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
 
-
+query TTT
+select id,c1,to_date(c2),c3 from tb_01;
+----
+1 abc 2023-11-29 {"a":1}
 
 statement ok
 set enable_distributed_merge_into = 0;
