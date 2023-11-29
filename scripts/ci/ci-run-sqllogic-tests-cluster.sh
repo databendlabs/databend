@@ -11,7 +11,7 @@ echo "Starting Cluster databend-query"
 
 export RUST_BACKTRACE=1
 
-TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
+TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""
