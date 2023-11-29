@@ -145,6 +145,9 @@ impl SyncSource for ReadParquetDataSource<true> {
                     &None
                 };
 
+                // Todo: using runtime filter to check if need to read this part.
+
+
                 let source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
                     &part,
@@ -157,6 +160,14 @@ impl SyncSource for ReadParquetDataSource<true> {
                 ))))
             }
         }
+    }
+
+    fn can_add_runtime_filter(&self) -> bool {
+       true
+    }
+
+    fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
+        Ok(self.runtime_filters.extend(filters))
     }
 }
 

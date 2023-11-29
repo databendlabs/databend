@@ -433,6 +433,7 @@ impl FuseTable {
         meta: &BlockMeta,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
+        let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
 
         for column_id in meta.col_metas.keys() {
             // ignore all deleted field
@@ -445,6 +446,10 @@ impl FuseTable {
             // ignore column this block dose not exist
             if let Some(meta) = meta.col_metas.get(column_id) {
                 columns_meta.insert(*column_id, meta.clone());
+            }
+
+            if let Some(stat) = meta.col_stats.get(column_id) {
+                columns_stats.insert(*column_id, stat.clone());
             }
         }
 
@@ -463,6 +468,7 @@ impl FuseTable {
             location,
             rows_count,
             columns_meta,
+            Some(columns_stats),
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
@@ -478,6 +484,7 @@ impl FuseTable {
         projection: &Projection,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
+        let mut columns_stat = HashMap::with_capacity(projection.len());
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
@@ -485,6 +492,9 @@ impl FuseTable {
                 // ignore column this block dose not exist
                 if let Some(column_meta) = meta.col_metas.get(column_id) {
                     columns_meta.insert(*column_id, column_meta.clone());
+                }
+                if let Some(column_stat) = meta.col_stats.get(column_id) {
+                    columns_stat.insert(*column_id, column_stat.clone());
                 }
             }
         }
@@ -506,6 +516,7 @@ impl FuseTable {
             location,
             rows_count,
             columns_meta,
+            Some(columns_stat),
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
