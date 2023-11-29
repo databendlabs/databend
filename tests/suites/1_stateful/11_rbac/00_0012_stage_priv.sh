@@ -7,9 +7,12 @@ export TEST_USER_NAME="u1"
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=u1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
+echo "set global experiment_enable_stage_udf_priv_check=1" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop table if exists test_table;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists u1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop STAGE if exists s2;" | $BENDSQL_CLIENT_CONNECT
+echo "drop STAGE if exists s1;" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE STAGE s2;" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE test_table (
@@ -115,4 +118,5 @@ echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
 rm -rf /tmp/00_0012
 
+echo "unset experiment_enable_stage_udf_priv_check" | $BENDSQL_CLIENT_CONNECT
 
