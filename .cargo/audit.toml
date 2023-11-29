@@ -18,5 +18,9 @@ ignore = [
     "RUSTSEC-2021-0139",
     # buf_redux
     # buf_redux is Unmaintained
-    "RUSTSEC-2023-0028"
+    "RUSTSEC-2023-0028",
+    # rsa
+    # Marvin Attack: potential key recovery through timing sidechannels
+    # No fixed upgrade is available!
+    "RUSTSEC-2023-0071"
 ]
