@@ -125,46 +125,36 @@ impl ScalarExpr {
 
     /// Returns true if the expression can be evaluated from a row of data.
     pub fn evaluable(&self) -> bool {
-        match self {
-            ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => true,
-            ScalarExpr::WindowFunction(_)
-            | ScalarExpr::AggregateFunction(_)
-            | ScalarExpr::SubqueryExpr(_)
-            | ScalarExpr::UDFServerCall(_)
-            | ScalarExpr::UDFLambdaCall(_) => false,
-            ScalarExpr::FunctionCall(func) => func.arguments.iter().all(|arg| arg.evaluable()),
-            ScalarExpr::LambdaFunction(func) => func.args.iter().all(|arg| arg.evaluable()),
-            ScalarExpr::CastExpr(expr) => expr.argument.evaluable(),
+        struct EvaluableVisitor {
+            evaluable: bool,
         }
-    }
 
-    pub fn try_project_column_binding(
-        &self,
-        f: impl Fn(&ColumnBinding) -> Option<ColumnBinding> + Copy,
-    ) -> Option<Self> {
-        match self {
-            ScalarExpr::BoundColumnRef(expr) => f(&expr.column).map(|x| {
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: x,
-                })
-            }),
-            ScalarExpr::FunctionCall(expr) => {
-                // Any of the arguments return None, then return None
-                let arguments = expr
-                    .arguments
-                    .iter()
-                    .map(|x| x.try_project_column_binding(f))
-                    .collect::<Option<Vec<_>>>()?;
-                Some(ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: expr.func_name.clone(),
-                    params: expr.params.clone(),
-                    arguments,
-                }))
+        impl<'a> Visitor<'a> for EvaluableVisitor {
+            fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
             }
-            _ => None,
+            fn visit_aggregate_function(&mut self, _: &'a AggregateFunction) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
+            }
+            fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
+            }
+            fn visit_udf_server_call(&mut self, _: &'a UDFServerCall) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
+            }
+            fn visit_udf_lambda_call(&mut self, _: &'a UDFLambdaCall) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
+            }
         }
+
+        let mut visitor = EvaluableVisitor { evaluable: true };
+        visitor.visit(self).unwrap();
+        visitor.evaluable
     }
 
     pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
