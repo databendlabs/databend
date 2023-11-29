@@ -348,13 +348,6 @@ impl SExpr {
                     });
                 }
             }
-            RelOperator::Lambda(op) => {
-                for item in &op.items {
-                    get_udf_names(&item.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
             RelOperator::Udf(udf) => {
                 for item in &udf.items {
                     get_udf_names(&item.scalar)?.iter().for_each(|udf| {
@@ -473,10 +466,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         }
         RelOperator::ProjectSet(op) => op
             .srfs
-            .iter()
-            .any(|expr| find_subquery_in_expr(&expr.scalar)),
-        RelOperator::Lambda(op) => op
-            .items
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
         RelOperator::Udf(op) => op

@@ -23,7 +23,6 @@ mod builder_exchange;
 mod builder_fill_missing_columns;
 mod builder_filter;
 mod builder_join;
-mod builder_lambda;
 mod builder_limit;
 mod builder_merge_into;
 mod builder_on_finished;

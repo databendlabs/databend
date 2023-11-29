@@ -62,7 +62,6 @@ pub enum OperatorType {
     Filter,
     ProjectSet,
     EvalScalar,
-    Lambda,
     Limit,
     TableScan,
     CteScan,
@@ -87,7 +86,6 @@ impl Display for OperatorType {
             OperatorType::Filter => write!(f, "Filter"),
             OperatorType::ProjectSet => write!(f, "ProjectSet"),
             OperatorType::EvalScalar => write!(f, "EvalScalar"),
-            OperatorType::Lambda => write!(f, "Lambda"),
             OperatorType::Limit => write!(f, "Limit"),
             OperatorType::TableScan => write!(f, "TableScan"),
             OperatorType::Sort => write!(f, "Sort"),
@@ -140,7 +138,6 @@ pub enum OperatorAttribute {
     Filter(FilterAttribute),
     EvalScalar(EvalScalarAttribute),
     ProjectSet(ProjectSetAttribute),
-    Lambda(LambdaAttribute),
     Limit(LimitAttribute),
     TableScan(TableScanAttribute),
     Sort(SortAttribute),
@@ -178,11 +175,6 @@ pub struct EvalScalarAttribute {
 #[derive(Debug, Clone)]
 pub struct ProjectSetAttribute {
     pub functions: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct LambdaAttribute {
-    pub scalars: String,
 }
 
 #[derive(Debug, Clone)]
