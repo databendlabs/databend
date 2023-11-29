@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -19,7 +20,6 @@ use common_exception::Result;
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::Decimal128Type;
 use common_expression::types::decimal::Decimal256Type;
-use common_expression::types::decimal::DecimalType;
 use common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use common_expression::types::number::Number;
@@ -49,7 +49,6 @@ use crate::aggregates::AggregateFunction;
 
 const POP: u8 = 0;
 const SAMP: u8 = 1;
-const VARIANCE_SCALE: u8 = 10;
 const OVERFLOW_PRECISION: u8 = 18;
 
 #[derive(Default, Serialize, Deserialize)]
@@ -93,6 +92,7 @@ where
                 * t;
         self.count += other.count;
         self.sum += other.sum;
+
         Ok(())
     }
 
@@ -103,6 +103,7 @@ where
     ) -> Result<()> {
         let variance = self.variance / (self.count - TYPE as u64) as f64;
         builder.push(variance.sqrt().into());
+
         Ok(())
     }
 
@@ -116,62 +117,13 @@ where
     }
 }
 
-impl<T, const TYPE: u8, S> UnaryState<T, DecimalType<S>> for NumberAggregateStddevState<TYPE>
-where
-    T: ValueType,
-    S: Decimal,
-    T::Scalar: AsPrimitive<S>,
-{
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
-        let value = T::to_owned_scalar(other).as_();
-        let value = value.to_float64(5);
-        self.sum += value;
-        self.count += 1;
-        if self.count > 1 {
-            let t = self.count as f64 * value - self.sum;
-            self.variance += (t * t) / (self.count * (self.count - 1)) as f64;
-        }
-        Ok(())
-    }
+struct DecimalFunctionData {
+    pub scale_add: u8,
+}
 
-    fn merge(&mut self, other: &Self) -> Result<()> {
-        if other.count == 0 {
-            return Ok(());
-        }
-        if self.count == 0 {
-            self.count = other.count;
-            self.sum = other.sum;
-            self.variance = other.variance;
-            return Ok(());
-        }
-
-        let t = (other.count as f64 / self.count as f64) * self.sum - other.sum;
-        self.variance += other.variance
-            + ((self.count as f64 / other.count as f64) / (self.count as f64 + other.count as f64))
-                * t
-                * t;
-        self.count += other.count;
-        self.sum += other.sum;
-        Ok(())
-    }
-
-    fn merge_result(
-        &mut self,
-        builder: &mut Vec<S>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let variance = self.variance / (self.count - TYPE as u64) as f64;
-        builder.push(S::from_float(variance.sqrt()));
-        Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        deserialize_state(reader)
+impl FunctionData for DecimalFunctionData {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -220,10 +172,10 @@ where
         }
         self.count += 1;
         if self.count > 1 {
-            let t = self.count as f64 * value.to_float64(VARIANCE_SCALE)
-                - self.sum.to_float64(VARIANCE_SCALE);
+            let t = self.count as f64 * value.to_float64(0) - self.sum.to_float64(0);
             self.variance += (t * t) / (self.count * (self.count - 1)) as f64;
         }
+
         Ok(())
     }
 
@@ -238,8 +190,8 @@ where
             return Ok(());
         }
 
-        let t = (other.count as f64 / self.count as f64) * self.sum.to_float64(VARIANCE_SCALE)
-            - other.sum.to_float64(VARIANCE_SCALE);
+        let t = (other.count as f64 / self.count as f64) * self.sum.to_float64(0)
+            - other.sum.to_float64(0);
         self.variance += other.variance
             + ((self.count as f64 / other.count as f64) / (self.count as f64 + other.count as f64))
                 * t
@@ -261,11 +213,22 @@ where
     fn merge_result(
         &mut self,
         builder: &mut T::ColumnBuilder,
-        _function_data: Option<&dyn FunctionData>,
+        function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
+        let decimal_func_data = unsafe {
+            function_data
+                .unwrap()
+                .as_any()
+                .downcast_ref_unchecked::<DecimalFunctionData>()
+        };
+
         let variance = self.variance / (self.count - TYPE as u64) as f64;
-        let value = T::Scalar::from_float(variance.sqrt());
+        // scale_add mutiply by 2 because of sqrt()
+        let scale_add = 10_i64.pow(decimal_func_data.scale_add as u32 * 2) as f64;
+        let value = T::Scalar::from_float((variance * scale_add).sqrt());
+
         T::push_item(builder, T::to_scalar_ref(&value));
+
         Ok(())
     }
 
@@ -300,23 +263,28 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 scale: s.scale.max(4),
             };
             let overflow = s.precision > OVERFLOW_PRECISION;
+            let scale_add = decimal_size.scale - s.scale;
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
             if overflow {
-                AggregateUnaryFunction::<
+                let func = AggregateUnaryFunction::<
                     DecimalNumberAggregateStddevState<true, Decimal128Type, TYPE>,
                     Decimal128Type,
                     Decimal128Type,
-                >::try_create_unary(
+                >::try_create(
                     display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalFunctionData { scale_add }));
+                Ok(Arc::new(func))
             } else {
-                AggregateUnaryFunction::<
+                let func = AggregateUnaryFunction::<
                     DecimalNumberAggregateStddevState<false, Decimal128Type, TYPE>,
                     Decimal128Type,
                     Decimal128Type,
-                >::try_create_unary(
+                >::try_create(
                     display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalFunctionData { scale_add }));
+                Ok(Arc::new(func))
             }
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
