@@ -80,3 +80,5 @@ done
 stmt "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV)"
 stmt "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV) force=true"
 query "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV) force=true purge=true return_failed_only=true"
+query "drop table ${TABLE}"
+
