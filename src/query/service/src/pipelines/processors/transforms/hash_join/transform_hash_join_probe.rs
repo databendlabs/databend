@@ -266,12 +266,12 @@ impl Processor for TransformHashJoinProbe {
 
     fn get_runtime_filter(&self) -> Result<Vec<Expr>> {
         // Create a false Expr
-        dbg!("call this");
         let expr = Expr::Constant {
             span: Span::default(),
             data_type: DataType::Boolean,
             scalar: Scalar::Boolean(false),
         };
+        // Todo: clear runtime filters
         Ok(vec![expr])
     }
 
