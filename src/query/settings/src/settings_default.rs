@@ -183,7 +183,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
                     possible_values: None,
-                    mode: SettingMode::Write,
+                    mode: SettingMode::Both,
                 }),
                 ("join_spilling_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
