@@ -930,9 +930,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
 
     let function_call = alt((
-        function_call_with_params,
-        function_call_with_window,
         function_call_with_lambda,
+        function_call_with_window,
+        function_call_with_params,
         trivial_function_call,
     ));
 
