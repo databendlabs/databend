@@ -128,8 +128,8 @@ fn replace_column(
         equi_conditions_map: &'a HashMap<&'a ScalarExpr, &'a ScalarExpr>,
     }
 
-    impl<'a, 'b> VisitorMut<'b> for ReplaceColumn<'a> {
-        fn visit(&mut self, expr: &'b mut ScalarExpr) -> Result<()> {
+    impl<'a> VisitorMut<'_> for ReplaceColumn<'a> {
+        fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
             if let Some(e) = self.equi_conditions_map.get(expr) {
                 *expr = (**e).clone();
                 return Ok(());

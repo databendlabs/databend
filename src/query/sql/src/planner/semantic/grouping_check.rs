@@ -39,8 +39,8 @@ impl<'a> GroupingChecker<'a> {
     }
 }
 
-impl<'a, 'b> VisitorMut<'b> for GroupingChecker<'a> {
-    fn visit(&mut self, expr: &'b mut ScalarExpr) -> Result<()> {
+impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
@@ -140,7 +140,7 @@ impl<'a, 'b> VisitorMut<'b> for GroupingChecker<'a> {
         walk_expr_mut(self, expr)
     }
 
-    fn visit_bound_column_ref(&mut self, column: &'b mut BoundColumnRef) -> Result<()> {
+    fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
         if self
             .bind_context
             .aggregate_info
@@ -159,7 +159,7 @@ impl<'a, 'b> VisitorMut<'b> for GroupingChecker<'a> {
         .set_span(column.span))
     }
 
-    fn visit_subquery_expr(&mut self, _: &'b mut SubqueryExpr) -> Result<()> {
+    fn visit_subquery_expr(&mut self, _: &mut SubqueryExpr) -> Result<()> {
         // TODO(leiysky): check subquery in the future
         Ok(())
     }

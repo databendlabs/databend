@@ -34,8 +34,8 @@ impl<'a> WindowChecker<'a> {
     }
 }
 
-impl<'a, 'b> VisitorMut<'b> for WindowChecker<'a> {
-    fn visit(&mut self, expr: &'b mut ScalarExpr) -> Result<()> {
+impl<'a> VisitorMut<'_> for WindowChecker<'a> {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::WindowFunction(win) = expr {
             if let Some(column) = self
                 .bind_context
@@ -65,7 +65,7 @@ impl<'a, 'b> VisitorMut<'b> for WindowChecker<'a> {
         walk_expr_mut(self, expr)
     }
 
-    fn visit_subquery_expr(&mut self, _subquery: &'b mut SubqueryExpr) -> Result<()> {
+    fn visit_subquery_expr(&mut self, _: &mut SubqueryExpr) -> Result<()> {
         // TODO(leiysky): check subquery in the future
         Ok(())
     }
