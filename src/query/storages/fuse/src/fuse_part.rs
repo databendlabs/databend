@@ -29,7 +29,8 @@ use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::Scalar;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_table_meta::meta::{ColumnMeta, ColumnStatistics};
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Location;
 

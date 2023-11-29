@@ -15,10 +15,12 @@
 use std::any::Any;
 use std::cell::UnsafeCell;
 use std::ops::Deref;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use futures::future::BoxFuture;
@@ -91,20 +93,19 @@ pub trait Processor: Send {
     }
 
     // Get runtime filter of join.
-    fn get_runtime_filter(&self) -> Result<Vec<Expr>> {
-        Ok(vec![])
+    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
+        Ok(HashMap::new())
     }
 
     fn can_add_runtime_filter(&self) -> bool {
         false
     }
 
-    fn add_runtime_filter(&mut self, _filters: Vec<Expr>) -> Result<()> {
+    fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented add_runtime_filter.",
         ))
     }
-
 }
 
 // To keep ProcessPtr::async_process taking &self, instead of self,
@@ -187,8 +188,8 @@ impl ProcessorPtr {
     }
 
     /// #Safety
-    pub unsafe fn get_runtime_filter(&self) -> Result<Vec<Expr>> {
-        (*self.inner.get()).get_runtime_filter()
+    pub unsafe fn get_runtime_filters(&self) -> Result<HashMap<ColumnId, Expr>> {
+        (*self.inner.get()).get_runtime_filters()
     }
 
     /// #Safety
@@ -197,8 +198,8 @@ impl ProcessorPtr {
     }
 
     /// #Safety
-    pub unsafe fn add_runtime_filter(&self, filters: Vec<Expr>) -> Result<()> {
-        (*self.inner.get()).add_runtime_filter(filters)
+    pub unsafe fn add_runtime_filters(&self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
+        (*self.inner.get()).add_runtime_filters(filters)
     }
 
     /// # Safety
@@ -281,15 +282,15 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
     }
 
     // Get runtime filter of join.
-    fn get_runtime_filter(&self) -> Result<Vec<Expr>> {
-        (**self).get_runtime_filter()
+    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
+        (**self).get_runtime_filters()
     }
 
     fn can_add_runtime_filter(&self) -> bool {
         (**self).can_add_runtime_filter()
     }
 
-    fn add_runtime_filter(&mut self, _filters: Vec<Expr>) -> Result<()> {
-        (**self).add_runtime_filter(_filters)
+    fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
+        (**self).add_runtime_filters(_filters)
     }
 }

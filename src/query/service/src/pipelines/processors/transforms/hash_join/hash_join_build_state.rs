@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::chunk;
 use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -218,6 +219,17 @@ impl HashJoinBuildState {
                     self.add_build_block(data_block)?;
                     buffer.clear();
                 }
+            }
+
+            if self.ctx.get_settings().get_runtime_filter()? {
+                let build_chunks =
+                    &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
+                *build_chunks = unsafe {
+                    (*self.hash_join_state.build_state.get())
+                        .generation_state
+                        .chunks
+                        .clone()
+                };
             }
 
             // Get the number of rows of the build side.
@@ -677,11 +689,17 @@ impl HashJoinBuildState {
             .fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
-            info!(
-                "finish build hash table with {} rows",
-                build_state.generation_state.build_num_rows
-            );
+            let build_num_rows = build_state.generation_state.build_num_rows;
+            info!("finish build hash table with {} rows", build_num_rows);
+
             let data_blocks = &mut build_state.generation_state.chunks;
+
+            // Todo(xudong): make runtime filter adaptive
+            if self.ctx.get_settings().get_runtime_filter()? {
+                // Collect all build keys values and make inlist filter
+                self.hash_join_state.generate_runtime_filters()?;
+            }
+
             if !data_blocks.is_empty()
                 && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
             {

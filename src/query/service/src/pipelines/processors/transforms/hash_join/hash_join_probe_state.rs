@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
@@ -29,6 +30,7 @@ use common_expression::types::nullable::NullableColumn;
 use common_expression::with_join_hash_method;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
