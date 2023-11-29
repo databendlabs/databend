@@ -55,7 +55,12 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "cume_dist",
 ];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 3] = ["array_transform", "array_apply", "array_filter"];
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 4] = [
+    "array_transform",
+    "array_apply",
+    "array_map",
+    "array_filter",
+];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

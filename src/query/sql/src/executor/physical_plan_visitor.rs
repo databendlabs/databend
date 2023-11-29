@@ -32,7 +32,6 @@ use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
@@ -79,7 +78,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
-            PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
             PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
@@ -484,16 +482,6 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_lambda(&mut self, plan: &Lambda) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Lambda(Lambda {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            lambda_funcs: plan.lambda_funcs.clone(),
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
     fn replace_runtime_filter_source(
         &mut self,
         plan: &RuntimeFilterSource,
@@ -587,9 +575,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ProjectSet(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
-                }
-                PhysicalPlan::Lambda(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {

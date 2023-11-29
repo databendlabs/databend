@@ -156,8 +156,8 @@ impl DefaultSettings {
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
-                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\", and \"Hive\".",
-                    possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
+                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
+                    possible_values: Some(vec!["PostgreSQL", "MySQL",  "Experimental", "Hive"]),
                     display_in_show_settings: true,
                 }),
                 ("enable_dphyp", DefaultSettingValue {
@@ -506,6 +506,12 @@ impl DefaultSettings {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
                     possible_values: Some(vec!["rounding", "truncating"]),
+                    display_in_show_settings: true,
+                }),
+                ("experiment_enable_stage_udf_priv_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting disables stage and udf privilege check(disable by default).",
+                    possible_values: None,
                     display_in_show_settings: true,
                 }),
             ]);
