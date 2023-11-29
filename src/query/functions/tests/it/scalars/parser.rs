@@ -341,7 +341,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     transform_expr(*expr, columns),
                     transform_expr(*key, columns),
                 ]),
-                MapAccessor::Dot { key } | MapAccessor::Colon { key } => (vec![], vec![
+                MapAccessor::Colon { key } => (vec![], vec![
                     transform_expr(*expr, columns),
                     RawExpr::Constant {
                         span,

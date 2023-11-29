@@ -54,6 +54,8 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::Expr as EExpr;
 use common_expression::FunctionContext;
 use common_expression::FunctionKind;
@@ -88,6 +90,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
+use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -132,6 +135,7 @@ use crate::Visibility;
 pub struct TypeChecker<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
+    dialect: Dialect,
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -162,9 +166,11 @@ impl<'a> TypeChecker<'a> {
         forbid_udf: bool,
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
+        let dialect = ctx.get_settings().get_sql_dialect()?;
         Ok(Self {
             bind_context,
             ctx,
+            dialect,
             func_ctx,
             name_resolution_ctx,
             metadata,
@@ -246,7 +252,7 @@ impl<'a> TypeChecker<'a> {
                     NameResolutionResult::Column(column) => {
                         if let Some(virtual_computed_expr) = column.virtual_computed_expr {
                             let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+                            let expr = parse_expr(&sql_tokens, self.dialect)?;
                             return self.resolve(&expr).await;
                         } else {
                             let data_type = *column.data_type.clone();
@@ -749,26 +755,28 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 // check window function legal
-                if window.is_some() {
-                    let supported_window_funcs = AggregateFunctionFactory::instance()
-                        .registered_names()
-                        .into_iter()
-                        .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
-                        .collect::<Vec<String>>();
-                    let name = func_name.to_lowercase();
-                    if !supported_window_funcs.contains(&name) {
-                        return Err(ErrorCode::SemanticError(
-                            "only general and aggregate functions allowed in window syntax",
-                        )
-                        .set_span(*span));
-                    }
+                if window.is_some()
+                    && !AggregateFunctionFactory::instance().contains(func_name)
+                    && !GENERAL_WINDOW_FUNCTIONS.contains(&func_name)
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "only general and aggregate functions allowed in window syntax",
+                    )
+                    .set_span(*span));
+                }
+                // check lambda function legal
+                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                    return Err(ErrorCode::SemanticError(
+                        "only lambda functions allowed in lambda syntax",
+                    )
+                    .set_span(*span));
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
 
                 // Check assumptions if it is a set returning function
                 if BUILTIN_FUNCTIONS
-                    .get_property(&name.name)
+                    .get_property(func_name)
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
@@ -800,8 +808,7 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::Internal("Logical error, there is a bug!"));
                 }
 
-                let name = func_name.to_lowercase();
-                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -818,13 +825,13 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let func = self
-                        .resolve_general_window_function(*span, &name, &args)
+                        .resolve_general_window_function(*span, func_name, &args)
                         .await?;
                     let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, window, func)
                         .await?
-                } else if AggregateFunctionFactory::instance().contains(&name) {
+                } else if AggregateFunctionFactory::instance().contains(func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -839,7 +846,9 @@ impl<'a> TypeChecker<'a> {
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
-                        .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
+                        .resolve_aggregate_function(
+                            *span, func_name, expr, *distinct, params, &args,
+                        )
                         .await?;
                     self.in_window_function = in_window;
                     self.in_aggregate_function = in_aggregate_function;
@@ -853,7 +862,7 @@ impl<'a> TypeChecker<'a> {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
-                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&name.as_str()) {
+                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -865,7 +874,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
-                            "function {name} must have a lambda expression",
+                            "function {func_name} must have a lambda expression",
                         )));
                     }
                     let lambda = lambda.as_ref().unwrap();
@@ -889,8 +898,43 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let box (arg, arg_type) = self.resolve(args[0]).await?;
+
+                    let inner_ty = match arg_type.remove_nullable() {
+                        DataType::Array(box inner_ty) => inner_ty.clone(),
+                        DataType::Null | DataType::EmptyArray => DataType::Null,
+                        _ => {
+                            return Err(ErrorCode::SemanticError(
+                                "invalid arguments for lambda function, argument data type must be array".to_string()
+                            ));
+                        }
+                    };
+                    let box (lambda_expr, lambda_type) =
+                        parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
+
+                    let return_type = if func_name == "array_filter" {
+                        if lambda_type.remove_nullable() == DataType::Boolean {
+                            arg_type.clone()
+                        } else {
+                            return Err(ErrorCode::SemanticError(
+                                "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
+                            ));
+                        }
+                    } else if arg_type.is_nullable() {
+                        DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
+                    } else {
+                        DataType::Array(Box::new(lambda_type))
+                    };
+
                     match arg_type.remove_nullable() {
-                        // Empty array will always return an Empty array
+                        // Null and Empty array can convert to ConstantExpr
+                        DataType::Null => Box::new((
+                            ConstantExpr {
+                                span: *span,
+                                value: Scalar::Null,
+                            }
+                            .into(),
+                            DataType::Null,
+                        )),
                         DataType::EmptyArray => Box::new((
                             ConstantExpr {
                                 span: *span,
@@ -899,45 +943,31 @@ impl<'a> TypeChecker<'a> {
                             .into(),
                             DataType::EmptyArray,
                         )),
-                        DataType::Array(box inner_ty) => {
-                            let box (lambda_expr, lambda_type) = parse_lambda_expr(
-                                self.ctx.clone(),
-                                &params[0],
-                                &inner_ty,
-                                &lambda.expr,
-                            )?;
+                        _ => {
+                            // generate lambda expression
+                            let lambda_field = DataField::new("0", inner_ty.clone());
+                            let lambda_schema = DataSchema::new(vec![lambda_field]);
 
-                            let return_type = if name == "array_filter" {
-                                if lambda_type.remove_nullable() == DataType::Boolean {
-                                    arg_type
-                                } else {
-                                    return Err(ErrorCode::SemanticError(
-                                        "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
-                                    ));
-                                }
-                            } else if arg_type.is_nullable() {
-                                DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
-                            } else {
-                                DataType::Array(Box::new(lambda_type))
-                            };
+                            let expr = lambda_expr.type_check(&lambda_schema)?.project_column_ref(
+                                |index| lambda_schema.index_of(&index.to_string()).unwrap(),
+                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            let remote_lambda_expr = expr.as_remote_expr();
+                            let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
+
                             Box::new((
                                 LambdaFunc {
                                     span: *span,
-                                    func_name: name.clone(),
-                                    display_name: format!("{:#}", expr),
+                                    func_name: func_name.to_string(),
                                     args: vec![arg],
-                                    params: vec![(params[0].clone(), inner_ty)],
-                                    lambda_expr: Box::new(lambda_expr),
+                                    lambda_expr: Box::new(remote_lambda_expr),
+                                    lambda_display,
                                     return_type: Box::new(return_type.clone()),
                                 }
                                 .into(),
                                 return_type,
                             ))
-                        }
-                        _ => {
-                            return Err(ErrorCode::SemanticError(
-                                "invalid arguments for lambda function, argument data type must be array".to_string()
-                            ));
                         }
                     }
                 } else {
@@ -1044,9 +1074,7 @@ impl<'a> TypeChecker<'a> {
                             }
                             lit.clone()
                         }
-                        MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
-                            Literal::String(key.name.clone())
-                        }
+                        MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(

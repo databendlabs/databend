@@ -284,8 +284,6 @@ impl Literal {}
 pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
-    /// `.a.b`
-    Dot { key: Identifier },
     /// `.1`
     DotNumber { key: u64 },
     /// `:a:b`
@@ -1247,7 +1245,6 @@ impl Display for Expr {
                 write!(f, "{}", expr)?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                    MapAccessor::Dot { key } => write!(f, ".{key}")?,
                     MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
