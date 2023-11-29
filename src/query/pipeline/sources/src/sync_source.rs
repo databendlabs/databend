@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_pipeline_core::processors::Event;
@@ -33,6 +33,14 @@ pub trait SyncSource: Send {
     const NAME: &'static str;
 
     fn generate(&mut self) -> Result<Option<DataBlock>>;
+
+    fn can_add_runtime_filter(&self) -> bool {
+        false
+    }
+
+    fn add_runtime_filter(&mut self, _filters: Vec<Expr>) -> Result<()>{
+        todo!()
+    }
 }
 
 // TODO: This can be refactored using proc macros
@@ -42,8 +50,6 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
     output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
     scan_progress: Arc<Progress>,
-
-    runtime_filters: Vec<Expr>,
 }
 
 impl<T: 'static + SyncSource> SyncSourcer<T> {
@@ -59,7 +65,6 @@ impl<T: 'static + SyncSource> SyncSourcer<T> {
             scan_progress,
             is_finish: false,
             generated_data: None,
-            runtime_filters: vec![],
         })))
     }
 }
@@ -75,12 +80,11 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     }
 
     fn add_runtime_filter(&mut self, filters: Vec<Expr>) -> Result<()> {
-        dbg!("come here");
-        Ok(self.runtime_filters.extend(filters))
+        self.inner.add_runtime_filter(filters)
     }
 
     fn can_add_runtime_filter(&self) -> bool {
-        true
+        self.inner.can_add_runtime_filter()
     }
 
     fn event(&mut self) -> Result<Event> {
@@ -107,7 +111,6 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     }
 
     fn process(&mut self) -> Result<()> {
-        dbg!(self.runtime_filters.clone());
         match self.inner.generate()? {
             None => self.is_finish = true,
             Some(data_block) => {

@@ -104,6 +104,7 @@ pub trait Processor: Send {
             "Unimplemented add_runtime_filter.",
         ))
     }
+
 }
 
 // To keep ProcessPtr::async_process taking &self, instead of self,
