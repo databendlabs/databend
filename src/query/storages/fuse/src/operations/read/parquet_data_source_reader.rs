@@ -109,6 +109,14 @@ impl SyncSource for ReadParquetDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
+                if runtime_filter_pruner(
+                    &part,
+                    &self.runtime_filters,
+                    &self.partitions.ctx.get_function_context()?,
+                )? {
+                    return Ok(None);
+                }
+
                 if let Some(index_reader) = self.index_reader.as_ref() {
                     let fuse_part = FusePartInfo::from_part(&part)?;
                     let loc =
@@ -147,14 +155,6 @@ impl SyncSource for ReadParquetDataSource<true> {
                 } else {
                     &None
                 };
-
-                if runtime_filter_pruner(
-                    &part,
-                    &self.runtime_filters,
-                    &self.partitions.ctx.get_function_context()?,
-                )? {
-                    return Ok(None);
-                }
 
                 let source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
@@ -223,12 +223,18 @@ impl Processor for ReadParquetDataSource<false> {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        dbg!(&self.runtime_filters);
         let parts = self.partitions.steal(self.id, self.batch_size);
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
             for part in &parts {
+                if runtime_filter_pruner(
+                    part,
+                    &self.runtime_filters,
+                    &self.partitions.ctx.get_function_context()?,
+                )? {
+                    continue;
+                }
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
