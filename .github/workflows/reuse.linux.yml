@@ -300,7 +300,7 @@ jobs:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         with:
           dirs: ee
-          handlers: mysql,http,clickhouse
+          handlers: mysql,http
           storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()

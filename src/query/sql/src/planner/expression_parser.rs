@@ -18,7 +18,6 @@ use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Dialect;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;
@@ -119,6 +118,7 @@ pub fn parse_exprs(
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let settings = Settings::create("".to_string());
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -129,7 +129,6 @@ pub fn parse_exprs(
         false,
     )?;
 
-    let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs
@@ -214,6 +213,7 @@ pub fn parse_computed_expr(
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect()?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -224,7 +224,6 @@ pub fn parse_computed_expr(
         false,
     )?;
 
-    let sql_dialect = Dialect::PostgreSQL;
     let tokens = tokenize_sql(sql)?;
     let mut asts = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     if asts.len() != 1 {

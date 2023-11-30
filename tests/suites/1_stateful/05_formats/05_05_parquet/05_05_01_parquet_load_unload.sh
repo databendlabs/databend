@@ -68,3 +68,5 @@ test_format() {
 }
 
 test_format "PARQUET"
+
+echo "drop table if exists test_load_unload" | $BENDSQL_CLIENT_CONNECT

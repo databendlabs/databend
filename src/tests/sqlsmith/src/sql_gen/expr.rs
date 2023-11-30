@@ -533,14 +533,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             key: Box::new(self.gen_expr(&DataType::Number(NumberDataType::UInt8))),
                         },
                         1 => {
-                            let key = self.gen_identifier();
-                            MapAccessor::Dot { key }
-                        }
-                        2 => {
                             let key = self.rng.gen_range(0..=10);
                             MapAccessor::DotNumber { key }
                         }
-                        3 => {
+                        2 => {
                             let key = self.gen_identifier();
                             MapAccessor::Colon { key }
                         }

@@ -987,7 +987,7 @@ BinaryOp {
         },
         right: ColumnRef {
             span: Some(
-                8..11,
+                8..9,
             ),
             database: None,
             table: Some(
@@ -1053,7 +1053,7 @@ BinaryOp {
 ---------- Input ----------
 "t":k1.k2
 ---------- Output ---------
-"t":k1.k2
+"t":k1:k2
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1091,7 +1091,7 @@ MapAccess {
             },
         },
     },
-    accessor: Dot {
+    accessor: Colon {
         key: Identifier {
             name: "k2",
             quote: None,
@@ -1106,7 +1106,7 @@ MapAccess {
 ---------- Input ----------
 "t":k1.k2.0
 ---------- Output ---------
-"t":k1.k2.0
+"t":k1:k2.0
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1148,7 +1148,7 @@ MapAccess {
                 },
             },
         },
-        accessor: Dot {
+        accessor: Colon {
             key: Identifier {
                 name: "k2",
                 quote: None,
@@ -1796,7 +1796,7 @@ Cast {
 ---------- Input ----------
 (arr[0]:a).b
 ---------- Output ---------
-arr[0]:a.b
+arr[0]:a:b
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1847,7 +1847,7 @@ MapAccess {
             },
         },
     },
-    accessor: Dot {
+    accessor: Colon {
         key: Identifier {
             name: "b",
             quote: None,
@@ -1975,7 +1975,7 @@ BinaryOp {
         ),
         expr: ColumnRef {
             span: Some(
-                0..5,
+                0..1,
             ),
             database: Some(
                 Identifier {
@@ -2154,7 +2154,7 @@ BinaryOp {
                         op: Eq,
                         left: ColumnRef {
                             span: Some(
-                                14..23,
+                                14..16,
                             ),
                             database: None,
                             table: Some(
@@ -4011,6 +4011,69 @@ FunctionCall {
             },
         },
     ),
+}
+
+
+---------- Input ----------
+(current_timestamp, current_timestamp(), now())
+---------- Output ---------
+(current_timestamp(), current_timestamp(), now())
+---------- AST ------------
+Tuple {
+    span: Some(
+        0..47,
+    ),
+    exprs: [
+        FunctionCall {
+            span: Some(
+                1..18,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "current_timestamp",
+                quote: None,
+                span: None,
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        FunctionCall {
+            span: Some(
+                20..39,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "current_timestamp",
+                quote: None,
+                span: Some(
+                    20..37,
+                ),
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        FunctionCall {
+            span: Some(
+                41..46,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "now",
+                quote: None,
+                span: Some(
+                    41..44,
+                ),
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+    ],
 }
 
 

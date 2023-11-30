@@ -111,9 +111,6 @@ impl PhysicalPlanBuilder {
             RelOperator::MaterializedCte(cte) => {
                 self.build_materialized_cte(s_expr, cte, required).await
             }
-            RelOperator::Lambda(lambda) => {
-                self.build_lambda(s_expr, lambda, required, stat_info).await
-            }
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }

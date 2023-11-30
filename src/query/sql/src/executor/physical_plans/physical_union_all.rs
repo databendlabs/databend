@@ -134,7 +134,7 @@ impl PhysicalPlanBuilder {
             let new_plan = if scalar_items.is_empty() {
                 plan
             } else {
-                plan_builder.crate_eval_scalar(
+                plan_builder.create_eval_scalar(
                     &crate::plans::EvalScalar {
                         items: scalar_items,
                     },

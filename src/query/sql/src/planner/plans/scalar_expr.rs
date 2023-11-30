@@ -21,6 +21,7 @@ use common_exception::Range;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use educe::Educe;
 use itertools::Itertools;
@@ -523,10 +524,9 @@ pub struct LambdaFunc {
     #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
     pub span: Span,
     pub func_name: String,
-    pub display_name: String,
     pub args: Vec<ScalarExpr>,
-    pub params: Vec<(String, DataType)>,
-    pub lambda_expr: Box<ScalarExpr>,
+    pub lambda_expr: Box<RemoteExpr>,
+    pub lambda_display: String,
     pub return_type: Box<DataType>,
 }
 
@@ -617,8 +617,8 @@ pub struct UDFLambdaCall {
 }
 
 pub trait Visitor<'a>: Sized {
-    fn visit(&mut self, a: &'a ScalarExpr) -> Result<()> {
-        walk_expr(self, a)?;
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        walk_expr(self, expr)?;
         Ok(())
     }
 
@@ -663,7 +663,6 @@ pub trait Visitor<'a>: Sized {
         for expr in &lambda.args {
             self.visit(expr)?;
         }
-        self.visit(&lambda.lambda_expr)?;
         Ok(())
     }
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
@@ -710,8 +709,8 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
 }
 
 pub trait VisitorMut<'a>: Sized {
-    fn visit(&mut self, a: &'a mut ScalarExpr) -> Result<()> {
-        walk_expr_mut(self, a)?;
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        walk_expr_mut(self, expr)?;
         Ok(())
     }
     fn visit_bound_column_ref(&mut self, _col: &'a mut BoundColumnRef) -> Result<()> {
@@ -755,7 +754,6 @@ pub trait VisitorMut<'a>: Sized {
         for expr in &mut lambda.args {
             self.visit(expr)?;
         }
-        self.visit(&mut lambda.lambda_expr)?;
         Ok(())
     }
     fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {

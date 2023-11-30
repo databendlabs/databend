@@ -61,10 +61,9 @@ impl<'a> WindowChecker<'a> {
                 Ok(LambdaFunc {
                     span: lambda.span,
                     func_name: lambda.func_name.clone(),
-                    display_name: lambda.display_name.clone(),
                     args: new_args,
-                    params: lambda.params.clone(),
                     lambda_expr: lambda.lambda_expr.clone(),
+                    lambda_display: lambda.lambda_display.clone(),
                     return_type: lambda.return_type.clone(),
                 }
                 .into())

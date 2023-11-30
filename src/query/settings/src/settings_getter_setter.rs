@@ -213,6 +213,7 @@ impl Settings {
         match self.try_get_string("sql_dialect")?.as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
+            "experimental" => Ok(Dialect::Experimental),
             _ => Ok(Dialect::PostgreSQL),
         }
     }
@@ -294,6 +295,10 @@ impl Settings {
 
     pub fn get_enable_table_lock(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
+    }
+
+    pub fn get_enable_stage_udf_priv_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("experiment_enable_stage_udf_priv_check")? != 0)
     }
 
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
