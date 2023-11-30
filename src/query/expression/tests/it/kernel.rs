@@ -202,6 +202,7 @@ pub fn test_pass() {
     );
 }
 
+// Build a range selection from a selection array.
 pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<(u32, u32)> {
     let mut range_selection = Vec::with_capacity(count);
     let mut start = selection[0];

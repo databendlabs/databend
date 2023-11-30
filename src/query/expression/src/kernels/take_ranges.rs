@@ -42,6 +42,7 @@ use crate::DataBlock;
 use crate::Value;
 
 impl DataBlock {
+    // Generate a new `DataBlock` by the specified indices ranges.  
     pub fn take_ranges(self, ranges: &Vec<(u32, u32)>, num_rows: usize) -> Result<DataBlock> {
         let columns = self
             .columns()
@@ -59,6 +60,7 @@ impl DataBlock {
 }
 
 impl Column {
+    // Generate a new `Column` by the specified indices ranges.  
     pub fn take_ranges(&self, ranges: &Vec<(u32, u32)>, num_rows: usize) -> Column {
         match self {
             Column::Null { .. } => Column::Null { len: num_rows },
