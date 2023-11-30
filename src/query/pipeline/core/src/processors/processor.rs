@@ -14,8 +14,8 @@
 
 use std::any::Any;
 use std::cell::UnsafeCell;
-use std::ops::Deref;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -92,19 +92,22 @@ pub trait Processor: Send {
         None
     }
 
-    // Get runtime filter of join.
+    // Get runtime filter from hash join, only hash join probe processor may return non-empty filters.
     fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
         Ok(HashMap::new())
     }
 
+    // If the processor can add runtime filter, only source related processors may return true.
     fn can_add_runtime_filter(&self) -> bool {
         false
     }
 
+    // Add runtime filter to the processor, only source related processors may implement this function.
     fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
-        Err(ErrorCode::Unimplemented(
-            "Unimplemented add_runtime_filter.",
-        ))
+        Err(ErrorCode::Unimplemented(format!(
+            "{} can't add runtime filters",
+            self.name
+        )))
     }
 }
 
@@ -281,7 +284,6 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
         (**self).details_status()
     }
 
-    // Get runtime filter of join.
     fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
         (**self).get_runtime_filters()
     }
@@ -290,7 +292,7 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
         (**self).can_add_runtime_filter()
     }
 
-    fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
-        (**self).add_runtime_filters(_filters)
+    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
+        (**self).add_runtime_filters(filters)
     }
 }
