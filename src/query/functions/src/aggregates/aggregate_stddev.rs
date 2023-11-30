@@ -180,14 +180,28 @@ where
             {
                 Some(t) => t,
                 None => {
-                    return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                    return Err(ErrorCode::Overflow(format!(
+                        "Decimal overflow: ({} * {} - {}) * 10^{} not in [{}, {}]",
+                        value,
+                        self.count,
+                        self.sum,
+                        VARIANCE_PRECISION,
+                        T::Scalar::MIN,
+                        T::Scalar::MAX,
+                    )));
                 }
             };
 
             let t = match t.checked_mul(t) {
                 Some(t) => t,
                 None => {
-                    return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                    return Err(ErrorCode::Overflow(format!(
+                        "Decimal overflow: {} * {} not in [{}, {}]",
+                        t,
+                        t,
+                        T::Scalar::MIN,
+                        T::Scalar::MAX,
+                    )));
                 }
             };
 
@@ -196,7 +210,13 @@ where
             let add_variance = match t.checked_div(count) {
                 Some(t) => t,
                 None => {
-                    return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                    return Err(ErrorCode::Overflow(format!(
+                        "Decimal overflow: {} / {} not in [{}, {}]",
+                        t,
+                        count,
+                        T::Scalar::MIN,
+                        T::Scalar::MAX,
+                    )));
                 }
             };
 
@@ -220,21 +240,36 @@ where
         let other_count = T::Scalar::from_u64(other.count);
         let self_count = T::Scalar::from_u64(self.count);
         let t = match other_count
-            .checked_mul(T::Scalar::e(VARIANCE_PRECISION as u32))
+            .checked_mul(self.sum)
+            .and_then(|v| v.checked_mul(T::Scalar::e(VARIANCE_PRECISION as u32)))
             .and_then(|v| v.checked_div(self_count))
-            .and_then(|v| v.checked_mul(self.sum))
             .and_then(|v| v.checked_sub(other.sum))
         {
             Some(t) => t,
             None => {
-                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                return Err(ErrorCode::Overflow(format!(
+                    "Decimal overflow: {} * {} * 10^{} / {} - {} not in [{}, {}]",
+                    other_count,
+                    other.sum,
+                    VARIANCE_PRECISION,
+                    self_count,
+                    self.sum,
+                    T::Scalar::MIN,
+                    T::Scalar::MAX,
+                )));
             }
         };
 
         let count_sum = match self_count.checked_add(other_count) {
             Some(t) => t,
             None => {
-                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                return Err(ErrorCode::Overflow(format!(
+                    "Decimal overflow: {} + {} not in [{}, {}]",
+                    self_count,
+                    other_count,
+                    T::Scalar::MIN,
+                    T::Scalar::MAX,
+                )));
             }
         };
         let add_variance = match t
@@ -245,7 +280,16 @@ where
         {
             Some(t) => t,
             None => {
-                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                return Err(ErrorCode::Overflow(format!(
+                    "Decimal overflow: {} * {} * {} / {} / {} not in [{}, {}]",
+                    t,
+                    t,
+                    self_count,
+                    other_count,
+                    count_sum,
+                    T::Scalar::MIN,
+                    T::Scalar::MAX,
+                )));
             }
         };
         self.variance += add_variance;
@@ -276,13 +320,19 @@ where
         };
 
         let variance = self.variance.to_float64(0);
-        let variance = variance / (self.count - TYPE as u64) as f64;
-        let value = match T::Scalar::from_float(variance.sqrt())
+        let variance_sqrt = (variance / (self.count - TYPE as u64) as f64).sqrt();
+        let value = match T::Scalar::from_float(variance_sqrt)
             .checked_div(T::Scalar::e(decimal_func_data.scale_add as u32))
         {
             Some(t) => t,
             None => {
-                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                return Err(ErrorCode::Overflow(format!(
+                    "Decimal overflow: {} / 10^{} not in [{}, {}]",
+                    variance_sqrt,
+                    decimal_func_data.scale_add,
+                    T::Scalar::MIN,
+                    T::Scalar::MAX,
+                )));
             }
         };
 
