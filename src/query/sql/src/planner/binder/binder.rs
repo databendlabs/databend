@@ -681,6 +681,7 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
+    // add check for SExpr to disable invalid source for copy/insert/merge/replace
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr, top_check: CheckType) -> Result<bool> {
         let f = match top_check {
             CheckType::Copy => |scalar: &ScalarExpr| {
@@ -698,14 +699,8 @@ impl<'a> Binder {
         self.check_sexpr(s_expr, &mut finder)
     }
 
-    pub(crate) fn check_sexpr<F>(
-        &self,
-        s_expr: &'a SExpr,
-        f: &'a mut Finder<'a, F>,
-    ) -> Result<bool>
-    where
-        F: Fn(&ScalarExpr) -> bool,
-    {
+    pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
+    where F: Fn(&ScalarExpr) -> bool {
         let result = match s_expr.plan.as_ref() {
             RelOperator::Scan(scan) => {
                 f.reset_finder();
@@ -814,7 +809,7 @@ impl<'a> Binder {
             true => {
                 for child in &s_expr.children {
                     let mut finder = Finder::new(f.find_fn());
-                    let flag = self.check_sexpr(child.as_ref(), &mut finder)?;
+                    let flag = Self::check_sexpr(child.as_ref(), &mut finder)?;
                     if !flag {
                         return Ok(false);
                     }
