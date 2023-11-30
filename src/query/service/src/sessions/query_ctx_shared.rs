@@ -41,6 +41,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
+use crate::api::DataExchangeManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
@@ -176,6 +177,7 @@ impl QueryContextShared {
 
         if let Some(executor) = self.executor.read().upgrade() {
             executor.finish(Some(cause));
+            DataExchangeManager::instance().on_finished_query(&self.init_query_id.read());
         }
 
         // TODO: Wait for the query to be processed (write out the last error)
