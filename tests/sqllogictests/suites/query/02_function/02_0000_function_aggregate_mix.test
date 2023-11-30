@@ -384,5 +384,22 @@ statement ok
 DROP TABLE aggr
 
 statement ok
+DROP TABLE IF EXISTS d
+
+statement ok
+create table d(value decimal(10, 2))
+
+statement ok
+insert into d values(20), (10)
+
+query F
+select stddev_samp(value) from d;
+----
+7.0710
+
+statement ok
+DROP TABLE d
+
+statement ok
 DROP DATABASE db1
 

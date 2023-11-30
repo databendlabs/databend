@@ -74,7 +74,7 @@ CREATE TABLE blobs (b TEXT, a BIGINT)
 statement ok
 INSERT INTO blobs VALUES('\xaa\xff\xaa',5), ('\xAA\xFF\xAA\xAA\xFF\xAA',30), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA',20)
 
-skipif clickhouse
+
 query TT
 select arg_min(b,a), arg_max(b,a)  from blobs
 ----
