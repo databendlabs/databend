@@ -180,7 +180,7 @@ impl<'a> InMemoryRowGroup<'a> {
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let chunk_data = self.get_ranges(&fetch_ranges).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?.0;
             let mut chunk_iter = chunk_data.into_iter();
             let mut page_start_offsets = page_start_offsets.into_iter();
 
@@ -215,7 +215,7 @@ impl<'a> InMemoryRowGroup<'a> {
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let chunk_data = self.get_ranges(&fetch_ranges).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?.0;
             let mut chunk_iter = chunk_data.into_iter();
 
             for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
@@ -235,13 +235,14 @@ impl<'a> InMemoryRowGroup<'a> {
         Ok(())
     }
 
-    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
+    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<(Vec<Bytes>, bool)> {
         let raw_ranges = ranges.to_vec();
         let range_merger =
             RangeMerger::from_iter(raw_ranges.clone(), self.max_gap_size, self.max_range_size);
         let merged_ranges = range_merger.ranges();
         let blocking_op = self.op.blocking();
         let location = self.location.to_owned();
+        let merged = merged_ranges.len() < raw_ranges.len();
         let chunks = match self.op.info().full_capability().blocking {
             true => {
                 // Read merged range data.
@@ -273,16 +274,19 @@ impl<'a> InMemoryRowGroup<'a> {
                 chunk_data.into_iter().collect()
             }
         };
-        raw_ranges
-            .into_iter()
-            .map(|raw_range| {
-                let range = range_merger.get(raw_range.clone()).unwrap().1;
-                let chunk = chunks.get(&range).unwrap();
-                let start = (raw_range.start - range.start) as usize;
-                let end = (raw_range.end - range.start) as usize;
-                Ok::<_, ErrorCode>(chunk.clone().slice(start..end))
-            })
-            .collect::<Result<Vec<_>>>()
+        Ok((
+            raw_ranges
+                .into_iter()
+                .map(|raw_range| {
+                    let range = range_merger.get(raw_range.clone()).unwrap().1;
+                    let chunk = chunks.get(&range).unwrap();
+                    let start = (raw_range.start - range.start) as usize;
+                    let end = (raw_range.end - range.start) as usize;
+                    chunk.clone().slice(start..end)
+                })
+                .collect::<Vec<_>>(),
+            merged,
+        ))
     }
 }
 
@@ -342,5 +346,61 @@ impl<'a> RowGroups for InMemoryRowGroup<'a> {
                 }))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bytes::Bytes;
+    use common_base::base::tokio;
+    use opendal::services::Memory;
+    use opendal::Operator;
+    use parquet::basic::ConvertedType;
+    use parquet::basic::Repetition;
+    use parquet::basic::Type as PhysicalType;
+    use parquet::file::metadata::RowGroupMetaData;
+    use parquet::schema::types::*;
+
+    use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
+
+    #[tokio::test]
+    async fn test_merge() {
+        let data = Bytes::from(
+            "
+        Obama, Biden, Hillary, and Trump, four former presidents, 
+        decided to team up for a soccer match. They hired a coach to guide them
+        The coach asked Obama, What position are you good at?
+        Obama replied, I'm good at organizing the midfield, skilled in passing and
+        controlling the pace of the game
+        ",
+        );
+        let builder = Memory::default();
+        let path = "/tmp/test/merged";
+        let op = Operator::new(builder).unwrap().finish();
+        let blocking_op = op.blocking();
+        blocking_op.write(path, data).unwrap();
+        let mut fields = vec![];
+
+        let inta = Type::primitive_type_builder("a", PhysicalType::INT32)
+            .with_repetition(Repetition::REQUIRED)
+            .with_converted_type(ConvertedType::INT_32)
+            .build()
+            .unwrap();
+        fields.push(Arc::new(inta));
+
+        let schema = Type::group_type_builder("schema")
+            .with_repetition(Repetition::REPEATED)
+            .with_fields(fields)
+            .build()
+            .unwrap();
+        let descr = SchemaDescriptor::new(Arc::new(schema));
+        let meta = RowGroupMetaData::builder(descr.into()).build().unwrap();
+        let group1 = InMemoryRowGroup::new(path, op.clone(), &meta, None, 0, 0);
+        let group2 = InMemoryRowGroup::new(path, op, &meta, None, 10, 200);
+        let ranges = vec![(1..10), (15..30), (40..50)];
+        assert!(!group1.get_ranges(&ranges.to_vec()).await.unwrap().1);
+        assert!(group2.get_ranges(&ranges.to_vec()).await.unwrap().1);
     }
 }
