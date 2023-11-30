@@ -1109,11 +1109,13 @@ impl<'a> Evaluator<'a> {
                 select_strategy,
                 count,
             )?;
+            if (true_count < count && select_strategy == SelectStrategy::ALL) || select_strategy == SelectStrategy::False {
+                select_strategy = SelectStrategy::True;
+            }
             count = true_count;
             if count == 0 {
                 break;
             }
-            select_strategy = SelectStrategy::True;
             if i != exprs_len - 1 {
                 temp_true_idx = *true_idx;
             } else {
@@ -1150,11 +1152,13 @@ impl<'a> Evaluator<'a> {
                 select_strategy,
                 count,
             )?;
+            if (true_count > 0 && select_strategy == SelectStrategy::ALL) || select_strategy == SelectStrategy::True {
+                select_strategy = SelectStrategy::False;
+            }
             count -= true_count;
             if count == 0 {
                 break;
             }
-            select_strategy = SelectStrategy::False;
             if i != exprs_len - 1 {
                 temp_false_idx = *false_idx;
             } else {
