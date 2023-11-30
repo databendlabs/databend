@@ -50,6 +50,7 @@ use crate::aggregates::AggregateFunction;
 const POP: u8 = 0;
 const SAMP: u8 = 1;
 const OVERFLOW_PRECISION: u8 = 18;
+const VARIANCE_PRECISION: u32 = 4;
 
 #[derive(Default, Serialize, Deserialize)]
 struct NumberAggregateStddevState<const TYPE: u8> {
@@ -117,11 +118,11 @@ where
     }
 }
 
-struct DecimalFunctionData {
+struct DecimalFuncData {
     pub scale_add: u8,
 }
 
-impl FunctionData for DecimalFunctionData {
+impl FunctionData for DecimalFuncData {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -135,7 +136,7 @@ where
 {
     pub sum: T::Scalar,
     pub count: u64,
-    pub variance: f64,
+    pub variance: T::Scalar,
 }
 
 impl<const OVERFLOW: bool, T, const TYPE: u8> Default
@@ -148,7 +149,7 @@ where
         Self {
             sum: T::Scalar::zero(),
             count: 0,
-            variance: 0.0,
+            variance: T::Scalar::zero(),
         }
     }
 }
@@ -172,8 +173,34 @@ where
         }
         self.count += 1;
         if self.count > 1 {
-            let t = self.count as f64 * value.to_float64(0) - self.sum.to_float64(0);
-            self.variance += (t * t) / (self.count * (self.count - 1)) as f64;
+            let t = match value
+                .checked_mul(T::Scalar::from_u64(self.count))
+                .and_then(|v| v.checked_sub(self.sum))
+                .and_then(|v| v.checked_mul(T::Scalar::e(VARIANCE_PRECISION)))
+            {
+                Some(t) => t,
+                None => {
+                    return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                }
+            };
+
+            let t = match t.checked_mul(t) {
+                Some(t) => t,
+                None => {
+                    return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                }
+            };
+
+            let count = T::Scalar::from_u64(self.count * (self.count - 1));
+
+            let add_variance = match t.checked_div(count) {
+                Some(t) => t,
+                None => {
+                    return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+                }
+            };
+
+            self.variance += add_variance;
         }
 
         Ok(())
@@ -190,12 +217,38 @@ where
             return Ok(());
         }
 
-        let t = (other.count as f64 / self.count as f64) * self.sum.to_float64(0)
-            - other.sum.to_float64(0);
-        self.variance += other.variance
-            + ((self.count as f64 / other.count as f64) / (self.count as f64 + other.count as f64))
-                * t
-                * t;
+        let other_count = T::Scalar::from_u64(other.count);
+        let self_count = T::Scalar::from_u64(self.count);
+        let t = match other_count
+            .checked_mul(T::Scalar::e(VARIANCE_PRECISION))
+            .and_then(|v| v.checked_div(self_count))
+            .and_then(|v| v.checked_mul(self.sum))
+            .and_then(|v| v.checked_sub(other.sum))
+        {
+            Some(t) => t,
+            None => {
+                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+            }
+        };
+
+        let count_sum = match self_count.checked_add(other_count) {
+            Some(t) => t,
+            None => {
+                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+            }
+        };
+        let add_variance = match t
+            .checked_mul(t)
+            .and_then(|v| v.checked_mul(self_count))
+            .and_then(|v| v.checked_div(other_count))
+            .and_then(|v| v.checked_div(count_sum))
+        {
+            Some(t) => t,
+            None => {
+                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+            }
+        };
+        self.variance += add_variance;
         self.count += other.count;
         self.sum += other.sum;
         if OVERFLOW && (self.sum > T::Scalar::MAX || self.sum < T::Scalar::MIN) {
@@ -219,14 +272,25 @@ where
             function_data
                 .unwrap()
                 .as_any()
-                .downcast_ref_unchecked::<DecimalFunctionData>()
+                .downcast_ref_unchecked::<DecimalFuncData>()
         };
 
-        let variance = self.variance / (self.count - TYPE as u64) as f64;
-        // scale_add mutiply by 2 because of sqrt()
-        let scale_add = 10_i64.pow(decimal_func_data.scale_add as u32 * 2) as f64;
-        let value = T::Scalar::from_float((variance * scale_add).sqrt());
-
+        let count = T::Scalar::from_u64(self.count - TYPE as u64);
+        let variance = match self.variance.checked_div(count) {
+            Some(t) => t,
+            None => {
+                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+            }
+        };
+        let variance = variance.to_float64(0);
+        let value = match T::Scalar::from_float(variance.sqrt())
+            .checked_div(T::Scalar::e(decimal_func_data.scale_add as u32))
+        {
+            Some(t) => t,
+            None => {
+                return Err(ErrorCode::Overflow("Decimal overflow".to_string()));
+            }
+        };
         T::push_item(builder, T::to_scalar_ref(&value));
 
         Ok(())
@@ -260,10 +324,10 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
             let decimal_size = DecimalSize {
                 precision: MAX_DECIMAL128_PRECISION,
-                scale: s.scale.max(4),
+                scale: s.scale.max(VARIANCE_PRECISION as u8),
             };
-            let overflow = s.precision > OVERFLOW_PRECISION;
             let scale_add = decimal_size.scale - s.scale;
+            let overflow = s.precision > OVERFLOW_PRECISION;
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
             if overflow {
                 let func = AggregateUnaryFunction::<
@@ -273,7 +337,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 >::try_create(
                     display_name, return_type, params, arguments[0].clone()
                 )
-                .with_function_data(Box::new(DecimalFunctionData { scale_add }));
+                .with_function_data(Box::new(DecimalFuncData { scale_add }));
                 Ok(Arc::new(func))
             } else {
                 let func = AggregateUnaryFunction::<
@@ -283,7 +347,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 >::try_create(
                     display_name, return_type, params, arguments[0].clone()
                 )
-                .with_function_data(Box::new(DecimalFunctionData { scale_add }));
+                .with_function_data(Box::new(DecimalFuncData { scale_add }));
                 Ok(Arc::new(func))
             }
         }
