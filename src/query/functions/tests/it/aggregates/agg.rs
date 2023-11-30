@@ -204,6 +204,7 @@ fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_avg(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "avg(1)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "avg(dec)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(x_null)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(all_null)", get_example().as_slice(), simulator);
 }
