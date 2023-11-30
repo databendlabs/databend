@@ -444,7 +444,7 @@ impl Column {
     /// # Safety
     /// * `src` + `src_idx`(in bits) must be [valid] for reads of `len` bits.
     /// * `ptr` must be [valid] for writes of `len` bits.
-    unsafe fn copy_continuous_bits(
+    pub unsafe fn copy_continuous_bits(
         ptr: &mut *mut u8,
         src: &[u8],
         mut dst_idx: usize,
