@@ -56,6 +56,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::VisitorMut as _;
 use crate::IndexType;
 use crate::TypeChecker;
 use crate::WindowChecker;
@@ -153,15 +154,17 @@ impl Binder {
             .iter()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
-                    let grouping_checker = GroupingChecker::new(bind_context);
-                    let scalar = grouping_checker.resolve(&item.scalar, None)?;
+                    let mut scalar = item.scalar.clone();
+                    let mut grouping_checker = GroupingChecker::new(bind_context);
+                    grouping_checker.visit(&mut scalar)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
                     })
                 } else {
-                    let window_checker = WindowChecker::new(bind_context);
-                    let scalar = window_checker.resolve(&item.scalar)?;
+                    let mut scalar = item.scalar.clone();
+                    let mut window_checker = WindowChecker::new(bind_context);
+                    window_checker.visit(&mut scalar)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,

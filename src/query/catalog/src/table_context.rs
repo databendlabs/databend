@@ -35,7 +35,6 @@ use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
@@ -180,9 +179,6 @@ pub trait TableContext: Send + Sync {
     fn get_on_error_mode(&self) -> Option<OnErrorMode>;
     fn set_on_error_mode(&self, mode: OnErrorMode);
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
-
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;

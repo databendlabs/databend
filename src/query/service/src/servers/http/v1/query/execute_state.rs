@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -26,7 +25,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
-use common_settings::ChangeValue;
+use common_settings::Settings;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
@@ -128,7 +127,7 @@ pub struct ExecutorSessionState {
     pub current_database: String,
     pub current_role: Option<String>,
     pub secondary_roles: Option<Vec<String>>,
-    pub settings: HashMap<String, ChangeValue>,
+    pub settings: Arc<Settings>,
 }
 
 impl ExecutorSessionState {
@@ -137,7 +136,7 @@ impl ExecutorSessionState {
             current_database: session.get_current_database(),
             current_role: session.get_current_role().map(|r| r.name),
             secondary_roles: session.get_secondary_roles(),
-            settings: session.get_changed_settings(),
+            settings: session.get_settings(),
         }
     }
 }

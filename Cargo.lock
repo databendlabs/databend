@@ -4483,6 +4483,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-store",
+ "common-meta-types",
  "common-sql",
  "common-storages-fuse",
  "common-storages-stream",
