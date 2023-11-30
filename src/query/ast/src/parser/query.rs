@@ -146,6 +146,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
                 ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+                ~ ( QUALIFY ~ ^#expr )?
         },
         |(
             opt_from_block,
@@ -157,6 +158,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_group_by_block,
             opt_having_block,
             opt_window_block,
+            opt_qualify_block,
         )| {
             SetOperationElement::SelectStmt {
                 hints: opt_hints,
@@ -171,6 +173,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
                 window_list: opt_window_block.map(|(_, windows)| windows),
+                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
             }
         },
     );
