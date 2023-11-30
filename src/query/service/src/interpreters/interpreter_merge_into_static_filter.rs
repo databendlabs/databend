@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::SendableDataBlockStream;
 use common_sql::bind_one_table;
+use common_sql::format_scalar;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
@@ -262,38 +263,13 @@ impl MergeIntoInterpreter {
         }
     }
 
-    fn display_scalar_expr(s: &ScalarExpr) -> String {
-        match s {
-            ScalarExpr::BoundColumnRef(x) => x.column.column_name.clone(),
-            ScalarExpr::ConstantExpr(x) => x.value.to_string(),
-            ScalarExpr::WindowFunction(x) => format!("{:?}", x),
-            ScalarExpr::AggregateFunction(x) => format!("{:?}", x),
-            ScalarExpr::LambdaFunction(x) => format!("{:?}", x),
-            ScalarExpr::FunctionCall(x) => match x.func_name.as_str() {
-                "and" | "or" | "gte" | "lte" => {
-                    format!(
-                        "({} {} {})",
-                        Self::display_scalar_expr(&x.arguments[0]),
-                        x.func_name,
-                        Self::display_scalar_expr(&x.arguments[1])
-                    )
-                }
-                _ => format!("{:?}", x),
-            },
-            ScalarExpr::CastExpr(x) => format!("{:?}", x),
-            ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
-            ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
-            ScalarExpr::UDFLambdaCall(x) => format!("{:?}", x),
-        }
-    }
-
     fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
         match s_expr.plan() {
             RelOperator::Scan(s) => {
                 let mut new_scan = s.clone();
                 info!("push down {} filters:", filters.len());
                 for filter in filters {
-                    info!("{}", Self::display_scalar_expr(filter));
+                    info!("{}", format_scalar(filter));
                 }
                 if let Some(preds) = new_scan.push_down_predicates {
                     new_scan.push_down_predicates =
