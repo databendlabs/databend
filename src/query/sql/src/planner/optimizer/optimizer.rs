@@ -38,6 +38,7 @@ use crate::optimizer::RESIDUAL_RULES;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -131,12 +132,17 @@ pub fn optimize(
             // reason: if there is subquery,windowfunc exprs etc. see
             // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
             // get dummy index. So we need to use optimizer to solve this.
-            let right_source = optimize_query(
+            let mut right_source = optimize_query(
                 ctx.clone(),
                 opt_ctx.clone(),
                 plan.meta_data.clone(),
                 plan.input.child(1)?.clone(),
             )?;
+            // we need to remove exchange of right_source, because it's
+            // not an end query.
+            if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
+                right_source = right_source.child(0)?.clone();
+            }
             // replace right source
             let mut join_sexpr = plan.input.clone();
             join_sexpr = Box::new(join_sexpr.replace_children(vec![
@@ -152,12 +158,23 @@ pub fn optimize(
                 // left join and right join.
                 // input is a Join_SExpr
                 let merge_into_join_sexpr = optimize_distributed_query(ctx.clone(), &join_sexpr)?;
-
+                // after optimize source, we need to add
                 let merge_source_optimizer = MergeSourceOptimizer::create();
-                let optimized_distributed_merge_into_join_sexpr =
-                    merge_source_optimizer.optimize(&merge_into_join_sexpr)?;
+                let (optimized_distributed_merge_into_join_sexpr, distributed) =
+                    if !merge_into_join_sexpr
+                        .match_pattern(&merge_source_optimizer.merge_source_pattern)
+                    {
+                        (merge_into_join_sexpr.clone(), false)
+                    } else {
+                        (
+                            merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
+                            true,
+                        )
+                    };
+
                 Ok(Plan::MergeInto(Box::new(MergeInto {
                     input: Box::new(optimized_distributed_merge_into_join_sexpr),
+                    distributed,
                     ..*plan
                 })))
             } else {

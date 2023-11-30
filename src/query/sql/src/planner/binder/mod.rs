@@ -62,6 +62,7 @@ pub use column_binding::ColumnBindingBuilder;
 pub use copy_into_table::resolve_stage_location;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::parse_uri_location;
+pub use merge_into::MergeIntoType;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;
