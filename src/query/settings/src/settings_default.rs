@@ -519,7 +519,7 @@ impl DefaultSettings {
                     possible_values: Some(vec!["rounding", "truncating"]),
                     mode: SettingMode::Both,
                 }),
-                ("experiment_enable_stage_udf_priv_check", DefaultSettingValue {
+                ("experiment_enable_new_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting disables stage and udf privilege check(disable by default).",
                     possible_values: None,

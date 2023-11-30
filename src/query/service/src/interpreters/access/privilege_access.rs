@@ -143,8 +143,8 @@ impl AccessChecker for PrivilegeAccess {
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
         let tenant = self.ctx.get_tenant();
-        let enable_stage_udf_priv_check =
-            self.ctx.get_settings().get_enable_stage_udf_priv_check()?;
+        let experiment_enable_new_rbac_check =
+            self.ctx.get_settings().get_enable_new_rbac_check()?;
 
         match plan {
             Plan::Query {
@@ -195,7 +195,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     _ => {}
                 };
-                if enable_stage_udf_priv_check {
+                if experiment_enable_new_rbac_check {
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
@@ -218,7 +218,7 @@ impl AccessChecker for PrivilegeAccess {
 
                 for table in metadata.tables() {
 
-                        if enable_stage_udf_priv_check && table.is_source_of_stage() {
+                        if experiment_enable_new_rbac_check && table.is_source_of_stage() {
                             match table.table().get_data_source_info() {
                                 DataSourceInfo::StageSource(stage_info) => {
                                     if !stage_info.stage_info.is_from_uri {
@@ -525,9 +525,11 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::ReclusterTable(plan) => {
-                if let Some(scalar) = &plan.push_downs {
-                    let udf = get_udf_names(scalar)?;
-                    self.check_udf_priv(udf).await?;
+                if experiment_enable_new_rbac_check {
+                    if let Some(scalar) = &plan.push_downs {
+                        let udf = get_udf_names(scalar)?;
+                        self.check_udf_priv(udf).await?;
+                    }
                 }
                 self.validate_access(
                     &GrantObject::Table(
@@ -624,7 +626,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::MergeInto(plan) => {
-                if enable_stage_udf_priv_check {
+                if experiment_enable_new_rbac_check {
                     let s_expr = &plan.input;
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
@@ -679,7 +681,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Delete(plan) => {
-                if enable_stage_udf_priv_check {
+                if experiment_enable_new_rbac_check {
                     if let Some(selection) = &plan.selection {
                         let udf = get_udf_names(selection)?;
                         self.check_udf_priv(udf).await?;
@@ -715,29 +717,31 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Update(plan) => {
-                for scalar in plan.update_list.values() {
-                    let udf = get_udf_names(scalar)?;
-                    self.check_udf_priv(udf).await?;
-                }
-                if let Some(selection) = &plan.selection {
-                    let udf = get_udf_names(selection)?;
-                    self.check_udf_priv(udf).await?;
-                }
-                for subquery in &plan.subquery_desc {
-                    match subquery.input_expr.get_udfs() {
-                        Ok(udfs) => {
-                            if !udfs.is_empty() {
-                                for udf in udfs {
-                                    self.validate_access(
-                                        &GrantObject::UDF(udf.clone()),
-                                        vec![UserPrivilegeType::Usage],
-                                        false,
-                                    ).await?
+                if experiment_enable_new_rbac_check {
+                    for scalar in plan.update_list.values() {
+                        let udf = get_udf_names(scalar)?;
+                        self.check_udf_priv(udf).await?;
+                    }
+                    if let Some(selection) = &plan.selection {
+                        let udf = get_udf_names(selection)?;
+                        self.check_udf_priv(udf).await?;
+                    }
+                    for subquery in &plan.subquery_desc {
+                        match subquery.input_expr.get_udfs() {
+                            Ok(udfs) => {
+                                if !udfs.is_empty() {
+                                    for udf in udfs {
+                                        self.validate_access(
+                                            &GrantObject::UDF(udf.clone()),
+                                            vec![UserPrivilegeType::Usage],
+                                            false,
+                                        ).await?
+                                    }
                                 }
                             }
-                        }
-                        Err(err) => {
-                            return Err(err.add_message("get udf error on validating access"));
+                            Err(err) => {
+                                return Err(err.add_message("get udf error on validating access"));
+                            }
                         }
                     }
                 }
@@ -851,19 +855,16 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoTable(plan) => {
                 // TODO(TCeason): need to check plan.query privileges.
-
-                    if enable_stage_udf_priv_check && !plan.stage_table_info.stage_info.is_from_uri {
-                        let stage_name = &plan.stage_table_info.stage_info.stage_name;
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Read],
-                                false,
-                            )
-                            .await?;
-                    }
-
-
+                if experiment_enable_new_rbac_check && !plan.stage_table_info.stage_info.is_from_uri {
+                    let stage_name = &plan.stage_table_info.stage_info.stage_name;
+                    self
+                        .validate_access(
+                            &GrantObject::Stage(stage_name.clone()),
+                            vec![UserPrivilegeType::Read],
+                            false,
+                        )
+                        .await?;
+                }
                 self
                     .validate_access(
                         &GrantObject::Table(
@@ -877,34 +878,31 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoLocation(plan) => {
-
-                    if enable_stage_udf_priv_check && !plan.stage.is_from_uri {
-                        let stage_name = &plan.stage.stage_name;
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Write],
-                                false,
-                            )
-                            .await?;
-                    }
+                if experiment_enable_new_rbac_check && !plan.stage.is_from_uri {
+                    let stage_name = &plan.stage.stage_name;
+                    self
+                        .validate_access(
+                            &GrantObject::Stage(stage_name.clone()),
+                            vec![UserPrivilegeType::Write],
+                            false,
+                        )
+                        .await?;
+                }
 
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
             Plan::RemoveStage(plan) => {
-
-                    if enable_stage_udf_priv_check && !plan.stage.is_from_uri {
-                        let stage_name = &plan.stage.stage_name;
-                        self
-                            .validate_access(
-                                &GrantObject::Stage(stage_name.clone()),
-                                vec![UserPrivilegeType::Write],
-                                false,
-                            )
-                            .await?;
-                    }
-
+                if experiment_enable_new_rbac_check && !plan.stage.is_from_uri {
+                    let stage_name = &plan.stage.stage_name;
+                    self
+                        .validate_access(
+                            &GrantObject::Stage(stage_name.clone()),
+                            vec![UserPrivilegeType::Write],
+                            false,
+                        )
+                        .await?;
+                }
             }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
@@ -953,31 +951,30 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetSecondaryRoles(_) => {}
             Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
-                    if enable_stage_udf_priv_check && !plan.stage.is_from_uri {
-                        let stage_name = &plan.stage.stage_name;
-                        let action = &plan.action;
-                        match action {
-                            PresignAction::Upload => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_name.clone()),
-                                        vec![UserPrivilegeType::Write],
-                                        false,
-                                    )
-                                    .await?
-                            }
-                            PresignAction::Download => {
-                                self
-                                    .validate_access(
-                                        &GrantObject::Stage(stage_name.clone()),
-                                        vec![UserPrivilegeType::Read],
-                                        false,
-                                    )
-                                    .await?
-                            }
+                if experiment_enable_new_rbac_check && !plan.stage.is_from_uri {
+                    let stage_name = &plan.stage.stage_name;
+                    let action = &plan.action;
+                    match action {
+                        PresignAction::Upload => {
+                            self
+                                .validate_access(
+                                    &GrantObject::Stage(stage_name.clone()),
+                                    vec![UserPrivilegeType::Write],
+                                    false,
+                                )
+                                .await?
+                        }
+                        PresignAction::Download => {
+                            self
+                                .validate_access(
+                                    &GrantObject::Stage(stage_name.clone()),
+                                    vec![UserPrivilegeType::Read],
+                                    false,
+                                )
+                                .await?
                         }
                     }
-
+                }
             }
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
