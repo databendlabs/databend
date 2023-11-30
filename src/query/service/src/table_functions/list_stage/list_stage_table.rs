@@ -185,8 +185,7 @@ impl AsyncSource for ListStagesSource {
 
         let (stage_info, path) =
             resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
-        let enable_stage_udf_priv_check =
-            self.ctx.get_settings().get_enable_stage_udf_priv_check()?;
+        let enable_stage_udf_priv_check = self.ctx.get_settings().get_enable_new_rbac_check()?;
         if enable_stage_udf_priv_check {
             let visibility_checker = self.ctx.get_visibility_checker().await?;
             if !stage_info.is_from_uri
