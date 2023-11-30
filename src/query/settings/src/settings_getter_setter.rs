@@ -85,10 +85,10 @@ impl Settings {
     pub fn set_setting(&self, k: String, v: String) -> Result<()> {
         DefaultSettings::check_setting_mode(&k, SettingMode::Write)?;
 
-        unsafe { self.unchecked_set_setting(k, v) }
+        self.unchecked_set_setting(k, v)
     }
 
-    unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<(), ErrorCode> {
+    fn unchecked_set_setting(&self, k: String, v: String) -> Result<(), ErrorCode> {
         if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
             self.changes.insert(key, ChangeValue {
                 value,
@@ -372,7 +372,7 @@ impl Settings {
     }
 
     /// # Safety
-    pub unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
+    pub fn set_deduplicate_label(&self, val: String) -> Result<()> {
         self.unchecked_set_setting("deduplicate_label".to_string(), val)
     }
 

@@ -163,7 +163,7 @@ impl FlightService for DatabendQueryFlightService {
                     let config = GlobalConfig::instance();
                     let session_manager = SessionManager::instance();
                     let settings = Settings::create(config.query.tenant_id.clone());
-                    unsafe {
+                    {
                         // Keep settings
                         settings.unchecked_apply_changes(
                             &init_query_fragments_plan.executor_packet.changed_settings,
