@@ -93,7 +93,7 @@ impl Interpreter for ExplainInterpreter {
                             res.extend(query);
                         }
                     }
-                    res
+                    vec![DataBlock::concat(&res)?]
                 }
                 _ => self.explain_plan(&self.plan)?,
             },
