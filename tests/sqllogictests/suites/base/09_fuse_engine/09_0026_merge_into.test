@@ -953,6 +953,23 @@ FROM orders;
 64.16764110 6.416764110000 1.97683658 19.29134884
 
 statement ok
+create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json);
+
+statement ok
+create table tmp_01 like tb_01;
+
+statement ok
+insert into tmp_01 values(1,'abc',to_date('2023-11-29'),parse_json('{"a":1}'));
+
+statement ok
+merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
+
+query TTT
+select id,c1,to_date(c2),c3 from tb_01;
+----
+1 abc 2023-11-29 {"a":1}
+
+statement ok
 set enable_distributed_merge_into = 0;
 
 statement ok

@@ -127,7 +127,7 @@ impl VisitorMut for AggregatingIndexRewriter {
 
                 _ => false,
             },
-            SelectTarget::QualifiedName { .. } => false,
+            SelectTarget::StarColumns { .. } => false,
         }) {
             self.user_defined_block_name = true;
         } else {

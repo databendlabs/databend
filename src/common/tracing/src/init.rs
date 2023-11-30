@@ -205,6 +205,15 @@ pub fn init_logging(
         .chain(
             fern::Dispatch::new()
                 .level_for("query", LevelFilter::Off)
+                .filter(|meta| {
+                    if meta.target().starts_with("databend_")
+                        || meta.target().starts_with("common_")
+                    {
+                        true
+                    } else {
+                        meta.level() >= LevelFilter::Error
+                    }
+                })
                 .chain(normal_logger),
         )
         .chain(
