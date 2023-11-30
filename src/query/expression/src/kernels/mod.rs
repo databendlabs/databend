@@ -21,6 +21,7 @@ mod sort;
 mod take;
 mod take_chunks;
 mod take_compact;
+mod take_ranges;
 mod topk;
 mod utils;
 

@@ -16,6 +16,7 @@ mod select;
 mod select_columns;
 mod select_scalar_column;
 
+pub use select::build_range_selection;
 pub use select::build_select_expr;
 pub use select::select_values;
 pub use select::selection_op;

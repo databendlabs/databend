@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
+use common_expression::build_range_selection;
 use common_expression::build_select_expr;
 use common_expression::filter::SelectStrategy;
 use common_expression::types::DataType;
@@ -119,17 +120,18 @@ impl BlockOperator {
                         SelectStrategy::ALL,
                         input.num_rows(),
                     )?;
+
                     let data_block = input.project(projections);
                     if count == data_block.num_rows() {
                         Ok(data_block)
+                    } else if count as f64 > data_block.num_rows() as f64 * 0.8
+                        && data_block.num_columns() > 1
+                    {
+                        let selection_ranges = build_range_selection(&true_selection, count);
+                        data_block.take_ranges(&selection_ranges, count)
                     } else {
                         data_block.take(&true_selection[0..count], &mut None)
                     }
-
-                    // let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    // let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
-                    // let data_block = input.project(projections);
-                    // data_block.filter_boolean_value(&filter)
                 }
             }
 
