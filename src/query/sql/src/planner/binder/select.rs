@@ -267,7 +267,7 @@ impl Binder {
 
         if let Some(qualify) = qualify {
             s_expr = self
-                .bind_qualify(&mut from_context, qualify, span, s_expr)
+                .bind_qualify(&mut from_context, qualify, s_expr)
                 .await?;
         }
 
