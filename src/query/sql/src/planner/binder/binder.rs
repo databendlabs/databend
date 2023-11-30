@@ -696,11 +696,17 @@ impl<'a> Binder {
         };
 
         let mut finder = Finder::new(&f);
-        Self::check_sexpr(s_expr, &mut finder)
+        Self::check_sexpr(s_expr, &mut finder, &top_check)
     }
 
-    pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
-    where F: Fn(&ScalarExpr) -> bool {
+    pub(crate) fn check_sexpr<F>(
+        s_expr: &'a SExpr,
+        f: &'a mut Finder<'a, F>,
+        top_check: &CheckType,
+    ) -> Result<bool>
+    where
+        F: Fn(&ScalarExpr) -> bool,
+    {
         let result = match s_expr.plan.as_ref() {
             RelOperator::Scan(scan) => {
                 f.reset_finder();
@@ -747,14 +753,18 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Aggregate(aggregate) => {
-                f.reset_finder();
-                for item in &aggregate.group_items {
-                    f.visit(&item.scalar)?;
+                if let CheckType::Copy = top_check {
+                    false
+                } else {
+                    f.reset_finder();
+                    for item in &aggregate.group_items {
+                        f.visit(&item.scalar)?;
+                    }
+                    for item in &aggregate.aggregate_functions {
+                        f.visit(&item.scalar)?;
+                    }
+                    f.scalars().is_empty()
                 }
-                for item in &aggregate.aggregate_functions {
-                    f.visit(&item.scalar)?;
-                }
-                f.scalars().is_empty()
             }
             RelOperator::Exchange(exchange) => {
                 f.reset_finder();
@@ -776,32 +786,24 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Window(window) => {
-                f.reset_finder();
-                for scalar_item in &window.arguments {
-                    f.visit(&scalar_item.scalar)?;
+                if let CheckType::Copy = top_check {
+                    false
+                } else {
+                    f.reset_finder();
+                    for scalar_item in &window.arguments {
+                        f.visit(&scalar_item.scalar)?;
+                    }
+                    for scalar_item in &window.partition_by {
+                        f.visit(&scalar_item.scalar)?;
+                    }
+                    for info in &window.order_by {
+                        f.visit(&info.order_by_item.scalar)?;
+                    }
+                    f.scalars().is_empty()
                 }
-                for scalar_item in &window.partition_by {
-                    f.visit(&scalar_item.scalar)?;
-                }
-                for info in &window.order_by {
-                    f.visit(&info.order_by_item.scalar)?;
-                }
-                f.scalars().is_empty()
             }
-            RelOperator::ProjectSet(set) => {
-                f.reset_finder();
-                for item in &set.srfs {
-                    f.visit(&item.scalar)?;
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Udf(udf) => {
-                f.reset_finder();
-                for item in &udf.items {
-                    f.visit(&item.scalar)?;
-                }
-                f.scalars().is_empty()
-            }
+            RelOperator::ProjectSet(_) => false,
+            RelOperator::Udf(_) => false,
             _ => true,
         };
 
@@ -809,7 +811,7 @@ impl<'a> Binder {
             true => {
                 for child in &s_expr.children {
                     let mut finder = Finder::new(f.find_fn());
-                    let flag = Self::check_sexpr(child.as_ref(), &mut finder)?;
+                    let flag = Self::check_sexpr(child.as_ref(), &mut finder, &top_check)?;
                     if !flag {
                         return Ok(false);
                     }
