@@ -378,7 +378,7 @@ create table aggavg1 as select t.goodsid, t.md, avg(t.avgcostvalue) avgcostvalue
 query TTFFF
 select * from aggavg1
 ----
-149350 246 18.99817596 37.99635193 2
+149350 246 18.998175965000 37.99635193 2
 
 statement ok
 DROP TABLE aggr

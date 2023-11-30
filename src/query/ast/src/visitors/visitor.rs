@@ -378,15 +378,17 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
 
-    fn visit_copy_into_table(&mut self, copy: &'ast CopyIntoTableStmt) {
-        if let CopyIntoTableSource::Query(query) = &copy.src {
-            self.visit_query(query)
-        }
+    fn visit_copy_into_table(&mut self, _copy: &'ast CopyIntoTableStmt) {
+        // todo!(youngsofun) please fix this
+        // if let CopyIntoTableSource::Query(query) = &copy.src {
+        //     self.visit_query(query)
+        // }
     }
-    fn visit_copy_into_location(&mut self, copy: &'ast CopyIntoLocationStmt) {
-        if let CopyIntoLocationSource::Query(query) = &copy.src {
-            self.visit_query(query)
-        }
+    fn visit_copy_into_location(&mut self, _copy: &'ast CopyIntoLocationStmt) {
+        // todo!(youngsofun) please fix this
+        // if let CopyIntoLocationSource::Query(query) = &copy.src {
+        //     self.visit_query(query)
+        // }
     }
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
