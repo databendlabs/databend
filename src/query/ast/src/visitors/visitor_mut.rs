@@ -432,6 +432,9 @@ pub trait VisitorMut: Sized {
     fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
     fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
     fn visit_merge_into(&mut self, merge_into: &mut MergeIntoStmt) {
+        // for visit merge into, its destination is to do some rules for the exprs
+        // in merge into before we bind_merge_into, we need to make sure the correct
+        // exprs rewrite for bind_merge_into
         if let MergeSource::Select { query, .. } = &mut merge_into.source {
             self.visit_query(query)
         }
