@@ -306,28 +306,28 @@ evaluation (internal):
 ast            : h3_edge_length_m(0)
 raw expr       : h3_edge_length_m(0)
 checked expr   : h3_edge_length_m<UInt8>(0_u8)
-optimized expr : 1107712.591_f64
+optimized expr : 1281256.010741364_f64
 output type    : Float64
-output domain  : {1107712.591..=1107712.591}
-output         : 1107712.591
+output domain  : {1281256.010741364..=1281256.010741364}
+output         : 1281256.010741364
 
 
 ast            : h3_edge_length_m(1)
 raw expr       : h3_edge_length_m(1)
 checked expr   : h3_edge_length_m<UInt8>(1_u8)
-optimized expr : 418676.0055_f64
+optimized expr : 483056.839071111_f64
 output type    : Float64
-output domain  : {418676.0055..=418676.0055}
-output         : 418676.0055
+output domain  : {483056.839071111..=483056.839071111}
+output         : 483056.839071111
 
 
 ast            : h3_edge_length_m(15)
 raw expr       : h3_edge_length_m(15)
 checked expr   : h3_edge_length_m<UInt8>(15_u8)
-optimized expr : 0.509713273_f64
+optimized expr : 0.5841686296_f64
 output type    : Float64
-output domain  : {0.509713273..=0.509713273}
-output         : 0.509713273
+output domain  : {0.5841686296..=0.5841686296}
+output         : 0.5841686296
 
 
 error: 
@@ -342,50 +342,50 @@ ast            : h3_edge_length_m(res)
 raw expr       : h3_edge_length_m(res::UInt8)
 checked expr   : h3_edge_length_m<UInt8>(res)
 evaluation:
-+--------+---------+--------------+
-|        | res     | Output       |
-+--------+---------+--------------+
-| Type   | UInt8   | Float64      |
-| Domain | {1..=4} | {-inf..=NaN} |
-| Row 0  | 1       | 418676.0055  |
-| Row 1  | 2       | 158244.6558  |
-| Row 2  | 3       | 59810.85794  |
-| Row 3  | 4       | 22606.3794   |
-+--------+---------+--------------+
++--------+---------+-------------------+
+|        | res     | Output            |
++--------+---------+-------------------+
+| Type   | UInt8   | Float64           |
+| Domain | {1..=4} | {-inf..=NaN}      |
+| Row 0  | 1       | 483056.839071111  |
+| Row 1  | 2       | 182512.9564891674 |
+| Row 2  | 3       | 68979.2217877558  |
+| Row 3  | 4       | 26071.7596801773  |
++--------+---------+-------------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------+
-| Column | Data                                                         |
-+--------+--------------------------------------------------------------+
-| res    | UInt8([1, 2, 3, 4])                                          |
-| Output | Float64([418676.0055, 158244.6558, 59810.85794, 22606.3794]) |
-+--------+--------------------------------------------------------------+
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| res    | UInt8([1, 2, 3, 4])                                                                |
+| Output | Float64([483056.839071111, 182512.9564891674, 68979.2217877558, 26071.7596801773]) |
++--------+------------------------------------------------------------------------------------+
 
 
 ast            : h3_edge_length_km(0)
 raw expr       : h3_edge_length_km(0)
 checked expr   : h3_edge_length_km<UInt8>(0_u8)
-optimized expr : 1107.712591_f64
+optimized expr : 1281.2560107413_f64
 output type    : Float64
-output domain  : {1107.712591..=1107.712591}
-output         : 1107.712591
+output domain  : {1281.2560107413..=1281.2560107413}
+output         : 1281.2560107413
 
 
 ast            : h3_edge_length_km(1)
 raw expr       : h3_edge_length_km(1)
 checked expr   : h3_edge_length_km<UInt8>(1_u8)
-optimized expr : 418.6760055_f64
+optimized expr : 483.0568390711_f64
 output type    : Float64
-output domain  : {418.6760055..=418.6760055}
-output         : 418.6760055
+output domain  : {483.0568390711..=483.0568390711}
+output         : 483.0568390711
 
 
 ast            : h3_edge_length_km(15)
 raw expr       : h3_edge_length_km(15)
 checked expr   : h3_edge_length_km<UInt8>(15_u8)
-optimized expr : 0.000509713_f64
+optimized expr : 0.0005841686_f64
 output type    : Float64
-output domain  : {0.000509713..=0.000509713}
-output         : 0.000509713
+output domain  : {0.0005841686..=0.0005841686}
+output         : 0.0005841686
 
 
 error: 
@@ -400,23 +400,23 @@ ast            : h3_edge_length_km(res)
 raw expr       : h3_edge_length_km(res::UInt8)
 checked expr   : h3_edge_length_km<UInt8>(res)
 evaluation:
-+--------+---------+--------------+
-|        | res     | Output       |
-+--------+---------+--------------+
-| Type   | UInt8   | Float64      |
-| Domain | {1..=4} | {-inf..=NaN} |
-| Row 0  | 1       | 418.6760055  |
-| Row 1  | 2       | 158.2446558  |
-| Row 2  | 3       | 59.81085794  |
-| Row 3  | 4       | 22.6063794   |
-+--------+---------+--------------+
++--------+---------+----------------+
+|        | res     | Output         |
++--------+---------+----------------+
+| Type   | UInt8   | Float64        |
+| Domain | {1..=4} | {-inf..=NaN}   |
+| Row 0  | 1       | 483.0568390711 |
+| Row 1  | 2       | 182.5129564891 |
+| Row 2  | 3       | 68.9792217877  |
+| Row 3  | 4       | 26.0717596801  |
++--------+---------+----------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------+
-| Column | Data                                                         |
-+--------+--------------------------------------------------------------+
-| res    | UInt8([1, 2, 3, 4])                                          |
-| Output | Float64([418.6760055, 158.2446558, 59.81085794, 22.6063794]) |
-+--------+--------------------------------------------------------------+
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| res    | UInt8([1, 2, 3, 4])                                                     |
+| Output | Float64([483.0568390711, 182.5129564891, 68.9792217877, 26.0717596801]) |
++--------+-------------------------------------------------------------------------+
 
 
 error: 
@@ -1662,19 +1662,19 @@ evaluation (internal):
 ast            : h3_edge_angle(0)
 raw expr       : h3_edge_angle(0)
 checked expr   : h3_edge_angle<UInt8>(0_u8)
-optimized expr : 9.961887434_f64
+optimized expr : 11.5225991443_f64
 output type    : Float64
-output domain  : {9.961887434..=9.961887434}
-output         : 9.961887434
+output domain  : {11.5225991443..=11.5225991443}
+output         : 11.5225991443
 
 
 ast            : h3_edge_angle(10)
 raw expr       : h3_edge_angle(10)
 checked expr   : h3_edge_angle<UInt8>(10_u8)
-optimized expr : 0.0005927224_f64
+optimized expr : 0.0006822586_f64
 output type    : Float64
-output domain  : {0.0005927224..=0.0005927224}
-output         : 0.0005927224
+output domain  : {0.0006822586..=0.0006822586}
+output         : 0.0006822586
 
 
 error: 
@@ -1694,15 +1694,15 @@ evaluation:
 +--------+-----------+--------------+
 | Type   | UInt8     | Float64      |
 | Domain | {10..=12} | {-inf..=NaN} |
-| Row 0  | 10        | 0.0005927224 |
-| Row 1  | 12        | 0.0000846757 |
+| Row 0  | 10        | 0.0006822586 |
+| Row 1  | 12        | 0.0000973981 |
 +--------+-----------+--------------+
 evaluation (internal):
 +--------+---------------------------------------+
 | Column | Data                                  |
 +--------+---------------------------------------+
 | res    | UInt8([10, 12])                       |
-| Output | Float64([0.0005927224, 0.0000846757]) |
+| Output | Float64([0.0006822586, 0.0000973981]) |
 +--------+---------------------------------------+
 
 

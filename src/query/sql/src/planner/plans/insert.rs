@@ -87,7 +87,6 @@ impl std::fmt::Debug for Insert {
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
-            .field("table_id", &self.table_id)
             .field("schema", &self.schema)
             .field("overwrite", &self.overwrite)
             .finish()

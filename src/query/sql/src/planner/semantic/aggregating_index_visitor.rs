@@ -197,7 +197,7 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
         if self.not_support {
             return;
         }
-        if stmt.having.is_some() || stmt.window_list.is_some() {
+        if stmt.having.is_some() || stmt.window_list.is_some() || stmt.qualify.is_some() {
             self.not_support = true;
             return;
         }

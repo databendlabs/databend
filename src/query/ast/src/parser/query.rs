@@ -58,6 +58,7 @@ pub enum SetOperationElement {
         group_by: Option<GroupBy>,
         having: Box<Option<Expr>>,
         window_list: Option<Vec<WindowDefinition>>,
+        qualify: Box<Option<Expr>>,
     },
     SetOperation {
         op: SetOperator,
@@ -104,6 +105,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
                 ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+                ~ ( QUALIFY ~ ^#expr )?
         },
         |(
             _select,
@@ -115,6 +117,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_group_by_block,
             opt_having_block,
             opt_window_block,
+            opt_qualify_block,
         )| {
             SetOperationElement::SelectStmt {
                 hints: opt_hints,
@@ -129,9 +132,52 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
                 window_list: opt_window_block.map(|(_, windows)| windows),
+                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
             }
         },
     );
+
+    // From ... Select
+    let select_stmt_from_first = map(
+        rule! {
+                ( FROM ~ ^#comma_separated_list1(table_reference) )?
+                ~ SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+                ~ ( WHERE ~ ^#expr )?
+                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
+                ~ ( HAVING ~ ^#expr )?
+                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+                ~ ( QUALIFY ~ ^#expr )?
+        },
+        |(
+            opt_from_block,
+            _select,
+            opt_hints,
+            opt_distinct,
+            select_list,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
+            opt_window_block,
+            opt_qualify_block,
+        )| {
+            SetOperationElement::SelectStmt {
+                hints: opt_hints,
+                distinct: opt_distinct.is_some(),
+                select_list: Box::new(select_list),
+                from: Box::new(
+                    opt_from_block
+                        .map(|(_, table_refs)| table_refs)
+                        .unwrap_or_default(),
+                ),
+                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
+                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
+                having: Box::new(opt_having_block.map(|(_, having)| having)),
+                window_list: opt_window_block.map(|(_, windows)| windows),
+                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
+            }
+        },
+    );
+
     let values = map(
         rule! {
             VALUES ~ ^#comma_separated_list1(row_values)
@@ -174,6 +220,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         | #with
         | #set_operator
         | #select_stmt
+        | #select_stmt_from_first
         | #values
         | #order_by
         | #limit
@@ -222,6 +269,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 group_by,
                 having,
                 window_list,
+                qualify,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
                 hints,
@@ -232,6 +280,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 group_by,
                 having: *having,
                 window_list,
+                qualify: *qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
                 span: transform_span(input.span.0),

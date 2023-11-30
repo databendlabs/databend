@@ -567,6 +567,7 @@ impl Binder {
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             };
             let (srf_expr, mut bind_context) = self
                 .bind_select_stmt(bind_context, &select_stmt, &[], 0)

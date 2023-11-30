@@ -9,7 +9,7 @@ SHOW STAGES
 ----
 test_stage Internal 0 'root'@'%' (empty)
 
-skipif clickhouse
+
 query TTTTTITT
 DESC STAGE test_stage
 ----
