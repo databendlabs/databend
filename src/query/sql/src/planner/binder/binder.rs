@@ -75,7 +75,8 @@ pub enum CheckType {
     Merge,
     Insert,
     Replace,
-    Copy,
+    CopyIntoTable,
+    CopyIntoLocation,
 }
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -682,9 +683,9 @@ impl<'a> Binder {
     }
 
     // add check for SExpr to disable invalid source for copy/insert/merge/replace
-    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr, top_check: CheckType) -> Result<bool> {
-        let f = match top_check {
-            CheckType::Copy => |scalar: &ScalarExpr| {
+    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr, check_type: CheckType) -> Result<bool> {
+        let f = match check_type {
+            CheckType::CopyIntoTable => |scalar: &ScalarExpr| {
                 matches!(
                     scalar,
                     ScalarExpr::WindowFunction(_)
@@ -696,13 +697,13 @@ impl<'a> Binder {
         };
 
         let mut finder = Finder::new(&f);
-        Self::check_sexpr(s_expr, &mut finder, &top_check)
+        Self::check_sexpr(s_expr, &mut finder, &check_type)
     }
 
     pub(crate) fn check_sexpr<F>(
         s_expr: &'a SExpr,
         f: &'a mut Finder<'a, F>,
-        top_check: &CheckType,
+        check_type: &CheckType,
     ) -> Result<bool>
     where
         F: Fn(&ScalarExpr) -> bool,
@@ -726,17 +727,21 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Join(join) => {
-                f.reset_finder();
-                for condition in &join.left_conditions {
-                    f.visit(condition)?;
+                if let CheckType::CopyIntoTable = check_type {
+                    false
+                } else {
+                    f.reset_finder();
+                    for condition in &join.left_conditions {
+                        f.visit(condition)?;
+                    }
+                    for condition in &join.right_conditions {
+                        f.visit(condition)?;
+                    }
+                    for condition in &join.non_equi_conditions {
+                        f.visit(condition)?;
+                    }
+                    f.scalars().is_empty()
                 }
-                for condition in &join.right_conditions {
-                    f.visit(condition)?;
-                }
-                for condition in &join.non_equi_conditions {
-                    f.visit(condition)?;
-                }
-                f.scalars().is_empty()
             }
             RelOperator::EvalScalar(eval) => {
                 f.reset_finder();
@@ -753,7 +758,7 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Aggregate(aggregate) => {
-                if let CheckType::Copy = top_check {
+                if let CheckType::CopyIntoTable = check_type {
                     false
                 } else {
                     f.reset_finder();
@@ -786,7 +791,7 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Window(window) => {
-                if let CheckType::Copy = top_check {
+                if let CheckType::CopyIntoTable = check_type {
                     false
                 } else {
                     f.reset_finder();
@@ -802,7 +807,6 @@ impl<'a> Binder {
                     f.scalars().is_empty()
                 }
             }
-            RelOperator::ProjectSet(_) => false,
             RelOperator::Udf(_) => false,
             _ => true,
         };
@@ -811,7 +815,7 @@ impl<'a> Binder {
             true => {
                 for child in &s_expr.children {
                     let mut finder = Finder::new(f.find_fn());
-                    let flag = Self::check_sexpr(child.as_ref(), &mut finder, &top_check)?;
+                    let flag = Self::check_sexpr(child.as_ref(), &mut finder, check_type)?;
                     if !flag {
                         return Ok(false);
                     }

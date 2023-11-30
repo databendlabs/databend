@@ -157,7 +157,7 @@ impl Binder {
                 if let Plan::Query { s_expr, .. } = &select_plan {
                     if !self.check_sexpr_top(s_expr, super::binder::CheckType::Insert)? {
                         return Err(ErrorCode::SemanticError(
-                            "insert source's condition can't contain udf functions".to_string(),
+                            "insert source can't contain udf functions".to_string(),
                         ));
                     }
                 }

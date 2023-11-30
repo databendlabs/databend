@@ -129,7 +129,7 @@ impl Binder {
 
         if !self.check_sexpr_top(&source_expr, super::binder::CheckType::Merge)? {
             return Err(ErrorCode::SemanticError(
-                "replace source's condition can't contain udf functions".to_string(),
+                "replace source can't contain udf functions".to_string(),
             ));
         }
 

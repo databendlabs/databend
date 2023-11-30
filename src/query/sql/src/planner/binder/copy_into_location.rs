@@ -63,10 +63,9 @@ impl<'a> Binder {
                     .bind_statement(bind_context, &Statement::Query(query.clone()))
                     .await?;
                 if let Plan::Query { s_expr, .. } = &select_plan {
-                    if !self.check_sexpr_top(s_expr, super::binder::CheckType::Copy)? {
+                    if !self.check_sexpr_top(s_expr, super::binder::CheckType::CopyIntoLocation)? {
                         return Err(ErrorCode::SemanticError(
-                            "copy into location source's condition can't contain window|aggregate|udf functions"
-                                .to_string(),
+                            "copy into location source can't contain udf functions".to_string(),
                         ));
                     }
                 }

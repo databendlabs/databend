@@ -393,7 +393,11 @@ pub trait VisitorMut: Sized {
         walk_statement_mut(self, stmt);
     }
 
-    fn visit_copy_into_table(&mut self, _copy: &mut CopyIntoTableStmt) {}
+    fn visit_copy_into_table(&mut self, copy: &mut CopyIntoTableStmt) {
+        if let CopyIntoTableSource::Query(query) = &mut copy.src {
+            self.visit_query(query)
+        }
+    }
     fn visit_copy_into_location(&mut self, copy: &mut CopyIntoLocationStmt) {
         if let CopyIntoLocationSource::Query(query) = &mut copy.src {
             self.visit_query(query)

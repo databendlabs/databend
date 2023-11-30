@@ -140,7 +140,7 @@ impl Binder {
                 if let Plan::Query { s_expr, .. } = &select_plan {
                     if !self.check_sexpr_top(s_expr, super::binder::CheckType::Replace)? {
                         return Err(ErrorCode::SemanticError(
-                            "replace source's condition can't contain udf functions".to_string(),
+                            "replace source can't contain udf functions".to_string(),
                         ));
                     }
                 }

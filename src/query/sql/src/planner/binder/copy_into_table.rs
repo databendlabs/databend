@@ -91,6 +91,14 @@ impl<'a> Binder {
                 let plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
+                if let Some(Plan::Query { s_expr, .. }) = plan.query.as_deref() {
+                    if !self.check_sexpr_top(s_expr, super::binder::CheckType::CopyIntoTable)? {
+                        return Err(ErrorCode::SemanticError(
+                            "copy into table source can't contain window|aggregate|udf|join functions"
+                                .to_string(),
+                        ));
+                    }
+                }
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
             }
