@@ -1709,6 +1709,21 @@ Filter
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 0.00
 
+query T
+explain insert into t2 select * from t1;
+----
+TableScan
+├── table: default.default.t1
+├── output columns: [a (#0), b (#1), c (#2)]
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 0.00
+Insert { catalog: "default", database: "default", table: "t2", table_id: 46896, schema: TableSchema { fields: [TableField { name: "a", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 0, computed_expr: None }, TableField { name: "b", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 1, computed_expr: None }, TableField { name: "c", default_expr: None, data_type: Nullable(String), column_id: 2, computed_expr: None }], metadata: {}, next_column_id: 3 }, overwrite: false }
+
+
 statement ok
 drop table t1;
 
