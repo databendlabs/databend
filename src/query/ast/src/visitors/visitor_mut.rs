@@ -533,7 +533,11 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_drop_tables(&mut self, _stmt: &mut ShowDropTablesStmt) {}
 
-    fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt) {}
+    fn visit_create_table(&mut self, stmt: &mut CreateTableStmt) {
+        if let Some(query) = stmt.as_query.as_deref_mut() {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_create_table_source(&mut self, _source: &mut CreateTableSource) {}
 
