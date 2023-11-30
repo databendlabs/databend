@@ -17,6 +17,7 @@ use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_transforms::processors::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::Sort;
@@ -83,7 +84,7 @@ impl PipelineBuilder {
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
-        after_exchange: bool,
+        after_exchange: Option<bool>,
     ) -> Result<()> {
         let block_size = self.settings.get_max_block_size()? as usize;
         let max_threads = self.settings.get_max_threads()? as usize;
@@ -98,15 +99,50 @@ impl PipelineBuilder {
             None
         };
 
-        build_full_sort_pipeline(
-            &mut self.main_pipeline,
-            input_schema,
-            sort_desc,
-            limit,
-            block_size,
-            block_size,
-            prof_info,
-            after_exchange,
-        )
+        match after_exchange {
+            Some(true) => {
+                // Build for the coordinator node.
+                // We only build a `MultiSortMergeTransform`,
+                // as the data is already sorted in each cluster node.
+                // The input number of the transform is equal to the number of cluster nodes.
+                try_add_multi_sort_merge(
+                    &mut self.main_pipeline,
+                    input_schema,
+                    block_size,
+                    limit,
+                    sort_desc,
+                    prof_info,
+                    true,
+                )
+            }
+            Some(false) => {
+                // Build for each cluster node.
+                // We build the full sort pipeline for it.
+                build_full_sort_pipeline(
+                    &mut self.main_pipeline,
+                    input_schema,
+                    sort_desc,
+                    limit,
+                    block_size,
+                    block_size,
+                    prof_info,
+                    false,
+                )
+            }
+            None => {
+                // Build for single node mode.
+                // We build the full sort pipeline for it.
+                build_full_sort_pipeline(
+                    &mut self.main_pipeline,
+                    input_schema,
+                    sort_desc,
+                    limit,
+                    block_size,
+                    block_size,
+                    prof_info,
+                    true,
+                )
+            }
+        }
     }
 }
