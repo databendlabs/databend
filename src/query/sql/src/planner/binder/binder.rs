@@ -696,7 +696,7 @@ impl<'a> Binder {
         };
 
         let mut finder = Finder::new(&f);
-        self.check_sexpr(s_expr, &mut finder)
+        Self::check_sexpr(s_expr, &mut finder)
     }
 
     pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
