@@ -50,7 +50,6 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -96,7 +95,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
-            PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
@@ -433,12 +431,6 @@ impl Display for CommitSink {
 impl Display for CopyIntoTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CopyIntoTable")
-    }
-}
-
-impl Display for RuntimeFilterSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RuntimeFilterSource")
     }
 }
 

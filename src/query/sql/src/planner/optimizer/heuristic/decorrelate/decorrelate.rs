@@ -220,7 +220,6 @@ impl SubqueryRewriter {
             },
             marker_index: None,
             from_correlated_subquery: true,
-            contain_runtime_filter: false,
             need_hold_hash_table: false,
         };
 
@@ -295,7 +294,6 @@ impl SubqueryRewriter {
                     join_type: JoinType::LeftSingle,
                     marker_index: None,
                     from_correlated_subquery: true,
-                    contain_runtime_filter: false,
                     need_hold_hash_table: false,
                 };
                 let s_expr = SExpr::create_binary(
@@ -343,7 +341,6 @@ impl SubqueryRewriter {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
-                    contain_runtime_filter: false,
                     need_hold_hash_table: false,
                 };
                 let s_expr = SExpr::create_binary(
@@ -406,7 +403,6 @@ impl SubqueryRewriter {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
-                    contain_runtime_filter: false,
                     need_hold_hash_table: false,
                 }
                 .into();

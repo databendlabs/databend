@@ -747,16 +747,6 @@ impl<'a> Binder {
                 }
                 f.scalars().is_empty()
             }
-            RelOperator::RuntimeFilterSource(runtime_filter_source) => {
-                f.reset_finder();
-                for scalar in runtime_filter_source.left_runtime_filters.values() {
-                    f.visit(scalar)?;
-                }
-                for scalar in runtime_filter_source.right_runtime_filters.values() {
-                    f.visit(scalar)?;
-                }
-                f.scalars().is_empty()
-            }
             RelOperator::Window(window) => {
                 f.reset_finder();
                 for scalar_item in &window.arguments {
