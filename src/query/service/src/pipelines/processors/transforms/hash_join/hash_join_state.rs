@@ -326,8 +326,15 @@ impl HashJoinState {
                     args,
                 };
                 runtime_filters.insert(
-                    column_id as ColumnId,
-                    contain_func.type_check(self.hash_join_desc.probe_schema.as_ref())?,
+                    *id as ColumnId,
+                    contain_func
+                        .type_check(self.hash_join_desc.probe_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            self.hash_join_desc
+                                .probe_schema
+                                .index_of(&index.to_string())
+                                .unwrap()
+                        }),
                 );
             }
         }

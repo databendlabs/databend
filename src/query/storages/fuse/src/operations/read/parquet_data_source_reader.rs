@@ -40,6 +40,7 @@ use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     id: usize,
@@ -105,7 +106,6 @@ impl SyncSource for ReadParquetDataSource<true> {
     const NAME: &'static str = "SyncReadParquetDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        dbg!(&self.runtime_filters);
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
@@ -148,7 +148,13 @@ impl SyncSource for ReadParquetDataSource<true> {
                     &None
                 };
 
-                // Todo: using runtime filter to check if need to read this part.
+                if runtime_filter_pruner(
+                    &part,
+                    &self.runtime_filters,
+                    &self.partitions.ctx.get_function_context()?,
+                )? {
+                    return Ok(None);
+                }
 
                 let source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
