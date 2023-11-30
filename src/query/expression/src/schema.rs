@@ -1290,6 +1290,13 @@ impl TableSchemaRefExt {
     pub fn create(fields: Vec<TableField>) -> TableSchemaRef {
         Arc::new(TableSchema::new(fields))
     }
+
+    pub fn create_dummy() -> TableSchemaRef {
+        Self::create(vec![TableField::new(
+            "dummy",
+            TableDataType::Number(NumberDataType::UInt8),
+        )])
+    }
 }
 
 impl From<&ArrowSchema> for TableSchema {

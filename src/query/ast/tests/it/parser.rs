@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::io::Write;
 
 use common_ast::display_parser_error;
@@ -25,51 +27,54 @@ use common_ast::parser::tokenize_sql;
 use common_ast::rule;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_ast::IResult;
 use common_ast::Input;
-use common_exception::Result;
 use goldenfile::Mint;
-use nom::Parser;
 
-macro_rules! run_parser {
-    ($file:expr, $parser:expr, $source:expr $(,)*) => {
-        run_parser_with_dialect!($file, $parser, Dialect::PostgreSQL, $source)
-    };
+fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
+where
+    P: FnMut(Input) -> IResult<O>,
+    O: Debug + Display,
+{
+    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, src)
 }
 
-macro_rules! run_parser_with_dialect {
-    ($file:expr, $parser:expr, $dialect:expr, $source:expr $(,)*) => {
-        let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
-        let backtrace = Backtrace::new();
-        let parser = $parser;
-        let mut parser = rule! { #parser ~ &EOI };
-        match parser.parse(Input(&tokens, $dialect, &backtrace)) {
-            Ok((i, (output, _))) => {
-                assert_eq!(i[0].kind, TokenKind::EOI);
-                writeln!($file, "---------- Input ----------").unwrap();
-                writeln!($file, "{}", $source).unwrap();
-                writeln!($file, "---------- Output ---------").unwrap();
-                writeln!($file, "{}", output).unwrap();
-                writeln!($file, "---------- AST ------------").unwrap();
-                writeln!($file, "{:#?}", output).unwrap();
-                writeln!($file, "\n").unwrap();
-            }
-            Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-                let report = display_parser_error(err, $source).trim_end().to_string();
-                writeln!($file, "---------- Input ----------").unwrap();
-                writeln!($file, "{}", $source).unwrap();
-                writeln!($file, "---------- Output ---------").unwrap();
-                writeln!($file, "{}", report).unwrap();
-                writeln!($file, "\n").unwrap();
-            }
-            Err(nom::Err::Incomplete(_)) => unreachable!(),
+fn run_parser_with_dialect<P, O>(file: &mut dyn Write, parser: P, dialect: Dialect, src: &str)
+where
+    P: FnMut(Input) -> IResult<O>,
+    O: Debug + Display,
+{
+    let tokens = tokenize_sql(src).unwrap();
+    let backtrace = Backtrace::new();
+    let parser = parser;
+    let mut parser = rule! { #parser ~ &EOI };
+    match parser(Input(&tokens, dialect, &backtrace)) {
+        Ok((i, (output, _))) => {
+            assert_eq!(i[0].kind, TokenKind::EOI);
+            writeln!(file, "---------- Input ----------").unwrap();
+            writeln!(file, "{}", src).unwrap();
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{}", output).unwrap();
+            writeln!(file, "---------- AST ------------").unwrap();
+            writeln!(file, "{:#?}", output).unwrap();
+            writeln!(file, "\n").unwrap();
         }
-    };
+        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
+            let report = display_parser_error(err, src).trim_end().to_string();
+            writeln!(file, "---------- Input ----------").unwrap();
+            writeln!(file, "{}", src).unwrap();
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{}", report).unwrap();
+            writeln!(file, "\n").unwrap();
+        }
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
+    }
 }
 
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("statement.txt").unwrap();
+    let file = &mut mint.new_goldenfile("statement.txt").unwrap();
     let cases = &[
         r#"show databases"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
@@ -552,7 +557,7 @@ fn test_statement() {
 #[test]
 fn test_statement_error() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("statement-error.txt").unwrap();
+    let file = &mut mint.new_goldenfile("statement-error.txt").unwrap();
 
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
@@ -633,9 +638,10 @@ fn test_statement_error() {
 #[test]
 fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("query.txt").unwrap();
+    let file = &mut mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
+        r#"select columns('abc'), columns(a -> length(a) = 3) from t"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,
@@ -688,14 +694,14 @@ fn test_query() {
     ];
 
     for case in cases {
-        run_parser!(file, query, case);
+        run_parser(file, query, case);
     }
 }
 
 #[test]
 fn test_query_error() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("query-error.txt").unwrap();
+    let file = &mut mint.new_goldenfile("query-error.txt").unwrap();
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
@@ -707,14 +713,14 @@ fn test_query_error() {
     ];
 
     for case in cases {
-        run_parser!(file, query, case);
+        run_parser(file, query, case);
     }
 }
 
 #[test]
 fn test_expr() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("expr.txt").unwrap();
+    let file = &mut mint.new_goldenfile("expr.txt").unwrap();
 
     let cases = &[
         r#"a"#,
@@ -800,14 +806,14 @@ fn test_expr() {
     ];
 
     for case in cases {
-        run_parser!(file, expr, case);
+        run_parser(file, expr, case);
     }
 }
 
 #[test]
 fn test_experimental_expr() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("experimental_expr.txt").unwrap();
+    let file = &mut mint.new_goldenfile("experimental_expr.txt").unwrap();
 
     let cases = &[
         r#"a"#,
@@ -820,14 +826,14 @@ fn test_experimental_expr() {
     ];
 
     for case in cases {
-        run_parser_with_dialect!(file, expr, Dialect::Experimental, case);
+        run_parser_with_dialect(file, expr, Dialect::Experimental, case);
     }
 }
 
 #[test]
 fn test_expr_error() {
     let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("expr-error.txt").unwrap();
+    let file = &mut mint.new_goldenfile("expr-error.txt").unwrap();
 
     let cases = &[
         r#"5 * (a and ) 1"#,
@@ -842,7 +848,7 @@ fn test_expr_error() {
     ];
 
     for case in cases {
-        run_parser!(file, expr, case);
+        run_parser(file, expr, case);
     }
 }
 

@@ -206,9 +206,9 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
                 visitor.visit_identifier(alias);
             }
         }
-        SelectTarget::QualifiedName {
+        SelectTarget::StarColumns {
             qualified: names,
-            exclude,
+            column_filter,
         } => {
             for indirection in names {
                 match indirection {
@@ -218,9 +218,17 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
                     Indirection::Star(_) => {}
                 }
             }
-            if let Some(cols) = exclude {
-                for ident in cols {
-                    visitor.visit_column_id(ident);
+
+            if let Some(col_filter) = column_filter {
+                match col_filter {
+                    ColumnFilter::Excludes(excludes) => {
+                        for ident in excludes.iter_mut() {
+                            visitor.visit_identifier(ident);
+                        }
+                    }
+                    ColumnFilter::Lambda(lambda) => {
+                        visitor.visit_expr(lambda.expr.as_mut());
+                    }
                 }
             }
         }
