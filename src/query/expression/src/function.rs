@@ -391,12 +391,7 @@ impl FunctionRegistry {
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
         if self.contains(&func_name) {
-            Some(
-                self.properties
-                    .get(&func_name.to_lowercase())
-                    .cloned()
-                    .unwrap_or_default(),
-            )
+            Some(self.properties.get(&func_name).cloned().unwrap_or_default())
         } else {
             None
         }

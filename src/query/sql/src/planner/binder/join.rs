@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_exception::Span;
 use indexmap::IndexMap;
 
+use super::Finder;
 use crate::binder::CteInfo;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -44,6 +45,7 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -519,6 +521,36 @@ impl<'a> JoinConditionResolver<'a> {
                     self.right_context,
                     self.join_context,
                 );
+            }
+        }
+
+        self.check_join_allowed_scalar_expr(left_join_conditions)
+            .await?;
+        self.check_join_allowed_scalar_expr(right_join_conditions)
+            .await?;
+        self.check_join_allowed_scalar_expr(non_equi_conditions)
+            .await?;
+        self.check_join_allowed_scalar_expr(other_join_conditions)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn check_join_allowed_scalar_expr(&mut self, scalars: &Vec<ScalarExpr>) -> Result<()> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+            )
+        };
+        for scalar in scalars {
+            let mut finder = Finder::new(&f);
+            finder.visit(scalar)?;
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "Join condition can't contain aggregate or window functions".to_string(),
+                )
+                .set_span(scalar.span()));
             }
         }
         Ok(())
