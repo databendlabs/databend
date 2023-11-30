@@ -39,7 +39,7 @@ pub fn runtime_filter_pruner(
     Ok(filters.iter().any(|(id, filter)| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).
-        assert_debug!(column_refs.len() == 1);
+        debug_assert!(column_refs.len() == 1);
         let ty = column_refs.values().last().unwrap();
         let name = column_refs.keys().last().unwrap();
         if let Some(stats) = &part.columns_stat {
