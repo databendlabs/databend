@@ -40,6 +40,8 @@ use super::AggregateInfo;
 use crate::binder::aggregate::find_replaced_aggregate_function;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
+use crate::binder::window::find_replaced_window_function;
+use crate::binder::window::WindowInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
@@ -73,6 +75,7 @@ impl Binder {
     pub fn analyze_projection(
         &mut self,
         agg_info: &AggregateInfo,
+        window_info: &WindowInfo,
         select_list: &SelectList,
     ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
@@ -93,6 +96,9 @@ impl Binder {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
                     find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                }
+                ScalarExpr::WindowFunction(win) => {
+                    find_replaced_window_function(window_info, win, &item.alias).unwrap()
                 }
                 _ => {
                     self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
