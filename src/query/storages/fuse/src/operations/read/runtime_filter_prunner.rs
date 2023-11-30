@@ -38,6 +38,8 @@ pub fn runtime_filter_pruner(
     let part = FusePartInfo::from_part(part)?;
     Ok(filters.iter().any(|(id, filter)| {
         let column_refs = filter.column_refs();
+        // Currently only support filter with one column(probe key).
+        assert_debug!(column_refs.len() == 1);
         let ty = column_refs.values().last().unwrap();
         let name = column_refs.keys().last().unwrap();
         if let Some(stats) = &part.columns_stat {
@@ -52,7 +54,6 @@ pub fn runtime_filter_pruner(
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
-                dbg!(&new_expr);
                 matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
