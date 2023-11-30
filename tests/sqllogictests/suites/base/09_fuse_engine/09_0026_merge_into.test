@@ -908,7 +908,7 @@ statement ok
 create table tmp_01 like tb_01;
 
 statement ok
-insert into tmp_01 values(1,'abc',now(),parse_json('{"a":1}'));
+insert into tmp_01 values(1,'abc',to_date('2023-11-29'),parse_json('{"a":1}'));
 
 statement ok
 merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
