@@ -184,7 +184,9 @@ pub fn optimize_query(
     let mut result = heuristic.pre_optimize(s_expr)?;
     result = heuristic.optimize_expression(&result, &DEFAULT_REWRITE_RULES)?;
     let mut dphyp_optimized = false;
-    if ctx.get_settings().get_enable_dphyp()? && !ctx.get_settings().get_disable_join_reorder()? {
+    if ctx.get_settings().get_enable_dphyp()?
+        && unsafe { !ctx.get_settings().get_disable_join_reorder()? }
+    {
         let (dp_res, optimized) =
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
         if optimized {
@@ -208,7 +210,7 @@ pub fn optimize_query(
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
-    if ctx.get_settings().get_disable_join_reorder()? {
+    if unsafe { ctx.get_settings().get_disable_join_reorder()? } {
         return heuristic.optimize_expression(&result, &[RuleID::EliminateEvalScalar]);
     }
     heuristic.optimize_expression(&result, &RESIDUAL_RULES)

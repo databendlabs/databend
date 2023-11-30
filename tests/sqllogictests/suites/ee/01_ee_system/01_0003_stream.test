@@ -127,10 +127,18 @@ select * from s2 order by a
 4
 
 statement ok
-create table t2(a int) change_tracking = true
+create table t2(a int)
 
 statement ok
 create stream s3 on table t2
+
+statement ok
+set hide_options_in_show_create_table=0
+
+query TT
+show create table t2
+----
+t2 CREATE TABLE `t2` (   `a` INT NULL ) ENGINE=FUSE CHANGE_TRACKING='true' COMPRESSION='zstd' STORAGE_FORMAT='parquet'
 
 statement ok
 insert into t2 values(3),(4)
