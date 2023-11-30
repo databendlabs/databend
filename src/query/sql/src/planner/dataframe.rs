@@ -144,9 +144,11 @@ impl Dataframe {
             .normalize_select_list(bind_context, select_list)
             .await?;
 
-        let (scalar_items, projections) = self
-            .binder
-            .analyze_projection(&bind_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.binder.analyze_projection(
+            &bind_context.aggregate_info,
+            &bind_context.windows,
+            &select_list,
+        )?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -192,9 +194,11 @@ impl Dataframe {
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
 
-        let (scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
 
         self.s_expr = self
             .binder
@@ -266,9 +270,11 @@ impl Dataframe {
                 .await?;
         }
 
-        let (scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -305,9 +311,11 @@ impl Dataframe {
             .await?;
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
-        let (mut scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (mut scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
         self.s_expr = self.binder.bind_distinct(
             None,
             &self.bind_context,
@@ -387,9 +395,11 @@ impl Dataframe {
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
-        let (mut scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (mut scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
         let order_items = self
             .binder
             .analyze_order_items(

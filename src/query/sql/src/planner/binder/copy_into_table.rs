@@ -339,8 +339,11 @@ impl<'a> Binder {
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
-        let (scalar_items, projections) =
-            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.analyze_projection(
+            &from_context.aggregate_info,
+            &from_context.windows,
+            &select_list,
+        )?;
 
         if projections.len() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(

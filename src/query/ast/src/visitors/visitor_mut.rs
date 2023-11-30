@@ -28,6 +28,7 @@ use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
 use super::walk_stream_point_mut;
 use super::walk_time_travel_point_mut;
+use super::walk_window_definition_mut;
 use crate::ast::*;
 use crate::visitors::walk_column_id_mut;
 
@@ -719,6 +720,8 @@ pub trait VisitorMut: Sized {
             selection,
             group_by,
             having,
+            window_list,
+            qualify,
             ..
         } = stmt;
 
@@ -752,6 +755,16 @@ pub trait VisitorMut: Sized {
 
         if let Some(having) = having {
             Self::visit_expr(self, having);
+        }
+
+        if let Some(window_list) = window_list {
+            for window_def in window_list {
+                walk_window_definition_mut(self, window_def);
+            }
+        }
+
+        if let Some(qualify) = qualify {
+            Self::visit_expr(self, qualify);
         }
     }
 
