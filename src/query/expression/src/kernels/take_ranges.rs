@@ -86,7 +86,7 @@ impl Column {
                 Column::Boolean(column)
             }
             Column::String(column) => {
-                let column = Self::take_ranges_string_scalars(column, ranges, num_rows);
+                let column = Self::take_ranges_string_types(column, ranges, num_rows);
                 Column::String(column)
             }
             Column::Timestamp(column) => {
@@ -127,7 +127,7 @@ impl Column {
                 )
             }
             Column::Bitmap(column) => {
-                let column = Self::take_ranges_string_scalars(column, ranges, num_rows);
+                let column = Self::take_ranges_string_types(column, ranges, num_rows);
                 Column::Bitmap(column)
             }
 
@@ -144,7 +144,7 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                let column = Self::take_ranges_string_scalars(column, ranges, num_rows);
+                let column = Self::take_ranges_string_types(column, ranges, num_rows);
                 Column::Variant(column)
             }
         }
@@ -178,7 +178,7 @@ impl Column {
         builder.into()
     }
 
-    fn take_ranges_string_scalars(
+    fn take_ranges_string_types(
         values: &StringColumn,
         ranges: &Vec<(u32, u32)>,
         num_rows: usize,
