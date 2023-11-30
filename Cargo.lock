@@ -2347,7 +2347,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
- "openraft 0.8.4",
+ "openraft 0.9.0",
  "serde",
  "serde_json",
 ]
@@ -2380,7 +2380,7 @@ dependencies = [
  "minitrace",
  "num",
  "once_cell",
- "openraft 0.8.4",
+ "openraft 0.9.0",
  "pretty_assertions",
  "semver",
  "serde",
@@ -2406,7 +2406,7 @@ dependencies = [
  "log",
  "minitrace",
  "once_cell",
- "openraft 0.8.4",
+ "openraft 0.9.0",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -2455,7 +2455,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
- "openraft 0.8.4",
+ "openraft 0.9.0",
  "prost 0.12.1",
  "prost-build",
  "regex",
@@ -4483,6 +4483,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-store",
+ "common-meta-types",
  "common-sql",
  "common-storages-fuse",
  "common-storages-stream",
@@ -6569,9 +6570,9 @@ dependencies = [
 
 [[package]]
 name = "h3o"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b043acc132a9a7d07a8fb9c4b49cc2459f163bb73ab22cdcdefe6b76b3a7df96"
+checksum = "c6fb938100651db317719f46877a3cd82105920be4ea2ff49d55d1d65fa7bec1"
 dependencies = [
  "ahash 0.8.3",
  "auto_ops",
@@ -7751,8 +7752,8 @@ dependencies = [
 
 [[package]]
 name = "macros"
-version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.10#7d469c3da769de5e8886cb1af95008c930b98147"
+version = "0.9.0"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.1#24243ec7b904d760c0419a83bd327dbf923e015e"
 
 [[package]]
 name = "maplit"
@@ -8527,8 +8528,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.10#7d469c3da769de5e8886cb1af95008c930b98147"
+version = "0.9.0"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.1#24243ec7b904d760c0419a83bd327dbf923e015e"
 dependencies = [
  "anyerror",
  "anyhow",

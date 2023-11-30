@@ -139,14 +139,14 @@ where
     }
 }
 
-impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalAvgState<OVERFLOW, T>
+impl<const OVERFLOW: bool, T> DecimalAvgState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
-        self.count += 1;
-        self.value += T::to_owned_scalar(other);
+    fn add_internal(&mut self, count: u64, value: T::ScalarRef<'_>) -> Result<()> {
+        self.count += count;
+        self.value += T::to_owned_scalar(value);
         if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
@@ -157,9 +157,19 @@ where
         }
         Ok(())
     }
+}
+
+impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalAvgState<OVERFLOW, T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        self.add_internal(1, other)
+    }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.add(T::to_scalar_ref(&rhs.value))
+        self.add_internal(rhs.count, T::to_scalar_ref(&rhs.value))
     }
 
     fn merge_result(
@@ -239,7 +249,7 @@ pub fn try_create_aggregate_avg_function(
 
             if overflow {
                 let func = AggregateUnaryFunction::<
-                    DecimalAvgState<false, Decimal128Type>,
+                    DecimalAvgState<true, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create(
@@ -249,7 +259,7 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             } else {
                 let func = AggregateUnaryFunction::<
-                    DecimalAvgState<true, Decimal128Type>,
+                    DecimalAvgState<false, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create(
@@ -272,7 +282,7 @@ pub fn try_create_aggregate_avg_function(
 
             if overflow {
                 let func = AggregateUnaryFunction::<
-                    DecimalAvgState<false, Decimal256Type>,
+                    DecimalAvgState<true, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(
@@ -282,7 +292,7 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             } else {
                 let func = AggregateUnaryFunction::<
-                    DecimalSumState<true, Decimal256Type>,
+                    DecimalSumState<false, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(

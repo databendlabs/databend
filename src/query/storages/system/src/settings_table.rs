@@ -53,9 +53,6 @@ impl SyncSystemTable for SettingsTable {
         let mut descs: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         for item in settings.into_iter() {
-            if !item.display_in_show_settings {
-                continue;
-            }
             // Name.
             names.push(item.name);
             // Value.

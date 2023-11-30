@@ -995,32 +995,28 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let chain_function_call = check_experimental_chain_function(
         true,
         alt((
-            map_res(
+            map(
                 rule! {
                     "." ~ #function_name
                     ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
                 },
-                |(_, name, _, param, _, expr, _)| {
-                    Ok(ExprElement::ChainFunctionCall {
-                        name,
-                        args: vec![],
-                        lambda: Some(Lambda {
-                            params: vec![param],
-                            expr: Box::new(expr),
-                        }),
-                    })
+                |(_, name, _, param, _, expr, _)| ExprElement::ChainFunctionCall {
+                    name,
+                    args: vec![],
+                    lambda: Some(Lambda {
+                        params: vec![param],
+                        expr: Box::new(expr),
+                    }),
                 },
             ),
-            map_res(
+            map(
                 rule! {
                     "." ~ #function_name ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ^")"
                 },
-                |(_, name, _, args, _)| {
-                    Ok(ExprElement::ChainFunctionCall {
-                        name,
-                        args,
-                        lambda: None,
-                    })
+                |(_, name, _, args, _)| ExprElement::ChainFunctionCall {
+                    name,
+                    args,
+                    lambda: None,
                 },
             ),
         )),

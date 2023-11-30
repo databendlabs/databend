@@ -164,7 +164,7 @@ pub type LogStore = Adaptor<TypeConfig, RaftStore>;
 pub type SMStore = Adaptor<TypeConfig, RaftStore>;
 
 /// MetaRaft is a implementation of the generic Raft handling meta data R/W.
-pub type MetaRaft = Raft<TypeConfig, Network, LogStore, SMStore>;
+pub type MetaRaft = Raft<TypeConfig>;
 
 /// MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {

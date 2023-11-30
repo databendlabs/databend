@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -25,7 +24,6 @@ use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_users::GrantObjectVisibilityChecker;
 use log::debug;
@@ -271,14 +269,6 @@ impl Session {
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         self.session_ctx.get_settings()
-    }
-
-    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.session_ctx.get_changed_settings()
-    }
-
-    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.session_ctx.apply_changed_settings(changes)
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

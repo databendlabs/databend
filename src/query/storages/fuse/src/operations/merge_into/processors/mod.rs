@@ -26,6 +26,7 @@ pub use processor_distributed_merge_into_block_serialize::TransformDistributedMe
 pub use processor_merge_into_matched_and_split::MatchedSplitProcessor;
 pub use processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
 pub(crate) use processor_merge_into_matched_and_split::RowIdKind;
+pub use processor_merge_into_matched_and_split::SourceFullMatched;
 pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_split::MergeIntoSplitProcessor;
 pub use processor_merge_into_split_row_number_and_log::RowNumberAndLogSplitProcessor;
