@@ -131,7 +131,11 @@ impl PrivilegeAccess {
         privilege: UserPrivilegeType,
     ) -> Result<()> {
         // this settings might be enabled as default after we got a better confidence on it
-        if !self.ctx.get_settings().get_enable_stage_udf_priv_check()? {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_rbac_check()?
+        {
             return Ok(());
         }
 
@@ -175,8 +179,10 @@ impl AccessChecker for PrivilegeAccess {
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
         let tenant = self.ctx.get_tenant();
-        let enable_stage_udf_priv_check =
-            self.ctx.get_settings().get_enable_stage_udf_priv_check()?;
+        let enable_experimental_rbac_check = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_rbac_check()?;
 
         match plan {
             Plan::Query {
@@ -227,7 +233,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     _ => {}
                 };
-                if enable_stage_udf_priv_check {
+                if enable_experimental_rbac_check {
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
@@ -249,7 +255,7 @@ impl AccessChecker for PrivilegeAccess {
                 let metadata = metadata.read().clone();
 
                 for table in metadata.tables() {
-                    if table.is_source_of_stage() {
+                    if enable_experimental_rbac_check && table.is_source_of_stage() {
                         match table.table().get_data_source_info() {
                             DataSourceInfo::StageSource(stage_info) => {
                                 self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
@@ -529,9 +535,11 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::ReclusterTable(plan) => {
-                if let Some(scalar) = &plan.push_downs {
-                    let udf = get_udf_names(scalar)?;
-                    self.check_udf_priv(udf).await?;
+                if enable_experimental_rbac_check {
+                    if let Some(scalar) = &plan.push_downs {
+                        let udf = get_udf_names(scalar)?;
+                        self.check_udf_priv(udf).await?;
+                    }
                 }
                 self.validate_access(
                     &GrantObject::Table(
@@ -628,7 +636,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::MergeInto(plan) => {
-                if enable_stage_udf_priv_check {
+                if enable_experimental_rbac_check {
                     let s_expr = &plan.input;
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
@@ -683,7 +691,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Delete(plan) => {
-                if enable_stage_udf_priv_check {
+                if enable_experimental_rbac_check {
                     if let Some(selection) = &plan.selection {
                         let udf = get_udf_names(selection)?;
                         self.check_udf_priv(udf).await?;
@@ -719,29 +727,31 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Update(plan) => {
-                for scalar in plan.update_list.values() {
-                    let udf = get_udf_names(scalar)?;
-                    self.check_udf_priv(udf).await?;
-                }
-                if let Some(selection) = &plan.selection {
-                    let udf = get_udf_names(selection)?;
-                    self.check_udf_priv(udf).await?;
-                }
-                for subquery in &plan.subquery_desc {
-                    match subquery.input_expr.get_udfs() {
-                        Ok(udfs) => {
-                            if !udfs.is_empty() {
-                                for udf in udfs {
-                                    self.validate_access(
-                                        &GrantObject::UDF(udf.clone()),
-                                        vec![UserPrivilegeType::Usage],
-                                        false,
-                                    ).await?
+                if enable_experimental_rbac_check {
+                    for scalar in plan.update_list.values() {
+                        let udf = get_udf_names(scalar)?;
+                        self.check_udf_priv(udf).await?;
+                    }
+                    if let Some(selection) = &plan.selection {
+                        let udf = get_udf_names(selection)?;
+                        self.check_udf_priv(udf).await?;
+                    }
+                    for subquery in &plan.subquery_desc {
+                        match subquery.input_expr.get_udfs() {
+                            Ok(udfs) => {
+                                if !udfs.is_empty() {
+                                    for udf in udfs {
+                                        self.validate_access(
+                                            &GrantObject::UDF(udf.clone()),
+                                            vec![UserPrivilegeType::Usage],
+                                            false,
+                                        ).await?
+                                    }
                                 }
                             }
-                        }
-                        Err(err) => {
-                            return Err(err.add_message("get udf error on validating access"));
+                            Err(err) => {
+                                return Err(err.add_message("get udf error on validating access"));
+                            }
                         }
                     }
                 }

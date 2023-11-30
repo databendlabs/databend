@@ -69,8 +69,9 @@ impl AsyncSystemTable for FunctionsTable {
         scalar_func_names.sort();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let aggr_func_names = aggregate_function_factory.registered_names();
-        let enable_stage_udf_priv_check = ctx.get_settings().get_enable_stage_udf_priv_check()?;
-        let udfs = if enable_stage_udf_priv_check {
+        let enable_experimental_rbac_check =
+            ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let udfs = if enable_experimental_rbac_check {
             let visibility_checker = ctx.get_visibility_checker().await?;
             let udfs = FunctionsTable::get_udfs(ctx).await?;
             udfs.into_iter()
