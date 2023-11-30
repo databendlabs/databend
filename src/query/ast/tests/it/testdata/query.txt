@@ -356,6 +356,7 @@ Query {
             group_by: None,
             having: None,
             window_list: None,
+            qualify: None,
         },
     ),
     order_by: [],
