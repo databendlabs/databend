@@ -32,6 +32,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
+use common_sql::executor::physical_plans::MutationKind;
 use opendal::Operator;
 use storages_common_index::BloomIndex;
 
@@ -76,7 +77,7 @@ impl TransformSerializeBlock {
         output: Arc<OutputPort>,
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
-        is_append: bool,
+        kind: MutationKind,
     ) -> Result<Self> {
         // remove virtual computed fields.
         let mut fields = table
@@ -86,7 +87,7 @@ impl TransformSerializeBlock {
             .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .cloned()
             .collect::<Vec<_>>();
-        if !is_append {
+        if !matches!(kind, MutationKind::Insert) {
             // add stream fields.
             for stream_column in table.stream_columns().iter() {
                 fields.push(stream_column.table_field());

@@ -202,7 +202,7 @@ impl FuseTable {
                     output,
                     self,
                     cluster_stats_gen.clone(),
-                    false,
+                    MutationKind::Compact,
                 )?;
                 proc.into_processor()
             },

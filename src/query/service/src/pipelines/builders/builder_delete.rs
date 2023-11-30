@@ -133,7 +133,7 @@ impl PipelineBuilder {
                 output,
                 table,
                 cluster_stats_gen.clone(),
-                false,
+                MutationKind::Delete,
             )?;
             proc.into_processor()
         })?;

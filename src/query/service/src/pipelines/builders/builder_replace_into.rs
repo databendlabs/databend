@@ -36,6 +36,7 @@ use common_pipeline_core::Pipe;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::create_dummy_item;
+use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use common_sql::executor::physical_plans::ReplaceDeduplicate;
 use common_sql::executor::physical_plans::ReplaceInto;
@@ -116,7 +117,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen,
-            false,
+            MutationKind::Replace,
         )?;
         let block_builder = serialize_block_transform.get_block_builder();
 

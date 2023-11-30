@@ -17,6 +17,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_sources::EmptySource;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::physical_plans::UpdateSource;
 use common_sql::gen_mutation_stream_operator;
 use common_storages_fuse::operations::TransformSerializeBlock;
@@ -83,7 +84,7 @@ impl PipelineBuilder {
                 output,
                 table,
                 cluster_stats_gen.clone(),
-                false,
+                MutationKind::Update,
             )?;
             proc.into_processor()
         })

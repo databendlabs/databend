@@ -26,6 +26,7 @@ use common_pipeline_sources::EmptySource;
 use common_pipeline_transforms::processors::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::physical_plans::ReclusterSink;
 use common_sql::executor::physical_plans::ReclusterSource;
 use common_sql::gen_mutation_stream_operator;
@@ -185,7 +186,7 @@ impl PipelineBuilder {
                             transform_output_port,
                             table,
                             cluster_stats_gen.clone(),
-                            false,
+                            MutationKind::Recluster,
                         )?;
                         proc.into_processor()
                     })
