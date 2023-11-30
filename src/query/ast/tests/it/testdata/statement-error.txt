@@ -405,7 +405,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
+  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
