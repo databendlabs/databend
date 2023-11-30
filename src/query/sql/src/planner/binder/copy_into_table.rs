@@ -94,7 +94,13 @@ impl<'a> Binder {
 
                 // just check query
                 let mut tmp_bind_context = BindContext::new();
-                let (bind_query, _) = self.bind_query(&mut tmp_bind_context, query).await?;
+                let mut tmp_binder = Binder::new(
+                    self.ctx.clone(),
+                    self.catalogs.clone(),
+                    self.name_resolution_ctx.clone(),
+                    self.metadata.clone(),
+                );
+                let (bind_query, _) = tmp_binder.bind_query(&mut tmp_bind_context, query).await?;
                 if !self.check_sexpr_top(&bind_query, super::binder::CheckType::CopyIntoTable)? {
                     return Err(ErrorCode::SemanticError(
                         "copy into table source can't contain window|aggregate|udf|join functions"
