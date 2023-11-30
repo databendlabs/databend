@@ -70,7 +70,7 @@ select 1
 ----
 1
 
-skipif clickhouse
+
 query I
 select 1
 ----

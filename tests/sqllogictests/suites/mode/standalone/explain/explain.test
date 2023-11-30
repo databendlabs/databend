@@ -200,7 +200,7 @@ WHERE
         AND (b < 10)
     )
 
-skipif clickhouse
+
 query T
 explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
@@ -217,7 +217,7 @@ SIZE_LIMIT = 10
 PURGE = false
 DISABLE_VARIANT_CHECK = false
 
-skipif clickhouse
+
 query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
@@ -455,7 +455,7 @@ Delete (children 2)
         ├── ColumnIdentifier b
         └── Literal UInt64(10)
 
-skipif clickhouse
+
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
@@ -1708,6 +1708,21 @@ Filter
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 0.00
+
+query T
+explain insert into t2 select * from t1;
+----
+Insert { catalog: "default", database: "default", table: "t2", schema: TableSchema { fields: [TableField { name: "a", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 0, computed_expr: None }, TableField { name: "b", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 1, computed_expr: None }, TableField { name: "c", default_expr: None, data_type: Nullable(String), column_id: 2, computed_expr: None }], metadata: {}, next_column_id: 3 }, overwrite: false }
+TableScan
+├── table: default.default.t1
+├── output columns: [a (#0), b (#1), c (#2)]
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 0.00
+
 
 statement ok
 drop table t1;

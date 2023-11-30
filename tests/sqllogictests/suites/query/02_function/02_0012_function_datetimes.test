@@ -936,7 +936,7 @@ insert into t values('2022-04-02T15:10:28+08:13', '2022-04-02T15:10:28.223-08:00
 statement ok
 insert into t values('2022-04-02T15:10:28-08:13', '2022-04-02T15:10:28.223+08:00', '2022-04-02')
 
-skipif clickhouse
+
 statement error 1006
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10')
 

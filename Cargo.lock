@@ -4085,7 +4085,6 @@ dependencies = [
  "common-exception",
  "env_logger",
  "futures-util",
- "lazy_static",
  "mysql_async",
  "rand 0.8.5",
  "regex",
