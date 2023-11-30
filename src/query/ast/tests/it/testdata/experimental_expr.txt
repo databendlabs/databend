@@ -1,0 +1,425 @@
+---------- Input ----------
+a
+---------- Output ---------
+a
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..1,
+    ),
+    database: None,
+    table: None,
+    column: Name(
+        Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                0..1,
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+a.add(b)
+---------- Output ---------
+add(a, b)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        1..8,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "add",
+        quote: None,
+        span: Some(
+            2..5,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                0..1,
+            ),
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        0..1,
+                    ),
+                },
+            ),
+        },
+        ColumnRef {
+            span: Some(
+                6..7,
+            ),
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        6..7,
+                    ),
+                },
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: None,
+}
+
+
+---------- Input ----------
+a.sub(b).add(e)
+---------- Output ---------
+add(sub(a, b), e)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        8..15,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "add",
+        quote: None,
+        span: Some(
+            9..12,
+        ),
+    },
+    args: [
+        FunctionCall {
+            span: Some(
+                1..8,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "sub",
+                quote: None,
+                span: Some(
+                    2..5,
+                ),
+            },
+            args: [
+                ColumnRef {
+                    span: Some(
+                        0..1,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                0..1,
+                            ),
+                        },
+                    ),
+                },
+                ColumnRef {
+                    span: Some(
+                        6..7,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                6..7,
+                            ),
+                        },
+                    ),
+                },
+            ],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        ColumnRef {
+            span: Some(
+                13..14,
+            ),
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    name: "e",
+                    quote: None,
+                    span: Some(
+                        13..14,
+                    ),
+                },
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: None,
+}
+
+
+---------- Input ----------
+a.sub(b).add(e)
+---------- Output ---------
+add(sub(a, b), e)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        8..15,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "add",
+        quote: None,
+        span: Some(
+            9..12,
+        ),
+    },
+    args: [
+        FunctionCall {
+            span: Some(
+                1..8,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "sub",
+                quote: None,
+                span: Some(
+                    2..5,
+                ),
+            },
+            args: [
+                ColumnRef {
+                    span: Some(
+                        0..1,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                0..1,
+                            ),
+                        },
+                    ),
+                },
+                ColumnRef {
+                    span: Some(
+                        6..7,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                6..7,
+                            ),
+                        },
+                    ),
+                },
+            ],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        ColumnRef {
+            span: Some(
+                13..14,
+            ),
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    name: "e",
+                    quote: None,
+                    span: Some(
+                        13..14,
+                    ),
+                },
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: None,
+}
+
+
+---------- Input ----------
+1 + {'k1': 4}.k1
+---------- Output ---------
+(1 + {'k1':4}:k1)
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..3,
+    ),
+    op: Plus,
+    left: Literal {
+        span: Some(
+            0..1,
+        ),
+        lit: UInt64(
+            1,
+        ),
+    },
+    right: MapAccess {
+        span: Some(
+            13..16,
+        ),
+        expr: Map {
+            span: Some(
+                4..13,
+            ),
+            kvs: [
+                (
+                    String(
+                        "k1",
+                    ),
+                    Literal {
+                        span: Some(
+                            11..12,
+                        ),
+                        lit: UInt64(
+                            4,
+                        ),
+                    },
+                ),
+            ],
+        },
+        accessor: Colon {
+            key: Identifier {
+                name: "k1",
+                quote: None,
+                span: Some(
+                    14..16,
+                ),
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
+'3'.plus(4)
+---------- Output ---------
+plus('3', 4)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        3..11,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "plus",
+        quote: None,
+        span: Some(
+            4..8,
+        ),
+    },
+    args: [
+        Literal {
+            span: Some(
+                0..3,
+            ),
+            lit: String(
+                "3",
+            ),
+        },
+        Literal {
+            span: Some(
+                9..10,
+            ),
+            lit: UInt64(
+                4,
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: None,
+}
+
+
+---------- Input ----------
+(3).add({'k1': 4 }.k1)
+---------- Output ---------
+add(3, {'k1':4}:k1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        3..22,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "add",
+        quote: None,
+        span: Some(
+            4..7,
+        ),
+    },
+    args: [
+        Literal {
+            span: Some(
+                1..2,
+            ),
+            lit: UInt64(
+                3,
+            ),
+        },
+        MapAccess {
+            span: Some(
+                18..21,
+            ),
+            expr: Map {
+                span: Some(
+                    8..18,
+                ),
+                kvs: [
+                    (
+                        String(
+                            "k1",
+                        ),
+                        Literal {
+                            span: Some(
+                                15..16,
+                            ),
+                            lit: UInt64(
+                                4,
+                            ),
+                        },
+                    ),
+                ],
+            },
+            accessor: Colon {
+                key: Identifier {
+                    name: "k1",
+                    quote: None,
+                    span: Some(
+                        19..21,
+                    ),
+                },
+            },
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: None,
+}
+
+

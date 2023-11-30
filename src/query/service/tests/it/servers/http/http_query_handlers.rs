@@ -61,6 +61,7 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use serde_json::json;
 use serde_json::Value;
 use tokio::time::sleep;
 use wiremock::matchers::method;
@@ -117,32 +118,32 @@ impl TestHttpQueryRequest {
     //    self
     // }
 
-    async fn fetch_begin(&mut self) -> Result<(StatusCode, QueryResponse)> {
-        let (status, resp) = self
+    async fn fetch_begin(&mut self) -> Result<(StatusCode, QueryResponse, String)> {
+        let (status, resp, body) = self
             .do_request(Method::POST, "/v1/query")
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
-        Ok((status, resp.unwrap()))
+        Ok((status, resp.unwrap(), body))
     }
 
-    async fn fetch_next(&mut self) -> Result<(StatusCode, Option<QueryResponse>)> {
-        let (status, resp) = self
+    async fn fetch_next(&mut self) -> Result<(StatusCode, Option<QueryResponse>, String)> {
+        let (status, resp, body) = self
             .do_request(Method::GET, self.next_uri.as_ref().unwrap())
             .await?;
         self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
-        Ok((status, resp))
+        Ok((status, resp, body))
     }
 
     async fn fetch_total(&mut self) -> Result<TestHttpQueryFetchReply> {
         let mut resps = vec![];
 
-        let (status, resp) = self.do_request(Method::POST, "/v1/query").await?;
+        let (status, resp, _) = self.do_request(Method::POST, "/v1/query").await?;
         self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
         resps.push((status, resp.clone().unwrap()));
 
         while self.next_uri.is_some() {
-            let (status, resp) = self
+            let (status, resp, _) = self
                 .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
             self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
@@ -156,7 +157,7 @@ impl TestHttpQueryRequest {
         &self,
         method: Method,
         uri: &str,
-    ) -> Result<(StatusCode, Option<QueryResponse>)> {
+    ) -> Result<(StatusCode, Option<QueryResponse>, String)> {
         let content_type = "application/json";
         let body = serde_json::to_vec(&self.json).unwrap();
 
@@ -181,7 +182,7 @@ impl TestHttpQueryRequest {
             .map(Some)
             .unwrap_or_default();
 
-        Ok((status_code, query_resp))
+        Ok((status_code, query_resp, body))
     }
 }
 
@@ -606,15 +607,18 @@ async fn test_result_timeout() -> Result<()> {
 
     let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
-    let (status, result) = req.fetch_begin().await?;
+    let (status, result, _) = req.fetch_begin().await?;
 
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
     assert!(!query_id.is_empty());
 
     sleep(std::time::Duration::from_secs(2)).await;
-    let (status, result) = req.fetch_next().await?;
+    let (status, result, body) = req.fetch_next().await?;
     assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", result);
+    let msg = format!("query id {} timeout on {}", query_id, config.query.node_id);
+    let msg = json!({ "error": { "code": "404", "message": msg }}).to_string();
+    assert_eq!(body, msg, "{:?}", result);
     Ok(())
 }
 

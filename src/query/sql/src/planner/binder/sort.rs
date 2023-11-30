@@ -196,14 +196,15 @@ impl Binder {
 
         for order in order_by.items {
             if from_context.in_grouping {
-                let group_checker = GroupingChecker::new(from_context);
+                let mut group_checker = GroupingChecker::new(from_context);
                 // Perform grouping check on original scalar expression if order item is alias.
                 if let Some(scalar_item) = select_list
                     .items
                     .iter()
                     .find(|item| item.alias == order.name)
                 {
-                    group_checker.resolve(&scalar_item.scalar, None)?;
+                    let mut scalar = scalar_item.scalar.clone();
+                    group_checker.visit(&mut scalar)?;
                 }
             }
 
@@ -214,11 +215,11 @@ impl Binder {
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;
                     if from_context.in_grouping {
-                        let group_checker = GroupingChecker::new(from_context);
-                        scalar = group_checker.resolve(&scalar, None)?;
+                        let mut group_checker = GroupingChecker::new(from_context);
+                        group_checker.visit(&mut scalar)?;
                     } else if !from_context.windows.window_functions.is_empty() {
-                        let window_checker = WindowChecker::new(from_context);
-                        scalar = window_checker.resolve(&scalar)?;
+                        let mut window_checker = WindowChecker::new(from_context);
+                        window_checker.visit(&mut scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }
@@ -338,10 +339,9 @@ impl Binder {
                     Ok(ScalarExpr::LambdaFunction(LambdaFunc {
                         span: lambda_func.span,
                         func_name: lambda_func.func_name.clone(),
-                        display_name: lambda_func.display_name.clone(),
                         args,
-                        params: lambda_func.params.clone(),
                         lambda_expr: lambda_func.lambda_expr.clone(),
+                        lambda_display: lambda_func.lambda_display.clone(),
                         return_type: lambda_func.return_type.clone(),
                     }))
                 }

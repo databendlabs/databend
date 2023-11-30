@@ -202,9 +202,9 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                 visitor.visit_identifier(alias);
             }
         }
-        SelectTarget::QualifiedName {
+        SelectTarget::StarColumns {
             qualified: names,
-            exclude,
+            column_filter,
         } => {
             for indirection in names {
                 match indirection {
@@ -214,9 +214,16 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                     Indirection::Star(_) => {}
                 }
             }
-            if let Some(cols) = exclude {
-                for ident in cols.iter() {
-                    visitor.visit_column_id(ident);
+            if let Some(col_filter) = column_filter {
+                match col_filter {
+                    ColumnFilter::Excludes(excludes) => {
+                        for ident in excludes.iter() {
+                            visitor.visit_identifier(ident);
+                        }
+                    }
+                    ColumnFilter::Lambda(lambda) => {
+                        visitor.visit_expr(&lambda.expr);
+                    }
                 }
             }
         }

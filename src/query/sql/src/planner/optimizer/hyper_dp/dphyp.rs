@@ -159,7 +159,6 @@ impl DPhpy {
                     left_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
-                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
@@ -172,7 +171,6 @@ impl DPhpy {
                     right_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
-                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
@@ -217,7 +215,6 @@ impl DPhpy {
             }
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
-            | RelOperator::Lambda(_)
             | RelOperator::Sort(_)
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)

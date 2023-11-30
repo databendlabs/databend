@@ -48,7 +48,6 @@ use log::warn;
 use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::join::JoinConditions;
-use crate::binder::lambda::LambdaRewriter;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::udf::UdfRewriter;
@@ -244,10 +243,8 @@ impl Binder {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
         }
 
-        if let Some((having, span)) = having {
-            s_expr = self
-                .bind_having(&mut from_context, having, span, s_expr)
-                .await?;
+        if let Some(having) = having {
+            s_expr = self.bind_having(&mut from_context, having, s_expr).await?;
         }
 
         // bind window
@@ -279,10 +276,6 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
-
-        // rewrite lambda
-        let mut lambda_rewriter = LambdaRewriter::new(self.metadata.clone());
-        s_expr = lambda_rewriter.rewrite(&s_expr)?;
 
         // rewrite udf
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
@@ -1057,8 +1050,11 @@ impl<'a> SelectRewriter<'a> {
 
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            let mut exclude_columns = aggregate_columns;
-            exclude_columns.push(ColumnID::Name(pivot.value_column.clone()));
+            let mut exclude_columns: Vec<_> = aggregate_columns
+                .iter()
+                .map(|c| Identifier::from_name(c.name()))
+                .collect();
+            exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
         };
         let new_aggregate_name = Identifier {
@@ -1100,13 +1096,7 @@ impl<'a> SelectRewriter<'a> {
         let unpivot = stmt.from[0].unpivot().unwrap();
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(
-                unpivot
-                    .names
-                    .iter()
-                    .map(|ident| ColumnID::Name(ident.clone()))
-                    .collect(),
-            );
+            star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
             Self::ident_from_string("unnest"),

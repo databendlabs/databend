@@ -102,9 +102,10 @@ impl<'a> Binder {
         if let Some(selection) = &selection {
             if !self.check_allowed_scalar_expr_with_subquery(selection)? {
                 return Err(ErrorCode::SemanticError(
-                        "selection in delete statement can't contain window|aggregate|lambda|udf functions".to_string(),
-                    )
-                    .set_span(selection.span()));
+                    "selection in delete statement can't contain window|aggregate|udf functions"
+                        .to_string(),
+                )
+                .set_span(selection.span()));
             }
         }
 
@@ -193,18 +194,18 @@ impl Binder {
         table_expr: SExpr,
         subquery_desc: &mut Vec<SubqueryDesc>,
     ) -> Result<()> {
-        struct FindSubquery<'a> {
+        struct FindSubqueryVisitor<'a> {
             subqueries: Vec<&'a SubqueryExpr>,
         }
 
-        impl<'a> Visitor<'a> for FindSubquery<'a> {
+        impl<'a> Visitor<'a> for FindSubqueryVisitor<'a> {
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
                 self.subqueries.push(subquery);
                 Ok(())
             }
         }
 
-        let mut find_subquery = FindSubquery { subqueries: vec![] };
+        let mut find_subquery = FindSubqueryVisitor { subqueries: vec![] };
         find_subquery.visit(scalar)?;
 
         for subquery in find_subquery.subqueries {
