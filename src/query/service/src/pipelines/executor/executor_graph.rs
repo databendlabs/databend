@@ -341,7 +341,6 @@ impl ExecutingGraph {
     ) -> Result<()> {
         if neighbors.clone().next().is_none() {
             // Source node
-            dbg!("find source node");
             let source_node = locker.graph[current_node].clone();
             source_node
                 .processor
@@ -349,8 +348,6 @@ impl ExecutingGraph {
             return Ok(());
         }
         for neighbor in neighbors {
-            let current_node = locker.graph[neighbor].clone();
-            dbg!(&current_node.processor.name());
             let nodes = locker
                 .graph
                 .neighbors_directed(neighbor, Direction::Incoming);
