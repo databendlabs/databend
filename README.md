@@ -62,7 +62,7 @@
 
 ### 1. Databend Serverless Cloud
 
-The fastest way to try Databend, [Databend Cloud](https://databend.rs/doc/cloud/)
+The fastest way to try Databend, [Databend Cloud](https://databend.com)
 
 ### 2. Install Databend from Docker
 
