@@ -32,7 +32,6 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
@@ -245,14 +244,6 @@ impl QueryContextShared {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
-    }
-
-    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.session.get_changed_settings()
-    }
-
-    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.session.apply_changed_settings(changes)
     }
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
