@@ -58,6 +58,7 @@ pub enum SetOperationElement {
         group_by: Option<GroupBy>,
         having: Box<Option<Expr>>,
         window_list: Option<Vec<WindowDefinition>>,
+        qualify: Box<Option<Expr>>,
     },
     SetOperation {
         op: SetOperator,
@@ -104,6 +105,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
                 ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+                ~ ( QUALIFY ~ ^#expr )?
         },
         |(
             _select,
@@ -115,6 +117,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_group_by_block,
             opt_having_block,
             opt_window_block,
+            opt_qualify_block,
         )| {
             SetOperationElement::SelectStmt {
                 hints: opt_hints,
@@ -129,6 +132,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
                 window_list: opt_window_block.map(|(_, windows)| windows),
+                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
             }
         },
     );
@@ -142,6 +146,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
                 ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+                ~ ( QUALIFY ~ ^#expr )?
         },
         |(
             opt_from_block,
@@ -153,6 +158,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_group_by_block,
             opt_having_block,
             opt_window_block,
+            opt_qualify_block,
         )| {
             SetOperationElement::SelectStmt {
                 hints: opt_hints,
@@ -167,6 +173,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
                 window_list: opt_window_block.map(|(_, windows)| windows),
+                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
             }
         },
     );
@@ -262,6 +269,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 group_by,
                 having,
                 window_list,
+                qualify,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
                 hints,
@@ -272,6 +280,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 group_by,
                 having: *having,
                 window_list,
+                qualify: *qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
                 span: transform_span(input.span.0),

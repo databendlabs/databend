@@ -646,6 +646,8 @@ pub trait Visitor<'ast>: Sized {
             selection,
             group_by,
             having,
+            window_list,
+            qualify,
             ..
         } = stmt;
 
@@ -679,6 +681,16 @@ pub trait Visitor<'ast>: Sized {
 
         if let Some(having) = having {
             walk_expr(self, having);
+        }
+
+        if let Some(window_list) = window_list {
+            for window_def in window_list {
+                walk_window_definition(self, window_def);
+            }
+        }
+
+        if let Some(qualify) = qualify {
+            walk_expr(self, qualify);
         }
     }
 

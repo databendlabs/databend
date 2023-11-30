@@ -36,6 +36,7 @@ mod merge_into;
 mod presign;
 mod project;
 mod project_set;
+mod qualify;
 mod replace;
 mod scalar;
 mod scalar_common;
