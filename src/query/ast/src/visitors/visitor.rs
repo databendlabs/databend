@@ -379,7 +379,11 @@ pub trait Visitor<'ast>: Sized {
     fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
 
     fn visit_copy_into_table(&mut self, _copy: &'ast CopyIntoTableStmt) {}
-    fn visit_copy_into_location(&mut self, _copy: &'ast CopyIntoLocationStmt) {}
+    fn visit_copy_into_location(&mut self, copy: &'ast CopyIntoLocationStmt) {
+        if let CopyIntoLocationSource::Query(query) = &copy.src {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
 
@@ -416,8 +420,18 @@ pub trait Visitor<'ast>: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &'ast str) {}
     fn visit_set_secondary_roles(&mut self, _option: &SecondaryRolesOption) {}
 
-    fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
-    fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}
+    fn visit_insert(&mut self, insert: &'ast InsertStmt) {
+        if let InsertSource::Select { query } = &insert.source {
+            self.visit_query(query)
+        }
+    }
+
+    fn visit_replace(&mut self, replace: &'ast ReplaceStmt) {
+        if let InsertSource::Select { query, .. } = &replace.source {
+            self.visit_query(query)
+        }
+    }
+
     fn visit_merge_into(&mut self, merge_into: &'ast MergeIntoStmt) {
         // for visit merge into, its destination is to do some rules for the exprs
         // in merge into before we bind_merge_into, we need to make sure the correct
@@ -449,11 +463,23 @@ pub trait Visitor<'ast>: Sized {
             }
         }
     }
+
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource) {}
 
-    fn visit_delete(&mut self, _delete: &'ast DeleteStmt) {}
+    fn visit_delete(&mut self, delete: &'ast DeleteStmt) {
+        if let Some(expr) = &delete.selection {
+            self.visit_expr(expr)
+        }
+    }
 
-    fn visit_update(&mut self, _update: &'ast UpdateStmt) {}
+    fn visit_update(&mut self, update: &'ast UpdateStmt) {
+        if let Some(expr) = &update.selection {
+            self.visit_expr(expr)
+        }
+        for update in &update.update_list {
+            self.visit_expr(&update.expr)
+        }
+    }
 
     fn visit_show_catalogs(&mut self, _stmt: &'ast ShowCatalogsStmt) {}
 

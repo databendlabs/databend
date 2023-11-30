@@ -394,7 +394,11 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_copy_into_table(&mut self, _copy: &mut CopyIntoTableStmt) {}
-    fn visit_copy_into_location(&mut self, _copy: &mut CopyIntoLocationStmt) {}
+    fn visit_copy_into_location(&mut self, copy: &mut CopyIntoLocationStmt) {
+        if let CopyIntoLocationSource::Query(query) = &mut copy.src {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
@@ -429,8 +433,16 @@ pub trait VisitorMut: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
     fn visit_set_secondary_roles(&mut self, _option: &mut SecondaryRolesOption) {}
 
-    fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
-    fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
+    fn visit_insert(&mut self, insert: &mut InsertStmt) {
+        if let InsertSource::Select { query } = &mut insert.source {
+            self.visit_query(query)
+        }
+    }
+    fn visit_replace(&mut self, replace: &mut ReplaceStmt) {
+        if let InsertSource::Select { query } = &mut replace.source {
+            self.visit_query(query)
+        }
+    }
     fn visit_merge_into(&mut self, merge_into: &mut MergeIntoStmt) {
         // for visit merge into, its destination is to do some rules for the exprs
         // in merge into before we bind_merge_into, we need to make sure the correct
@@ -464,11 +476,23 @@ pub trait VisitorMut: Sized {
             }
         }
     }
+
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
+    fn visit_delete(&mut self, delete: &mut DeleteStmt) {
+        if let Some(expr) = &mut delete.selection {
+            self.visit_expr(expr)
+        }
+    }
 
-    fn visit_update(&mut self, _update: &mut UpdateStmt) {}
+    fn visit_update(&mut self, update: &mut UpdateStmt) {
+        if let Some(expr) = &mut update.selection {
+            self.visit_expr(expr)
+        }
+        for update in &mut update.update_list {
+            self.visit_expr(&mut update.expr)
+        }
+    }
 
     fn visit_show_catalogs(&mut self, _stmt: &mut ShowCatalogsStmt) {}
 

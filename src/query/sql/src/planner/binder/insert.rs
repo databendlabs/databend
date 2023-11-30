@@ -153,6 +153,15 @@ impl Binder {
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
                     enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
                 }));
+
+                if let Plan::Query { s_expr, .. } = &select_plan {
+                    if !self.check_sexpr_top(s_expr, super::binder::CheckType::Insert)? {
+                        return Err(ErrorCode::SemanticError(
+                            "insert source's condition can't contain udf functions".to_string(),
+                        ));
+                    }
+                }
+
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }

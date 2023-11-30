@@ -127,6 +127,12 @@ impl Binder {
         let (source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
 
+        if !self.check_sexpr_top(&source_expr, super::binder::CheckType::Merge)? {
+            return Err(ErrorCode::SemanticError(
+                "replace source's condition can't contain udf functions".to_string(),
+            ));
+        }
+
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
         let mut columns_set = source_context.column_set();
