@@ -22,11 +22,19 @@ use common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::Sort;
+use common_sql::executor::PhysicalPlan;
 
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_sort(&mut self, sort: &Sort) -> Result<()> {
+        if matches!(sort.after_exchange, Some(true)) {
+            debug_assert!(matches!(sort.input, box PhysicalPlan::ExchangeSource(_)));
+            // It will be set to false when the builder get into building exchange source plan.
+            // The pipeline graph of distributed sort can be found in https://github.com/datafuselabs/databend/pull/13881
+            self.before_sort_and_after_exchange = true;
+        }
+
         self.build_pipeline(&sort.input)?;
 
         let input_schema = sort.input.output_schema()?;

@@ -55,6 +55,9 @@ pub struct PipelineBuilder {
     pub(crate) enable_profiling: bool,
     pub(crate) proc_profs: SharedProcessorProfiles,
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
+
+    // Indicate whether the current plan to build is a sort plan after an exchange plan.
+    pub(crate) before_sort_and_after_exchange: bool,
 }
 
 impl PipelineBuilder {
@@ -79,6 +82,7 @@ impl PipelineBuilder {
             index: None,
             cte_state: HashMap::new(),
             probe_data_fields: None,
+            before_sort_and_after_exchange: false,
         }
     }
 

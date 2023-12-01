@@ -351,6 +351,7 @@ impl DataExchangeManager {
                     enable_profiling,
                     fragment_id,
                     injector,
+                    true,
                 )?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
@@ -410,6 +411,7 @@ impl DataExchangeManager {
         fragment_id: usize,
         enable_profiling: bool,
         injector: Arc<dyn ExchangeInjector>,
+        resize_back: bool,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -429,6 +431,7 @@ impl DataExchangeManager {
                     enable_profiling,
                     fragment_id,
                     injector,
+                    resize_back,
                 )
             }
         }
@@ -625,6 +628,7 @@ impl QueryCoordinator {
         enable_profiling: bool,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
+        resize_back: bool,
     ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
@@ -668,6 +672,7 @@ impl QueryCoordinator {
                 &exchange_params,
                 &mut build_res.main_pipeline,
                 injector,
+                resize_back,
             )?;
 
             return Ok(build_res);
