@@ -55,10 +55,10 @@ statement ok
 drop CONNECTION IF EXISTS my_conn
 
 statement ok
-create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://localhost:9900'
+create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/'
 
 query
-select * from INFER_SCHEMA(location => 's3://dandan/tuple.parquet', connection_name => 'my_conn')
+select * from INFER_SCHEMA(location => 's3://testbucket/admin/data/parquet/tuple.parquet', connection_name => 'my_conn')
 ----
 id INT 0 0
 t TUPLE(A INT32, B STRING) 0 1
