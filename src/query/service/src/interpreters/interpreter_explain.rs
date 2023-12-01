@@ -95,6 +95,26 @@ impl Interpreter for ExplainInterpreter {
                     }
                     vec![DataBlock::concat(&res)?]
                 }
+                Plan::CreateTable(plan) => match &plan.as_select {
+                    Some(box Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        formatted_ast,
+                        ..
+                    }) => {
+                        let mut res =
+                            vec![DataBlock::new_from_columns(vec![StringType::from_data(
+                                vec!["CreateTableAsSelect:", ""],
+                            )])];
+                        res.extend(
+                            self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                .await?,
+                        );
+                        vec![DataBlock::concat(&res)?]
+                    }
+                    _ => self.explain_plan(&self.plan)?,
+                },
                 _ => self.explain_plan(&self.plan)?,
             },
 
