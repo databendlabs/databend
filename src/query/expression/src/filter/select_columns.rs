@@ -791,15 +791,6 @@ where
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
-                        println!("left: {}", left.get_unchecked(idx as usize));
-                        println!("right: {}", right.get_unchecked(idx as usize));
-                        println!(
-                            "res = {}",
-                            op(
-                                *left.get_unchecked(idx as usize),
-                                *right.get_unchecked(idx as usize),
-                            )
-                        );
                         let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
                                 *left.get_unchecked(idx as usize),
