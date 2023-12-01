@@ -22,10 +22,7 @@ use async_channel::Receiver;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Thread;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -172,25 +169,19 @@ impl DataExchangeManager {
         let config = GlobalConfig::instance();
         let address = address.to_string();
 
-        GlobalIORuntime::instance()
-            .spawn(GLOBAL_TASK, async move {
-                match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            address.to_owned(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(address.to_owned(), None, None)
-                            .await?,
-                    ))),
-                }
-            })
-            .await
-            .expect("create client future must be joined successfully")
+        match config.tls_query_cli_enabled() {
+            true => Ok(FlightClient::new(FlightServiceClient::new(
+                ConnectionFactory::create_rpc_channel(
+                    address.to_owned(),
+                    None,
+                    Some(config.query.to_rpc_client_tls_config()),
+                )
+                .await?,
+            ))),
+            false => Ok(FlightClient::new(FlightServiceClient::new(
+                ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+            ))),
+        }
     }
 
     // Execute query in background
