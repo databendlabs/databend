@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,7 +48,6 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
@@ -85,15 +83,16 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let start = Instant::now();
-        let (physical_plan, table_info) = self.build_physical_plan().await?;
+        let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
         // Add table lock before execution.
-        let table_lock = LockManager::create_table_lock(table_info)?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
+        // let table_lock = LockManager::create_table_lock(table_info)?;
+        // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        // build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -113,7 +112,7 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
-                false,
+                true,
             )
             .await;
         }

@@ -48,6 +48,14 @@ where F: Fn(&ScalarExpr) -> bool
     pub fn scalars(&self) -> &[ScalarExpr] {
         &self.scalars
     }
+
+    pub fn reset_finder(&mut self) {
+        self.scalars.clear()
+    }
+
+    pub fn find_fn(&self) -> &'a F {
+        self.find_fn
+    }
 }
 
 impl<'a, F> Visitor<'a> for Finder<'a, F>

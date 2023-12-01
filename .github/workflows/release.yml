@@ -106,6 +106,7 @@ jobs:
           gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} >> $df
           sed -i -E 's/^--$/---/g' $df
           sed -i -E '/^asset:/d' $df
+          sed -i -E 's_https://github.com/datafuselabs/databend/pull/([0-9]+)_[#\1](https://github.com/datafuselabs/databend/pull/\1)_g' $df
           git add docs/release-nightly
           git status
       - uses: peter-evans/create-pull-request@v4
