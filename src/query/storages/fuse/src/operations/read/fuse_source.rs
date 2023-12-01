@@ -24,6 +24,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
@@ -290,6 +291,7 @@ pub(crate) fn fill_internal_column_meta(
     data_block: DataBlock,
     fuse_part: &FusePartInfo,
     offsets: Option<Vec<usize>>,
+    base_block_ids: Option<Scalar>,
 ) -> Result<DataBlock> {
     // Fill `BlockMetaInfoPtr` if query internal columns
     let block_meta = fuse_part.block_meta_index().unwrap();
@@ -300,6 +302,7 @@ pub(crate) fn fill_internal_column_meta(
         segment_location: block_meta.segment_location.clone(),
         snapshot_location: block_meta.snapshot_location.clone(),
         offsets,
+        base_block_ids,
     };
 
     let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));

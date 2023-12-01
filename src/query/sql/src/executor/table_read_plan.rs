@@ -25,6 +25,7 @@ use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StreamTablePart;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -89,7 +90,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let start = std::time::Instant::now();
 
-        let (statistics, parts) = if let Some(PushDownInfo {
+        let (statistics, mut parts) = if let Some(PushDownInfo {
             filters:
                 Some(Filters {
                     filter:
@@ -108,6 +109,15 @@ impl ToReadDataSourcePlan for dyn Table {
             self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
                 .await
         }?;
+
+        let mut base_block_ids = None;
+        if parts.partitions.len() == 1 {
+            let part = parts.partitions[0].clone();
+            if let Ok(part) = StreamTablePart::from_part(&part) {
+                parts = part.inner();
+                base_block_ids = Some(part.base_block_ids());
+            }
+        }
 
         ctx.set_status_info(&format!(
             "build physical plan - got data source partitions, time used {:?}",
@@ -279,6 +289,7 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            base_block_ids,
             update_stream_columns: false,
             data_mask_policy,
         })
