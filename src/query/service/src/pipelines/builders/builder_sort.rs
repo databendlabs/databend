@@ -17,6 +17,7 @@ use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_transforms::processors::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -30,26 +31,30 @@ impl PipelineBuilder {
 
         let input_schema = sort.input.output_schema()?;
 
-        if let Some(proj) = &sort.pre_projection {
-            // Do projection to reduce useless data copying during sorting.
-            let projection = proj
-                .iter()
-                .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
-                .collect::<Vec<_>>();
+        if !matches!(sort.after_exchange, Some(true)) {
+            // If the Sort plan is afte exchange, we don't need to do a projection,
+            // because the data is already projected in each cluster node.
+            if let Some(proj) = &sort.pre_projection {
+                // Do projection to reduce useless data copying during sorting.
+                let projection = proj
+                    .iter()
+                    .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
+                    .collect::<Vec<_>>();
 
-            if projection.len() < input_schema.fields().len() {
-                // Only if the projection is not a full projection, we need to add a projection transform.
-                self.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                        input,
-                        output,
-                        input_schema.num_fields(),
-                        self.func_ctx.clone(),
-                        vec![BlockOperator::Project {
-                            projection: projection.clone(),
-                        }],
-                    )))
-                })?;
+                if projection.len() < input_schema.fields().len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    self.main_pipeline.add_transform(|input, output| {
+                        Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                            input,
+                            output,
+                            input_schema.num_fields(),
+                            self.func_ctx.clone(),
+                            vec![BlockOperator::Project {
+                                projection: projection.clone(),
+                            }],
+                        )))
+                    })?;
+                }
             }
         }
 
@@ -105,15 +110,28 @@ impl PipelineBuilder {
                 // We only build a `MultiSortMergeTransform`,
                 // as the data is already sorted in each cluster node.
                 // The input number of the transform is equal to the number of cluster nodes.
-                try_add_multi_sort_merge(
-                    &mut self.main_pipeline,
-                    input_schema,
-                    block_size,
-                    limit,
-                    sort_desc,
-                    prof_info,
-                    true,
-                )
+                if self.main_pipeline.output_len() > 1 {
+                    try_add_multi_sort_merge(
+                        &mut self.main_pipeline,
+                        input_schema,
+                        block_size,
+                        limit,
+                        sort_desc,
+                        prof_info,
+                        true,
+                    )
+                } else {
+                    build_merge_sort_pipeline(
+                        &mut self.main_pipeline,
+                        input_schema,
+                        sort_desc,
+                        limit,
+                        block_size,
+                        block_size,
+                        prof_info,
+                        true,
+                    )
+                }
             }
             Some(false) => {
                 // Build for each cluster node.
