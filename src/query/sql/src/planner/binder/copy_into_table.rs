@@ -65,6 +65,7 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
+use crate::ScalarExpr;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -333,6 +334,17 @@ impl<'a> Binder {
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
+
+        for item in select_list.items.iter() {
+            if matches!(&item.scalar, ScalarExpr::AggregateFunction(_))
+                || matches!(&item.scalar, ScalarExpr::WindowFunction(_))
+            {
+                return Err(ErrorCode::SemanticError(
+                    "copy into table source can't contain window|aggregate|udf|join functions"
+                        .to_string(),
+                ));
+            };
+        }
         let (scalar_items, projections) = self.analyze_projection(
             &from_context.aggregate_info,
             &from_context.windows,
@@ -352,13 +364,6 @@ impl<'a> Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-
-        if !self.check_sexpr_top(&s_expr, super::binder::CheckType::CopyIntoTable)? {
-            return Err(ErrorCode::SemanticError(
-                "copy into table source can't contain window|aggregate|udf|join functions"
-                    .to_string(),
-            ));
-        }
 
         plan.query = Some(Box::new(Plan::Query {
             s_expr: Box::new(s_expr),

@@ -75,7 +75,6 @@ pub enum CheckType {
     Merge,
     Insert,
     Replace,
-    CopyIntoTable,
     CopyIntoLocation,
 }
 
@@ -684,18 +683,7 @@ impl<'a> Binder {
 
     // add check for SExpr to disable invalid source for copy/insert/merge/replace
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr, check_type: CheckType) -> Result<bool> {
-        let f = match check_type {
-            CheckType::CopyIntoTable => |scalar: &ScalarExpr| {
-                matches!(
-                    scalar,
-                    ScalarExpr::WindowFunction(_)
-                        | ScalarExpr::AggregateFunction(_)
-                        | ScalarExpr::UDFServerCall(_)
-                )
-            },
-            _ => |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_)),
-        };
-
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_));
         let mut finder = Finder::new(&f);
         Self::check_sexpr(s_expr, &mut finder, &check_type)
     }
@@ -727,21 +715,17 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Join(join) => {
-                if let CheckType::CopyIntoTable = check_type {
-                    false
-                } else {
-                    f.reset_finder();
-                    for condition in &join.left_conditions {
-                        f.visit(condition)?;
-                    }
-                    for condition in &join.right_conditions {
-                        f.visit(condition)?;
-                    }
-                    for condition in &join.non_equi_conditions {
-                        f.visit(condition)?;
-                    }
-                    f.scalars().is_empty()
+                f.reset_finder();
+                for condition in &join.left_conditions {
+                    f.visit(condition)?;
                 }
+                for condition in &join.right_conditions {
+                    f.visit(condition)?;
+                }
+                for condition in &join.non_equi_conditions {
+                    f.visit(condition)?;
+                }
+                f.scalars().is_empty()
             }
             RelOperator::EvalScalar(eval) => {
                 f.reset_finder();
@@ -758,18 +742,14 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Aggregate(aggregate) => {
-                if let CheckType::CopyIntoTable = check_type {
-                    false
-                } else {
-                    f.reset_finder();
-                    for item in &aggregate.group_items {
-                        f.visit(&item.scalar)?;
-                    }
-                    for item in &aggregate.aggregate_functions {
-                        f.visit(&item.scalar)?;
-                    }
-                    f.scalars().is_empty()
+                f.reset_finder();
+                for item in &aggregate.group_items {
+                    f.visit(&item.scalar)?;
                 }
+                for item in &aggregate.aggregate_functions {
+                    f.visit(&item.scalar)?;
+                }
+                f.scalars().is_empty()
             }
             RelOperator::Exchange(exchange) => {
                 f.reset_finder();
@@ -791,21 +771,17 @@ impl<'a> Binder {
                 f.scalars().is_empty()
             }
             RelOperator::Window(window) => {
-                if let CheckType::CopyIntoTable = check_type {
-                    false
-                } else {
-                    f.reset_finder();
-                    for scalar_item in &window.arguments {
-                        f.visit(&scalar_item.scalar)?;
-                    }
-                    for scalar_item in &window.partition_by {
-                        f.visit(&scalar_item.scalar)?;
-                    }
-                    for info in &window.order_by {
-                        f.visit(&info.order_by_item.scalar)?;
-                    }
-                    f.scalars().is_empty()
+                f.reset_finder();
+                for scalar_item in &window.arguments {
+                    f.visit(&scalar_item.scalar)?;
                 }
+                for scalar_item in &window.partition_by {
+                    f.visit(&scalar_item.scalar)?;
+                }
+                for info in &window.order_by {
+                    f.visit(&info.order_by_item.scalar)?;
+                }
+                f.scalars().is_empty()
             }
             RelOperator::Udf(_) => false,
             _ => true,
