@@ -29,7 +29,6 @@ use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::all_stream_columns;
 use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::Scalar;
@@ -40,6 +39,8 @@ use super::AggregateInfo;
 use crate::binder::aggregate::find_replaced_aggregate_function;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
+use crate::binder::window::find_replaced_window_function;
+use crate::binder::window::WindowInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
@@ -73,6 +74,7 @@ impl Binder {
     pub fn analyze_projection(
         &mut self,
         agg_info: &AggregateInfo,
+        window_info: &WindowInfo,
         select_list: &SelectList,
     ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
@@ -93,6 +95,9 @@ impl Binder {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
                     find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                }
+                ScalarExpr::WindowFunction(win) => {
+                    find_replaced_window_function(window_info, win, &item.alias).unwrap()
                 }
                 _ => {
                     self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
@@ -359,7 +364,6 @@ impl Binder {
         let mut match_database = false;
         let mut match_table = false;
         let star = table.is_none();
-        let stream_columns = all_stream_columns();
         let mut column_ids = Vec::new();
         let mut column_names = Vec::new();
 
@@ -367,11 +371,6 @@ impl Binder {
 
         for column_binding in input_context.all_column_bindings() {
             if column_binding.visibility != Visibility::Visible {
-                continue;
-            }
-
-            // TODO: zhyass refactor it with InVisible
-            if stream_columns.contains(&column_binding.column_name) {
                 continue;
             }
 

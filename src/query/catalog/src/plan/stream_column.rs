@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::path::Path;
+use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_base::base::uuid::Uuid;
@@ -25,7 +27,6 @@ use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
 use common_expression::types::DecimalSize;
 use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
 use common_expression::types::UInt64Type;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfo;
@@ -39,20 +40,66 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::Value;
 use common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
-use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
-use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use common_expression::ORIGIN_VERSION_COLUMN_ID;
-use common_expression::ORIGIN_VERSION_COL_NAME;
+
+use crate::plan::PartInfo;
+use crate::plan::PartInfoPtr;
+use crate::plan::Partitions;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct StreamTablePart {
+    inner: Partitions,
+    base_block_ids: Scalar,
+}
+
+#[typetag::serde(name = "stream")]
+impl PartInfo for StreamTablePart {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        info.as_any()
+            .downcast_ref::<StreamTablePart>()
+            .is_some_and(|other| self == other)
+    }
+
+    fn hash(&self) -> u64 {
+        0
+    }
+}
+
+impl StreamTablePart {
+    pub fn create(inner: Partitions, base_block_ids: Scalar) -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(StreamTablePart {
+            inner,
+            base_block_ids,
+        }))
+    }
+
+    pub fn from_part(info: &PartInfoPtr) -> Result<&StreamTablePart> {
+        info.as_any()
+            .downcast_ref::<StreamTablePart>()
+            .ok_or(ErrorCode::Internal(
+                "Cannot downcast from PartInfo to StreamTablePart.",
+            ))
+    }
+
+    pub fn inner(&self) -> Partitions {
+        self.inner.clone()
+    }
+
+    pub fn base_block_ids(&self) -> Scalar {
+        self.base_block_ids.clone()
+    }
+}
 
 // meta data for generate internal columns
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum StreamColumnMeta {
-    Append(u64),
-    Mutation {
-        block_id: u128,
-        inner: Option<BlockMetaInfoPtr>,
-    },
+pub struct StreamColumnMeta {
+    pub block_id: i128,
+    pub inner: Option<BlockMetaInfoPtr>,
 }
 
 #[typetag::serde(name = "stream_column_meta")]
@@ -73,49 +120,26 @@ impl StreamColumnMeta {
         ))
     }
 
-    pub fn build_origin_version(&self) -> Value<AnyType> {
-        match self {
-            StreamColumnMeta::Append(version) => {
-                Value::Scalar(Scalar::Number(NumberScalar::UInt64(*version)))
-            }
-            StreamColumnMeta::Mutation { .. } => Value::Scalar(Scalar::Null),
-        }
-    }
-
     pub fn build_origin_block_id(&self) -> Value<AnyType> {
-        match self {
-            StreamColumnMeta::Append(_) => Value::Scalar(Scalar::Null),
-            StreamColumnMeta::Mutation { block_id, .. } => Value::Scalar(Scalar::Decimal(
-                DecimalScalar::Decimal128(*block_id as i128, DecimalSize {
-                    precision: 38,
-                    scale: 0,
-                }),
-            )),
-        }
+        Value::Scalar(Scalar::Decimal(DecimalScalar::Decimal128(
+            self.block_id,
+            DecimalSize {
+                precision: 38,
+                scale: 0,
+            },
+        )))
     }
 
     pub fn build_origin_block_row_num(&self, num_rows: usize) -> Value<AnyType> {
-        match self {
-            StreamColumnMeta::Append(_) => Value::Scalar(Scalar::Null),
-            StreamColumnMeta::Mutation { .. } => {
-                let mut row_ids = Vec::with_capacity(num_rows);
-                for i in 0..num_rows {
-                    row_ids.push(i as u64);
-                }
-                let column = UInt64Type::from_data(row_ids);
-                Value::Column(Column::Nullable(Box::new(NullableColumn {
-                    column,
-                    validity: Bitmap::new_constant(true, num_rows),
-                })))
-            }
+        let mut row_ids = Vec::with_capacity(num_rows);
+        for i in 0..num_rows {
+            row_ids.push(i as u64);
         }
-    }
-
-    pub fn inner_meta(&self) -> Option<BlockMetaInfoPtr> {
-        match self {
-            StreamColumnMeta::Append(_) => None,
-            StreamColumnMeta::Mutation { inner, .. } => inner.clone(),
-        }
+        let column = UInt64Type::from_data(row_ids);
+        Value::Column(Column::Nullable(Box::new(NullableColumn {
+            column,
+            validity: Bitmap::new_constant(true, num_rows),
+        })))
     }
 }
 
@@ -185,10 +209,7 @@ impl StreamColumn {
 
     pub fn generate_column_values(&self, meta: &StreamColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
-            StreamColumnType::OriginVersion => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                meta.build_origin_version(),
-            ),
+            StreamColumnType::OriginVersion => unreachable!(),
             StreamColumnType::OriginBlockId => BlockEntry::new(
                 DataType::Nullable(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
                     DecimalSize {
@@ -206,21 +227,7 @@ impl StreamColumn {
     }
 }
 
-pub fn gen_append_stream_columns() -> Vec<StreamColumn> {
-    vec![
-        StreamColumn::new(ORIGIN_VERSION_COL_NAME, StreamColumnType::OriginVersion),
-        StreamColumn::new(ORIGIN_BLOCK_ID_COL_NAME, StreamColumnType::OriginBlockId),
-        StreamColumn::new(
-            ORIGIN_BLOCK_ROW_NUM_COL_NAME,
-            StreamColumnType::OriginRowNum,
-        ),
-    ]
-}
-
-pub fn gen_mutation_stream_meta(
-    inner: Option<BlockMetaInfoPtr>,
-    path: &str,
-) -> Result<StreamColumnMeta> {
+pub fn block_id_from_location(path: &str) -> Result<i128> {
     if let Some(file_stem) = Path::new(path).file_stem() {
         let file_strs = file_stem
             .to_str()
@@ -230,11 +237,19 @@ pub fn gen_mutation_stream_meta(
         let block_id = Uuid::parse_str(file_strs[0])
             .map_err(|e| e.to_string())?
             .as_u128();
-        Ok(StreamColumnMeta::Mutation { block_id, inner })
+        Ok(block_id as i128)
     } else {
         Err(ErrorCode::Internal(format!(
             "Illegal meta file format: {}",
             path
         )))
     }
+}
+
+pub fn gen_mutation_stream_meta(
+    inner: Option<BlockMetaInfoPtr>,
+    path: &str,
+) -> Result<StreamColumnMeta> {
+    let block_id = block_id_from_location(path)?;
+    Ok(StreamColumnMeta { block_id, inner })
 }
