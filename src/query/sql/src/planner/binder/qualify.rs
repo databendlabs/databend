@@ -12,64 +12,112 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_ast::ast::Expr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::Finder;
+use crate::binder::split_conjunctions;
+use crate::binder::window::WindowRewriter;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::ExprContext;
+use crate::binder::ScalarBinder;
 use crate::binder::Visibility;
+use crate::optimizer::SExpr;
+use crate::planner::semantic::GroupingChecker;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
+use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
+use crate::plans::Visitor;
 use crate::plans::VisitorMut;
 use crate::BindContext;
+use crate::Binder;
 
-/// Check validity of scalar expression in a grouping context.
-/// The matched grouping item will be replaced with a BoundColumnRef
-/// to corresponding grouping item column.
-///
-/// Also replaced the matched window function with a BoundColumnRef.
-pub struct GroupingChecker<'a> {
+impl Binder {
+    /// Analyze window in qualify clause, this will rewrite window functions.
+    /// See `WindowRewriter` for more details.
+    #[async_backtrace::framed]
+    pub async fn analyze_window_qualify<'a>(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        qualify: &Expr,
+    ) -> Result<ScalarExpr> {
+        bind_context.set_expr_context(ExprContext::QualifyClause);
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            aliases,
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
+        );
+        let (mut scalar, _) = scalar_binder.bind(qualify).await?;
+        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
+        rewriter.visit(&mut scalar)?;
+        Ok(scalar)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn bind_qualify(
+        &mut self,
+        bind_context: &mut BindContext,
+        qualify: ScalarExpr,
+        child: SExpr,
+    ) -> Result<SExpr> {
+        bind_context.set_expr_context(ExprContext::QualifyClause);
+
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+        let mut finder = Finder::new(&f);
+        finder.visit(&qualify)?;
+        if !finder.scalars().is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Qualify clause must not contain aggregate functions".to_string(),
+            )
+            .set_span(qualify.span()));
+        }
+
+        let scalar = {
+            let mut qualify = qualify;
+            if bind_context.in_grouping {
+                // If we are in grouping context, we will perform the grouping check
+                let mut grouping_checker = GroupingChecker::new(bind_context);
+                grouping_checker.visit(&mut qualify)?;
+            } else {
+                let mut qualify_checker = QualifyChecker::new(bind_context);
+                qualify_checker.visit(&mut qualify)?;
+            }
+            qualify
+        };
+
+        let predicates = split_conjunctions(&scalar);
+
+        let filter = Filter { predicates };
+
+        Ok(SExpr::create_unary(
+            Arc::new(filter.into()),
+            Arc::new(child),
+        ))
+    }
+}
+
+pub struct QualifyChecker<'a> {
     bind_context: &'a BindContext,
 }
 
-impl<'a> GroupingChecker<'a> {
+impl<'a> QualifyChecker<'a> {
     pub fn new(bind_context: &'a BindContext) -> Self {
         Self { bind_context }
     }
 }
 
-impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
+impl<'a> VisitorMut<'_> for QualifyChecker<'a> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
-            let column = &self.bind_context.aggregate_info.group_items[*index];
-            let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
-            {
-                column_ref.column.clone()
-            } else {
-                ColumnBindingBuilder::new(
-                    "group_item".to_string(),
-                    column.index,
-                    Box::new(column.scalar.data_type()?),
-                    Visibility::Visible,
-                )
-                .build()
-            };
-
-            if let Some(grouping_sets) = &self.bind_context.aggregate_info.grouping_sets {
-                if grouping_sets.grouping_id_column.index != column_binding.index {
-                    column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
-                }
-            }
-
-            *expr = BoundColumnRef {
-                span: expr.span(),
-                column: column_binding,
-            }
-            .into();
-            return Ok(());
-        }
-
         if let ScalarExpr::WindowFunction(window) = expr {
             if let Some(column) = self
                 .bind_context
@@ -79,19 +127,7 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
             {
                 // The exprs in `win` has already been rewrittern to `BoundColumnRef` in `WindowRewriter`.
                 // So we need to check the exprs in `bind_context.windows`
-                let mut window_info = self.bind_context.windows.window_functions[*column].clone();
-                // Just check if the exprs are in grouping items.
-                for part in window_info.partition_by_items.iter_mut() {
-                    self.visit(&mut part.scalar)?;
-                }
-                // Just check if the exprs are in grouping items.
-                for order in window_info.order_by_items.iter_mut() {
-                    self.visit(&mut order.order_by_item.scalar)?;
-                }
-                // Just check if the exprs are in grouping items.
-                for arg in window_info.arguments.iter_mut() {
-                    self.visit(&mut arg.scalar)?;
-                }
+                let window_info = &self.bind_context.windows.window_functions[*column];
 
                 let column_binding = ColumnBindingBuilder::new(
                     window.display_name.clone(),
@@ -107,8 +143,9 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
                 .into();
                 return Ok(());
             }
-
-            return Err(ErrorCode::Internal("Group Check: Invalid window function"));
+            return Err(ErrorCode::Internal(
+                "Qualify check: Invalid window function",
+            ));
         }
 
         if let ScalarExpr::AggregateFunction(agg) = expr {
@@ -138,25 +175,6 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
         }
 
         walk_expr_mut(self, expr)
-    }
-
-    fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
-        if self
-            .bind_context
-            .aggregate_info
-            .aggregate_functions_map
-            .contains_key(&column.column.column_name)
-        {
-            // Be replaced by `WindowRewriter`.
-            return Ok(());
-        }
-
-        // If this is a group item, then it should have been replaced with `group_items_map`
-        Err(ErrorCode::SemanticError(format!(
-            "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-            &column.column.column_name
-        ))
-        .set_span(column.span))
     }
 
     fn visit_subquery_expr(&mut self, _: &mut SubqueryExpr) -> Result<()> {
