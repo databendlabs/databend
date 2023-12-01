@@ -50,12 +50,15 @@ pub const ROW_ID_COLUMN_ID: u32 = u32::MAX;
 pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
+pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 4;
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
-pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
+pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
+
+pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 
 // stream column id.
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
@@ -67,17 +70,16 @@ pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
 
 #[inline]
-pub fn all_stream_columns() -> HashSet<String> {
-    HashSet::from([
-        ORIGIN_VERSION_COL_NAME.to_string(),
-        ORIGIN_BLOCK_ID_COL_NAME.to_string(),
-        ORIGIN_BLOCK_ROW_NUM_COL_NAME.to_string(),
-    ])
+pub fn is_internal_column_id(column_id: ColumnId) -> bool {
+    column_id >= BASE_BLOCK_IDS_COLUMN_ID
 }
 
 #[inline]
-pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= SNAPSHOT_NAME_COLUMN_ID
+pub fn is_stream_column(column_name: &str) -> bool {
+    matches!(
+        column_name,
+        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+    )
 }
 
 #[inline]
@@ -1289,6 +1291,13 @@ impl DataSchemaRefExt {
 impl TableSchemaRefExt {
     pub fn create(fields: Vec<TableField>) -> TableSchemaRef {
         Arc::new(TableSchema::new(fields))
+    }
+
+    pub fn create_dummy() -> TableSchemaRef {
+        Self::create(vec![TableField::new(
+            "dummy",
+            TableDataType::Number(NumberDataType::UInt8),
+        )])
     }
 }
 

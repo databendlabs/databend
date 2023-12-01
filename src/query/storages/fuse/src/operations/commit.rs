@@ -215,7 +215,7 @@ impl FuseTable {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             copied_files: copied_files.clone(),
-            deduplicated_label: ctx.get_settings().get_deduplicate_label()?,
+            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
             update_stream_meta: update_stream_meta.to_vec(),
         };
 

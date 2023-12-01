@@ -56,6 +56,7 @@ pub enum ExprContext {
     WhereClause,
     GroupClaue,
     HavingClause,
+    QualifyClause,
     OrderByClause,
     LimitClause,
 

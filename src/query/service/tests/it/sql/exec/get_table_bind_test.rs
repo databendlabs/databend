@@ -103,7 +103,6 @@ use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::Planner;
 use common_storage::CopyStatus;
@@ -597,14 +596,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        todo!()
-    }
-
-    fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
-        todo!()
-    }
-
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         todo!()
     }
 

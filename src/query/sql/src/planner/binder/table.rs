@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -51,6 +52,7 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::is_stream_column;
 use common_expression::types::DataType;
 use common_expression::types::NumberScalar;
 use common_expression::ColumnId;
@@ -61,6 +63,7 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_expression::BASE_BLOCK_IDS_COL_NAME;
 use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use common_expression::ORIGIN_VERSION_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -93,6 +96,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
@@ -121,7 +125,7 @@ impl Binder {
         select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in select_list {
-            if let SelectTarget::QualifiedName {
+            if let SelectTarget::StarColumns {
                 qualified: names, ..
             } = select_target
             {
@@ -309,9 +313,6 @@ impl Binder {
                 }
             }
             _ => {
-                if table_meta.engine() == "STREAM" {
-                    bind_context.allow_internal_columns(false);
-                }
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
@@ -566,6 +567,7 @@ impl Binder {
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             };
             let (srf_expr, mut bind_context) = self
                 .bind_select_stmt(bind_context, &select_stmt, &[], 0)
@@ -1210,6 +1212,7 @@ impl Binder {
         let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
         let mut predicates = Vec::new();
         let columns = self.metadata.read().columns_by_table_index(table_index);
+        let mut origin_block_id = None;
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -1227,7 +1230,7 @@ impl Binder {
                         column_name.clone(),
                         *column_index,
                         Box::new(DataType::from(data_type)),
-                        if path_indices.is_some() {
+                        if path_indices.is_some() || is_stream_column(column_name) {
                             Visibility::InVisible
                         } else {
                             Visibility::Visible
@@ -1243,7 +1246,7 @@ impl Binder {
                     // For select stream.
                     if let Some(table_version) = table_version {
                         match column_name.to_lowercase().as_str() {
-                            ORIGIN_BLOCK_ID_COL_NAME => {
+                            ORIGIN_VERSION_COL_NAME => {
                                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
                                     span: None,
                                     func_name: "is_not_null".to_string(),
@@ -1254,8 +1257,7 @@ impl Binder {
                                     })],
                                 });
                                 predicates.push(predicate);
-                            }
-                            ORIGIN_VERSION_COL_NAME => {
+
                                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
                                     span: None,
                                     func_name: "lt".to_string(),
@@ -1275,6 +1277,9 @@ impl Binder {
                                 });
                                 predicates.push(predicate);
                             }
+                            ORIGIN_BLOCK_ID_COL_NAME => {
+                                origin_block_id = Some(column_binding.clone());
+                            }
                             _ => {}
                         }
                     }
@@ -1293,11 +1298,54 @@ impl Binder {
             }
         }
 
+        let mut columns = columns
+            .into_iter()
+            .map(|col| col.index())
+            .collect::<HashSet<_>>();
+        if let Some(origin_block_id) = origin_block_id {
+            let column_index = self.metadata.write().add_internal_column(
+                table_index,
+                INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(BASE_BLOCK_IDS_COL_NAME)
+                    .unwrap(),
+            );
+            let column = self.metadata.read().column(column_index).clone();
+            let base_block_ids = ColumnBindingBuilder::new(
+                column.name(),
+                column_index,
+                Box::new(column.data_type()),
+                Visibility::InVisible,
+            )
+            .table_name(Some(table_name.to_string()))
+            .database_name(Some(database_name.to_string()))
+            .table_index(Some(table_index))
+            .build();
+
+            columns.insert(base_block_ids.index);
+
+            let predicate = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "contains".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: base_block_ids,
+                    }),
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: origin_block_id,
+                    }),
+                ],
+            });
+            predicates.push(predicate);
+        }
+
         let stat = table.table_statistics().await?;
         let scan = SExpr::create_leaf(Arc::new(
             Scan {
                 table_index,
-                columns: columns.into_iter().map(|col| col.index()).collect(),
+                columns,
                 statistics: Statistics {
                     statistics: stat,
                     col_stats,
@@ -1307,9 +1355,10 @@ impl Binder {
             .into(),
         ));
 
-        // not(is_not_null(_origin_block_id) and _origin_version<base_table_version)
+        // not(is_not_null(_origin_version) and (contains(_base_block_ids, _origin_block_id)
+        //  or _origin_version<base_table_version))
         let s_expr = if !predicates.is_empty() {
-            assert!(predicates.len() == 2);
+            assert!(predicates.len() == 3);
             let filter_plan = Filter {
                 predicates: vec![ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
@@ -1319,7 +1368,15 @@ impl Binder {
                         span: None,
                         func_name: "and".to_string(),
                         params: vec![],
-                        arguments: vec![predicates[0].clone(), predicates[1].clone()],
+                        arguments: vec![
+                            predicates[0].clone(),
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "or".to_string(),
+                                params: vec![],
+                                arguments: vec![predicates[1].clone(), predicates[2].clone()],
+                            }),
+                        ],
                     })],
                 })],
             };

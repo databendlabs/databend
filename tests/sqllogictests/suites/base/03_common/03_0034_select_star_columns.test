@@ -54,10 +54,10 @@ statement ok
 insert into default.t1 values(2, (200,200))
 
 
-query I
-select * exclude c1 from db.t
+query II
+select * exclude c1,  columns(* exclude c1) from db.t
 ----
-1
+1 1
 
 
 query T
@@ -112,9 +112,10 @@ select db.t.* exclude (c1), default.t1.* exclude id from db.t join default.t1
 1 (200,200)
 
 
-statement error 1065
+query TT
 select * exclude id from default.t1 join db.t
-
+----
+(200,200) (0,0)
 
 statement error 1065
 select db.t.* exclude (c1), default.t1.* exclude idcc from db.t join default.t1
@@ -174,6 +175,26 @@ select c.* exclude (ID) from db.t as c
 (0,0)
 
 
+query ITIT
+select columns(* exclude c1), columns(* exclude id) from db.t
+----
+1 (0,0)
+
+
+query ITIT
+select columns(a -> length(a) = 2), columns('i.*'), columns(a -> a like '%c%') from db.t
+----
+1 (0,0) 1 (0,0)
+
+statement ok
+create table db.abc(score int, age int, name string, issues int, father string) as select 1,2,'jack',3,'frank';
+
+query ITITI
+select columns(a -> a like '%re%' or a like '%er%'), columns(a -> a = 'age' or a in ('issues', 'name'))  from db.abc;
+----
+1 frank 2 jack 3
+
+
 statement error 1065
 select db.c.* exclude (ID) from db.t as c
 
@@ -197,9 +218,6 @@ select db.t.* exclude (C1), default.t1.* exclude ID from db.t join default.t1
 ----
 1 (200,200)
 
-
-statement error 1065
-select * exclude ID from default.t1 join db.t
 
 
 statement error 1065

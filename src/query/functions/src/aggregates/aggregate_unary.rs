@@ -34,6 +34,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 use common_expression::StateAddr;
+
 pub trait UnaryState<T, R>: Send + Sync + Default
 where
     T: ValueType,
@@ -104,6 +105,7 @@ where
             _argument,
         )))
     }
+
     pub(crate) fn try_create(
         display_name: &str,
         return_type: DataType,

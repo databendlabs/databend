@@ -641,6 +641,7 @@ fn test_query() {
     let file = &mut mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
+        r#"select columns('abc'), columns(a -> length(a) = 3) from t"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,

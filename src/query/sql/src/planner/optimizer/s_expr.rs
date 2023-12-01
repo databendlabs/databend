@@ -30,6 +30,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
+use crate::plans::SubqueryExpr;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::plans::Visitor;
@@ -476,32 +477,30 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 }
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
-    match expr {
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
-        ScalarExpr::WindowFunction(expr) => {
-            let flag = match &expr.func {
-                WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
-                _ => false,
-            };
-            flag || expr.partition_by.iter().any(find_subquery_in_expr)
-                || expr.order_by.iter().any(|o| find_subquery_in_expr(&o.expr))
-        }
-        ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
-        ScalarExpr::LambdaFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
-        ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
-        ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
-        ScalarExpr::SubqueryExpr(_) => true,
-        ScalarExpr::UDFServerCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
-        ScalarExpr::UDFLambdaCall(expr) => find_subquery_in_expr(&expr.scalar),
+    struct HasSubqueryVisitor {
+        has_subquery: bool,
     }
+
+    impl<'a> Visitor<'a> for HasSubqueryVisitor {
+        fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
+            self.has_subquery = true;
+            Ok(())
+        }
+    }
+
+    let mut has_subquery = HasSubqueryVisitor {
+        has_subquery: false,
+    };
+    has_subquery.visit(expr).unwrap();
+    has_subquery.has_subquery
 }
 
 pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
-    struct FindUdfNames<'a> {
+    struct FindUdfNamesVisitor<'a> {
         udfs: HashSet<&'a String>,
     }
 
-    impl<'a> Visitor<'a> for FindUdfNames<'a> {
+    impl<'a> Visitor<'a> for FindUdfNamesVisitor<'a> {
         fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) -> Result<()> {
             for expr in &udf.arguments {
                 self.visit(expr)?;
@@ -518,7 +517,7 @@ pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
         }
     }
 
-    let mut find_udfs = FindUdfNames {
+    let mut find_udfs = FindUdfNamesVisitor {
         udfs: HashSet::new(),
     };
     find_udfs.visit(scalar)?;

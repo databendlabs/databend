@@ -22,15 +22,23 @@ use std::time::Instant;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::block_id_from_location;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StreamColumn;
+use common_catalog::plan::StreamTablePart;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::decimal::Decimal128Type;
+use common_expression::FromData;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::BASE_BLOCK_IDS_COL_NAME;
 use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use common_expression::ORIGIN_VERSION_COL_NAME;
@@ -228,43 +236,61 @@ impl StreamTable {
             HashSet::new()
         };
 
-        let fuse_segment_io =
-            SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
-
-        let diff_in_base = base_segments
-            .difference(&latest_segments)
-            .cloned()
-            .collect::<Vec<_>>();
-        let diff_in_base = fuse_segment_io
-            .read_segments::<SegmentInfo>(&diff_in_base, true)
-            .await?;
         let mut base_blocks = HashSet::new();
-        for segment in diff_in_base {
-            let segment = segment?;
-            segment.blocks.into_iter().for_each(|block| {
-                base_blocks.insert(block.location.clone());
-            })
-        }
-
-        let diff_in_latest = latest_segments
-            .difference(&base_segments)
-            .cloned()
-            .collect::<Vec<_>>();
-        let diff_in_latest = fuse_segment_io
-            .read_segments::<SegmentInfo>(&diff_in_latest, true)
-            .await?;
         let mut latest_blocks = Vec::new();
-        for segment in diff_in_latest {
-            let segment = segment?;
-            segment.blocks.into_iter().for_each(|block| {
-                if !base_blocks.contains(&block.location) {
-                    latest_blocks.push(block);
+        {
+            let fuse_segment_io =
+                SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
+            let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+
+            let diff_in_base = base_segments
+                .difference(&latest_segments)
+                .cloned()
+                .collect::<Vec<_>>();
+            for chunk in diff_in_base.chunks(chunk_size) {
+                let segments = fuse_segment_io
+                    .read_segments::<SegmentInfo>(chunk, true)
+                    .await?;
+                for segment in segments {
+                    let segment = segment?;
+                    segment.blocks.into_iter().for_each(|block| {
+                        base_blocks.insert(block.location.clone());
+                    })
                 }
-            });
+            }
+
+            let diff_in_latest = latest_segments
+                .difference(&base_segments)
+                .cloned()
+                .collect::<Vec<_>>();
+            for chunk in diff_in_latest.chunks(chunk_size) {
+                let segments = fuse_segment_io
+                    .read_segments::<SegmentInfo>(chunk, true)
+                    .await?;
+
+                for segment in segments {
+                    let segment = segment?;
+                    segment.blocks.into_iter().for_each(|block| {
+                        if base_blocks.contains(&block.location) {
+                            base_blocks.remove(&block.location);
+                        } else {
+                            latest_blocks.push(block);
+                        }
+                    });
+                }
+            }
         }
         if latest_blocks.is_empty() {
             return Ok((PartStatistics::default(), Partitions::default()));
         }
+
+        let mut base_block_ids = Vec::with_capacity(base_blocks.len());
+        for base_block in base_blocks {
+            let block_id = block_id_from_location(&base_block.0)?;
+            base_block_ids.push(block_id);
+        }
+        let base_block_ids_scalar = Scalar::Array(Decimal128Type::from_data(base_block_ids));
+        let push_downs = replace_push_downs(push_downs, &base_block_ids_scalar)?;
 
         let table_schema = fuse_table.schema_with_stream();
         let bloom_index_cols = fuse_table.bloom_index_cols();
@@ -301,14 +327,20 @@ impl StreamTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        fuse_table.read_partitions_with_metas(
+        let (stats, parts) = fuse_table.read_partitions_with_metas(
             ctx.clone(),
             table_schema,
             push_downs,
             &block_metas,
             summary,
             pruning_stats,
-        )
+        )?;
+        let wrapper =
+            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![StreamTablePart::create(
+                parts,
+                base_block_ids_scalar,
+            )]);
+        Ok((stats, wrapper))
     }
 
     #[minitrace::trace]
@@ -335,6 +367,10 @@ impl Table for StreamTable {
 
     /// whether column prune(projection) can help in table read
     fn support_column_projection(&self) -> bool {
+        true
+    }
+
+    fn support_row_id_column(&self) -> bool {
         true
     }
 
@@ -379,5 +415,49 @@ impl Table for StreamTable {
             ))
         })?;
         table.read_data(ctx, plan, pipeline, put_cache)
+    }
+}
+
+fn replace_push_downs(
+    push_downs: Option<PushDownInfo>,
+    base_block_ids: &Scalar,
+) -> Result<Option<PushDownInfo>> {
+    fn visit_expr_column(expr: &mut RemoteExpr<String>, base_block_ids: &Scalar) -> Result<()> {
+        match expr {
+            RemoteExpr::ColumnRef {
+                span,
+                id,
+                data_type,
+                ..
+            } => {
+                if id == BASE_BLOCK_IDS_COL_NAME {
+                    *expr = RemoteExpr::Constant {
+                        span: *span,
+                        scalar: base_block_ids.clone(),
+                        data_type: data_type.clone(),
+                    };
+                }
+            }
+            RemoteExpr::Cast { expr, .. } => {
+                visit_expr_column(expr, base_block_ids)?;
+            }
+            RemoteExpr::FunctionCall { args, .. } => {
+                for arg in args.iter_mut() {
+                    visit_expr_column(arg, base_block_ids)?;
+                }
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+
+    if let Some(mut push_downs) = push_downs {
+        if let Some(filters) = &mut push_downs.filters {
+            visit_expr_column(&mut filters.filter, base_block_ids)?;
+            visit_expr_column(&mut filters.inverted_filter, base_block_ids)?;
+        }
+        Ok(Some(push_downs))
+    } else {
+        Ok(None)
     }
 }
