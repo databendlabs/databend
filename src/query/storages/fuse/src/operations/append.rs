@@ -34,6 +34,7 @@ use common_pipeline_transforms::processors::TransformCompact;
 use common_pipeline_transforms::processors::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::physical_plans::MutationKind;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
@@ -80,6 +81,7 @@ impl FuseTable {
                 output,
                 self,
                 cluster_stats_gen.clone(),
+                MutationKind::Insert,
             )?;
             proc.into_processor()
         })?;

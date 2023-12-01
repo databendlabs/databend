@@ -72,6 +72,7 @@ pub struct HashJoinProbeState {
     pub(crate) probe_workers: AtomicUsize,
     /// Wait all `probe_workers` finish
     pub(crate) barrier: Barrier,
+    pub(crate) barrier_count: AtomicUsize,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -136,6 +137,7 @@ impl HashJoinProbeState {
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
+            barrier_count: AtomicUsize::new(0),
         })
     }
 
