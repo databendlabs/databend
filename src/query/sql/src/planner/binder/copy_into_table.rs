@@ -92,27 +92,12 @@ impl<'a> Binder {
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
 
-                // just check query
-                let mut tmp_bind_context = BindContext::new();
-                let mut tmp_binder = Binder::new(
-                    self.ctx.clone(),
-                    self.catalogs.clone(),
-                    self.name_resolution_ctx.clone(),
-                    self.metadata.clone(),
-                );
-                let (bind_query, _) = tmp_binder.bind_query(&mut tmp_bind_context, query).await?;
-                if !self.check_sexpr_top(&bind_query, super::binder::CheckType::CopyIntoTable)? {
-                    return Err(ErrorCode::SemanticError(
-                        "copy into table source can't contain window|aggregate|udf|join functions"
-                            .to_string(),
-                    ));
-                }
-
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
             }
         }
     }
+
     async fn bind_copy_into_table_common(
         &mut self,
         bind_context: &mut BindContext,
@@ -368,6 +353,12 @@ impl<'a> Binder {
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
 
+        if !self.check_sexpr_top(&s_expr, super::binder::CheckType::CopyIntoTable)? {
+            return Err(ErrorCode::SemanticError(
+                "insert source can't contain udf functions".to_string(),
+            ));
+        }
+
         plan.query = Some(Box::new(Plan::Query {
             s_expr: Box::new(s_expr),
             metadata: self.metadata.clone(),
@@ -376,6 +367,7 @@ impl<'a> Binder {
             ignore_result: false,
             formatted_ast: None,
         }));
+
         Ok(Plan::CopyIntoTable(Box::new(plan)))
     }
 
