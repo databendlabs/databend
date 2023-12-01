@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::CatalogConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
@@ -56,7 +56,7 @@ pub struct CatalogManager {
 impl CatalogManager {
     /// Fetch catalog manager from global instance.
     pub fn instance() -> Arc<CatalogManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     /// Init the catalog manager in global instance.
@@ -66,7 +66,7 @@ impl CatalogManager {
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, default_catalog, catalog_creators).await?);
+        SingletonInstance::set(Self::try_create(conf, default_catalog, catalog_creators).await?);
 
         Ok(())
     }

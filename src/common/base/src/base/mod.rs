@@ -37,7 +37,7 @@ pub use shutdown_signal::signal_stream;
 pub use shutdown_signal::DummySignalStream;
 pub use shutdown_signal::SignalStream;
 pub use shutdown_signal::SignalType;
-pub use singleton_instance::GlobalInstance;
+pub use singleton_instance::SingletonInstance;
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
 pub use string::convert_byte_size;

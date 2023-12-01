@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::base::GlobalInstance;
+use crate::base::SingletonInstance;
 use crate::runtime::Runtime;
 
 pub struct GlobalIORuntime;
@@ -35,7 +35,7 @@ impl GlobalIORuntime {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
 
-        GlobalInstance::set(Arc::new(Runtime::with_worker_threads(
+        SingletonInstance::set(Arc::new(Runtime::with_worker_threads(
             thread_num,
             Some("IO-worker".to_owned()),
         )?));
@@ -43,7 +43,7 @@ impl GlobalIORuntime {
     }
 
     pub fn instance() -> Arc<Runtime> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 }
 
@@ -53,11 +53,11 @@ impl GlobalQueryRuntime {
         let thread_num = std::cmp::max(2, thread_num);
 
         let rt = Runtime::with_worker_threads(thread_num, Some("g-query-worker".to_owned()))?;
-        GlobalInstance::set(Arc::new(GlobalQueryRuntime(rt)));
+        SingletonInstance::set(Arc::new(GlobalQueryRuntime(rt)));
         Ok(())
     }
 
     pub fn instance() -> Arc<GlobalQueryRuntime> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 }

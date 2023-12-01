@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::ConnectionApi;
@@ -60,7 +60,7 @@ impl UserApiProvider {
         tenant: &str,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, idm_config).await?);
+        SingletonInstance::set(Self::try_create(conf, idm_config).await?);
         if let Some(q) = quota {
             let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
             let res = i.get_quota(MatchSeq::GE(0)).await?;
@@ -88,7 +88,7 @@ impl UserApiProvider {
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<impl UserApi>> {

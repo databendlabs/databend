@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -54,7 +54,7 @@ impl RealVacuumHandler {
     pub fn init() -> Result<()> {
         let rm = RealVacuumHandler {};
         let wrapper = VacuumHandlerWrapper::new(Box::new(rm));
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

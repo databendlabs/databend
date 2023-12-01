@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::catalog::Catalog;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -86,7 +86,7 @@ impl RealVirtualColumnHandler {
     pub fn init() -> Result<()> {
         let rm = RealVirtualColumnHandler {};
         let wrapper = VirtualColumnHandlerWrapper::new(Box::new(rm));
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

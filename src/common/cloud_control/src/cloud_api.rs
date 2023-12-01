@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -54,12 +54,12 @@ impl CloudControlApiProvider {
     #[async_backtrace::framed]
     pub async fn init(addr: String) -> Result<()> {
         let provider = Self::new(addr).await?;
-        GlobalInstance::set(provider);
+        SingletonInstance::set(provider);
         Ok(())
     }
 
     pub fn instance() -> Arc<CloudControlApiProvider> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     pub fn get_task_client(&self) -> Arc<TaskClient> {

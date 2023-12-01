@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use aggregating_index::AggregatingIndexHandler;
 use aggregating_index::AggregatingIndexHandlerWrapper;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::catalog::Catalog;
 use common_exception::Result;
 use common_meta_app::schema::CreateIndexReply;
@@ -73,7 +73,7 @@ impl RealAggregatingIndexHandler {
     pub fn init() -> Result<()> {
         let rm = RealAggregatingIndexHandler {};
         let wrapper = AggregatingIndexHandlerWrapper::new(Box::new(rm));
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

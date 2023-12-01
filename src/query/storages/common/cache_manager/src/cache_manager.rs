@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
 use common_config::CacheConfig;
@@ -102,7 +102,7 @@ impl CacheManager {
 
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
-            GlobalInstance::set(Arc::new(Self {
+            SingletonInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
                 bloom_index_filter_cache: None,
@@ -137,7 +137,7 @@ impl CacheManager {
 
             let file_meta_data_cache =
                 Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "parquet_file_meta");
-            GlobalInstance::set(Arc::new(Self {
+            SingletonInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 bloom_index_filter_cache,
@@ -154,7 +154,7 @@ impl CacheManager {
     }
 
     pub fn instance() -> Arc<CacheManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {

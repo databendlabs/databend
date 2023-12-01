@@ -95,9 +95,9 @@ impl Debug for SingletonType {
 }
 
 /// Global is an empty struct that only used to carry associated functions.
-pub struct GlobalInstance;
+pub struct SingletonInstance;
 
-impl GlobalInstance {
+impl SingletonInstance {
     /// init production global data registry.
     ///
     /// Should only be initiated once.

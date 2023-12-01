@@ -28,9 +28,9 @@ use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep as tokio_async_sleep;
 use common_base::base::DummySignalStream;
-use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+use common_base::base::SingletonInstance;
 pub use common_catalog::cluster_info::Cluster;
 use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -152,7 +152,7 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn init(cfg: InnerConfig) -> Result<()> {
         let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
-        GlobalInstance::set(Self::try_create(&cfg, metastore).await?);
+        SingletonInstance::set(Self::try_create(&cfg, metastore).await?);
 
         Ok(())
     }
@@ -180,7 +180,7 @@ impl ClusterDiscovery {
     }
 
     pub fn instance() -> Arc<ClusterDiscovery> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     fn create_provider(

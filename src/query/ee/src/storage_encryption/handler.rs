@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_license::license::Feature;
@@ -48,7 +48,7 @@ impl RealStorageEncryptionHandler {
     pub fn init(cfg: &InnerConfig) -> Result<()> {
         let handler = RealStorageEncryptionHandler { cfg: cfg.clone() };
         let wrapper = StorageEncryptionHandlerWrapper::new(Box::new(handler));
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

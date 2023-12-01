@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,12 +44,12 @@ pub enum Credential {
 
 impl AuthMgr {
     pub fn init(cfg: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(AuthMgr::create(cfg));
+        SingletonInstance::set(AuthMgr::create(cfg));
         Ok(())
     }
 
     pub fn instance() -> Arc<AuthMgr> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -53,6 +53,6 @@ impl StorageEncryptionHandlerWrapper {
 
 /// Fetch the StorageEncryptionHandlerWrapper from the global instance.
 pub fn get_storage_encryption_handler() -> Arc<StorageEncryptionHandlerWrapper> {
-    GlobalInstance::try_get()
+    SingletonInstance::try_get()
         .unwrap_or_else(|| Arc::new(StorageEncryptionHandlerWrapper::new(Box::new(()))))
 }

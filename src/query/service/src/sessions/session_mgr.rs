@@ -22,8 +22,8 @@ use std::sync::Weak;
 use std::time::Duration;
 
 use common_base::base::tokio;
-use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
+use common_base::base::SingletonInstance;
 use common_catalog::table_context::ProcessInfoState;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
@@ -55,7 +55,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub fn init(conf: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(Self::create(conf));
+        SingletonInstance::set(Self::create(conf));
 
         Ok(())
     }
@@ -72,7 +72,7 @@ impl SessionManager {
     }
 
     pub fn instance() -> Arc<SessionManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     #[async_backtrace::framed]

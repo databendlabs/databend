@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -51,12 +51,12 @@ impl LicenseManager for RealLicenseManager {
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
         };
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 
     fn instance() -> Arc<Box<dyn LicenseManager>> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {

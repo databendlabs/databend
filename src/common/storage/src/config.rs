@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_auth::RefreshableToken;
 use common_auth::TokenFile;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_meta_app::storage::StorageParams;
 use serde::Deserialize;
 use serde::Serialize;
@@ -59,7 +59,7 @@ impl ShareTableConfig {
         token_file: &str,
         default_token: String,
     ) -> common_exception::Result<()> {
-        GlobalInstance::set(Self::try_create(
+        SingletonInstance::set(Self::try_create(
             share_endpoint_address,
             token_file,
             default_token,
@@ -100,6 +100,6 @@ impl ShareTableConfig {
     }
 
     pub fn instance() -> ShareTableConfig {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 }

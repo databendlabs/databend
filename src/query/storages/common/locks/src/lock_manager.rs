@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::time::timeout;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_base::GLOBAL_TASK;
@@ -64,12 +64,12 @@ impl LockManager {
                 }
             }
         });
-        GlobalInstance::set(Arc::new(lock_manager));
+        SingletonInstance::set(Arc::new(lock_manager));
         Ok(())
     }
 
     pub fn instance() -> Arc<LockManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     pub fn create_table_lock(table_info: TableInfo) -> Result<TableLock> {

@@ -54,7 +54,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
         .await
         .unwrap();
 
-    GlobalServices::init(conf.clone()).await?;
+    GlobalServices::create(conf.clone()).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.clone()).unwrap();
 

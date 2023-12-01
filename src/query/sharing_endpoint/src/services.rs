@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_exception::Result;
 
@@ -26,7 +26,7 @@ impl SharingServices {
     #[async_backtrace::framed]
     pub async fn init(config: Config) -> Result<()> {
         // init global instance singleton
-        GlobalInstance::init_production();
+        SingletonInstance::init_production();
 
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         SharingAccessor::init(&config).await

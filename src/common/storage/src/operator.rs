@@ -19,7 +19,7 @@ use std::io::Result;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_base::GLOBAL_TASK;
@@ -396,7 +396,7 @@ impl DataOperator {
 
     #[async_backtrace::framed]
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
-        GlobalInstance::set(Self::try_create(&conf.params).await?);
+        SingletonInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
     }
@@ -449,6 +449,6 @@ impl DataOperator {
     }
 
     pub fn instance() -> DataOperator {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 }

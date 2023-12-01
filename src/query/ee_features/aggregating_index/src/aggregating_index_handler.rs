@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::catalog::Catalog;
 use common_exception::Result;
 use common_meta_app::schema::CreateIndexReply;
@@ -100,5 +100,5 @@ impl AggregatingIndexHandlerWrapper {
 }
 
 pub fn get_agg_index_handler() -> Arc<AggregatingIndexHandlerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }

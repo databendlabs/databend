@@ -20,7 +20,7 @@ use background_service::BackgroundServiceHandler;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::uuid::Uuid;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -254,7 +254,7 @@ impl RealBackgroundService {
         let rm = RealBackgroundService::new(conf).await?;
         if let Some(rm) = rm {
             let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));
-            GlobalInstance::set(Arc::new(wrapper));
+            SingletonInstance::set(Arc::new(wrapper));
         }
         Ok(())
     }

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_expression::types::DataType;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
@@ -75,7 +75,7 @@ fn test_format() {
         .map(ToString::to_string)
         .expect("thread should has a name");
 
-    GlobalInstance::init_testing(&thread_name);
+    SingletonInstance::init_testing(&thread_name);
 
     let mut metadata = Metadata::default();
     let tab1 = metadata.add_table(

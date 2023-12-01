@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_meta_app::principal::UserIdentity;
 
@@ -62,5 +62,5 @@ impl BackgroundServiceHandlerWrapper {
 }
 
 pub fn get_background_service_handler() -> Arc<BackgroundServiceHandlerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }

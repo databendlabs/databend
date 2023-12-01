@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
 use common_catalog::catalog::CatalogCreator;
@@ -44,17 +44,38 @@ use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
 
-pub struct GlobalServices;
+///
+pub struct GlobalServices {
+    pub config: Arc<InnerConfig>,
+}
 
 impl GlobalServices {
     #[async_backtrace::framed]
-    pub async fn init(config: InnerConfig) -> Result<()> {
-        GlobalInstance::init_production();
-        GlobalServices::init_with(config).await
+    pub async fn create(config: InnerConfig) -> Result<Self> {
+        // Init singleton services.
+        GlobalServices::init_singleton_services(&config).await?;
+        // Init global services.
+        GlobalServices::init_global_services(&config).await
     }
 
+    /// Init global services.
+    /// global services are services that can be initialized multiple times, each time is a instance.
     #[async_backtrace::framed]
-    pub async fn init_with(config: InnerConfig) -> Result<()> {
+    pub async fn init_global_services(config: &InnerConfig) -> Result<GlobalServices> {
+        let global_services = GlobalServices {
+            config: Arc::new(config.clone()),
+        };
+
+        Ok(global_services)
+    }
+
+    /// Init singleton services.
+    /// singleton services are services that only need to be initialized once.
+    #[async_backtrace::framed]
+    pub async fn init_singleton_services(config: &InnerConfig) -> Result<()> {
+        // Init production env.
+        SingletonInstance::init_production();
+
         // app name format: node_id[0..7]@cluster_id
         let app_name_shuffle = format!(
             "databend-query-{}@{}",
@@ -101,19 +122,21 @@ impl GlobalServices {
                 (CatalogType::Hive, Arc::new(HiveCreator)),
             ];
 
-            CatalogManager::init(&config, Arc::new(default_catalog), catalog_creator).await?;
+            CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
-        HttpQueryManager::init(&config).await?;
+        HttpQueryManager::init(config).await?;
         DataExchangeManager::init()?;
-        SessionManager::init(&config)?;
+        SessionManager::init(config)?;
         LockManager::init()?;
-        AuthMgr::init(&config)?;
+        AuthMgr::init(config)?;
+
+        let conf = config.clone();
         UserApiProvider::init(
-            config.meta.to_meta_grpc_client_conf(),
-            config.query.idm,
-            config.query.tenant_id.as_str(),
-            config.query.tenant_quota,
+            conf.meta.to_meta_grpc_client_conf(),
+            conf.query.idm,
+            conf.query.tenant_id.as_str(),
+            conf.query.tenant_quota,
         )
         .await?;
         RoleCacheManager::init()?;

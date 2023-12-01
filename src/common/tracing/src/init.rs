@@ -20,7 +20,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use common_base::base::tokio;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
 use log::Log;
@@ -42,7 +42,7 @@ pub struct GlobalLogger {
 impl GlobalLogger {
     pub fn init(name: &str, cfg: &Config, labels: BTreeMap<String, String>) {
         let _guards = init_logging(name, cfg, labels);
-        GlobalInstance::set(Self { _guards });
+        SingletonInstance::set(Self { _guards });
     }
 }
 

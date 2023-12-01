@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -195,7 +195,7 @@ impl RealStreamHandler {
     pub fn init() -> Result<()> {
         let rm = RealStreamHandler {};
         let wrapper = StreamHandlerWrapper::new(Box::new(rm));
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_license::license_manager::LicenseManagerWrapper;
@@ -34,7 +34,7 @@ impl MockServices {
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
         };
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;

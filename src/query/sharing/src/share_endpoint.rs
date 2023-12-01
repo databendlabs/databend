@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use common_auth::RefreshableToken;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -51,14 +51,14 @@ pub struct ShareEndpointManager {
 
 impl ShareEndpointManager {
     pub fn init() -> Result<()> {
-        GlobalInstance::set(Arc::new(ShareEndpointManager {
+        SingletonInstance::set(Arc::new(ShareEndpointManager {
             client: HttpClient::new()?,
         }));
         Ok(())
     }
 
     pub fn instance() -> Arc<ShareEndpointManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     #[async_backtrace::framed]

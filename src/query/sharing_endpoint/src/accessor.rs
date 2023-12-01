@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_meta_app::storage::StorageParams;
 use common_storage::init_operator;
@@ -60,13 +60,13 @@ pub fn truncate_root(root: String, loc: String) -> String {
 impl SharingAccessor {
     #[async_backtrace::framed]
     pub async fn init(cfg: &Config) -> Result<()> {
-        GlobalInstance::set(Self::try_create(cfg).await?);
+        SingletonInstance::set(Self::try_create(cfg).await?);
 
         Ok(())
     }
 
     pub fn instance() -> SharingAccessor {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     #[async_backtrace::framed]

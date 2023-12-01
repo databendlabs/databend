@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReply;
@@ -66,5 +66,5 @@ impl StreamHandlerWrapper {
 }
 
 pub fn get_stream_handler() -> Arc<StreamHandlerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }

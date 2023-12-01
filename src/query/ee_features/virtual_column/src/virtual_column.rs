@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::catalog::Catalog;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -121,5 +121,5 @@ impl VirtualColumnHandlerWrapper {
 }
 
 pub fn get_virtual_column_handler() -> Arc<VirtualColumnHandlerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }

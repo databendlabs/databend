@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_config::InnerConfig;
@@ -97,7 +97,7 @@ pub struct HttpQueryManager {
 impl HttpQueryManager {
     #[async_backtrace::framed]
     pub async fn init(_cfg: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(Arc::new(HttpQueryManager {
+        SingletonInstance::set(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             removed_queries: Arc::new(RwLock::new(SizeLimitedIndexMap::new(1000))),
@@ -107,7 +107,7 @@ impl HttpQueryManager {
     }
 
     pub fn instance() -> Arc<HttpQueryManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     #[async_backtrace::framed]

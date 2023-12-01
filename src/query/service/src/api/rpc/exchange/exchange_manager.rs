@@ -21,7 +21,7 @@ use std::sync::Arc;
 use async_channel::Receiver;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_base::runtime::Thread;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -68,7 +68,7 @@ pub struct DataExchangeManager {
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {
-        GlobalInstance::set(Arc::new(DataExchangeManager {
+        SingletonInstance::set(Arc::new(DataExchangeManager {
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
         }));
 
@@ -76,7 +76,7 @@ impl DataExchangeManager {
     }
 
     pub fn instance() -> Arc<DataExchangeManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {

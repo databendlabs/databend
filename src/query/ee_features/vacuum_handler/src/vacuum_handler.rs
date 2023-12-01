@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -74,5 +74,5 @@ impl VacuumHandlerWrapper {
 }
 
 pub fn get_vacuum_handler() -> Arc<VacuumHandlerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }

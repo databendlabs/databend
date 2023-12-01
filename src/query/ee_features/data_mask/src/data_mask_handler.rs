@@ -28,7 +28,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_meta_app::data_mask::CreateDatamaskReq;
 use common_meta_app::data_mask::DatamaskMeta;
@@ -89,5 +89,5 @@ impl DatamaskHandlerWrapper {
 }
 
 pub fn get_datamask_handler() -> Arc<DatamaskHandlerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_meta_api::DatamaskApi;
 use common_meta_app::data_mask::CreateDatamaskReq;
@@ -65,7 +65,7 @@ impl RealDatamaskHandler {
     pub fn init() -> Result<()> {
         let rm = RealDatamaskHandler {};
         let wrapper = DatamaskHandlerWrapper::new(Box::new(rm));
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

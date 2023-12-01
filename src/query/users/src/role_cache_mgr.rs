@@ -19,7 +19,7 @@ use std::time::Instant;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
@@ -46,7 +46,7 @@ impl RoleCacheManager {
         // Check that the user API has been initialized.
         let instance = UserApiProvider::instance();
 
-        GlobalInstance::set(Self::try_create(instance)?);
+        SingletonInstance::set(Self::try_create(instance)?);
         Ok(())
     }
 
@@ -63,7 +63,7 @@ impl RoleCacheManager {
     }
 
     pub fn instance() -> Arc<RoleCacheManager> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     pub fn background_polling(&mut self) {

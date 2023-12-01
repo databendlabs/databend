@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use common_ast::ast::UriLocation;
 use common_base::base::tokio;
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_meta_app::storage::StorageFsConfig;
@@ -45,7 +45,7 @@ async fn test_parse_uri_location() -> Result<()> {
         .map(ToString::to_string)
         .expect("thread should has a name");
 
-    GlobalInstance::init_testing(&thread_name);
+    SingletonInstance::init_testing(&thread_name);
     GlobalConfig::init(InnerConfig::default())?;
 
     let cases = vec![

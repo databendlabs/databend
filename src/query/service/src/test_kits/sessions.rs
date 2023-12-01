@@ -43,9 +43,9 @@ impl TestGlobalServices {
         };
 
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::init_testing(&thread_name);
+        common_base::base::SingletonInstance::init_testing(&thread_name);
 
-        GlobalServices::init_with(config.clone()).await?;
+        GlobalServices::init_singleton_services(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
 
         // Cluster register.
@@ -78,6 +78,6 @@ impl TestGuard {
 impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+        common_base::base::SingletonInstance::drop_testing(&self.thread_name);
     }
 }

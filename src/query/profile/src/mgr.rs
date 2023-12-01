@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 
@@ -40,11 +40,11 @@ impl QueryProfileManager {
     }
 
     pub fn init() {
-        GlobalInstance::set(Arc::new(Self::new(DEFAULT_QUERY_PROFILE_LIMIT)));
+        SingletonInstance::set(Arc::new(Self::new(DEFAULT_QUERY_PROFILE_LIMIT)));
     }
 
     pub fn instance() -> Arc<Self> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     /// Try to get the query profile by query ID.

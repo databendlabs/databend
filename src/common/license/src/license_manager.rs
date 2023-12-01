@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
+use common_base::base::SingletonInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::claims::JWTClaims;
@@ -68,12 +68,12 @@ impl LicenseManager for OssLicenseManager {
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
         };
-        GlobalInstance::set(Arc::new(wrapper));
+        SingletonInstance::set(Arc::new(wrapper));
         Ok(())
     }
 
     fn instance() -> Arc<Box<dyn LicenseManager>> {
-        GlobalInstance::get()
+        SingletonInstance::get()
     }
 
     fn check_enterprise_enabled(&self, _license_key: String, _feature: Feature) -> Result<()> {
@@ -90,5 +90,5 @@ impl LicenseManager for OssLicenseManager {
 }
 
 pub fn get_license_manager() -> Arc<LicenseManagerWrapper> {
-    GlobalInstance::get()
+    SingletonInstance::get()
 }
