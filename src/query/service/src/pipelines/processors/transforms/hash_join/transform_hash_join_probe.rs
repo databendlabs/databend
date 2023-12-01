@@ -95,6 +95,7 @@ impl TransformHashJoinProbe {
             input_data: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
             step: HashJoinProbeStep::WaitBuild,
+            step_logs: vec![HashJoinProbeStep::WaitBuild],
             join_probe_state,
             probe_state: ProbeState::create(
                 max_block_size,

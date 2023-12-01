@@ -137,6 +137,7 @@ impl HashJoinProbeState {
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
+            barrier_count: AtomicUsize::new(0),
         })
     }
 
