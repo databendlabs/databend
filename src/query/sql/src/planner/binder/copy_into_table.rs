@@ -355,7 +355,8 @@ impl<'a> Binder {
 
         if !self.check_sexpr_top(&s_expr, super::binder::CheckType::CopyIntoTable)? {
             return Err(ErrorCode::SemanticError(
-                "insert source can't contain udf functions".to_string(),
+                "copy into table source can't contain window|aggregate|udf|join functions"
+                    .to_string(),
             ));
         }
 
