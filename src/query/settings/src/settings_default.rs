@@ -525,6 +525,12 @@ impl DefaultSettings {
                     possible_values: None,
                     mode: SettingMode::Both,
                 }),
+                ("create_query_flight_client_with_current_rt", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "create query flight client with current runtime",
+                    possible_values: None,
+                    mode: SettingMode::Both,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
