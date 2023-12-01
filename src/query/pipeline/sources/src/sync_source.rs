@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
@@ -117,6 +116,10 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         match self.inner.generate()? {
             None => self.is_finish = true,
             Some(data_block) => {
+                if data_block.is_empty() && data_block.get_meta().is_none() {
+                    // A part was pruned by runtime filter
+                    return Ok(());
+                }
                 let progress_values = ProgressValues {
                     rows: data_block.num_rows(),
                     bytes: data_block.memory_size(),

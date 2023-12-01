@@ -114,7 +114,7 @@ impl SyncSource for ReadParquetDataSource<true> {
                     &self.runtime_filters,
                     &self.partitions.ctx.get_function_context()?,
                 )? {
-                    return Ok(None);
+                    return Ok(Some(DataBlock::empty()));
                 }
 
                 if let Some(index_reader) = self.index_reader.as_ref() {
@@ -175,7 +175,8 @@ impl SyncSource for ReadParquetDataSource<true> {
     }
 
     fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
-        Ok(self.runtime_filters.extend(filters))
+        self.runtime_filters.extend(filters);
+        Ok(())
     }
 }
 
@@ -190,7 +191,8 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
-        Ok(self.runtime_filters.extend(filters))
+        self.runtime_filters.extend(filters);
+        Ok(())
     }
 
     fn can_add_runtime_filter(&self) -> bool {

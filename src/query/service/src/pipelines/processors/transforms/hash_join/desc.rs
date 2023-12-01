@@ -19,7 +19,6 @@ use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::physical_plans::HashJoin;
-use common_sql::ScalarExpr;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;

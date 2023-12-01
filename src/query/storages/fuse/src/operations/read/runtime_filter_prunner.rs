@@ -22,6 +22,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
+use log::info;
 use storages_common_index::statistics_to_domain;
 
 use crate::FusePartInfo;
@@ -36,7 +37,7 @@ pub fn runtime_filter_pruner(
     }
 
     let part = FusePartInfo::from_part(part)?;
-    Ok(filters.iter().any(|(id, filter)| {
+    let pruned = filters.iter().any(|(id, filter)| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).
         debug_assert!(column_refs.len() == 1);
@@ -47,22 +48,29 @@ pub fn runtime_filter_pruner(
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
                 let mut input_domains = HashMap::new();
-                input_domains.insert(name.clone(), domain);
+                input_domains.insert(*name, domain);
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
                     filter,
                     &input_domains,
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
-                matches!(new_expr, Expr::Constant {
+                return matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
-                })
-            } else {
-                false
+                });
             }
-        } else {
-            false
         }
-    }))
+        false
+    });
+
+    if pruned {
+        info!(
+            "Pruned partition with {:?} rows by runtime filter",
+            part.nums_rows
+        );
+        return Ok(true);
+    }
+
+    Ok(false)
 }
