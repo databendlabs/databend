@@ -546,6 +546,7 @@ impl Processor for TransformHashJoinProbe {
 
     fn details_status(&self) -> Option<String> {
         #[derive(Debug)]
+        #[allow(dead_code)]
         struct Display {
             begin_barrier_count: usize,
             step_logs: Vec<HashJoinProbeStep>,
