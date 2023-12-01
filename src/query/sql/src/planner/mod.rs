@@ -41,6 +41,7 @@ pub use format::format_scalar;
 pub use metadata::*;
 pub use planner::PlanExtras;
 pub use planner::Planner;
+pub use plans::insert::InsertInputSource;
 pub use plans::ScalarExpr;
 pub use semantic::*;
 pub use stream_column::*;

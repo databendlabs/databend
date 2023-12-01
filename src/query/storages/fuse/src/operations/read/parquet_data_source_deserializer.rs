@@ -28,6 +28,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_metrics::storage::*;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
@@ -59,6 +60,8 @@ pub struct DeserializeDataTransform {
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+
+    base_block_ids: Option<Scalar>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -106,6 +109,7 @@ impl DeserializeDataTransform {
             uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             index_reader,
             virtual_reader,
+            base_block_ids: plan.base_block_ids.clone(),
         })))
     }
 }
@@ -231,7 +235,12 @@ impl Processor for DeserializeDataTransform {
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     if self.block_reader.query_internal_columns() {
-                        data_block = fill_internal_column_meta(data_block, part, None)?;
+                        data_block = fill_internal_column_meta(
+                            data_block,
+                            part,
+                            None,
+                            self.base_block_ids.clone(),
+                        )?;
                     }
 
                     if self.block_reader.update_stream_columns() {

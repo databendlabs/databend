@@ -233,12 +233,18 @@ impl Processor for ExchangeShuffleTransform {
             return Ok(Event::Finished);
         }
 
-        if self.finished_inputs == self.inputs.len() && self.buffer.is_all_empty() {
-            for output in &self.outputs {
-                output.port.finish();
+        if self.finished_inputs == self.inputs.len() {
+            for (index, output) in self.outputs.iter_mut().enumerate() {
+                if self.buffer.is_empty(index) && output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                    output.port.finish();
+                }
             }
 
-            return Ok(Event::Finished);
+            if self.buffer.is_all_empty() {
+                return Ok(Event::Finished);
+            }
         }
 
         match self.waiting_outputs.is_empty() {

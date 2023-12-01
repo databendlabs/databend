@@ -397,12 +397,8 @@ where F: SnapshotGenerator + Send + 'static
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
                         let table_info = self.table.get_table_info();
-                        // If change tracking is enabled, we cannot retry the commit operation.
-                        match (
-                            self.backoff.next_backoff(),
-                            self.table.change_tracking_enabled(),
-                        ) {
-                            (Some(d), false) => {
+                        match self.backoff.next_backoff() {
+                            Some(d) => {
                                 let name = table_info.name.clone();
                                 debug!(
                                     "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
@@ -414,7 +410,7 @@ where F: SnapshotGenerator + Send + 'static
                                 self.retries += 1;
                                 self.state = State::RefreshTable;
                             }
-                            _ => {
+                            None => {
                                 // Commit not fulfilled. try to abort the operations.
                                 // if it is safe to do so.
                                 if FuseTable::no_side_effects_in_meta_store(&e) {

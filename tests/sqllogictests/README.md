@@ -5,7 +5,7 @@ This is Databend's [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/
 Before running the following commands, you should generate **databend-sqllogictests** binary file.
 
 ---
-Run all tests under the three handlers(mysql, http, clickhouse) in turn.
+Run all tests under the three handlers(mysql, http) in turn.
 ```shell
 databend-sqllogictests
 ```
