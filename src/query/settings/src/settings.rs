@@ -101,7 +101,7 @@ impl Settings {
     /// # Safety
     ///
     /// We will not validate the setting value type
-    pub fn unchecked_apply_changes(&self, changes: &Settings) {
+    pub unsafe fn unchecked_apply_changes(&self, changes: &Settings) {
         for change in changes.changes.iter() {
             self.changes
                 .insert(change.key().clone(), change.value().clone());

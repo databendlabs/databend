@@ -581,8 +581,10 @@ impl TableContext for QueryContext {
 
     fn get_settings(&self) -> Arc<Settings> {
         if !self.query_settings.is_changed() {
-            self.query_settings
-                .unchecked_apply_changes(&self.shared.get_settings());
+            unsafe {
+                self.query_settings
+                    .unchecked_apply_changes(&self.shared.get_settings());
+            }
         }
 
         self.query_settings.clone()

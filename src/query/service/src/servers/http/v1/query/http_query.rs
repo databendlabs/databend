@@ -292,7 +292,9 @@ impl HttpQuery {
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
-            ctx.get_settings().set_deduplicate_label(label.clone())?;
+            unsafe {
+                ctx.get_settings().set_deduplicate_label(label.clone())?;
+            }
         }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
