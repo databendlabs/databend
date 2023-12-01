@@ -29,7 +29,6 @@ use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::all_stream_columns;
 use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::Scalar;
@@ -365,7 +364,6 @@ impl Binder {
         let mut match_database = false;
         let mut match_table = false;
         let star = table.is_none();
-        let stream_columns = all_stream_columns();
         let mut column_ids = Vec::new();
         let mut column_names = Vec::new();
 
@@ -373,11 +371,6 @@ impl Binder {
 
         for column_binding in input_context.all_column_bindings() {
             if column_binding.visibility != Visibility::Visible {
-                continue;
-            }
-
-            // TODO: zhyass refactor it with InVisible
-            if stream_columns.contains(&column_binding.column_name) {
                 continue;
             }
 

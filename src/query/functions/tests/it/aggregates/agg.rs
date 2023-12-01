@@ -405,6 +405,12 @@ fn test_agg_stddev(file: &mut impl Write, simulator: impl AggregationSimulator) 
     run_agg_ast(file, "stddev_samp(a)", get_example().as_slice(), simulator);
     run_agg_ast(
         file,
+        "stddev_samp(dec)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
         "stddev_samp(x_null)",
         get_example().as_slice(),
         simulator,
