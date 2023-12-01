@@ -638,6 +638,8 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("QUALIFY", ignore(ascii_case))]
+    QUALIFY,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
@@ -1094,6 +1096,7 @@ impl TokenKind {
             | TokenKind::OF
             | TokenKind::ORDER
             | TokenKind::OVER
+            | TokenKind::QUALIFY
             | TokenKind::ROWS
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
@@ -1210,6 +1213,7 @@ impl TokenKind {
             | TokenKind::OF
             | TokenKind::ORDER
             | TokenKind::OVER
+            | TokenKind::QUALIFY
             | TokenKind::ROWS
             | TokenKind::RANGE
             // | TokenKind::OVERLAPS
