@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_ast::ast::FileLocation;
+use common_ast::ast::UriLocation;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -41,11 +44,12 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_sql::binder::resolve_stage_location;
+use common_sql::binder::resolve_file_location;
 use common_storage::init_stage_operator;
 use common_storage::read_parquet_schema_async;
 use common_storage::read_parquet_schema_async_rs;
 use common_storage::StageFilesInfo;
+use opendal::Scheme;
 
 use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
@@ -179,8 +183,36 @@ impl AsyncSource for InferSchemaSource {
         }
         self.is_finished = true;
 
-        let (stage_info, path) =
-            resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
+        let file_location = if let Some(location) =
+            self.args_parsed.location.clone().strip_prefix('@')
+        {
+            FileLocation::Stage(location.to_string())
+        } else {
+            if let Some(connection_name) = &self.args_parsed.connection_name {
+                let conn = self.ctx.get_connection(connection_name).await?;
+                let uri = UriLocation::from_uri(
+                    self.args_parsed.location.clone(),
+                    "".to_string(),
+                    conn.storage_params,
+                )?;
+                let proto = conn.storage_type.parse::<Scheme>()?;
+                if proto != uri.protocol.parse::<Scheme>()? {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "protocol from connection_name={connection_name} ({proto}) not match with uri protocol ({0}).",
+                        uri.protocol
+                    )));
+                }
+                FileLocation::Uri(uri)
+            } else {
+                let uri = UriLocation::from_uri(
+                    self.args_parsed.location.clone(),
+                    "".to_string(),
+                    BTreeMap::default(),
+                )?;
+                FileLocation::Uri(uri)
+            }
+        };
+        let (stage_info, path) = resolve_file_location(&self.ctx, &file_location).await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()
