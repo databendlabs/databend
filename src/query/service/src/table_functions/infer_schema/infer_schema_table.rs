@@ -187,30 +187,28 @@ impl AsyncSource for InferSchemaSource {
             self.args_parsed.location.clone().strip_prefix('@')
         {
             FileLocation::Stage(location.to_string())
-        } else {
-            if let Some(connection_name) = &self.args_parsed.connection_name {
-                let conn = self.ctx.get_connection(connection_name).await?;
-                let uri = UriLocation::from_uri(
-                    self.args_parsed.location.clone(),
-                    "".to_string(),
-                    conn.storage_params,
-                )?;
-                let proto = conn.storage_type.parse::<Scheme>()?;
-                if proto != uri.protocol.parse::<Scheme>()? {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "protocol from connection_name={connection_name} ({proto}) not match with uri protocol ({0}).",
-                        uri.protocol
-                    )));
-                }
-                FileLocation::Uri(uri)
-            } else {
-                let uri = UriLocation::from_uri(
-                    self.args_parsed.location.clone(),
-                    "".to_string(),
-                    BTreeMap::default(),
-                )?;
-                FileLocation::Uri(uri)
+        } else if let Some(connection_name) = &self.args_parsed.connection_name {
+            let conn = self.ctx.get_connection(connection_name).await?;
+            let uri = UriLocation::from_uri(
+                self.args_parsed.location.clone(),
+                "".to_string(),
+                conn.storage_params,
+            )?;
+            let proto = conn.storage_type.parse::<Scheme>()?;
+            if proto != uri.protocol.parse::<Scheme>()? {
+                return Err(ErrorCode::BadArguments(format!(
+                    "protocol from connection_name={connection_name} ({proto}) not match with uri protocol ({0}).",
+                    uri.protocol
+                )));
             }
+            FileLocation::Uri(uri)
+        } else {
+            let uri = UriLocation::from_uri(
+                self.args_parsed.location.clone(),
+                "".to_string(),
+                BTreeMap::default(),
+            )?;
+            FileLocation::Uri(uri)
         };
         let (stage_info, path) = resolve_file_location(&self.ctx, &file_location).await?;
         let enable_experimental_rbac_check = self
