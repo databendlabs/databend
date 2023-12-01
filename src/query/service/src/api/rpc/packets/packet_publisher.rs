@@ -41,6 +41,7 @@ pub struct InitNodesChannelPacket {
     pub executor: Arc<NodeInfo>,
     pub fragment_connections_info: Vec<ConnectionInfo>,
     pub statistics_connections_info: Vec<ConnectionInfo>,
+    pub create_rpc_clint_with_current_rt: bool,
 }
 
 impl InitNodesChannelPacket {
@@ -49,12 +50,14 @@ impl InitNodesChannelPacket {
         executor: Arc<NodeInfo>,
         fragment_connections_info: Vec<ConnectionInfo>,
         statistics_connections_info: Vec<ConnectionInfo>,
+        create_rpc_clint_with_current_rt: bool,
     ) -> InitNodesChannelPacket {
         InitNodesChannelPacket {
             query_id,
             executor,
             fragment_connections_info,
             statistics_connections_info,
+            create_rpc_clint_with_current_rt,
         }
     }
 }
