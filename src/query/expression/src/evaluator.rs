@@ -27,7 +27,7 @@ use log::error;
 use crate::block::DataBlock;
 use crate::expression::Expr;
 use crate::filter::select_values;
-use crate::filter::update_selection_by_default_result;
+use crate::filter::update_selection_by_boolean_value;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::function::EvalContext;
@@ -1068,15 +1068,25 @@ impl<'a> Evaluator<'a> {
                 select_strategy,
                 count,
             )?,
-            SelectExpr::Constant(constant) => {
-                // TODO(Dousir9): support constant
-                if *constant {
-                    count
-                } else {
-                    0
-                };
-                unimplemented!()
-            }
+            SelectExpr::BooleanColumnRef((id, data_type)) => self.process_boolean_column_ref(
+                *id,
+                data_type,
+                true_selection,
+                false_selection,
+                true_idx,
+                false_idx,
+                select_strategy,
+                count,
+            )?,
+            SelectExpr::Constant(constant) => self.process_boolean_constant(
+                *constant,
+                true_selection,
+                false_selection,
+                true_idx,
+                false_idx,
+                select_strategy,
+                count,
+            )?,
         };
 
         Ok(count)
@@ -1252,7 +1262,7 @@ impl<'a> Evaluator<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                update_selection_by_default_result(
+                update_selection_by_boolean_value(
                     result,
                     return_type,
                     true_selection,
@@ -1265,6 +1275,58 @@ impl<'a> Evaluator<'a> {
             }
             _ => unreachable!(),
         };
+        Ok(count)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
+    pub fn process_boolean_column_ref(
+        &self,
+        id: usize,
+        data_type: &DataType,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        true_idx: &mut usize,
+        false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let column = self.input_columns.get_by_offset(id).value.clone();
+        let count = update_selection_by_boolean_value(
+            column,
+            data_type,
+            true_selection,
+            false_selection,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        );
+        Ok(count)
+    }
+
+    // TODO(Dousir9): move this to a more appropriate place
+    #[allow(clippy::too_many_arguments)]
+    pub fn process_boolean_constant(
+        &self,
+        constant: bool,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        true_idx: &mut usize,
+        false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let count = update_selection_by_boolean_value(
+            Value::Scalar(Scalar::Boolean(constant)),
+            &DataType::Boolean,
+            true_selection,
+            false_selection,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        );
         Ok(count)
     }
 

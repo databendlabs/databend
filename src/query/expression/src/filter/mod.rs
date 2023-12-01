@@ -21,7 +21,7 @@ pub use select::build_select_expr;
 pub use select::select_values;
 pub use select::selection_op;
 pub use select::selection_op_ref;
-pub use select::update_selection_by_default_result;
+pub use select::update_selection_by_boolean_value;
 pub use select::SelectExpr;
 pub use select::SelectOp;
 pub use select::SelectStrategy;

@@ -28,12 +28,13 @@ use crate::Expr;
 use crate::Scalar;
 use crate::Value;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug)]
 pub enum SelectExpr {
     And(Vec<SelectExpr>),
     Or(Vec<SelectExpr>),
     Compare((SelectOp, Vec<Expr>)),
     Others(Expr),
+    BooleanColumnRef((usize, DataType)),
     Constant(bool),
 }
 
@@ -77,6 +78,12 @@ pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
                 "is_true" => build_select_expr(&args[0]),
                 _ => (SelectExpr::Others(expr.clone()), false),
             }
+        }
+        Expr::ColumnRef { id, data_type, .. } if matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)) => {
+            (
+                SelectExpr::BooleanColumnRef((*id, data_type.clone())),
+                false,
+            )
         }
         Expr::Constant {
             scalar, data_type, ..
@@ -315,9 +322,9 @@ pub fn select_values(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn update_selection_by_default_result(
-    result: Value<AnyType>,
-    result_type: &DataType,
+pub fn update_selection_by_boolean_value(
+    value: Value<AnyType>,
+    data_type: &DataType,
     true_selection: &mut [u32],
     false_selection: (&mut [u32], bool),
     true_idx: &mut usize,
@@ -325,62 +332,70 @@ pub fn update_selection_by_default_result(
     select_strategy: SelectStrategy,
     count: usize,
 ) -> usize {
-    if result_type == &DataType::Boolean {
-        let value = result.try_downcast::<BooleanType>().unwrap();
-        match value {
-            Value::Scalar(scalar) => update_selection_by_scalar_adapt(
-                scalar,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            ),
-            Value::Column(column) => update_selection_by_column_adapt(
-                column,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            ),
-        }
-    } else {
-        let nullable_value = result.try_downcast::<NullableType<BooleanType>>().unwrap();
-        match nullable_value {
-            Value::Scalar(None) => update_selection_by_scalar_adapt(
-                false,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            ),
-            Value::Scalar(Some(scalar)) => update_selection_by_scalar_adapt(
-                scalar,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
-            ),
-            Value::Column(NullableColumn { column, validity }) => {
-                let bitmap = &column & &validity;
-                update_selection_by_column_adapt(
-                    bitmap,
+    debug_assert!(
+        matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
+    );
+
+    match data_type {
+        DataType::Boolean => {
+            let value = value.try_downcast::<BooleanType>().unwrap();
+            match value {
+                Value::Scalar(scalar) => update_selection_by_scalar_adapt(
+                    scalar,
                     true_selection,
                     false_selection,
                     true_idx,
                     false_idx,
                     select_strategy,
                     count,
-                )
+                ),
+                Value::Column(column) => update_selection_by_column_adapt(
+                    column,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                ),
             }
         }
+        DataType::Nullable(box DataType::Boolean) => {
+            let nullable_value = value.try_downcast::<NullableType<BooleanType>>().unwrap();
+            match nullable_value {
+                Value::Scalar(None) => update_selection_by_scalar_adapt(
+                    false,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                ),
+                Value::Scalar(Some(scalar)) => update_selection_by_scalar_adapt(
+                    scalar,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                ),
+                Value::Column(NullableColumn { column, validity }) => {
+                    let bitmap = &column & &validity;
+                    update_selection_by_column_adapt(
+                        bitmap,
+                        true_selection,
+                        false_selection,
+                        true_idx,
+                        false_idx,
+                        select_strategy,
+                        count,
+                    )
+                }
+            }
+        }
+        _ => unreachable!("update_selection_by_boolean_value: {:?}", data_type),
     }
 }
 
