@@ -112,7 +112,7 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
-                false,
+                true,
             )
             .await;
         }
