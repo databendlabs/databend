@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::SendableDataBlockStream;
 use common_sql::bind_one_table;
+use common_sql::format_scalar;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
@@ -68,7 +69,11 @@ impl MergeStyleJoin<'_> {
             RelOperator::Join(j) => j,
             _ => unreachable!(),
         };
-        assert!(matches!(join_op.join_type, JoinType::Right));
+        assert!(
+            join_op.join_type == JoinType::Right
+                || join_op.join_type == JoinType::RightAnti
+                || join_op.join_type == JoinType::Inner
+        );
         let source_conditions = &join_op.right_conditions;
         let target_conditions = &join_op.left_conditions;
         let source_sexpr = join.child(1).unwrap();
@@ -258,38 +263,13 @@ impl MergeIntoInterpreter {
         }
     }
 
-    fn display_scalar_expr(s: &ScalarExpr) -> String {
-        match s {
-            ScalarExpr::BoundColumnRef(x) => x.column.column_name.clone(),
-            ScalarExpr::ConstantExpr(x) => x.value.to_string(),
-            ScalarExpr::WindowFunction(x) => format!("{:?}", x),
-            ScalarExpr::AggregateFunction(x) => format!("{:?}", x),
-            ScalarExpr::LambdaFunction(x) => format!("{:?}", x),
-            ScalarExpr::FunctionCall(x) => match x.func_name.as_str() {
-                "and" | "or" | "gte" | "lte" => {
-                    format!(
-                        "({} {} {})",
-                        Self::display_scalar_expr(&x.arguments[0]),
-                        x.func_name,
-                        Self::display_scalar_expr(&x.arguments[1])
-                    )
-                }
-                _ => format!("{:?}", x),
-            },
-            ScalarExpr::CastExpr(x) => format!("{:?}", x),
-            ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
-            ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
-            ScalarExpr::UDFLambdaCall(x) => format!("{:?}", x),
-        }
-    }
-
     fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
         match s_expr.plan() {
             RelOperator::Scan(s) => {
                 let mut new_scan = s.clone();
                 info!("push down {} filters:", filters.len());
                 for filter in filters {
-                    info!("{}", Self::display_scalar_expr(filter));
+                    info!("{}", format_scalar(filter));
                 }
                 if let Some(preds) = new_scan.push_down_predicates {
                     new_scan.push_down_predicates =
@@ -317,7 +297,6 @@ impl MergeIntoInterpreter {
             RelOperator::Window(_) => {}
             RelOperator::ProjectSet(_) => {}
             RelOperator::MaterializedCte(_) => {}
-            RelOperator::Lambda(_) => {}
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
             RelOperator::AddRowNumber(_) => {}

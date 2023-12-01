@@ -195,6 +195,7 @@ impl Processor for MutationSource {
                             segment_location: block_meta.segment_location.clone(),
                             snapshot_location: None,
                             offsets: None,
+                            base_block_ids: None,
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),

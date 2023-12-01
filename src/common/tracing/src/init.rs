@@ -161,7 +161,8 @@ pub fn init_logging(
     if cfg.otlp.on {
         let mut labels = labels.clone();
         labels.insert("category".to_string(), "system".to_string());
-        let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
+        labels.extend(cfg.otlp.labels.clone());
+        let logger = new_otlp_log_writer(&cfg.otlp.endpoint, labels);
         let dispatch = fern::Dispatch::new()
             .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
             .format(formatter("json"))
@@ -194,7 +195,8 @@ pub fn init_logging(
         if !cfg.query.otlp_endpoint.is_empty() {
             let mut labels = labels.clone();
             labels.insert("category".to_string(), "query".to_string());
-            let logger = new_otlp_log_writer(&cfg.tracing.otlp_endpoint, labels);
+            labels.extend(cfg.query.labels.clone());
+            let logger = new_otlp_log_writer(&cfg.query.otlp_endpoint, labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -203,6 +205,15 @@ pub fn init_logging(
         .chain(
             fern::Dispatch::new()
                 .level_for("query", LevelFilter::Off)
+                .filter(|meta| {
+                    if meta.target().starts_with("databend_")
+                        || meta.target().starts_with("common_")
+                    {
+                        true
+                    } else {
+                        meta.level() >= LevelFilter::Error
+                    }
+                })
                 .chain(normal_logger),
         )
         .chain(

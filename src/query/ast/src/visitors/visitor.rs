@@ -378,8 +378,16 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
 
-    fn visit_copy_into_table(&mut self, _copy: &'ast CopyIntoTableStmt) {}
-    fn visit_copy_into_location(&mut self, _copy: &'ast CopyIntoLocationStmt) {}
+    fn visit_copy_into_table(&mut self, copy: &'ast CopyIntoTableStmt) {
+        if let CopyIntoTableSource::Query(query) = &copy.src {
+            self.visit_query(query)
+        }
+    }
+    fn visit_copy_into_location(&mut self, copy: &'ast CopyIntoLocationStmt) {
+        if let CopyIntoLocationSource::Query(query) = &copy.src {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
 
@@ -416,14 +424,66 @@ pub trait Visitor<'ast>: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &'ast str) {}
     fn visit_set_secondary_roles(&mut self, _option: &SecondaryRolesOption) {}
 
-    fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
-    fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}
-    fn visit_merge_into(&mut self, _merge_into: &'ast MergeIntoStmt) {}
+    fn visit_insert(&mut self, insert: &'ast InsertStmt) {
+        if let InsertSource::Select { query } = &insert.source {
+            self.visit_query(query)
+        }
+    }
+
+    fn visit_replace(&mut self, replace: &'ast ReplaceStmt) {
+        if let InsertSource::Select { query, .. } = &replace.source {
+            self.visit_query(query)
+        }
+    }
+
+    fn visit_merge_into(&mut self, merge_into: &'ast MergeIntoStmt) {
+        // for visit merge into, its destination is to do some rules for the exprs
+        // in merge into before we bind_merge_into, we need to make sure the correct
+        // exprs rewrite for bind_merge_into
+        if let MergeSource::Select { query, .. } = &merge_into.source {
+            self.visit_query(query)
+        }
+        self.visit_expr(&merge_into.join_expr);
+        for operation in &merge_into.merge_options {
+            match operation {
+                MergeOption::Match(match_operation) => {
+                    if let Some(expr) = &match_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    if let MatchOperation::Update { update_list, .. } = &match_operation.operation {
+                        for update in update_list {
+                            self.visit_expr(&update.expr)
+                        }
+                    }
+                }
+                MergeOption::Unmatch(unmatch_operation) => {
+                    if let Some(expr) = &unmatch_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    for expr in &unmatch_operation.insert_operation.values {
+                        self.visit_expr(expr)
+                    }
+                }
+            }
+        }
+    }
+
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource) {}
 
-    fn visit_delete(&mut self, _delete: &'ast DeleteStmt) {}
+    fn visit_delete(&mut self, delete: &'ast DeleteStmt) {
+        if let Some(expr) = &delete.selection {
+            self.visit_expr(expr)
+        }
+    }
 
-    fn visit_update(&mut self, _update: &'ast UpdateStmt) {}
+    fn visit_update(&mut self, update: &'ast UpdateStmt) {
+        if let Some(expr) = &update.selection {
+            self.visit_expr(expr)
+        }
+        for update in &update.update_list {
+            self.visit_expr(&update.expr)
+        }
+    }
 
     fn visit_show_catalogs(&mut self, _stmt: &'ast ShowCatalogsStmt) {}
 
@@ -459,7 +519,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_drop_tables(&mut self, _stmt: &'ast ShowDropTablesStmt) {}
 
-    fn visit_create_table(&mut self, _stmt: &'ast CreateTableStmt) {}
+    fn visit_create_table(&mut self, stmt: &'ast CreateTableStmt) {
+        if let Some(query) = stmt.as_query.as_deref() {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
 
@@ -646,6 +710,8 @@ pub trait Visitor<'ast>: Sized {
             selection,
             group_by,
             having,
+            window_list,
+            qualify,
             ..
         } = stmt;
 
@@ -679,6 +745,16 @@ pub trait Visitor<'ast>: Sized {
 
         if let Some(having) = having {
             walk_expr(self, having);
+        }
+
+        if let Some(window_list) = window_list {
+            for window_def in window_list {
+                walk_window_definition(self, window_def);
+            }
+        }
+
+        if let Some(qualify) = qualify {
+            walk_expr(self, qualify);
         }
     }
 

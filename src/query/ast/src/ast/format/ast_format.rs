@@ -558,7 +558,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
         let key_name = match accessor {
             MapAccessor::Bracket { key } => format!("accessor [{key}]"),
-            MapAccessor::Dot { key } => format!("accessor .{key}"),
             MapAccessor::DotNumber { key } => format!("accessor .{key}"),
             MapAccessor::Colon { key } => format!("accessor :{key}"),
         };
@@ -2778,6 +2777,16 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(window_list_node);
         }
 
+        if let Some(qualify) = &stmt.qualify {
+            self.visit_expr(qualify);
+            let qualify_child = self.children.pop().unwrap();
+            let qualify_name = "Qualify".to_string();
+            let qualify_format_ctx = AstFormatContext::with_children(qualify_name, 1);
+            let qualify_node =
+                FormatTreeNode::with_children(qualify_format_ctx, vec![qualify_child]);
+            children.push(qualify_node);
+        }
+
         let name = "SelectQuery".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
@@ -2798,7 +2807,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
-            SelectTarget::QualifiedName { .. } => {
+            SelectTarget::StarColumns { .. } => {
                 let name = format!("Target {}", target);
                 let format_ctx = AstFormatContext::new(name);
                 let node = FormatTreeNode::new(format_ctx);

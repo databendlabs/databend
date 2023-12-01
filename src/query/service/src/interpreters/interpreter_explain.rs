@@ -26,6 +26,8 @@ use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::ProfileHelper;
 use common_sql::optimizer::ColumnSet;
+use common_sql::BindContext;
+use common_sql::InsertInputSource;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -71,17 +73,48 @@ impl Interpreter for ExplainInterpreter {
                     formatted_ast,
                     ..
                 } => {
-                    let ctx = self.ctx.clone();
-                    // If `formatted_ast` is Some, it means we may use query result cache.
-                    // If we use result cache for this query,
-                    // we should not use `dry_run` mode to build the physical plan.
-                    // It's because we need to get the same partitions as the original selecting plan.
-                    let mut builder =
-                        PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
-                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
-                    self.explain_physical_plan(&plan, metadata, formatted_ast)
+                    self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
+                Plan::Insert(insert_plan) => {
+                    let mut res = self.explain_plan(&self.plan)?;
+                    if let InsertInputSource::SelectPlan(plan) = &insert_plan.source {
+                        if let Plan::Query {
+                            s_expr,
+                            metadata,
+                            bind_context,
+                            formatted_ast,
+                            ..
+                        } = &**plan
+                        {
+                            let query = self
+                                .explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                .await?;
+                            res.extend(query);
+                        }
+                    }
+                    vec![DataBlock::concat(&res)?]
+                }
+                Plan::CreateTable(plan) => match &plan.as_select {
+                    Some(box Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        formatted_ast,
+                        ..
+                    }) => {
+                        let mut res =
+                            vec![DataBlock::new_from_columns(vec![StringType::from_data(
+                                vec!["CreateTableAsSelect:", ""],
+                            )])];
+                        res.extend(
+                            self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                .await?,
+                        );
+                        vec![DataBlock::concat(&res)?]
+                    }
+                    _ => self.explain_plan(&self.plan)?,
+                },
                 _ => self.explain_plan(&self.plan)?,
             },
 
@@ -339,5 +372,23 @@ impl ExplainInterpreter {
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    async fn explain_query(
+        &self,
+        s_expr: &SExpr,
+        metadata: &MetadataRef,
+        bind_context: &BindContext,
+        formatted_ast: &Option<String>,
+    ) -> Result<Vec<DataBlock>> {
+        let ctx = self.ctx.clone();
+        // If `formatted_ast` is Some, it means we may use query result cache.
+        // If we use result cache for this query,
+        // we should not use `dry_run` mode to build the physical plan.
+        // It's because we need to get the same partitions as the original selecting plan.
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
+        let plan = builder.build(s_expr, bind_context.column_set()).await?;
+        self.explain_physical_plan(&plan, metadata, formatted_ast)
+            .await
     }
 }

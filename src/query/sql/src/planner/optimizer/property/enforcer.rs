@@ -73,6 +73,7 @@ pub fn require_property(
                 // We should wrap the child with Broadcast exchange to make it available to all nodes.
                 let enforced_child = enforce_property(optimized_expr.child(index)?, &required)?;
                 children.push(Arc::new(enforced_child));
+                continue;
             }
         }
         if let RelOperator::UnionAll(_) = s_expr.plan.as_ref() {

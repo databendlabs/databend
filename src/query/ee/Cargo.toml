@@ -27,6 +27,7 @@ common-license = { path = "../../common/license" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-store = { path = "../../meta/store" }
+common-meta-types = { path = "../../meta/types" }
 common-sql = { path = "../sql" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-stream = { path = "../storages/stream" }

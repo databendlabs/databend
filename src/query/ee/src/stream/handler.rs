@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
@@ -25,6 +26,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_types::MatchSeq;
 use common_sql::plans::CreateStreamPlan;
 use common_sql::plans::DropStreamPlan;
 use common_sql::plans::StreamNavigation;
@@ -38,6 +41,7 @@ use common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
 use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use common_storages_stream::stream_table::STREAM_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use stream_handler::StreamHandler;
 use stream_handler::StreamHandlerWrapper;
@@ -52,26 +56,36 @@ impl StreamHandler for RealStreamHandler {
         ctx: Arc<dyn TableContext>,
         plan: &CreateStreamPlan,
     ) -> Result<CreateTableReply> {
-        let table = ctx
-            .get_table(&plan.catalog, &plan.table_database, &plan.table_name)
-            .await?;
-        if !table.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
-                plan.table_database, plan.table_name
-            )));
-        }
+        let tenant = ctx.get_tenant();
+        let catalog = ctx.get_catalog(&plan.catalog).await?;
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_info = fuse_table.get_table_info();
+        let table = catalog
+            .get_table(&tenant, &plan.table_database, &plan.table_name)
+            .await?;
+        let table_info = table.get_table_info();
         let table_version = table_info.ident.seq;
         let table_id = table_info.ident.table_id;
         let schema = table_info.schema().clone();
+        if !table.change_tracking_enabled() {
+            // enable change tracking.
+            let req = UpsertTableOptionReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                options: HashMap::from([(
+                    OPT_KEY_CHANGE_TRACKING.to_string(),
+                    Some("true".to_string()),
+                )]),
+            };
+
+            catalog
+                .upsert_table_option(&tenant, &plan.table_database, req)
+                .await?;
+        }
 
         let mut options = BTreeMap::new();
         match &plan.navigation {
             Some(StreamNavigation::AtStream { database, name }) => {
-                let stream = ctx.get_table(&plan.catalog, database, name).await?;
+                let stream = catalog.get_table(&tenant, database, name).await?;
                 let stream = StreamTable::try_from_table(stream.as_ref())?;
                 let stream_opts = stream.get_table_info().options();
                 let stream_table_name = stream_opts
@@ -104,6 +118,7 @@ impl StreamHandler for RealStreamHandler {
                 options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
                 options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
                 options.insert(OPT_KEY_MODE.to_string(), MODE_APPEND_ONLY.to_string());
+                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                 if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
                     options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
                 }
@@ -126,7 +141,6 @@ impl StreamHandler for RealStreamHandler {
             },
         };
 
-        let catalog = ctx.get_catalog(&plan.catalog).await?;
         catalog.create_table(req).await
     }
 
@@ -162,7 +176,7 @@ impl StreamHandler for RealStreamHandler {
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: plan.if_exists,
-                    tenant: plan.tenant.clone(),
+                    tenant,
                     tb_id: table.get_id(),
                 })
                 .await

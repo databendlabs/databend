@@ -48,6 +48,7 @@ use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
+use crate::RemoteExpr;
 
 pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
@@ -162,6 +163,27 @@ impl<'a> Evaluator<'a> {
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 Ok(result)
+            }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_expr,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                self.run_lambda(name, args, lambda_expr)
             }
         };
 
@@ -881,6 +903,110 @@ impl<'a> Evaluator<'a> {
 
         unreachable!("expr is not a set returning function: {expr}")
     }
+
+    fn run_lambda(
+        &self,
+        func_name: &str,
+        args: Vec<Value<AnyType>>,
+        lambda_expr: &RemoteExpr,
+    ) -> Result<Value<AnyType>> {
+        let expr = lambda_expr.as_expr(self.fn_registry);
+        // TODO: Support multi args
+        match &args[0] {
+            Value::Scalar(s) => match s {
+                Scalar::Array(c) => {
+                    let entry = BlockEntry::new(c.data_type(), Value::Column(c.clone()));
+                    let block = DataBlock::new(vec![entry], c.len());
+
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    let result = evaluator.run(&expr)?;
+                    let result_col = result.convert_to_full_column(expr.data_type(), c.len());
+
+                    if func_name == "array_filter" {
+                        let result_col = result_col.remove_nullable();
+                        let bitmap = result_col.as_boolean().unwrap();
+                        let filtered_inner_col = c.filter(bitmap);
+                        Ok(Value::Scalar(Scalar::Array(filtered_inner_col)))
+                    } else {
+                        Ok(Value::Scalar(Scalar::Array(result_col)))
+                    }
+                }
+                _ => unreachable!(),
+            },
+            Value::Column(c) => {
+                let (inner_col, inner_ty, offsets, validity) = match c {
+                    Column::Array(box array_col) => (
+                        array_col.values.clone(),
+                        array_col.values.data_type(),
+                        array_col.offsets.clone(),
+                        None,
+                    ),
+                    Column::Nullable(box nullable_col) => match &nullable_col.column {
+                        Column::Array(box array_col) => (
+                            array_col.values.clone(),
+                            array_col.values.data_type(),
+                            array_col.offsets.clone(),
+                            Some(nullable_col.validity.clone()),
+                        ),
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+                let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
+                let block = DataBlock::new(vec![entry], inner_col.len());
+
+                let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                let result = evaluator.run(&expr)?;
+                let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
+
+                let col = if func_name == "array_filter" {
+                    let result_col = result_col.remove_nullable();
+                    let bitmap = result_col.as_boolean().unwrap();
+                    let filtered_inner_col = inner_col.filter(bitmap);
+                    // generate new offsets after filter.
+                    let mut new_offset = 0;
+                    let mut filtered_offsets = Vec::with_capacity(offsets.len());
+                    filtered_offsets.push(0);
+                    for offset in offsets.windows(2) {
+                        let off = offset[0] as usize;
+                        let len = (offset[1] - offset[0]) as usize;
+                        let unset_count = bitmap.null_count_range(off, len);
+                        new_offset += (len - unset_count) as u64;
+                        filtered_offsets.push(new_offset);
+                    }
+
+                    let array_col = Column::Array(Box::new(ArrayColumn {
+                        values: filtered_inner_col,
+                        offsets: filtered_offsets.into(),
+                    }));
+                    match validity {
+                        Some(validity) => {
+                            Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                column: array_col,
+                                validity,
+                            })))
+                        }
+                        None => Value::Column(array_col),
+                    }
+                } else {
+                    let array_col = Column::Array(Box::new(ArrayColumn {
+                        values: result_col,
+                        offsets,
+                    }));
+                    match validity {
+                        Some(validity) => {
+                            Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                column: array_col,
+                                validity,
+                            })))
+                        }
+                        None => Value::Column(array_col),
+                    }
+                };
+                Ok(col)
+            }
+        }
+    }
 }
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
@@ -1159,7 +1285,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 args,
                 return_type,
             } => {
-                let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
+                let (mut args_expr, mut args_domain) = (
+                    Vec::with_capacity(args.len()),
+                    Some(Vec::with_capacity(args.len())),
+                );
                 for arg in args {
                     let (expr, domain) = self.fold_once(arg);
                     args_expr.push(expr);
@@ -1222,6 +1351,48 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
 
                 (func_expr, func_domain)
+            }
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => {
+                let mut args_expr = Vec::with_capacity(args.len());
+                for arg in args {
+                    let (expr, _) = self.fold_once(arg);
+                    args_expr.push(expr);
+                }
+                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::LambdaFunctionCall {
+                    span: *span,
+                    name: name.clone(),
+                    args: args_expr,
+                    lambda_expr: lambda_expr.clone(),
+                    lambda_display: lambda_display.clone(),
+                    return_type: return_type.clone(),
+                };
+
+                if all_args_is_scalar {
+                    let block = DataBlock::empty();
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    // Since we know the expression is constant, it'll be safe to change its column index type.
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar,
+                                data_type: return_type.clone(),
+                            },
+                            None,
+                        );
+                    }
+                }
+                (func_expr, None)
             }
         };
 

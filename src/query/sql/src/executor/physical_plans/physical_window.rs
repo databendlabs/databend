@@ -191,7 +191,7 @@ impl PhysicalPlanBuilder {
             scalar_items.push(order.order_by_item.clone())
         }
         let input = if !scalar_items.is_empty() {
-            self.crate_eval_scalar(
+            self.create_eval_scalar(
                 &crate::planner::plans::EvalScalar {
                     items: scalar_items,
                 },

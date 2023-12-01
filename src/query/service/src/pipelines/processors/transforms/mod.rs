@@ -32,6 +32,7 @@ mod transform_resort_addon;
 mod transform_resort_addon_without_source_schema;
 mod transform_runtime_cast_schema;
 mod transform_runtime_filter;
+mod transform_srf;
 mod transform_udf;
 mod window;
 
@@ -57,6 +58,7 @@ pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithou
 pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_runtime_filter::SinkRuntimeFilterSource;
 pub use transform_runtime_filter::TransformRuntimeFilter;
+pub use transform_srf::TransformSRF;
 pub use transform_udf::TransformUdf;
 pub use window::FrameBound;
 pub use window::TransformWindow;

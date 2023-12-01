@@ -37,7 +37,6 @@ use itertools::Itertools;
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
-use crate::binder::lambda::LambdaInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
@@ -57,6 +56,7 @@ pub enum ExprContext {
     WhereClause,
     GroupClaue,
     HavingClause,
+    QualifyClause,
     OrderByClause,
     LimitClause,
 
@@ -117,8 +117,6 @@ pub struct BindContext {
 
     pub windows: WindowInfo,
 
-    pub lambda_info: LambdaInfo,
-
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
 
@@ -170,7 +168,6 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
-            lambda_info: LambdaInfo::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
             allow_internal_columns: true,
@@ -190,7 +187,6 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
-            lambda_info: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
             allow_internal_columns: parent.allow_internal_columns,

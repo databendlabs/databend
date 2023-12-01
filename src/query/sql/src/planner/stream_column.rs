@@ -15,16 +15,16 @@
 use std::sync::Arc;
 
 use common_catalog::plan::StreamColumn;
-use common_catalog::plan::StreamColumnMeta;
 use common_catalog::plan::StreamColumnType;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use common_expression::ORIGIN_VERSION_COL_NAME;
 
 use crate::evaluator::BlockOperator;
-use crate::evaluator::CompoundBlockOperator;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::ColumnBindingBuilder;
 use crate::ScalarExpr;
@@ -33,24 +33,58 @@ use crate::Visibility;
 pub const CURRENT_BLOCK_ID_COL_NAME: &str = "_current_block_id";
 pub const CURRENT_BLOCK_ROW_NUM_COL_NAME: &str = "_current_block_row_num";
 
-pub enum TransformStreamKind {
-    Append(StreamColumnMeta),
-    Mutation(CompoundBlockOperator),
-}
-
 /// Generate stream columns operator '_origin_block_id' and
 /// '_origin_block_row_num' for mutation.
 pub fn gen_mutation_stream_operator(
     schema: Arc<TableSchema>,
-    change_tracking: bool,
+    table_version: u64,
 ) -> Result<(Vec<StreamColumn>, Vec<BlockOperator>)> {
-    if !change_tracking {
-        return Ok((vec![], vec![]));
-    }
-
     let input_schema = schema.remove_virtual_computed_fields();
     let fields_num = input_schema.fields().len();
-    let mut exprs = Vec::with_capacity(2);
+    let mut exprs = Vec::with_capacity(3);
+
+    let origin_version_col =
+        StreamColumn::new(ORIGIN_VERSION_COL_NAME, StreamColumnType::OriginVersion);
+    let version_type = Box::new(origin_version_col.data_type());
+    let origin_version_index = input_schema
+        .index_of(origin_version_col.column_name())
+        .unwrap();
+    let origin_version_scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+        span: None,
+        column: ColumnBindingBuilder::new(
+            origin_version_col.column_name().to_string(),
+            origin_version_index,
+            version_type.clone(),
+            Visibility::Visible,
+        )
+        .build(),
+    });
+    let current_version_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+        span: None,
+        value: table_version.into(),
+    });
+    let version_predicate = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "is_not_null".to_string(),
+        params: vec![],
+        arguments: vec![origin_version_scalar.clone()],
+    });
+    // if(is_not_null(_origin_version), _origin_version, _current_version)
+    let version_scalar = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "if".to_string(),
+        params: vec![],
+        arguments: vec![
+            version_predicate,
+            origin_version_scalar,
+            current_version_scalar,
+        ],
+    });
+    exprs.push(
+        version_scalar
+            .as_expr()?
+            .project_column_ref(|col| col.index),
+    );
 
     let origin_block_id_col =
         StreamColumn::new(ORIGIN_BLOCK_ID_COL_NAME, StreamColumnType::OriginBlockId);
@@ -154,10 +188,12 @@ pub fn gen_mutation_stream_operator(
 
     let mut projections = Vec::with_capacity(fields_num);
     for i in 0..fields_num {
-        if i == origin_block_id_index {
+        if i == origin_version_index {
             projections.push(fields_num + 2);
-        } else if i == origin_row_num_index {
+        } else if i == origin_block_id_index {
             projections.push(fields_num + 3);
+        } else if i == origin_row_num_index {
+            projections.push(fields_num + 4);
         } else {
             projections.push(i);
         }

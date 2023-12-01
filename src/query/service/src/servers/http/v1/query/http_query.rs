@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use super::RemoveReason;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -219,7 +220,9 @@ impl HttpQuery {
                             "last query on the session not finished",
                         ));
                     } else {
-                        http_query_manager.remove_query(&query_id).await;
+                        let _ = http_query_manager
+                            .remove_query(&query_id, RemoveReason::Canceled)
+                            .await;
                     }
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
@@ -289,7 +292,9 @@ impl HttpQuery {
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
-            ctx.get_settings().set_deduplicate_label(label.clone())?;
+            unsafe {
+                ctx.get_settings().set_deduplicate_label(label.clone())?;
+            }
         }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
@@ -456,8 +461,10 @@ impl HttpQuery {
 
         let settings = session_state
             .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .as_ref()
+            .into_iter()
+            .filter(|item| item.default_value != item.user_value)
+            .map(|item| (item.name.to_string(), item.user_value.as_string()))
             .collect::<BTreeMap<_, _>>();
         let database = session_state.current_database.clone();
         let role = session_state.current_role.clone();

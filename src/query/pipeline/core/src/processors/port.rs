@@ -154,6 +154,10 @@ impl InputPort {
         ((flags & IS_FINISHED) == IS_FINISHED) && ((flags & HAS_DATA) == 0)
     }
 
+    pub fn is_need_data(&self) -> bool {
+        self.shared.get_flags() & NEED_DATA != 0
+    }
+
     #[inline(always)]
     pub fn set_need_data(&self) {
         unsafe {
@@ -238,6 +242,14 @@ impl OutputPort {
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
         (self.shared.get_flags() & IS_FINISHED) != 0
+    }
+
+    pub fn has_data(&self) -> bool {
+        (self.shared.get_flags() & HAS_DATA) != 0
+    }
+
+    pub fn is_need_data(&self) -> bool {
+        (self.shared.get_flags() & NEED_DATA) != 0
     }
 
     #[inline(always)]

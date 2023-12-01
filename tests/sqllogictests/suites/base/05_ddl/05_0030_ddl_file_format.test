@@ -13,7 +13,7 @@ CREATE FILE FORMAT if not exists test_format TYPE=CSV
 statement error 2509
 CREATE FILE FORMAT test_format TYPE=CSV
 
-skipif clickhouse
+
 query TT
 show FILE FORMATS;
 ----

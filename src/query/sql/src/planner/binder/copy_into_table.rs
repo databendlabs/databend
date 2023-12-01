@@ -47,7 +47,6 @@ use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
@@ -92,11 +91,13 @@ impl<'a> Binder {
                 let plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
+
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
             }
         }
     }
+
     async fn bind_copy_into_table_common(
         &mut self,
         bind_context: &mut BindContext,
@@ -332,8 +333,21 @@ impl<'a> Binder {
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
-        let (scalar_items, projections) =
-            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+
+        for item in select_list.items.iter() {
+            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
+                // in fact, if there is a join, we will stop in `check_transform_query()`
+                return Err(ErrorCode::SemanticError(
+                    "copy into table source can't contain window|aggregate|udf|join functions"
+                        .to_string(),
+                ));
+            };
+        }
+        let (scalar_items, projections) = self.analyze_projection(
+            &from_context.aggregate_info,
+            &from_context.windows,
+            &select_list,
+        )?;
 
         if projections.len() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
@@ -357,6 +371,7 @@ impl<'a> Binder {
             ignore_result: false,
             formatted_ast: None,
         }));
+
         Ok(Plan::CopyIntoTable(Box::new(plan)))
     }
 
@@ -369,27 +384,7 @@ impl<'a> Binder {
         if !stmt.file_format.is_empty() {
             stage.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
-
-        // Copy options.
-        {
-            // on_error.
-            stage.copy_options.on_error =
-                OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
-
-            // size_limit.
-            if stmt.size_limit != 0 {
-                stage.copy_options.size_limit = stmt.size_limit;
-            }
-            if stmt.max_files != 0 {
-                stage.copy_options.max_files = stmt.max_files;
-            }
-            stage.copy_options.split_size = stmt.split_size;
-            stage.copy_options.purge = stmt.purge;
-            stage.copy_options.disable_variant_check = stmt.disable_variant_check;
-            stage.copy_options.return_failed_only = stmt.return_failed_only;
-        }
-
-        Ok(())
+        stmt.apply_to_copy_option(&mut stage.copy_options)
     }
 
     #[async_backtrace::framed]
@@ -567,7 +562,7 @@ pub async fn resolve_file_location(
                     "copy from insecure storage is not allowed",
                 ))
             } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, &path);
+                let stage_info = StageInfo::new_external_stage(storage_params, &path, true);
                 Ok((stage_info, path))
             }
         }

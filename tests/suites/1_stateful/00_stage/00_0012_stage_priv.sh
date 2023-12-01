@@ -7,9 +7,12 @@ export TEST_USER_NAME="u1"
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=u1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
+echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop table if exists test_table;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists u1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop STAGE if exists s2;" | $BENDSQL_CLIENT_CONNECT
+echo "drop STAGE if exists s1;" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE STAGE s2;" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE TABLE test_table (
@@ -93,9 +96,30 @@ echo "select 1 from infer_schema(location => '@s3')" | $TEST_USER_CONNECT
 echo "select 1 from list_stage(location => '@s3')" | $TEST_USER_CONNECT
 echo "select 1 from inspect_parquet('@s3')" | $TEST_USER_CONNECT
 
-## Drop table.
+echo "=== check external location ==="
+rm -rf /tmp/00_0012
+mkdir -p /tmp/00_0012
+cat << EOF > /tmp/00_0012/i0.csv
+1,1
+2,2
+EOF
+
+echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
+echo "select \$1, \$2 from 'fs:///tmp/00_0012/' (FILE_FORMAT => 'CSV')"  | $TEST_USER_CONNECT
+echo "create table t(c1 int, c2 int)" | $BENDSQL_CLIENT_CONNECT
+echo "grant select, insert on default.t to u1" | $BENDSQL_CLIENT_CONNECT
+echo "copy into t from 'fs:///tmp/00_0012/' FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
+echo "select * from t" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== check access user's local stage ==="
+# presign upload requires a write priv
+curl -s -w "%{http_code}\n" -X PUT -o /dev/null -H Content-Type:application/octet-stream "`echo "PRESIGN UPLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT`"
+
+## clean ups
 echo "drop stage if exists presign_stage" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
+rm -rf /tmp/00_0012
 
-
+echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

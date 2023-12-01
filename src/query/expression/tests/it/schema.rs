@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
 use common_expression::types::NumberDataType;
@@ -23,6 +25,15 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use pretty_assertions::assert_eq;
+
+#[test]
+fn test_from_arrow_field_to_table_data_type() -> Result<()> {
+    let extension_data_type =
+        ArrowDataType::Extension("a".to_string(), Box::new(ArrowDataType::Int8), None);
+    let arrow_field = ArrowField::new("".to_string(), extension_data_type, false);
+    let _: TableDataType = (&arrow_field).into();
+    Ok(())
+}
 
 #[test]
 fn test_project_schema_from_tuple() -> Result<()> {

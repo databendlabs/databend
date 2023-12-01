@@ -7,6 +7,8 @@ echo "=== test UDF priv"
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
+echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "DROP FUNCTION IF EXISTS f1;" |  $BENDSQL_CLIENT_CONNECT
 echo "DROP FUNCTION IF EXISTS f2;" |  $BENDSQL_CLIENT_CONNECT
@@ -126,3 +128,4 @@ echo "DROP FUNCTION IF EXISTS f1;" |  $BENDSQL_CLIENT_CONNECT
 echo "DROP FUNCTION IF EXISTS f2;" |  $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists default.t;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists default.t2;" | $BENDSQL_CLIENT_CONNECT
+echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

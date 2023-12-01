@@ -233,18 +233,54 @@ impl Processor for ExchangeShuffleTransform {
             return Ok(Event::Finished);
         }
 
-        if self.finished_inputs == self.inputs.len() && self.buffer.is_all_empty() {
-            for output in &self.outputs {
-                output.port.finish();
+        if self.finished_inputs == self.inputs.len() {
+            for (index, output) in self.outputs.iter_mut().enumerate() {
+                if self.buffer.is_empty(index) && output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                    output.port.finish();
+                }
             }
 
-            return Ok(Event::Finished);
+            if self.buffer.is_all_empty() {
+                return Ok(Event::Finished);
+            }
         }
 
         match self.waiting_outputs.is_empty() {
             true => Ok(Event::NeedConsume),
             false => Ok(Event::NeedData),
         }
+    }
+
+    fn details_status(&self) -> Option<String> {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct Display {
+            queue_status: Vec<(usize, usize)>,
+            inputs: usize,
+            finished_inputs: usize,
+            outputs: usize,
+            finished_outputs: usize,
+
+            waiting_outputs: Vec<usize>,
+            waiting_inputs: VecDeque<usize>,
+        }
+
+        let mut queue_status = vec![];
+        for (idx, queue) in self.buffer.inner.iter().enumerate() {
+            queue_status.push((idx, queue.len()));
+        }
+
+        Some(format!("{:?}", Display {
+            queue_status,
+            inputs: self.inputs.len(),
+            outputs: self.outputs.len(),
+            finished_inputs: self.finished_inputs,
+            finished_outputs: self.finished_outputs,
+            waiting_inputs: self.waiting_inputs.clone(),
+            waiting_outputs: self.waiting_outputs.clone(),
+        }))
     }
 }
 
