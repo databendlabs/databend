@@ -16,7 +16,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 
 use crate::selection_op;
-use crate::selection_op_ref;
 use crate::types::array::ArrayColumn;
 use crate::types::string::StringColumn;
 use crate::types::AnyType;
@@ -1021,7 +1020,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     select_strategy: SelectStrategy,
     count: usize,
 ) -> usize {
-    let op = selection_op_ref::<Column>(op);
+    let op = selection_op::<Column>(op);
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
@@ -1033,7 +1032,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                     for i in start..end {
                         let idx = *true_selection.get_unchecked(i);
                         let ret = validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, &column.index_unchecked(idx as usize));
+                            && op(scalar.clone(), column.index_unchecked(idx as usize));
                         if TRUE {
                             true_selection[true_idx] = idx;
                             true_idx += ret as usize;
@@ -1047,7 +1046,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 None => {
                     for i in start..end {
                         let idx = *true_selection.get_unchecked(i);
-                        let ret = op(scalar, &column.index_unchecked(idx as usize));
+                        let ret = op(scalar.clone(), column.index_unchecked(idx as usize));
                         if TRUE {
                             true_selection[true_idx] = idx;
                             true_idx += ret as usize;
@@ -1068,7 +1067,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                     for i in start..end {
                         let idx = *false_selection.get_unchecked(i);
                         let ret = validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, &column.index_unchecked(idx as usize));
+                            && op(scalar.clone(), column.index_unchecked(idx as usize));
                         if TRUE {
                             true_selection[true_idx] = idx;
                             true_idx += ret as usize;
@@ -1082,7 +1081,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 None => {
                     for i in start..end {
                         let idx = *false_selection.get_unchecked(i);
-                        let ret = op(scalar, &column.index_unchecked(idx as usize));
+                        let ret = op(scalar.clone(), column.index_unchecked(idx as usize));
                         if TRUE {
                             true_selection[true_idx] = idx;
                             true_idx += ret as usize;
@@ -1100,7 +1099,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
                         let ret = validity.get_bit_unchecked(idx as usize)
-                            && op(scalar, &column.index_unchecked(idx as usize));
+                            && op(scalar.clone(), column.index_unchecked(idx as usize));
                         if TRUE {
                             true_selection[true_idx] = idx;
                             true_idx += ret as usize;
@@ -1113,7 +1112,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 }
                 None => {
                     for idx in 0u32..count as u32 {
-                        let ret = op(scalar, &column.index_unchecked(idx as usize));
+                        let ret = op(scalar.clone(), column.index_unchecked(idx as usize));
                         if TRUE {
                             true_selection[true_idx] = idx;
                             true_idx += ret as usize;

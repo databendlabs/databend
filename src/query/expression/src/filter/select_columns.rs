@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 
 use crate::arrow::and_validities;
 use crate::selection_op;
-use crate::selection_op_ref;
 use crate::types::array::ArrayColumn;
 use crate::types::string::StringColumn;
 use crate::types::AnyType;
@@ -410,7 +411,7 @@ pub fn select_primitive_adapt<T>(
     count: usize,
 ) -> usize
 where
-    T: std::cmp::PartialOrd,
+    T: std::cmp::PartialOrd + Display + Copy,
 {
     let has_true = !true_selection.is_empty();
     let has_false = false_selection.1;
@@ -698,9 +699,9 @@ pub fn select_primitive<T, const TRUE: bool, const FALSE: bool>(
     count: usize,
 ) -> usize
 where
-    T: std::cmp::PartialOrd,
+    T: std::cmp::PartialOrd + Display + Copy,
 {
-    let op = selection_op_ref::<T>(op);
+    let op = selection_op::<T>(op);
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
@@ -713,8 +714,8 @@ where
                         let idx = *true_selection.get_unchecked(i);
                         let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
-                                left.get_unchecked(idx as usize),
-                                right.get_unchecked(idx as usize),
+                                *left.get_unchecked(idx as usize),
+                                *right.get_unchecked(idx as usize),
                             );
                         if TRUE {
                             *true_selection.get_unchecked_mut(true_idx) = idx;
@@ -730,8 +731,8 @@ where
                     for i in start..end {
                         let idx = *true_selection.get_unchecked(i);
                         let ret = op(
-                            left.get_unchecked(idx as usize),
-                            right.get_unchecked(idx as usize),
+                            *left.get_unchecked(idx as usize),
+                            *right.get_unchecked(idx as usize),
                         );
                         if TRUE {
                             *true_selection.get_unchecked_mut(true_idx) = idx;
@@ -754,8 +755,8 @@ where
                         let idx = *false_selection.get_unchecked(i);
                         let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
-                                left.get_unchecked(idx as usize),
-                                right.get_unchecked(idx as usize),
+                                *left.get_unchecked(idx as usize),
+                                *right.get_unchecked(idx as usize),
                             );
                         if TRUE {
                             *true_selection.get_unchecked_mut(true_idx) = idx;
@@ -771,8 +772,8 @@ where
                     for i in start..end {
                         let idx = *false_selection.get_unchecked(i);
                         let ret = op(
-                            left.get_unchecked(idx as usize),
-                            right.get_unchecked(idx as usize),
+                            *left.get_unchecked(idx as usize),
+                            *right.get_unchecked(idx as usize),
                         );
                         if TRUE {
                             *true_selection.get_unchecked_mut(true_idx) = idx;
@@ -790,10 +791,19 @@ where
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
+                        println!("left: {}", left.get_unchecked(idx as usize));
+                        println!("right: {}", right.get_unchecked(idx as usize));
+                        println!(
+                            "res = {}",
+                            op(
+                                *left.get_unchecked(idx as usize),
+                                *right.get_unchecked(idx as usize),
+                            )
+                        );
                         let ret = validity.get_bit_unchecked(idx as usize)
                             && op(
-                                left.get_unchecked(idx as usize),
-                                right.get_unchecked(idx as usize),
+                                *left.get_unchecked(idx as usize),
+                                *right.get_unchecked(idx as usize),
                             );
                         if TRUE {
                             *true_selection.get_unchecked_mut(true_idx) = idx;
@@ -808,8 +818,8 @@ where
                 None => {
                     for idx in 0u32..count as u32 {
                         let ret = op(
-                            left.get_unchecked(idx as usize),
-                            right.get_unchecked(idx as usize),
+                            *left.get_unchecked(idx as usize),
+                            *right.get_unchecked(idx as usize),
                         );
                         if TRUE {
                             *true_selection.get_unchecked_mut(true_idx) = idx;
