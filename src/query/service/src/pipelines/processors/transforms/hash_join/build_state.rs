@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_expression::types::DataType;
-use common_expression::Column;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 

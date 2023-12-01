@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use minitrace::prelude::*;
@@ -106,7 +105,7 @@ pub trait Processor: Send {
     fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "{} can't add runtime filters",
-            self.name
+            self.name()
         )))
     }
 }
@@ -190,17 +189,17 @@ impl ProcessorPtr {
         (*self.inner.get()).interrupt()
     }
 
-    /// #Safety
+    /// # Safety
     pub unsafe fn get_runtime_filters(&self) -> Result<HashMap<ColumnId, Expr>> {
         (*self.inner.get()).get_runtime_filters()
     }
 
-    /// #Safety
+    /// # Safety
     pub unsafe fn can_add_runtime_filter(&self) -> bool {
         (*self.inner.get()).can_add_runtime_filter()
     }
 
-    /// #Safety
+    /// # Safety
     pub unsafe fn add_runtime_filters(&self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
         (*self.inner.get()).add_runtime_filters(filters)
     }

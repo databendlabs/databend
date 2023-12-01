@@ -20,7 +20,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::chunk;
 use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;

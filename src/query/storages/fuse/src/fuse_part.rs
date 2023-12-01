@@ -69,6 +69,7 @@ impl PartInfo for FusePartInfo {
 }
 
 impl FusePartInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
         rows_count: u64,

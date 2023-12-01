@@ -288,7 +288,7 @@ impl ExecutingGraph {
                         .neighbors_directed(schedule_index, Direction::Incoming);
                     ExecutingGraph::push_down_runtime_filters(
                         locker,
-                        schedule_index.clone(),
+                        schedule_index,
                         &rt_filters,
                         neighbors,
                     )?;

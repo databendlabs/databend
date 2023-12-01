@@ -27,30 +27,24 @@ use common_base::base::tokio::sync::watch::Sender;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Column;
 use common_expression::ColumnId;
-use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
-use common_expression::RawExpr;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
-use common_sql::TypeCheck;
 use ethnum::U256;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
@@ -266,81 +260,17 @@ impl HashJoinState {
             .iter()
             .zip(self.hash_join_desc.probe_keys.iter())
         {
-            // Only support key is a column
-            if let Expr::ColumnRef {
-                span,
-                id,
-                data_type,
-                display_name,
-            } = probe_key
-            {
-                let column_id: usize = self.hash_join_desc.probe_schema.fields[*id]
-                    .name()
-                    .parse()
-                    .unwrap();
-                let raw_probe_key = RawExpr::ColumnRef {
-                    span: span.clone(),
-                    id: column_id,
-                    data_type: data_type.clone(),
-                    display_name: display_name.clone(),
-                };
-                let mut columns = Vec::with_capacity(data_blocks.len());
-                for block in data_blocks.iter() {
-                    if block.num_columns() == 0 {
-                        continue;
-                    }
-                    let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
-                    let column = evaluator
-                        .run(build_key)?
-                        .convert_to_full_column(build_key.data_type(), block.num_rows());
-                    columns.push(column);
-                }
-                // Generate inlist using build column
-                let build_key_column = Column::concat_columns(columns.into_iter())?;
-                let mut list = Vec::with_capacity(build_key_column.len());
-                for value in build_key_column.iter() {
-                    list.push(RawExpr::Constant {
-                        span: None,
-                        scalar: value.to_owned(),
-                    })
-                }
-                let array = RawExpr::FunctionCall {
-                    span: None,
-                    name: "array".to_string(),
-                    params: vec![],
-                    args: list,
-                };
-                let distinct_list = RawExpr::FunctionCall {
-                    span: None,
-                    name: "array_distinct".to_string(),
-                    params: vec![],
-                    args: vec![array],
-                };
-
-                let args = vec![distinct_list, raw_probe_key];
-                // Make contain function
-                let contain_func = RawExpr::FunctionCall {
-                    span: None,
-                    name: "contains".to_string(),
-                    params: vec![],
-                    args,
-                };
-                runtime_filters.insert(
-                    *id as ColumnId,
-                    contain_func
-                        .type_check(self.hash_join_desc.probe_schema.as_ref())?
-                        .project_column_ref(|index| {
-                            self.hash_join_desc
-                                .probe_schema
-                                .index_of(&index.to_string())
-                                .unwrap()
-                        }),
-                );
+            if let Some(filter) = inlist_filter(
+                &func_ctx,
+                &self.hash_join_desc.probe_schema,
+                build_key,
+                probe_key,
+                data_blocks,
+            )? {
+                runtime_filters.insert(filter.0, filter.1);
             }
         }
-
         data_blocks.clear();
-
         Ok(())
     }
 }
