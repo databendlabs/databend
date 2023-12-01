@@ -111,12 +111,14 @@ echo "grant select, insert on default.t to u1" | $BENDSQL_CLIENT_CONNECT
 echo "copy into t from 'fs:///tmp/00_0012/' FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT
 echo "select * from t" | $BENDSQL_CLIENT_CONNECT
 
-## Drop table.
+echo "=== check access user's local stage ==="
+# presign upload requires a write priv
+curl -s -w "%{http_code}\n" -X PUT -o /dev/null -H Content-Type:application/octet-stream "`echo "PRESIGN UPLOAD @~/hello_world.txt CONTENT_TYPE='application/octet-stream'" | $TEST_USER_CONNECT`"
+
+## clean ups
 echo "drop stage if exists presign_stage" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1"  | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t"  | $BENDSQL_CLIENT_CONNECT
 rm -rf /tmp/00_0012
-
 echo "unset experiment_enable_stage_udf_priv_check" | $BENDSQL_CLIENT_CONNECT
-
