@@ -71,13 +71,6 @@ use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
 
-pub enum CheckType {
-    Merge,
-    Insert,
-    Replace,
-    CopyIntoLocation,
-}
-
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
 /// During this phase, it will:
@@ -682,20 +675,14 @@ impl<'a> Binder {
     }
 
     // add check for SExpr to disable invalid source for copy/insert/merge/replace
-    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr, check_type: CheckType) -> Result<bool> {
+    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_));
         let mut finder = Finder::new(&f);
-        Self::check_sexpr(s_expr, &mut finder, &check_type)
+        Self::check_sexpr(s_expr, &mut finder)
     }
 
-    pub(crate) fn check_sexpr<F>(
-        s_expr: &'a SExpr,
-        f: &'a mut Finder<'a, F>,
-        check_type: &CheckType,
-    ) -> Result<bool>
-    where
-        F: Fn(&ScalarExpr) -> bool,
-    {
+    pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
+    where F: Fn(&ScalarExpr) -> bool {
         let result = match s_expr.plan.as_ref() {
             RelOperator::Scan(scan) => {
                 f.reset_finder();
@@ -791,7 +778,7 @@ impl<'a> Binder {
             true => {
                 for child in &s_expr.children {
                     let mut finder = Finder::new(f.find_fn());
-                    let flag = Self::check_sexpr(child.as_ref(), &mut finder, check_type)?;
+                    let flag = Self::check_sexpr(child.as_ref(), &mut finder)?;
                     if !flag {
                         return Ok(false);
                     }

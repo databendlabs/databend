@@ -199,7 +199,7 @@ impl Binder {
         let (source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
 
-        if !self.check_sexpr_top(&source_expr, super::binder::CheckType::Merge)? {
+        if !self.check_sexpr_top(&source_expr)? {
             return Err(ErrorCode::SemanticError(
                 "replace source can't contain udf functions".to_string(),
             ));

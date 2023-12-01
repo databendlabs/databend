@@ -91,9 +91,10 @@ impl Interpreter for MergeIntoInterpreter {
                 .await?;
 
         // Add table lock before execution.
-        let table_lock = LockManager::create_table_lock(table_info)?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
+        // let table_lock = LockManager::create_table_lock(table_info)?;
+        // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        // build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {

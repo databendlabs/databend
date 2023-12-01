@@ -138,7 +138,7 @@ impl Binder {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 if let Plan::Query { s_expr, .. } = &select_plan {
-                    if !self.check_sexpr_top(s_expr, super::binder::CheckType::Replace)? {
+                    if !self.check_sexpr_top(s_expr)? {
                         return Err(ErrorCode::SemanticError(
                             "replace source can't contain udf functions".to_string(),
                         ));
