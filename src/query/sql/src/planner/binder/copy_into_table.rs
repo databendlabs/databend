@@ -336,9 +336,8 @@ impl<'a> Binder {
             .await?;
 
         for item in select_list.items.iter() {
-            if matches!(&item.scalar, ScalarExpr::AggregateFunction(_))
-                || matches!(&item.scalar, ScalarExpr::WindowFunction(_))
-            {
+            if self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
+                // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
                     "copy into table source can't contain window|aggregate|udf|join functions"
                         .to_string(),
