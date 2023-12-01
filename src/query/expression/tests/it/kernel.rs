@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Range;
+
 use common_expression::block_debug::assert_block_value_eq;
 use common_expression::types::number::*;
 use common_expression::types::DataType;
@@ -203,18 +205,18 @@ pub fn test_pass() {
 }
 
 // Build a range selection from a selection array.
-pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<(u32, u32)> {
+pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<Range<u32>> {
     let mut range_selection = Vec::with_capacity(count);
     let mut start = selection[0];
     let mut idx = 1;
     while idx < count {
         if selection[idx] != selection[idx - 1] + 1 {
-            range_selection.push((start, selection[idx - 1] + 1));
+            range_selection.push(start..selection[idx - 1] + 1);
             start = selection[idx];
         }
         idx += 1;
     }
-    range_selection.push((start, selection[count - 1] + 1));
+    range_selection.push(start..selection[count - 1] + 1);
     range_selection
 }
 

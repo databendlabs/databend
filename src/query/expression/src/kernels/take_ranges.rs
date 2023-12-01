@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Range;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -43,9 +44,12 @@ use crate::Value;
 
 impl DataBlock {
     // Generate a new `DataBlock` by the specified indices ranges.
-    pub fn take_ranges(self, ranges: &Vec<(u32, u32)>, num_rows: usize) -> Result<DataBlock> {
+    pub fn take_ranges(self, ranges: &[Range<u32>], num_rows: usize) -> Result<DataBlock> {
         debug_assert_eq!(
-            ranges.iter().map(|(start, end)| end - start).sum::<u32>() as usize,
+            ranges
+                .iter()
+                .map(|range| range.end - range.start)
+                .sum::<u32>() as usize,
             num_rows
         );
 
@@ -66,7 +70,7 @@ impl DataBlock {
 
 impl Column {
     // Generate a new `Column` by the specified indices ranges.
-    fn take_ranges(&self, ranges: &Vec<(u32, u32)>, num_rows: usize) -> Column {
+    fn take_ranges(&self, ranges: &[Range<u32>], num_rows: usize) -> Column {
         match self {
             Column::Null { .. } => Column::Null { len: num_rows },
             Column::EmptyArray { .. } => Column::EmptyArray { len: num_rows },
@@ -158,11 +162,11 @@ impl Column {
     fn take_ranges_scalar_types<T: ValueType>(
         col: &T::Column,
         mut builder: T::ColumnBuilder,
-        ranges: &Vec<(u32, u32)>,
+        ranges: &[Range<u32>],
         _num_rows: usize,
     ) -> Column {
-        for (start, end) in ranges {
-            for index in *start as usize..*end as usize {
+        for range in ranges {
+            for index in range.start as usize..range.end as usize {
                 T::push_item(&mut builder, unsafe {
                     T::index_column_unchecked(col, index)
                 });
@@ -173,19 +177,19 @@ impl Column {
 
     fn take_ranges_primitive_types<T: Copy>(
         values: &Buffer<T>,
-        ranges: &Vec<(u32, u32)>,
+        ranges: &[Range<u32>],
         num_rows: usize,
     ) -> Buffer<T> {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        for (start, end) in ranges {
-            builder.extend(&values[*start as usize..*end as usize]);
+        for range in ranges {
+            builder.extend(&values[range.start as usize..range.end as usize]);
         }
         builder.into()
     }
 
     fn take_ranges_string_types(
         values: &StringColumn,
-        ranges: &Vec<(u32, u32)>,
+        ranges: &[Range<u32>],
         num_rows: usize,
     ) -> StringColumn {
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -198,9 +202,11 @@ impl Column {
         unsafe {
             *offsets.get_unchecked_mut(offsets_len) = 0;
             offsets_len += 1;
-            for (start, end) in ranges {
-                let mut offset_start = values_offset[*start as usize];
-                for offset_end in values_offset[*start as usize + 1..*end as usize + 1].iter() {
+            for range in ranges {
+                let mut offset_start = values_offset[range.start as usize];
+                for offset_end in
+                    values_offset[range.start as usize + 1..range.end as usize + 1].iter()
+                {
                     data_size += offset_end - offset_start;
                     offset_start = *offset_end;
                     *offsets.get_unchecked_mut(offsets_len) = data_size;
@@ -215,9 +221,9 @@ impl Column {
         let mut data_ptr = data.as_mut_ptr();
 
         unsafe {
-            for (start, end) in ranges {
-                let col_data = &value_data[values_offset[*start as usize] as usize
-                    ..values_offset[*end as usize] as usize];
+            for range in ranges {
+                let col_data = &value_data[values_offset[range.start as usize] as usize
+                    ..values_offset[range.end as usize] as usize];
                 copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
             }
             set_vec_len_by_ptr(&mut data, data_ptr);
@@ -228,7 +234,7 @@ impl Column {
 
     fn take_ranges_boolean_types(
         bitmap: &Bitmap,
-        ranges: &Vec<(u32, u32)>,
+        ranges: &[Range<u32>],
         num_rows: usize,
     ) -> Bitmap {
         let capacity = num_rows.saturating_add(7) / 8;
@@ -240,9 +246,9 @@ impl Column {
 
         let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
         unsafe {
-            for (start, end) in ranges {
-                let mut start = *start as usize;
-                let end = *end as usize;
+            for range in ranges {
+                let mut start = range.start as usize;
+                let end = range.end as usize;
                 if builder_idx % 8 != 0 {
                     while start < end {
                         if bitmap.get_bit_unchecked(start) {
