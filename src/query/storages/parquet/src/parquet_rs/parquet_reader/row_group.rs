@@ -235,7 +235,7 @@ impl<'a> InMemoryRowGroup<'a> {
         Ok(())
     }
 
-    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<(Vec<Bytes>, bool)> {
+    pub async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<(Vec<Bytes>, bool)> {
         let raw_ranges = ranges.to_vec();
         let range_merger =
             RangeMerger::from_iter(raw_ranges.clone(), self.max_gap_size, self.max_range_size);
@@ -346,61 +346,5 @@ impl<'a> RowGroups for InMemoryRowGroup<'a> {
                 }))
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use bytes::Bytes;
-    use common_base::base::tokio;
-    use opendal::services::Memory;
-    use opendal::Operator;
-    use parquet::basic::ConvertedType;
-    use parquet::basic::Repetition;
-    use parquet::basic::Type as PhysicalType;
-    use parquet::file::metadata::RowGroupMetaData;
-    use parquet::schema::types::*;
-
-    use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
-
-    #[tokio::test]
-    async fn test_merge() {
-        let data = Bytes::from(
-            "
-        Obama, Biden, Hillary, and Trump, four former presidents, 
-        decided to team up for a soccer match. They hired a coach to guide them
-        The coach asked Obama, What position are you good at?
-        Obama replied, I'm good at organizing the midfield, skilled in passing and
-        controlling the pace of the game
-        ",
-        );
-        let builder = Memory::default();
-        let path = "/tmp/test/merged";
-        let op = Operator::new(builder).unwrap().finish();
-        let blocking_op = op.blocking();
-        blocking_op.write(path, data).unwrap();
-        let mut fields = vec![];
-
-        let inta = Type::primitive_type_builder("a", PhysicalType::INT32)
-            .with_repetition(Repetition::REQUIRED)
-            .with_converted_type(ConvertedType::INT_32)
-            .build()
-            .unwrap();
-        fields.push(Arc::new(inta));
-
-        let schema = Type::group_type_builder("schema")
-            .with_repetition(Repetition::REPEATED)
-            .with_fields(fields)
-            .build()
-            .unwrap();
-        let descr = SchemaDescriptor::new(Arc::new(schema));
-        let meta = RowGroupMetaData::builder(descr.into()).build().unwrap();
-        let group1 = InMemoryRowGroup::new(path, op.clone(), &meta, None, 0, 0);
-        let group2 = InMemoryRowGroup::new(path, op, &meta, None, 10, 200);
-        let ranges = vec![(1..10), (15..30), (40..50)];
-        assert!(!group1.get_ranges(&ranges.to_vec()).await.unwrap().1);
-        assert!(group2.get_ranges(&ranges.to_vec()).await.unwrap().1);
     }
 }
