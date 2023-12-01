@@ -72,6 +72,7 @@ pub struct HashJoinProbeState {
     pub(crate) probe_workers: AtomicUsize,
     /// Wait all `probe_workers` finish
     pub(crate) barrier: Barrier,
+    pub(crate) barrier_count: AtomicUsize,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
