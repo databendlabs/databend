@@ -65,7 +65,6 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
-use crate::ScalarExpr;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
