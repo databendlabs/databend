@@ -35,7 +35,7 @@ pub enum SelectExpr {
     Compare((SelectOp, Vec<Expr>)),
     Others(Expr),
     BooleanColumnRef((usize, DataType)),
-    Constant(bool),
+    BooleanConstant((Scalar, DataType)),
 }
 
 pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
@@ -87,9 +87,11 @@ pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
         }
         Expr::Constant {
             scalar, data_type, ..
-        } if data_type == &DataType::Boolean => {
-            let value = scalar.as_boolean().unwrap();
-            (SelectExpr::Constant(*value), false)
+        } if matches!(data_type, &DataType::Boolean | &DataType::Nullable(box DataType::Boolean)) => {
+            (
+                SelectExpr::BooleanConstant((scalar.clone(), data_type.clone())),
+                false,
+            )
         }
         _ => unreachable!("build_select_expr: {:?}", expr),
     }
@@ -202,54 +204,6 @@ where T: std::cmp::PartialOrd {
         SelectOp::Gte => greater_than_equal::<T>,
         SelectOp::Lt => less_than::<T>,
         SelectOp::Lte => less_than_equal::<T>,
-    }
-}
-
-#[inline(always)]
-fn equal_ref<T>(left: &T, right: &T) -> bool
-where T: std::cmp::PartialOrd {
-    left == right
-}
-
-#[inline(always)]
-fn not_equal_ref<T>(left: &T, right: &T) -> bool
-where T: std::cmp::PartialOrd {
-    left == right
-}
-
-#[inline(always)]
-fn greater_than_ref<T>(left: &T, right: &T) -> bool
-where T: std::cmp::PartialOrd {
-    left > right
-}
-
-#[inline(always)]
-fn greater_than_equal_ref<T>(left: &T, right: &T) -> bool
-where T: std::cmp::PartialOrd {
-    left >= right
-}
-
-#[inline(always)]
-fn less_than_ref<T>(left: &T, right: &T) -> bool
-where T: std::cmp::PartialOrd {
-    left < right
-}
-
-#[inline(always)]
-fn less_than_equal_ref<T>(left: &T, right: &T) -> bool
-where T: std::cmp::PartialOrd {
-    left <= right
-}
-
-pub fn selection_op_ref<T>(op: SelectOp) -> fn(&T, &T) -> bool
-where T: std::cmp::PartialOrd {
-    match op {
-        SelectOp::Equal => equal_ref::<T>,
-        SelectOp::NotEqual => not_equal_ref::<T>,
-        SelectOp::Gt => greater_than_ref::<T>,
-        SelectOp::Gte => greater_than_equal_ref::<T>,
-        SelectOp::Lt => less_than_ref::<T>,
-        SelectOp::Lte => less_than_equal_ref::<T>,
     }
 }
 

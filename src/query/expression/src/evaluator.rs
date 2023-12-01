@@ -1078,8 +1078,9 @@ impl<'a> Evaluator<'a> {
                 select_strategy,
                 count,
             )?,
-            SelectExpr::Constant(constant) => self.process_boolean_constant(
-                *constant,
+            SelectExpr::BooleanConstant((constant, data_type)) => self.process_boolean_constant(
+                constant.clone(),
+                data_type,
                 true_selection,
                 false_selection,
                 true_idx,
@@ -1309,7 +1310,8 @@ impl<'a> Evaluator<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn process_boolean_constant(
         &self,
-        constant: bool,
+        constant: Scalar,
+        data_type: &DataType,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         true_idx: &mut usize,
@@ -1318,8 +1320,8 @@ impl<'a> Evaluator<'a> {
         count: usize,
     ) -> Result<usize> {
         let count = update_selection_by_boolean_value(
-            Value::Scalar(Scalar::Boolean(constant)),
-            &DataType::Boolean,
+            Value::Scalar(constant),
+            data_type,
             true_selection,
             false_selection,
             true_idx,
