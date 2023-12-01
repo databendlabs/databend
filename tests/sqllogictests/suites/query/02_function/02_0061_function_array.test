@@ -221,7 +221,7 @@ select array_apply(array_apply([5, NULL, 6], x -> COALESCE(x, 0) + 1), y -> y + 
 [16,11,17]
 
 query TT
-select array_transform(col1, a -> a * 2), array_apply(col2, b -> upper(b)) from t
+select array_transform(col1, A -> a * 2), array_apply(col2, B -> upper(B)) from t
 ----
 [2,4,6,6] ['X','X','Y','Z']
 
