@@ -132,5 +132,6 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);
 
+    fixture.destroy().await?;
     Ok(())
 }

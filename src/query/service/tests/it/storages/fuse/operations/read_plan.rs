@@ -187,5 +187,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let fuse_part = FusePartInfo::from_part(&part)?;
         assert!(fuse_part.create_on.is_some())
     }
+
+    fixture.destroy().await?;
     Ok(())
 }

@@ -32,6 +32,7 @@ use databend_query::test_kits::TestFixture;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_with_partition() -> Result<()> {
     let fixture = TestFixture::new().await?;
+
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
     let spiller_config = SpillerConfig::create(query_spill_prefix(&tenant));
@@ -71,5 +72,7 @@ async fn test_spill_with_partition() -> Result<()> {
             }
         }
     }
+
+    fixture.destroy().await?;
     Ok(())
 }

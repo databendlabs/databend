@@ -25,6 +25,7 @@ use crate::test_kits::TestFixture;
 use crate::GlobalServices;
 
 impl TestFixture {
+    /// Setup the test.
     pub async fn setup() -> Result<()> {
         let config = ConfigBuilder::create().build();
         Self::setup_with_config(&config).await

@@ -21,7 +21,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::new_with_setup(EESetup::new()).await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_computed_table().await?;
@@ -152,5 +152,6 @@ async fn test_computed_column() -> Result<()> {
         .await?;
     }
 
+    fixture.destroy().await?;
     Ok(())
 }

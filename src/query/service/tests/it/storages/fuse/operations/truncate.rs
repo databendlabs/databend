@@ -79,6 +79,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);
 
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -173,5 +174,6 @@ async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::
         num_blocks * rows_per_block * 3
     );
 
+    fixture.destroy().await?;
     Ok(())
 }

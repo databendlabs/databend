@@ -703,6 +703,7 @@ impl TableContext for CtxDelegation {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
     let fixture = TestFixture::new().await?;
+
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",
         fixture.default_db_name().as_str(),
@@ -734,5 +735,7 @@ async fn test_get_same_table_once() -> Result<()> {
             .load(std::sync::atomic::Ordering::SeqCst),
         2
     );
+
+    fixture.destroy().await?;
     Ok(())
 }

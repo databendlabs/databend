@@ -28,6 +28,7 @@ use crate::storages::fuse::utils::do_insertions;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
     let fixture = TestFixture::new().await?;
+
     let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_optimize";
     do_insertions(&fixture).await?;
@@ -43,7 +44,10 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
     fuse_table
         .do_purge(&table_ctx, snapshot_files, None, true, false)
         .await?;
-    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
+
+    fixture.destroy().await?;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -93,6 +97,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
         assert!(snapshot_opt.unwrap().table_statistics_location.is_none());
     }
 
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -117,5 +122,8 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     fuse_table
         .do_purge(&table_ctx, snapshot_files, None, true, false)
         .await?;
-    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
+
+    fixture.destroy().await?;
+    Ok(())
 }

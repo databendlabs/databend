@@ -104,6 +104,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
         );
     }
 
+    fixture.destroy().await?;
     Ok(())
 }
 

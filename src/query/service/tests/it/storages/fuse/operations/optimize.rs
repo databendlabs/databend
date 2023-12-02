@@ -82,5 +82,6 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // blocks are so tiny, they should be compacted into one
     assert_eq!(parts.len(), 1);
 
+    fixture.destroy().await?;
     Ok(())
 }

@@ -22,6 +22,7 @@ use enterprise_query::storages::fuse::do_vacuum_drop_tables;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
     let fixture = TestFixture::new().await?;
+
     fixture
         .default_session()
         .get_settings()
@@ -86,5 +87,7 @@ async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
         )
         .await?;
     }
+
+    fixture.destroy().await?;
     Ok(())
 }

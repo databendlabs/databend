@@ -117,14 +117,26 @@ impl Setup for OSSSetup {
 }
 
 impl TestFixture {
+    /// Create a new TestFixture with default config.
+    /// Need to call `TestFixture::destroy` after use.
     pub async fn new() -> Result<TestFixture> {
         let mut config = ConfigBuilder::create().config();
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();
         config.storage.params = StorageParams::Fs(StorageFsConfig { root });
-        Self::with_setup(OSSSetup { config }).await
+        Self::new_with_setup(OSSSetup { config }).await
     }
-    pub async fn with_setup(setup: impl Setup) -> Result<TestFixture> {
+
+    pub async fn destroy(&self) -> Result<()> {
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&thread_name);
+        Ok(())
+    }
+
+    /// Create a new TestFixture with setup impl.
+    /// Need to call `TestFixture::destroy` after use.
+    pub async fn new_with_setup(setup: impl Setup) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
         let default_session = Self::create_session(SessionType::Dummy).await?;
@@ -162,11 +174,13 @@ impl TestFixture {
             prefix: random_prefix,
         })
     }
-    pub async fn with_config(mut config: InnerConfig) -> Result<TestFixture> {
+
+    /// Need to call `TestFixture::destroy` after use.
+    pub async fn new_with_config(mut config: InnerConfig) -> Result<TestFixture> {
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();
         config.storage.params = StorageParams::Fs(StorageFsConfig { root });
-        Self::with_setup(OSSSetup { config }).await
+        Self::new_with_setup(OSSSetup { config }).await
     }
 
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
@@ -204,18 +218,8 @@ impl TestFixture {
         self.default_session.create_query_context().await
     }
 
-    /// returns a new session, for test cases that need to tweak session setting,
-    /// please use this method.
-    pub async fn new_session(&self) -> Result<Arc<Session>> {
-        Self::create_session(SessionType::Dummy).await
-    }
-
     pub async fn new_session_with_type(&self, session_type: SessionType) -> Result<Arc<Session>> {
         Self::create_session(session_type).await
-    }
-
-    pub fn conf(&self) -> &InnerConfig {
-        &self.conf
     }
 
     pub fn storage_root(&self) -> &str {
@@ -548,16 +552,6 @@ impl TestFixture {
         Box::pin(futures::stream::iter(blocks))
     }
 
-    pub fn gen_variant_sample_blocks_stream_ex(
-        num_of_block: usize,
-        rows_perf_block: usize,
-        val_start_from: i32,
-    ) -> SendableDataBlockStream {
-        let (_, blocks) =
-            Self::gen_variant_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
-        Box::pin(futures::stream::iter(blocks))
-    }
-
     pub fn gen_computed_sample_blocks(
         num_of_blocks: usize,
         start: i32,
@@ -596,16 +590,6 @@ impl TestFixture {
 
     pub fn gen_computed_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
         let (_, blocks) = Self::gen_computed_sample_blocks(num, start);
-        Box::pin(futures::stream::iter(blocks))
-    }
-
-    pub fn gen_computed_sample_blocks_stream_ex(
-        num_of_block: usize,
-        rows_perf_block: usize,
-        val_start_from: i32,
-    ) -> SendableDataBlockStream {
-        let (_, blocks) =
-            Self::gen_computed_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 

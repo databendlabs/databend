@@ -120,6 +120,8 @@ async fn test_fuse_navigate() -> Result<()> {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
     };
+
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -219,5 +221,6 @@ async fn test_navigate_for_purge() -> Result<()> {
     assert_eq!(2, files.len());
     assert_eq!(navigate, second_snapshot);
 
+    fixture.destroy().await?;
     Ok(())
 }

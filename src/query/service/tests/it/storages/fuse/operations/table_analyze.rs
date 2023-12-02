@@ -94,6 +94,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     // check count: delete not affect counts
     check_column_ndv_statistics(table.clone(), expected).await?;
 
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -166,6 +167,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
 
     assert_eq!(segment_summary, last_summary);
 
+    fixture.destroy().await?;
     Ok(())
 }
 

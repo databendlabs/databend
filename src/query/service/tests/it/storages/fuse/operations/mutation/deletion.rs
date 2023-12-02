@@ -53,5 +53,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         expected,
     )
     .await?;
+
+    fixture.destroy().await?;
     Ok(())
 }

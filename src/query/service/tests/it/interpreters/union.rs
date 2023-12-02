@@ -59,6 +59,7 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 async fn test_simple_union_output_type() -> Result<()> {
     {
         let fixture = TestFixture::new().await?;
+
         let (_, schema) = get_interpreter(
             fixture.new_query_ctx().await?,
             "select 1 union all select 2.0::FLOAT64",
@@ -74,14 +75,18 @@ async fn test_simple_union_output_type() -> Result<()> {
             "select 1.0::FLOAT64 union all select 2",
         )
         .await?;
+
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
         ));
+
+        fixture.destroy().await?;
     }
 
     {
         let fixture = TestFixture::new().await?;
+
         execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
         execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
         let (_, schema) = get_interpreter(
@@ -103,6 +108,8 @@ async fn test_simple_union_output_type() -> Result<()> {
             schema.field(0).data_type().remove_nullable(),
             DataType::Number(NumberDataType::Float64),
         ));
+
+        fixture.destroy().await?;
     }
 
     Ok(())
@@ -200,5 +207,6 @@ async fn test_union_output_type() -> Result<()> {
         }
     }
 
+    fixture.destroy().await?;
     Ok(())
 }

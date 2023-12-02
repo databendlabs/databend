@@ -71,6 +71,8 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
         "Expected {:?}, got {:?}. Scenario: {:?}, predicate: {}",
         expected_selection, selection, scenario, predicate
     );
+
+    fixture.destroy().await.unwrap();
 }
 
 #[tokio::test]

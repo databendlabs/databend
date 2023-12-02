@@ -252,5 +252,6 @@ async fn test_block_pruner() -> Result<()> {
         assert_eq!(expected_blocks, blocks.len());
     }
 
+    fixture.destroy().await?;
     Ok(())
 }

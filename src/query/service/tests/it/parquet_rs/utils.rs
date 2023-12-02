@@ -26,7 +26,7 @@ use databend_query::test_kits::TestFixture;
 pub async fn create_parquet2_test_fixture() -> TestFixture {
     let mut conf = ConfigBuilder::create().config();
     conf.storage.allow_insecure = true;
-    let test_fixture = TestFixture::with_config(conf).await.unwrap();
+    let test_fixture = TestFixture::new_with_config(conf).await.unwrap();
     test_fixture
         .default_session()
         .get_settings()

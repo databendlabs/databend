@@ -121,5 +121,6 @@ async fn test_status() -> Result<()> {
         "finished"
     );
 
+    fixture.destroy().await?;
     Ok(())
 }

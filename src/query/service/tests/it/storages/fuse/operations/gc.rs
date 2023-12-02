@@ -66,6 +66,8 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
         None,
     )
     .await?;
+
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -121,6 +123,8 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         None,
     )
     .await?;
+
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -241,6 +245,8 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
         None,
     )
     .await?;
+
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -347,5 +353,6 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         .await?;
     }
 
+    fixture.destroy().await?;
     Ok(())
 }

@@ -123,6 +123,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }
 
+    fixture.destroy().await?;
     Ok(())
 }
 

@@ -177,6 +177,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -214,6 +215,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
 
     assert_eq!(content.as_slice(), expected.as_bytes());
 
+    fixture.destroy().await?;
     Ok(())
 }
 
@@ -229,6 +231,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
     impl Case {
         async fn run(&self) -> Result<()> {
             let fixture = TestFixture::new().await?;
+
             fixture.create_default_table().await?;
             let ctx = fixture.new_query_ctx().await?;
             let catalog = ctx.get_catalog("default").await?;
@@ -296,6 +299,8 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 "case name {}",
                 self.case_name
             );
+
+            fixture.destroy().await?;
             Ok(())
         }
     }
