@@ -67,7 +67,7 @@ impl ParquetReadOptions {
 
     #[inline]
     pub fn with_read_query(mut self, v: bool) -> Self {
-        self.do_prewhere = v;
+        self.read_query = v;
         self
     }
 
