@@ -86,7 +86,6 @@ impl JoinNode {
             join_type: self.join_type.clone(),
             marker_index: None,
             from_correlated_subquery: false,
-            contain_runtime_filter: false,
             need_hold_hash_table: false,
         });
         let children = self

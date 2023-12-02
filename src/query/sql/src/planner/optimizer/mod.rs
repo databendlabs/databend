@@ -26,7 +26,6 @@ mod optimizer;
 mod pattern_extractor;
 mod property;
 mod rule;
-mod runtime_filter;
 pub mod s_expr;
 mod util;
 

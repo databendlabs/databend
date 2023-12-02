@@ -252,10 +252,9 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((new_s_expr, optimized))
             }
-            RelOperator::Exchange(_)
-            | RelOperator::AddRowNumber(_)
-            | RelOperator::Pattern(_)
-            | RelOperator::RuntimeFilterSource(_) => unreachable!(),
+            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) | RelOperator::Pattern(_) => {
+                unreachable!()
+            }
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)
