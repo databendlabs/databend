@@ -339,8 +339,8 @@ impl Settings {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
     }
 
-    pub fn get_enable_stage_udf_priv_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("experiment_enable_stage_udf_priv_check")? != 0)
+    pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }
 
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
@@ -490,5 +490,9 @@ impl Settings {
 
     pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_timeout_secs")
+    }
+
+    pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
+        Ok(self.try_get_u64("create_query_flight_client_with_current_rt")? != 0)
     }
 }

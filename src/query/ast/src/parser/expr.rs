@@ -296,6 +296,13 @@ pub enum ExprElement {
         args: Vec<Expr>,
         lambda: Option<Lambda>,
     },
+    /// python/rust list comprehension
+    ListComprehension {
+        source: Expr,
+        param: Identifier,
+        filter: Option<Expr>,
+        result: Expr,
+    },
     /// An expression between parentheses
     Group(Expr),
     /// `[1, 2, 3]`
@@ -518,6 +525,44 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 exprs,
             },
+            ExprElement::ListComprehension {
+                source,
+                param,
+                filter,
+                result,
+            } => {
+                let span = transform_span(elem.span.0);
+                let mut source = source;
+
+                // array_filter(source, filter)
+                if let Some(filter) = filter {
+                    source = Expr::FunctionCall {
+                        span,
+                        distinct: false,
+                        name: Identifier::from_name("array_filter"),
+                        args: vec![source],
+                        params: vec![],
+                        window: None,
+                        lambda: Some(Lambda {
+                            params: vec![param.clone()],
+                            expr: Box::new(filter),
+                        }),
+                    };
+                }
+                // array_map(source, result)
+                Expr::FunctionCall {
+                    span,
+                    distinct: false,
+                    name: Identifier::from_name("array_map"),
+                    args: vec![source],
+                    params: vec![],
+                    window: None,
+                    lambda: Some(Lambda {
+                        params: vec![param.clone()],
+                        expr: Box::new(result),
+                    }),
+                }
+            }
             ExprElement::Map { kvs } => Expr::Map {
                 span: transform_span(elem.span.0),
                 kvs,
@@ -1022,6 +1067,28 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         )),
     );
 
+    // python style list comprehensions
+    // python: [i for i in range(10) if i%2==0 ]
+    // sql: [i for i in range(10) if i%2 = 0 ]
+    let list_comprehensions = check_experimental_chain_function(
+        true,
+        map(
+            rule! {
+                "[" ~ #subexpr(0) ~ FOR ~ #ident ~ IN
+                ~ #subexpr(0) ~ (IF ~ #subexpr(2))? ~ "]"
+            },
+            |(_, result, _, param, _, source, opt_filter, _)| {
+                let filter = opt_filter.map(|(_, filter)| filter);
+                ExprElement::ListComprehension {
+                    source,
+                    param,
+                    filter,
+                    result,
+                }
+            },
+        ),
+    );
+
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
@@ -1154,6 +1221,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #chain_function_call : "x.func(...)"
+            | #list_comprehensions: "[expr for x in ... [if ...]]"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
             | #function_call : "<function>"
             | #case : "`CASE ... END`"
@@ -1684,6 +1752,11 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
 
 pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
+    let contains_underscore = text.contains('_');
+    if contains_underscore {
+        let text = text.replace(|p| p == '_', "");
+        return parse_uint(&text, radix);
+    }
 
     if text.is_empty() {
         return Ok(Literal::UInt64(0));

@@ -44,10 +44,7 @@ pub struct PipelineBuilder {
 
     // probe data_fields for merge into
     pub probe_data_fields: Option<Vec<DataField>>,
-    // Used in runtime filter source
     pub join_state: Option<Arc<HashJoinBuildState>>,
-    // record the index of join build side pipeline in `pipelines`
-    pub index: Option<usize>,
 
     // Cte -> state, each cte has it's own state
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
@@ -75,13 +72,12 @@ impl PipelineBuilder {
             func_ctx,
             settings,
             pipelines: vec![],
-            join_state: None,
             main_pipeline: Pipeline::with_scopes(scopes),
             proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
-            index: None,
             cte_state: HashMap::new(),
             probe_data_fields: None,
+            join_state: None,
             before_sort_and_after_exchange: false,
         }
     }
@@ -138,9 +134,6 @@ impl PipelineBuilder {
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
-            PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
-                self.build_runtime_filter_source(runtime_filter_source)
-            }
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)

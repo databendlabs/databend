@@ -22,6 +22,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use common_storages_fuse::operations::SourceFullMatched;
 
 pub struct AccumulateRowNumber {
     data_blocks: Vec<DataBlock>,
@@ -64,6 +65,14 @@ impl AccumulateRowNumber {
 
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<DataBlock>> {
+        // for distributed execution, if it's insert-only
+        // merge into , we use right anti join.if all source
+        // data is matched, we can't get any block.
+        if self.data_blocks.is_empty() {
+            return Ok(Some(DataBlock::empty_with_meta(Box::new(
+                SourceFullMatched,
+            ))));
+        }
         // row_numbers is small, so concat is ok.
         Ok(Some(DataBlock::concat(&self.data_blocks)?))
     }

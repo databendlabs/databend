@@ -25,10 +25,10 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_transforms::processors::Transform;
 use common_pipeline_transforms::processors::Transformer;
-use common_sql::TransformStreamKind;
+use common_sql::evaluator::CompoundBlockOperator;
 
 pub struct TransformAddStreamColumns {
-    kind: TransformStreamKind,
+    expression_transform: CompoundBlockOperator,
     stream_columns: Vec<StreamColumn>,
 }
 
@@ -38,14 +38,14 @@ where Self: Transform
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        kind: TransformStreamKind,
+        expression_transform: CompoundBlockOperator,
         stream_columns: Vec<StreamColumn>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             Self {
-                kind,
+                expression_transform,
                 stream_columns,
             },
         )))
@@ -58,28 +58,19 @@ impl Transform for TransformAddStreamColumns {
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         let num_rows = block.num_rows();
         if num_rows != 0 {
-            match &mut self.kind {
-                TransformStreamKind::Append(meta) => {
-                    for stream_column in self.stream_columns.iter() {
-                        let entry = stream_column.generate_column_values(meta, num_rows);
-                        block.add_column(entry);
-                    }
-                }
-                TransformStreamKind::Mutation(expression_transform) => {
-                    if let Some(meta) = block.take_meta() {
-                        let meta = StreamColumnMeta::downcast_from(meta)
-                            .ok_or(ErrorCode::Internal("It's a bug"))?;
+            if let Some(meta) = block.take_meta() {
+                let meta = StreamColumnMeta::downcast_from(meta)
+                    .ok_or(ErrorCode::Internal("It's a bug"))?;
 
-                        for stream_column in self.stream_columns.iter() {
-                            let entry = stream_column.generate_column_values(&meta, num_rows);
-                            block.add_column(entry);
-                        }
-
-                        block = expression_transform
-                            .transform(block)?
-                            .add_meta(meta.inner_meta())?;
-                    }
+                for stream_column in self.stream_columns.iter() {
+                    let entry = stream_column.generate_column_values(&meta, num_rows);
+                    block.add_column(entry);
                 }
+
+                block = self
+                    .expression_transform
+                    .transform(block)?
+                    .add_meta(meta.inner)?;
             }
         }
 

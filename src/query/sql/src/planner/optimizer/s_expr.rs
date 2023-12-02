@@ -362,7 +362,6 @@ impl SExpr {
             | RelOperator::DummyTableScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AddRowNumber(_)
-            | RelOperator::RuntimeFilterSource(_)
             | RelOperator::Pattern(_)
             | RelOperator::MaterializedCte(_)
             | RelOperator::ConstantTableScan(_) => {}
@@ -429,7 +428,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::DummyTableScan(_)
         | RelOperator::CteScan(_)
         | RelOperator::AddRowNumber(_)
-        | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_)
         | RelOperator::MaterializedCte(_)
         | RelOperator::ConstantTableScan(_) => false,

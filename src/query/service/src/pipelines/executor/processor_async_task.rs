@@ -74,6 +74,7 @@ impl ProcessorAsyncTask {
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
+            let mut log_graph = false;
 
             loop {
                 let interval = Box::pin(sleep(Duration::from_secs(5)));
@@ -82,14 +83,19 @@ impl ProcessorAsyncTask {
                         inner = right;
                         let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
-                        let running_graph_format =
-                            match elapsed >= Duration::from_secs(200) && active_workers == 0 {
-                                false => String::new(),
-                                true => match weak_executor.upgrade() {
+                        let running_graph_format = match elapsed >= Duration::from_secs(200)
+                            && active_workers == 0
+                            && !log_graph
+                        {
+                            false => String::new(),
+                            true => {
+                                log_graph = true;
+                                match weak_executor.upgrade() {
                                     None => String::new(),
                                     Some(executor) => executor.graph.format_graph_nodes(),
-                                },
-                            };
+                                }
+                            }
+                        };
 
                         warn!(
                             "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",

@@ -28,6 +28,7 @@ use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
 use super::walk_stream_point_mut;
 use super::walk_time_travel_point_mut;
+use super::walk_window_definition_mut;
 use crate::ast::*;
 use crate::visitors::walk_column_id_mut;
 
@@ -393,8 +394,16 @@ pub trait VisitorMut: Sized {
         walk_statement_mut(self, stmt);
     }
 
-    fn visit_copy_into_table(&mut self, _copy: &mut CopyIntoTableStmt) {}
-    fn visit_copy_into_location(&mut self, _copy: &mut CopyIntoLocationStmt) {}
+    fn visit_copy_into_table(&mut self, copy: &mut CopyIntoTableStmt) {
+        if let CopyIntoTableSource::Query(query) = &mut copy.src {
+            self.visit_query(query)
+        }
+    }
+    fn visit_copy_into_location(&mut self, copy: &mut CopyIntoLocationStmt) {
+        if let CopyIntoLocationSource::Query(query) = &mut copy.src {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
@@ -429,14 +438,66 @@ pub trait VisitorMut: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
     fn visit_set_secondary_roles(&mut self, _option: &mut SecondaryRolesOption) {}
 
-    fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
-    fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
-    fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
+    fn visit_insert(&mut self, insert: &mut InsertStmt) {
+        if let InsertSource::Select { query } = &mut insert.source {
+            self.visit_query(query)
+        }
+    }
+    fn visit_replace(&mut self, replace: &mut ReplaceStmt) {
+        if let InsertSource::Select { query } = &mut replace.source {
+            self.visit_query(query)
+        }
+    }
+    fn visit_merge_into(&mut self, merge_into: &mut MergeIntoStmt) {
+        // for visit merge into, its destination is to do some rules for the exprs
+        // in merge into before we bind_merge_into, we need to make sure the correct
+        // exprs rewrite for bind_merge_into
+        if let MergeSource::Select { query, .. } = &mut merge_into.source {
+            self.visit_query(query)
+        }
+        self.visit_expr(&mut merge_into.join_expr);
+        for operation in &mut merge_into.merge_options {
+            match operation {
+                MergeOption::Match(match_operation) => {
+                    if let Some(expr) = &mut match_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    if let MatchOperation::Update { update_list, .. } =
+                        &mut match_operation.operation
+                    {
+                        for update in update_list {
+                            self.visit_expr(&mut update.expr)
+                        }
+                    }
+                }
+                MergeOption::Unmatch(unmatch_operation) => {
+                    if let Some(expr) = &mut unmatch_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    for expr in &mut unmatch_operation.insert_operation.values {
+                        self.visit_expr(expr)
+                    }
+                }
+            }
+        }
+    }
+
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
+    fn visit_delete(&mut self, delete: &mut DeleteStmt) {
+        if let Some(expr) = &mut delete.selection {
+            self.visit_expr(expr)
+        }
+    }
 
-    fn visit_update(&mut self, _update: &mut UpdateStmt) {}
+    fn visit_update(&mut self, update: &mut UpdateStmt) {
+        if let Some(expr) = &mut update.selection {
+            self.visit_expr(expr)
+        }
+        for update in &mut update.update_list {
+            self.visit_expr(&mut update.expr)
+        }
+    }
 
     fn visit_show_catalogs(&mut self, _stmt: &mut ShowCatalogsStmt) {}
 
@@ -472,7 +533,11 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_drop_tables(&mut self, _stmt: &mut ShowDropTablesStmt) {}
 
-    fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt) {}
+    fn visit_create_table(&mut self, stmt: &mut CreateTableStmt) {
+        if let Some(query) = stmt.as_query.as_deref_mut() {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_create_table_source(&mut self, _source: &mut CreateTableSource) {}
 
@@ -659,6 +724,8 @@ pub trait VisitorMut: Sized {
             selection,
             group_by,
             having,
+            window_list,
+            qualify,
             ..
         } = stmt;
 
@@ -692,6 +759,16 @@ pub trait VisitorMut: Sized {
 
         if let Some(having) = having {
             Self::visit_expr(self, having);
+        }
+
+        if let Some(window_list) = window_list {
+            for window_def in window_list {
+                walk_window_definition_mut(self, window_def);
+            }
+        }
+
+        if let Some(qualify) = qualify {
+            Self::visit_expr(self, qualify);
         }
     }
 

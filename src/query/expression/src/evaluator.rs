@@ -922,14 +922,15 @@ impl<'a> Evaluator<'a> {
                     let result = evaluator.run(&expr)?;
                     let result_col = result.convert_to_full_column(expr.data_type(), c.len());
 
-                    if func_name == "array_filter" {
+                    let val = if func_name == "array_filter" {
                         let result_col = result_col.remove_nullable();
                         let bitmap = result_col.as_boolean().unwrap();
                         let filtered_inner_col = c.filter(bitmap);
-                        Ok(Value::Scalar(Scalar::Array(filtered_inner_col)))
+                        Value::Scalar(Scalar::Array(filtered_inner_col))
                     } else {
-                        Ok(Value::Scalar(Scalar::Array(result_col)))
-                    }
+                        Value::Scalar(Scalar::Array(result_col))
+                    };
+                    Ok(val)
                 }
                 _ => unreachable!(),
             },
@@ -959,7 +960,7 @@ impl<'a> Evaluator<'a> {
                 let result = evaluator.run(&expr)?;
                 let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
 
-                let col = if func_name == "array_filter" {
+                let array_col = if func_name == "array_filter" {
                     let result_col = result_col.remove_nullable();
                     let bitmap = result_col.as_boolean().unwrap();
                     let filtered_inner_col = inner_col.filter(bitmap);
@@ -975,33 +976,22 @@ impl<'a> Evaluator<'a> {
                         filtered_offsets.push(new_offset);
                     }
 
-                    let array_col = Column::Array(Box::new(ArrayColumn {
+                    Column::Array(Box::new(ArrayColumn {
                         values: filtered_inner_col,
                         offsets: filtered_offsets.into(),
-                    }));
-                    match validity {
-                        Some(validity) => {
-                            Value::Column(Column::Nullable(Box::new(NullableColumn {
-                                column: array_col,
-                                validity,
-                            })))
-                        }
-                        None => Value::Column(array_col),
-                    }
+                    }))
                 } else {
-                    let array_col = Column::Array(Box::new(ArrayColumn {
+                    Column::Array(Box::new(ArrayColumn {
                         values: result_col,
                         offsets,
-                    }));
-                    match validity {
-                        Some(validity) => {
-                            Value::Column(Column::Nullable(Box::new(NullableColumn {
-                                column: array_col,
-                                validity,
-                            })))
-                        }
-                        None => Value::Column(array_col),
-                    }
+                    }))
+                };
+                let col = match validity {
+                    Some(validity) => Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        column: array_col,
+                        validity,
+                    }))),
+                    None => Value::Column(array_col),
                 };
                 Ok(col)
             }

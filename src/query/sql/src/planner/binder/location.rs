@@ -175,6 +175,10 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         )
     })?;
 
+    // If role_arn is empty and we don't allow allow insecure, we should disable credential loader.
+    let disable_credential_loader =
+        role_arn.is_empty() && !GlobalConfig::instance().storage.allow_insecure;
+
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
         region,
@@ -184,9 +188,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         security_token,
         master_key,
         root,
-        // Disable credential load by default.
-        // TODO(xuanwo): we should support AssumeRole.
-        disable_credential_loader: !GlobalConfig::instance().storage.allow_insecure,
+        disable_credential_loader,
         enable_virtual_host_style,
         role_arn,
         external_id,

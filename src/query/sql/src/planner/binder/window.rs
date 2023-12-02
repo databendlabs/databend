@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_exception::Span;
 
 use super::select::SelectList;
+use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
@@ -344,8 +345,8 @@ impl<'a> WindowRewriter<'a> {
             frame: window.frame.clone(),
         };
 
-        let window_infos = &mut self.bind_context.windows;
         // push window info to BindContext
+        let window_infos = &mut self.bind_context.windows;
         window_infos.window_functions.push(window_info);
         window_infos.window_functions_map.insert(
             window.display_name.clone(),
@@ -423,7 +424,7 @@ impl<'a> WindowRewriter<'a> {
         }
     }
 
-    fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter {
+    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter {
         WindowAggregateRewriter {
             bind_context: self.bind_context,
         }
@@ -431,6 +432,23 @@ impl<'a> WindowRewriter<'a> {
 }
 
 impl<'a> VisitorMut<'a> for WindowRewriter<'a> {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if let ScalarExpr::WindowFunction(window) = expr {
+            *expr = {
+                let window_infos = &self.bind_context.windows;
+
+                if let Some(column) =
+                    find_replaced_window_function(window_infos, window, &window.display_name)
+                {
+                    BoundColumnRef { span: None, column }.into()
+                } else {
+                    self.replace_window_function(window)?.into()
+                }
+            };
+            return Ok(());
+        }
+        walk_expr_mut(self, expr)
+    }
     fn visit_window_function(&mut self, window: &'a mut WindowFunc) -> Result<()> {
         *window = self.replace_window_function(window)?;
         Ok(())
@@ -478,6 +496,31 @@ impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
 
         walk_expr_mut(self, expr)
     }
+}
+
+/// Replace [`WindowFunction`] with a [`ColumnBinding`] if the function is already replaced.
+pub fn find_replaced_window_function(
+    window_info: &WindowInfo,
+    window: &WindowFunc,
+    new_name: &str,
+) -> Option<ColumnBinding> {
+    window_info
+        .window_functions_map
+        .get(&window.display_name)
+        .map(|i| {
+            let window_func_info = &window_info.window_functions[*i];
+            debug_assert_eq!(
+                window_func_info.func.return_type(),
+                window.func.return_type()
+            );
+            ColumnBindingBuilder::new(
+                new_name.to_string(),
+                window_func_info.index,
+                Box::new(window.func.return_type()),
+                Visibility::Visible,
+            )
+            .build()
+        })
 }
 
 impl Binder {

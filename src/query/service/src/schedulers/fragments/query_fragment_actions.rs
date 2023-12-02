@@ -250,6 +250,9 @@ impl QueryFragmentsActions {
                     true => statistics_connections.clone(),
                     false => vec![],
                 },
+                self.ctx
+                    .get_settings()
+                    .get_create_query_flight_client_with_current_rt()?,
             ));
         }
 

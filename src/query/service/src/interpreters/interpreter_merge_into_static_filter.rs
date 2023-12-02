@@ -69,7 +69,11 @@ impl MergeStyleJoin<'_> {
             RelOperator::Join(j) => j,
             _ => unreachable!(),
         };
-        assert!(matches!(join_op.join_type, JoinType::Right));
+        assert!(
+            join_op.join_type == JoinType::Right
+                || join_op.join_type == JoinType::RightAnti
+                || join_op.join_type == JoinType::Inner
+        );
         let source_conditions = &join_op.right_conditions;
         let target_conditions = &join_op.left_conditions;
         let source_sexpr = join.child(1).unwrap();
@@ -289,7 +293,6 @@ impl MergeIntoInterpreter {
             RelOperator::Exchange(_) => {}
             RelOperator::UnionAll(_) => {}
             RelOperator::DummyTableScan(_) => {}
-            RelOperator::RuntimeFilterSource(_) => {}
             RelOperator::Window(_) => {}
             RelOperator::ProjectSet(_) => {}
             RelOperator::MaterializedCte(_) => {}

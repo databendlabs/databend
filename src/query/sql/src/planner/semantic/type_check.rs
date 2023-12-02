@@ -760,7 +760,7 @@ impl<'a> TypeChecker<'a> {
                     && !GENERAL_WINDOW_FUNCTIONS.contains(&func_name)
                 {
                     return Err(ErrorCode::SemanticError(
-                        "only general and aggregate functions allowed in window syntax",
+                        "only window and aggregate functions allowed in window syntax",
                     )
                     .set_span(*span));
                 }
@@ -821,7 +821,7 @@ impl<'a> TypeChecker<'a> {
                     // general window function
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
-                            "window function {name} can only be used in window clause"
+                            "window function {func_name} can only be used in window clause"
                         )));
                     }
                     let func = self
@@ -882,19 +882,19 @@ impl<'a> TypeChecker<'a> {
                     let params = lambda
                         .params
                         .iter()
-                        .map(|param| param.name.clone())
+                        .map(|param| param.name.to_lowercase())
                         .collect::<Vec<_>>();
 
                     // TODO: support multiple params
                     if params.len() != 1 {
                         return Err(ErrorCode::SemanticError(format!(
-                            "incorrect number of parameters in lambda function, {name} expects 1 parameter",
+                            "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
                         )));
                     }
 
                     if args.len() != 1 {
                         return Err(ErrorCode::SemanticError(format!(
-                            "invalid arguments for lambda function, {name} expects 1 argument"
+                            "invalid arguments for lambda function, {func_name} expects 1 argument"
                         )));
                     }
                     let box (arg, arg_type) = self.resolve(args[0]).await?;

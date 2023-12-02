@@ -125,10 +125,13 @@ impl DataExchangeManager {
 
         let target = &packet.executor.id;
 
+        let create_rpc_client_with_current_rt = packet.create_rpc_clint_with_current_rt;
+
         for connection_info in &packet.fragment_connections_info {
             for fragment in &connection_info.fragments {
                 let address = &connection_info.source.flight_address;
-                let mut flight_client = Self::create_client(address).await?;
+                let mut flight_client =
+                    Self::create_client(address, create_rpc_client_with_current_rt).await?;
 
                 targets_exchanges.insert(
                     (connection_info.source.id.clone(), *fragment),
@@ -141,7 +144,8 @@ impl DataExchangeManager {
 
         for connection_info in &packet.statistics_connections_info {
             let address = &connection_info.source.flight_address;
-            let mut flight_client = Self::create_client(address).await?;
+            let mut flight_client =
+                Self::create_client(address, create_rpc_client_with_current_rt).await?;
             request_exchanges.insert(
                 connection_info.source.id.clone(),
                 flight_client
@@ -168,29 +172,32 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn create_client(address: &str) -> Result<FlightClient> {
+    pub async fn create_client(address: &str, use_current_rt: bool) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
         let address = address.to_string();
-
-        GlobalIORuntime::instance()
-            .spawn(GLOBAL_TASK, async move {
-                match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            address.to_owned(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(address.to_owned(), None, None)
-                            .await?,
-                    ))),
-                }
-            })
-            .await
-            .expect("create client future must be joined successfully")
+        let task = async move {
+            match config.tls_query_cli_enabled() {
+                true => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(
+                        address.to_owned(),
+                        None,
+                        Some(config.query.to_rpc_client_tls_config()),
+                    )
+                    .await?,
+                ))),
+                false => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+                ))),
+            }
+        };
+        if use_current_rt {
+            task.await
+        } else {
+            GlobalIORuntime::instance()
+                .spawn(GLOBAL_TASK, task)
+                .await
+                .expect("create client future must be joined successfully")
+        }
     }
 
     // Execute query in background

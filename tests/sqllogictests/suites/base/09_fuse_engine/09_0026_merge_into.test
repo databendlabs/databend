@@ -598,8 +598,11 @@ merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched
 statement ok
 create table tt1 (a int, b int);
 
-statement ok
+statement error 1065
 merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
+
+statement ok
+merge into tt1 using(select 10 as a, 20 as b) as tt2 on tt1.a = 1 when not matched and tt2.b = 2 then insert values (10, 20);
 
 query T
 select count(*) from tt1;
@@ -900,6 +903,74 @@ MERGE INTO orders USING (
 WHEN NOT MATCHED THEN 
     INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
     VALUES ((SELECT MAX(order_id) FROM orders) + 1, synthetic_orders.user_id, synthetic_orders.synthetic_order_type, synthetic_orders.asset_type, synthetic_orders.total_quantity, 0, 'pending', synthetic_orders.synthetic_date, synthetic_orders.synthetic_date);
+
+## issue #13810: rewrite rule test
+statement ok
+DROP TABLE IF EXISTS orders;
+
+statement ok
+CREATE TABLE orders (
+                        order_id      INT          NOT NULL,
+                        user_id       INT          NOT NULL,
+                        order_type    VARCHAR      NOT NULL,
+                        asset_type    VARCHAR      NOT NULL,
+                        quantity      DECIMAL(18,8) NOT NULL,
+                        price         DECIMAL(18,8) NOT NULL,
+                        status        VARCHAR      NOT NULL,
+                        created_at    DATE         NOT NULL,
+                        updated_at    DATE         NOT NULL
+) row_per_block=5113;
+
+statement ok
+insert into orders values(200007,7,'buy','BTC',4.81412194,48.14121943,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200015,15,'buy','BTC',3.78463552,37.84635523,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200019,19,'buy','BTC',1.61186913,16.11869132,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200031,31,'buy','BTC',3.99013730,39.90137297,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200047,47,'buy','BTC',0.98841829,9.88418289,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200077,77,'buy','BTC',2.07360391,20.73603908,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200087,87,'sell','ETH',9.64567442,96.45674419,'pending',to_date('2021-01-01'),to_date('2021-01-01')),
+(200095,95,'buy','BTC',2.26686563,22.66865634,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200098,98,'buy','BTC',1.37252960,13.72529599,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200102,102,'buy','BTC',1.53596481,15.35964815,'completed',to_date('2021-01-01'),to_date('2021-01-01'));
+
+statement ok
+MERGE INTO orders USING (
+    SELECT o.order_id, o.user_id, o.order_type, o.asset_type, o.quantity + a.avg_quantity AS new_quantity, o.price, o.status, o.created_at, o.updated_at
+    FROM orders o
+             INNER JOIN (
+        SELECT user_id, asset_type, sum(quantity) AS avg_quantity
+        FROM orders
+        GROUP BY user_id, asset_type
+    ) a ON o.user_id = a.user_id AND o.asset_type = a.asset_type
+) AS joined_data ON orders.order_id = joined_data.order_id
+    WHEN MATCHED THEN
+        UPDATE SET orders.quantity = joined_data.new_quantity;
+
+query TTTT
+SELECT SUM(quantity) AS total_quantity,
+       AVG(quantity) AS average_quantity,
+       MIN(quantity) AS min_quantity,
+       MAX(quantity) AS max_quantity
+FROM orders;
+----
+64.16764110 6.416764110000 1.97683658 19.29134884
+
+statement ok
+create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json);
+
+statement ok
+create table tmp_01 like tb_01;
+
+statement ok
+insert into tmp_01 values(1,'abc',to_date('2023-11-29'),parse_json('{"a":1}'));
+
+statement ok
+merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
+
+query TTT
+select id,c1,to_date(c2),c3 from tb_01;
+----
+1 abc 2023-11-29 {"a":1}
 
 statement ok
 set enable_distributed_merge_into = 0;

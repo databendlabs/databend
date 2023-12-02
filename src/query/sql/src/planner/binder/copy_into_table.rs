@@ -91,11 +91,13 @@ impl<'a> Binder {
                 let plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
+
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
             }
         }
     }
+
     async fn bind_copy_into_table_common(
         &mut self,
         bind_context: &mut BindContext,
@@ -331,8 +333,21 @@ impl<'a> Binder {
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
-        let (scalar_items, projections) =
-            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+
+        for item in select_list.items.iter() {
+            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
+                // in fact, if there is a join, we will stop in `check_transform_query()`
+                return Err(ErrorCode::SemanticError(
+                    "copy into table source can't contain window|aggregate|udf|join functions"
+                        .to_string(),
+                ));
+            };
+        }
+        let (scalar_items, projections) = self.analyze_projection(
+            &from_context.aggregate_info,
+            &from_context.windows,
+            &select_list,
+        )?;
 
         if projections.len() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
@@ -356,6 +371,7 @@ impl<'a> Binder {
             ignore_result: false,
             formatted_ast: None,
         }));
+
         Ok(Plan::CopyIntoTable(Box::new(plan)))
     }
 
