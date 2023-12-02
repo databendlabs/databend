@@ -28,7 +28,7 @@ use common_sql::plans::RelOperator;
 use common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::expects_ok;
+use databend_query::test_kits::test_fixture::expects_ok;
 use databend_query::test_kits::TestFixture;
 use enterprise_query::test_kits::context::EESetup;
 use futures_util::TryStreamExt;

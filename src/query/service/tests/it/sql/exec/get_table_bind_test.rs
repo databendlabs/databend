@@ -112,7 +112,7 @@ use common_storage::StageFileInfo;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::test_fixture::TestFixture;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;

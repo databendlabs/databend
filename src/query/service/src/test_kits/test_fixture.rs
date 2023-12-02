@@ -91,20 +91,17 @@ use crate::sessions::TableContext;
 use crate::sql::Planner;
 use crate::storages::Table;
 use crate::test_kits::ConfigBuilder;
-use crate::test_kits::TestGlobalServices;
-use crate::test_kits::TestGuard;
 
 pub struct TestFixture {
     default_ctx: Arc<QueryContext>,
     default_session: Arc<Session>,
     conf: InnerConfig,
     prefix: String,
-    _guard: TestGuard,
 }
 
 #[async_trait::async_trait]
 pub trait Setup {
-    async fn setup(&self) -> Result<(TestGuard, InnerConfig)>;
+    async fn setup(&self) -> Result<InnerConfig>;
 }
 
 struct OSSSetup {
@@ -113,11 +110,9 @@ struct OSSSetup {
 
 #[async_trait::async_trait]
 impl Setup for OSSSetup {
-    async fn setup(&self) -> Result<(TestGuard, InnerConfig)> {
-        Ok((
-            TestGlobalServices::setup(&self.config).await?,
-            self.config.clone(),
-        ))
+    async fn setup(&self) -> Result<InnerConfig> {
+        TestFixture::setup_with_config(&self.config).await?;
+        Ok(self.config.clone())
     }
 }
 
@@ -130,7 +125,7 @@ impl TestFixture {
         Self::with_setup(OSSSetup { config }).await
     }
     pub async fn with_setup(setup: impl Setup) -> Result<TestFixture> {
-        let (guard, conf) = setup.setup().await?;
+        let conf = setup.setup().await?;
 
         let default_session = Self::create_session(SessionType::Dummy).await?;
         let default_ctx = default_session.create_query_context().await?;
@@ -165,7 +160,6 @@ impl TestFixture {
             default_session,
             conf,
             prefix: random_prefix,
-            _guard: guard,
         })
     }
     pub async fn with_config(mut config: InnerConfig) -> Result<TestFixture> {

@@ -23,13 +23,16 @@ use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::generate_numbers_parts;
 use databend_query::table_functions::NumbersPartInfo;
 use databend_query::table_functions::NumbersTable;
+use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {
+    TestFixture::setup().await?;
+
+    let ctx = TestFixture::create_query_context().await?;
     let tbl_args = TableArgs::new_positioned(vec![Scalar::from(8u64)]);
-    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
     let source_plan = table
@@ -63,6 +66,7 @@ async fn test_number_table() -> Result<()> {
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, result.as_slice());
 
+    TestFixture::teardown().await?;
     Ok(())
 }
 

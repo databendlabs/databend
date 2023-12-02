@@ -24,12 +24,15 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::plans::TableOptions;
 use common_storages_null::NullTable;
 use databend_query::stream::ReadDataBlockStream;
+use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
+    // Setup.
+    TestFixture::setup().await?;
 
+    let ctx = TestFixture::create_query_context().await?;
     let table = NullTable::try_create(TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
@@ -64,6 +67,9 @@ async fn test_null_table() -> Result<()> {
     {
         table.truncate(ctx).await?;
     }
+
+    // Teardown.
+    TestFixture::teardown().await?;
 
     Ok(())
 }

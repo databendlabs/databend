@@ -34,7 +34,7 @@ use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::test_fixture::TestFixture;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_table_meta::meta;

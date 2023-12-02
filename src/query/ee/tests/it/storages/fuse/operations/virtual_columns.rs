@@ -17,8 +17,8 @@ use common_exception::Result;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
-use databend_query::test_kits::table_test_fixture::append_variant_sample_data;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::test_fixture::append_variant_sample_data;
+use databend_query::test_kits::test_fixture::TestFixture;
 use enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
 use storages_common_cache::LoadParams;
 

@@ -21,8 +21,7 @@ use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
 use databend_query::servers::http::CLICKHOUSE_VERSION;
 use databend_query::servers::HttpHandlerKind;
-use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::TestFixture;
 use http::Uri;
 use poem::error::Result as PoemResult;
 use poem::http::Method;
@@ -49,8 +48,8 @@ macro_rules! assert_ok {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_select() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
 
     {
@@ -91,13 +90,15 @@ async fn test_select() -> PoemResult<()> {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "0\ta\n1\ta\n");
     }
+
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_values() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
     {
         let (status, body) = server.post("create table t1(a int, b string)", "").await;
@@ -119,13 +120,15 @@ async fn test_insert_values() -> PoemResult<()> {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
+
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_output_formats() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
     {
         let (status, body) = server
@@ -161,13 +164,15 @@ async fn test_output_formats() -> PoemResult<()> {
         assert_ok!(status, body);
         assert_eq!(&body, exp);
     }
+
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_output_format_compress() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
     let sql = "select 1 format TabSeparated";
     let (status, body) = server
@@ -182,13 +187,15 @@ async fn test_output_format_compress() -> PoemResult<()> {
     assert_ok!(status, body);
     let exp = "DE79CF087FB635049DB816DF195B016B820C0000000200000020310A";
     assert_eq!(&body, exp);
+
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_format_values() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
     {
         let (status, body) = server.post("create table t1(a int, b string)", "").await;
@@ -210,13 +217,14 @@ async fn test_insert_format_values() -> PoemResult<()> {
         assert_eq!(status, StatusCode::OK, "{} {}", status, body);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
+
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_format_ndjson() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -240,13 +248,15 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         assert_ok!(status, body);
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
+
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_settings() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
 
     // unknown setting
@@ -295,13 +305,14 @@ async fn test_settings() -> PoemResult<()> {
         assert_eq!(&body, "1\n1000\n");
     }
 
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_multi_partition() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
     {
         let sql = "create table tb2(id int, c1 varchar) Engine=Fuse;";
@@ -328,13 +339,14 @@ async fn test_multi_partition() -> PoemResult<()> {
         );
     }
 
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_federated() -> PoemResult<()> {
-    let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    TestFixture::setup().await.unwrap();
+
     let server = Server::new().await;
     {
         let sql = "select version();";
@@ -343,6 +355,7 @@ async fn test_federated() -> PoemResult<()> {
         assert_eq!(&body, &(CLICKHOUSE_VERSION.to_string() + "\n"));
     }
 
+    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 

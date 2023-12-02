@@ -17,11 +17,13 @@ use common_exception::Result;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build().clone()).await?;
+    // Setup.
+    TestFixture::setup().await?;
+
     let session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;
@@ -45,13 +47,17 @@ async fn test_session() -> Result<()> {
         assert_eq!(actual, 3);
     }
 
+    // Teardown.
+    TestFixture::teardown().await?;
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(ConfigBuilder::create().with_management_mode().build()).await?;
+    // Setup.
+    TestFixture::setup_with_config(&ConfigBuilder::create().with_management_mode().build()).await?;
+
     let session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;
@@ -65,6 +71,9 @@ async fn test_session_in_management_mode() -> Result<()> {
         let actual = session.get_current_tenant();
         assert_eq!(&actual, "tenant2");
     }
+
+    // Teardown.
+    TestFixture::teardown().await?;
 
     Ok(())
 }

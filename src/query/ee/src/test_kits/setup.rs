@@ -16,27 +16,19 @@ use common_config::InnerConfig;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::test_kits::TestGuard;
 use databend_query::GlobalServices;
 use log::info;
 
 use crate::test_kits::mock_services::MockServices;
 
-pub struct TestGlobalServices;
+pub struct TestFixture;
 
-unsafe impl Send for TestGlobalServices {}
-
-unsafe impl Sync for TestGlobalServices {}
-
-impl TestGlobalServices {
-    pub async fn setup(config: &InnerConfig, public_key: String) -> Result<TestGuard> {
+impl TestFixture {
+    pub async fn setup(config: &InnerConfig, public_key: String) -> Result<()> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        let thread_name = match std::thread::current().name() {
-            None => panic!("thread name is none"),
-            Some(thread_name) => thread_name.to_string(),
-        };
+        let thread_name = std::thread::current().name().unwrap().to_string();
 
         #[cfg(debug_assertions)]
         common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -55,6 +47,16 @@ impl TestGlobalServices {
             );
         }
 
-        Ok(TestGuard::new(thread_name.to_string()))
+        Ok(())
+    }
+
+    /// Teardown the test environment.
+    pub async fn teardown() -> Result<()> {
+        let thread_name = std::thread::current().name().unwrap().to_string();
+
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&thread_name);
+
+        Ok(())
     }
 }

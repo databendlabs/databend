@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
-
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_license::license_manager::LicenseManager;
@@ -22,26 +20,28 @@ use common_tracing::set_panic_hook;
 use log::info;
 
 use crate::clusters::ClusterDiscovery;
+use crate::test_kits::ConfigBuilder;
+use crate::test_kits::TestFixture;
 use crate::GlobalServices;
 
-pub struct TestGlobalServices;
+impl TestFixture {
+    pub async fn setup() -> Result<()> {
+        let config = ConfigBuilder::create().build();
+        Self::setup_with_config(&config).await
+    }
 
-unsafe impl Send for TestGlobalServices {}
-
-unsafe impl Sync for TestGlobalServices {}
-
-impl TestGlobalServices {
-    pub async fn setup(config: impl Borrow<InnerConfig>) -> Result<TestGuard> {
+    /// Setup the test environment.
+    /// Set the panic hook.
+    /// Set the unit test env.
+    /// Init the global instance.
+    /// Init the global services.
+    /// Init the license manager.
+    /// Register the cluster to the metastore.
+    pub async fn setup_with_config(config: &InnerConfig) -> Result<()> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        let config = config.borrow();
-
-        let thread_name = match std::thread::current().name() {
-            None => panic!("thread name is none"),
-            Some(thread_name) => thread_name.to_string(),
-        };
-
+        let thread_name = std::thread::current().name().unwrap().to_string();
         #[cfg(debug_assertions)]
         common_base::base::GlobalInstance::init_testing(&thread_name);
 
@@ -54,30 +54,21 @@ impl TestGlobalServices {
                 .register_to_metastore(config)
                 .await?;
             info!(
-                "Databend query has been registered:{:?} to metasrv:{:?}.",
+                "Databend query unit test setup registered:{:?} to metasrv:{:?}.",
                 config.query.cluster_id, config.meta.endpoints
             );
         }
 
-        Ok(TestGuard {
-            thread_name: thread_name.to_string(),
-        })
+        Ok(())
     }
-}
 
-pub struct TestGuard {
-    thread_name: String,
-}
+    /// Teardown the test environment.
+    pub async fn teardown() -> Result<()> {
+        let thread_name = std::thread::current().name().unwrap().to_string();
 
-impl TestGuard {
-    pub fn new(thread_name: String) -> Self {
-        Self { thread_name }
-    }
-}
-
-impl Drop for TestGuard {
-    fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+        common_base::base::GlobalInstance::drop_testing(&thread_name);
+
+        Ok(())
     }
 }
