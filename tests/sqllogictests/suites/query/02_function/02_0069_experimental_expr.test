@@ -21,3 +21,18 @@ with t(f) as (select '11|open|22|ai|33|is nothing without sam'.split('|')
 
 statement error 1008
 SELECT t.a::String.lowe() FROM numbers(1) t(a)
+
+## List Comprehension
+
+query T
+select  [ x * 100  FOR x in [1,2,3] if x % 2 = 0 ];
+----
+[200]
+
+
+query IT
+SELECT  12_000_111_222, [x.split(' ')[2]
+     FOR x IN ['OpenAI', 'I LOVE', 'YOU ALL']
+     IF x.INSTR('LOVE') > 0][1];
+----
+12000111222 LOVE

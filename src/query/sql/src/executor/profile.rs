@@ -431,17 +431,6 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
-        PhysicalPlan::RuntimeFilterSource(source) => {
-            let proc_prof = profs.get(&source.plan_id).copied().unwrap_or_default();
-            let prof = OperatorProfile {
-                id: source.plan_id,
-                operator_type: OperatorType::RuntimeFilter,
-                execution_info: proc_prof.into(),
-                children: vec![],
-                attribute: OperatorAttribute::Empty,
-            };
-            plan_node_profs.push(prof);
-        }
         PhysicalPlan::DistributedInsertSelect(select) => {
             flatten_plan_node_profile(metadata, &select.input, profs, plan_node_profs)?;
             let proc_prof = profs.get(&select.plan_id).copied().unwrap_or_default();

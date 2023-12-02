@@ -131,7 +131,6 @@ impl SubqueryRewriter {
                 join_type: JoinType::Cross,
                 marker_index: None,
                 from_correlated_subquery: false,
-                contain_runtime_filter: false,
                 need_hold_hash_table: false,
             }
             .into();
@@ -459,7 +458,6 @@ impl SubqueryRewriter {
                     join_type: join.join_type.clone(),
                     marker_index: join.marker_index,
                     from_correlated_subquery: false,
-                    contain_runtime_filter: false,
                     need_hold_hash_table: false,
                 }
                 .into(),
