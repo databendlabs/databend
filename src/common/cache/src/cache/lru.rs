@@ -161,14 +161,25 @@ impl<K: Eq + Hash, V, S: BuildHasher> LruCache<K, V, S, Count> {
 
 impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S, M> {
     fn find_evict_candidate(&mut self) -> Option<K> {
-        let mut iter = self.visited.iter_mut();
+        let iter = self.visited.iter_mut();
         let mut p: Option<K> = None;
-        while let Some((key, value)) = iter.next() {
-            if *value == false && p.is_none() {
+        for (key, value) in iter {
+            if !(*value) && p.is_none() {
                 p = Some(unsafe { std::ptr::read(key) })
             }
-            if *value == true {
+            if *value {
                 *value = false;
+            }
+        }
+        p
+    }
+
+    fn peek_evict_candidate(&self) -> Option<K> {
+        let iter = self.visited.iter();
+        let mut p: Option<K> = None;
+        for (key, value) in iter {
+            if !(*value) && p.is_none() {
+                p = Some(unsafe { std::ptr::read(key) })
             }
         }
         p
@@ -271,7 +282,11 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// assert_eq!(cache.peek_by_policy(), Some((&1, &"a")));
     /// ```
     fn peek_by_policy(&self) -> Option<(&K, &V)> {
-        todo!()
+        if let Some(old_key) = self.peek_evict_candidate() {
+            self.map.get_key_value(&old_key)
+        } else {
+            self.map.front()
+        }
     }
 
     /// Checks if the map contains the given key.
