@@ -275,6 +275,8 @@ impl Table for ParquetRSTable {
                 .collect::<Vec<_>>(),
         };
 
+        let is_remote = matches!(self.stage_info.stage_type, StageType::External);
+
         let num_columns = self.leaf_fields.len();
 
         let now = Instant::now();
@@ -286,7 +288,7 @@ impl Table for ParquetRSTable {
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
-            false,
+            is_remote,
         )
         .await?;
         let elapsed = now.elapsed();

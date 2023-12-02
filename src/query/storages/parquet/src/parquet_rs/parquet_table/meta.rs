@@ -39,7 +39,7 @@ pub async fn read_metas_in_parallel(
     leaf_fields: Arc<Vec<TableField>>,
     num_threads: usize,
     max_memory_usage: u64,
-    is_copy: bool,
+    is_remote_query: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     if file_infos.is_empty() {
         return Ok(vec![]);
@@ -67,7 +67,7 @@ pub async fn read_metas_in_parallel(
             leaf_fields,
             schema_from,
             max_memory_usage,
-            is_copy,
+            is_remote_query,
         ));
     }
 
