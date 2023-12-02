@@ -113,7 +113,7 @@ impl ToReadDataSourcePlan for dyn Table {
         let mut base_block_ids = None;
         if parts.partitions.len() == 1 {
             let part = parts.partitions[0].clone();
-            if let Ok(part) = StreamTablePart::from_part(&part) {
+            if let Some(part) = StreamTablePart::from_part(&part) {
                 parts = part.inner();
                 base_block_ids = Some(part.base_block_ids());
             }
