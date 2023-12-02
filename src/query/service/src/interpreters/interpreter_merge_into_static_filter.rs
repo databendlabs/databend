@@ -293,7 +293,6 @@ impl MergeIntoInterpreter {
             RelOperator::Exchange(_) => {}
             RelOperator::UnionAll(_) => {}
             RelOperator::DummyTableScan(_) => {}
-            RelOperator::RuntimeFilterSource(_) => {}
             RelOperator::Window(_) => {}
             RelOperator::ProjectSet(_) => {}
             RelOperator::MaterializedCte(_) => {}

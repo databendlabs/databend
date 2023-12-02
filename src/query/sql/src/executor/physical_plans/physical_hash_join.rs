@@ -61,8 +61,6 @@ pub struct HashJoin {
     // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
     pub output_schema: DataSchemaRef,
-    // It means that join has a corresponding runtime filter
-    pub contain_runtime_filter: bool,
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
@@ -398,7 +396,6 @@ impl PhysicalPlanBuilder {
             from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
-            contain_runtime_filter: join.contain_runtime_filter,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
         }))
