@@ -48,7 +48,6 @@ use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
@@ -70,7 +69,6 @@ use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -128,10 +126,7 @@ impl Drop for TestFixture {
 impl TestFixture {
     /// Create a new TestFixture with default config.
     pub async fn new() -> Result<TestFixture> {
-        let mut config = ConfigBuilder::create().config();
-        let tmp_dir = TempDir::new().expect("create tmp dir failed");
-        let root = tmp_dir.path().to_str().unwrap().to_string();
-        config.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        let config = ConfigBuilder::create().config();
         Self::new_with_setup(OSSSetup { config }).await
     }
 
@@ -175,10 +170,7 @@ impl TestFixture {
         })
     }
 
-    pub async fn new_with_config(mut config: InnerConfig) -> Result<TestFixture> {
-        let tmp_dir = TempDir::new().expect("create tmp dir failed");
-        let root = tmp_dir.path().to_str().unwrap().to_string();
-        config.storage.params = StorageParams::Fs(StorageFsConfig { root });
+    pub async fn new_with_config(config: InnerConfig) -> Result<TestFixture> {
         Self::new_with_setup(OSSSetup { config }).await
     }
 

@@ -430,9 +430,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
 
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
-
-    // Setup.
-    TestFixture::setup_with_config(&conf).await?;
+    let _fixture = TestFixture::new_with_config(conf).await?;
 
     let ctx = TestFixture::create_query_context().await?;
     let auth_mgr = AuthMgr::instance();
@@ -603,9 +601,6 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             .await;
         assert!(res.is_err());
     }
-
-    // Tear down.
-    TestFixture::teardown().await?;
 
     Ok(())
 }
