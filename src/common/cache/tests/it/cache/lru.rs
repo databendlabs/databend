@@ -89,13 +89,13 @@ fn test_debug() {
     cache.put(3, 30);
     assert_eq!(format!("{:?}", cache), "{3: 30, 2: 20, 1: 10}");
     cache.put(2, 22);
-    assert_eq!(format!("{:?}", cache), "{2: 22, 3: 30, 1: 10}");
+    assert_eq!(format!("{:?}", cache), "{3: 30, 2: 22, 1: 10}");
     cache.put(6, 60);
-    assert_eq!(format!("{:?}", cache), "{6: 60, 2: 22, 3: 30}");
+    assert_eq!(format!("{:?}", cache), "{6: 60, 3: 30, 2: 22}");
     cache.get(&3);
-    assert_eq!(format!("{:?}", cache), "{3: 30, 6: 60, 2: 22}");
+    assert_eq!(format!("{:?}", cache), "{6: 60, 3: 30, 2: 22}");
     cache.set_capacity(2);
-    assert_eq!(format!("{:?}", cache), "{3: 30, 6: 60}");
+    assert_eq!(format!("{:?}", cache), "{6: 60, 3: 30}");
 }
 
 #[test]
