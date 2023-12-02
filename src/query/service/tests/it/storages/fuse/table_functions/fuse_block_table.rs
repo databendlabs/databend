@@ -91,6 +91,5 @@ async fn test_fuse_block_table() -> Result<()> {
         );
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

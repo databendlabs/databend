@@ -445,6 +445,4 @@ async fn test_box_display() {
         }
         write!(file, "\n\n").unwrap();
     }
-
-    fixture.destroy().await.unwrap();
 }

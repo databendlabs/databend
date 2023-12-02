@@ -66,8 +66,6 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
         "Expected {:?}, got {:?}. Scenario: {:?}, predicate: {}",
         expected_rgs, rgs, scenario, predicate
     );
-
-    fixture.destroy().await.unwrap();
 }
 
 #[tokio::test]

@@ -80,8 +80,6 @@ async fn test_simple_union_output_type() -> Result<()> {
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
         ));
-
-        fixture.destroy().await?;
     }
 
     {
@@ -108,8 +106,6 @@ async fn test_simple_union_output_type() -> Result<()> {
             schema.field(0).data_type().remove_nullable(),
             DataType::Number(NumberDataType::Float64),
         ));
-
-        fixture.destroy().await?;
     }
 
     Ok(())
@@ -207,6 +203,5 @@ async fn test_union_output_type() -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

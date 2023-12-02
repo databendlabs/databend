@@ -101,7 +101,6 @@ async fn test_compact() -> Result<()> {
     )
     .await?;
 
-    fixture.destroy().await?;
     Ok(())
 }
 

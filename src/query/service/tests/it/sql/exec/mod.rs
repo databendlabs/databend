@@ -136,7 +136,6 @@ pub async fn test_snapshot_consistency() -> Result<()> {
             return Err(ErrorCode::BadArguments("query bad plan"));
         }
 
-        fixture.destroy().await?;
         Ok::<(), ErrorCode>(())
     };
 

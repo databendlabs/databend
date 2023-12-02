@@ -104,7 +104,6 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let stream = fixture.execute_query(qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -162,7 +161,6 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
     assert_eq!(table_statistics.num_rows.unwrap() as usize, num_inserts * 2);
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -203,7 +201,6 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     assert!(r.is_err());
     assert_eq!(r.err().unwrap().code(), ErrorCode::UNRESOLVABLE_CONFLICT);
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -630,7 +627,6 @@ async fn test_segment_compactor() -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 

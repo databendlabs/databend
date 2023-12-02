@@ -68,6 +68,5 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

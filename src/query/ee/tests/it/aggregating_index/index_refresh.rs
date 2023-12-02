@@ -221,7 +221,6 @@ async fn test_refresh_agg_index() -> Result<()> {
         );
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -284,7 +283,6 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
     let indexes = collect_file_names(&agg_index_path)?;
     assert_eq!(blocks.len(), indexes.len());
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -411,7 +409,6 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
         );
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -532,7 +529,6 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     let indexes_1 = collect_file_names(&agg_index_path_1)?;
     assert_eq!(blocks, indexes_1);
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -593,7 +589,6 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
         );
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 

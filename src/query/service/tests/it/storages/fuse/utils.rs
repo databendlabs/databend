@@ -72,6 +72,5 @@ pub async fn do_purge_test(
     .await?;
     history_should_have_item(&fixture, case_name, snapshot_count).await?;
 
-    fixture.destroy().await?;
     Ok(())
 }

@@ -1034,6 +1034,5 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

@@ -177,7 +177,6 @@ async fn test_fuse_occ_retry() -> Result<()> {
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -215,7 +214,6 @@ async fn test_last_snapshot_hint() -> Result<()> {
 
     assert_eq!(content.as_slice(), expected.as_bytes());
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -300,7 +298,6 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 self.case_name
             );
 
-            fixture.destroy().await?;
             Ok(())
         }
     }

@@ -278,6 +278,5 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     )
     .await?;
 
-    fixture.destroy().await?;
     Ok(())
 }

@@ -188,6 +188,5 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         assert!(fuse_part.create_on.is_some())
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

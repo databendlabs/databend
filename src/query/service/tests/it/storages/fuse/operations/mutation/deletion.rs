@@ -54,6 +54,5 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     )
     .await?;
 
-    fixture.destroy().await?;
     Ok(())
 }

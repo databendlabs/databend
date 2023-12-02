@@ -88,6 +88,5 @@ async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
         .await?;
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

@@ -428,7 +428,6 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 

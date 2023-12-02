@@ -211,6 +211,5 @@ async fn test_internal_column() -> Result<()> {
     check_partitions(&parts, &fixture).await?;
     check_data_block(expected, blocks)?;
 
-    fixture.destroy().await?;
     Ok(())
 }

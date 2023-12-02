@@ -152,6 +152,5 @@ async fn test_computed_column() -> Result<()> {
         .await?;
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

@@ -736,6 +736,5 @@ async fn test_get_same_table_once() -> Result<()> {
         2
     );
 
-    fixture.destroy().await?;
     Ok(())
 }

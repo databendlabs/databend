@@ -149,7 +149,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let total_block_nums = mutator.tasks.iter().map(|t| t.parts.len()).sum::<usize>();
     assert_eq!(total_block_nums, 3);
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -319,7 +318,6 @@ async fn test_safety_for_recluster() -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 

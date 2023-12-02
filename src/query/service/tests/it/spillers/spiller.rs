@@ -73,6 +73,5 @@ async fn test_spill_with_partition() -> Result<()> {
         }
     }
 
-    fixture.destroy().await?;
     Ok(())
 }

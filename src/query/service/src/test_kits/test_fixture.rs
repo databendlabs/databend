@@ -116,9 +116,17 @@ impl Setup for OSSSetup {
     }
 }
 
+impl Drop for TestFixture {
+    fn drop(&mut self) {
+        let thread_name = std::thread::current().name().unwrap().to_string();
+
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&thread_name);
+    }
+}
+
 impl TestFixture {
     /// Create a new TestFixture with default config.
-    /// Need to call `TestFixture::destroy` after use.
     pub async fn new() -> Result<TestFixture> {
         let mut config = ConfigBuilder::create().config();
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
@@ -127,15 +135,7 @@ impl TestFixture {
         Self::new_with_setup(OSSSetup { config }).await
     }
 
-    pub async fn destroy(&self) -> Result<()> {
-        let thread_name = std::thread::current().name().unwrap().to_string();
-        #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&thread_name);
-        Ok(())
-    }
-
     /// Create a new TestFixture with setup impl.
-    /// Need to call `TestFixture::destroy` after use.
     pub async fn new_with_setup(setup: impl Setup) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
@@ -175,7 +175,6 @@ impl TestFixture {
         })
     }
 
-    /// Need to call `TestFixture::destroy` after use.
     pub async fn new_with_config(mut config: InnerConfig) -> Result<TestFixture> {
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();

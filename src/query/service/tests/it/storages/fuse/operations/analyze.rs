@@ -46,7 +46,6 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
         .await?;
     check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -97,7 +96,6 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
         assert!(snapshot_opt.unwrap().table_statistics_location.is_none());
     }
 
-    fixture.destroy().await?;
     Ok(())
 }
 
@@ -124,6 +122,5 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
         .await?;
     check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
 
-    fixture.destroy().await?;
     Ok(())
 }
