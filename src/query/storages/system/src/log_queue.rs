@@ -94,7 +94,7 @@ impl<Event: SystemLogElement + 'static> SystemLogQueue<Event> {
                 Some(instance) => instance
                     .downcast_ref::<Arc<Self>>()
                     .cloned()
-                    .ok_or(ErrorCode::Internal("")),
+                    .ok_or(ErrorCode::Internal("SystemLogQueue instance get error")),
             }
         }
     }

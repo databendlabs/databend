@@ -175,7 +175,7 @@ impl TestFixture {
         Self::with_setup(OSSSetup { config }).await
     }
 
-    async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
+    pub async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),

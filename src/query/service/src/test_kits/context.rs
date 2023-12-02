@@ -33,6 +33,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 use crate::test_kits::ConfigBuilder;
+use crate::test_kits::TestFixture;
 use crate::test_kits::TestGlobalServices;
 use crate::test_kits::TestGuard;
 
@@ -131,6 +132,7 @@ pub async fn create_query_context_with_config_new(
     Ok((guard, dummy_query_context, dummy_session))
 }
 
+#[derive(Clone)]
 pub struct ClusterDescriptor {
     local_node_id: String,
     cluster_nodes_list: Vec<Arc<NodeInfo>>,
@@ -175,12 +177,8 @@ impl Default for ClusterDescriptor {
 #[allow(dead_code)]
 pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
-) -> Result<(TestGuard, Arc<QueryContext>)> {
-    let config = ConfigBuilder::create().build();
-    let guard = TestGlobalServices::setup(&config).await?;
-    let dummy_session = SessionManager::instance()
-        .create_session(SessionType::Dummy)
-        .await?;
+) -> Result<Arc<QueryContext>> {
+    let dummy_session = TestFixture::create_session(SessionType::Dummy).await?;
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
@@ -190,5 +188,5 @@ pub async fn create_query_context_with_cluster(
     )?);
 
     dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok((guard, dummy_query_context))
+    Ok(dummy_query_context)
 }

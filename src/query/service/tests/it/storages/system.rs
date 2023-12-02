@@ -410,8 +410,7 @@ async fn test_caches_table() -> Result<()> {
     let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
 
     let cluster_desc = ClusterDescriptor::new().with_local_id("test-node");
-    let (_guard, ctx) =
-        databend_query::test_kits::create_query_context_with_cluster(cluster_desc).await?;
+    let ctx = databend_query::test_kits::create_query_context_with_cluster(cluster_desc).await?;
 
     let table = CachesTable::create(1);
 
