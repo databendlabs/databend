@@ -65,6 +65,7 @@ pub use stage::StageFilesInfo;
 pub use stage::STDIN_FD;
 
 mod copy;
+mod merge;
 mod statistics;
 
 pub use copy::CopyStatus;
