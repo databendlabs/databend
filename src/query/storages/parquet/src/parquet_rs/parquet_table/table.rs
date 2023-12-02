@@ -279,7 +279,7 @@ impl Table for ParquetRSTable {
         };
 
         let is_remote_query = matches!(self.stage_info.stage_type, StageType::External)
-           && self.read_options.read_query();
+            && self.read_options.read_query();
 
         let num_columns = self.leaf_fields.len();
 
