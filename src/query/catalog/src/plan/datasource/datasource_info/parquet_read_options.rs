@@ -33,6 +33,8 @@ pub struct ParquetReadOptions {
     push_down_bitmap: bool,
     // /// If refresh the file meta data cache.
     // refresh_meta_cache: bool,
+    /// - If `ready_query` is true, `QueryKind` should be Query
+    read_query: bool,
 }
 
 impl ParquetReadOptions {
@@ -63,6 +65,12 @@ impl ParquetReadOptions {
         self
     }
 
+    #[inline]
+    pub fn with_read_query(mut self, v: bool) -> Self {
+        self.do_prewhere = v;
+        self
+    }
+
     // #[inline]
     // pub fn with_refresh_meta_cache(mut self, v: bool) -> Self {
     //     self.refresh_meta_cache = v;
@@ -89,6 +97,11 @@ impl ParquetReadOptions {
         self.do_prewhere
     }
 
+    #[inline]
+    pub fn read_query(&self) -> bool {
+        self.read_query
+    }
+
     // #[inline]
     // pub fn refresh_meta_cache(&self) -> bool {
     //     self.refresh_meta_cache
@@ -102,6 +115,7 @@ impl Default for ParquetReadOptions {
             prune_row_groups: true,
             prune_pages: true,
             push_down_bitmap: false,
+            read_query: false,
             // refresh_meta_cache: false,
         }
     }

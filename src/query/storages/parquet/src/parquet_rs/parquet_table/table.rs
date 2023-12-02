@@ -42,6 +42,7 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::principal::StageType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -142,6 +143,8 @@ impl ParquetRSTable {
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
+        let is_query = matches!(ctx.get_query_kind(), QueryKind::Query);
+        read_options.with_read_query(is_query);
 
         Ok(Arc::new(ParquetRSTable {
             table_info,
@@ -275,7 +278,8 @@ impl Table for ParquetRSTable {
                 .collect::<Vec<_>>(),
         };
 
-        let is_remote = matches!(self.stage_info.stage_type, StageType::External);
+        let is_remote_query = matches!(self.stage_info.stage_type, StageType::External)
+            && self.read_options.read_query();
 
         let num_columns = self.leaf_fields.len();
 
@@ -288,7 +292,7 @@ impl Table for ParquetRSTable {
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
-            is_remote,
+            is_remote_query,
         )
         .await?;
         let elapsed = now.elapsed();
