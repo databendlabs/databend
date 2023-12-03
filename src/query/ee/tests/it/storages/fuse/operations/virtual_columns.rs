@@ -30,6 +30,7 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         .default_session()
         .get_settings()
         .set_retention_period(0)?;
+    fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
     let number_of_block = 2;

@@ -27,6 +27,7 @@ async fn test_fuse_block_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     // test db & table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     {

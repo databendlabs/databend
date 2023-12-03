@@ -143,6 +143,7 @@ async fn test_internal_column() -> Result<()> {
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.new_query_ctx().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let internal_columns = vec![

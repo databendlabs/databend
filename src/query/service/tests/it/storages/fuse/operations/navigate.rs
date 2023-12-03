@@ -36,6 +36,8 @@ async fn test_fuse_navigate() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     // 1.1 first commit
@@ -130,6 +132,8 @@ async fn test_navigate_for_purge() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     // 1.1 first commit

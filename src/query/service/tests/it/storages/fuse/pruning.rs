@@ -73,6 +73,8 @@ async fn test_block_pruner() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
+    fixture.create_default_database().await?;
+
     let test_tbl_name = "test_index_helper";
     let test_schema = TableSchemaRefExt::create(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),

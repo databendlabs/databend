@@ -38,6 +38,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     // test db & table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     // func args

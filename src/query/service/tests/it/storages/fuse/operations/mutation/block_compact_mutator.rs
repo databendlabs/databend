@@ -48,6 +48,7 @@ async fn test_compact() -> Result<()> {
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert

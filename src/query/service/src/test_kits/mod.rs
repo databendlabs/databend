@@ -16,11 +16,10 @@
 
 pub mod block_writer;
 pub mod config;
-pub mod context;
 pub mod fixture;
 pub mod utils;
 
 pub use config::ConfigBuilder;
-pub use context::ClusterDescriptor;
+pub use fixture::ClusterDescriptor;
 pub use fixture::Setup;
 pub use fixture::TestFixture;

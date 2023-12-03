@@ -153,6 +153,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let mut table = fixture.latest_default_table().await?;

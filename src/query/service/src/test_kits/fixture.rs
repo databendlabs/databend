@@ -18,9 +18,11 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::cluster_info::Cluster;
 use common_catalog::table::AppendMode;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
@@ -49,10 +51,13 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::storage::StorageParams;
+use common_meta_types::NodeInfo;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
+use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::UpdatePlan;
@@ -75,6 +80,7 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::clusters::ClusterDiscovery;
+use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
@@ -85,6 +91,7 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -237,6 +244,23 @@ impl TestFixture {
     /// returns new QueryContext of default session
     pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
         self.default_session.create_query_context().await
+    }
+
+    /// returns new QueryContext of default session with cluster
+    pub async fn new_query_ctx_with_cluster(
+        &self,
+        desc: ClusterDescriptor,
+    ) -> Result<Arc<QueryContext>> {
+        let local_id = desc.local_node_id;
+        let nodes = desc.cluster_nodes_list;
+
+        let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
+            self.default_session.clone(),
+            Cluster::create(nodes, local_id),
+        )?);
+
+        dummy_query_context.get_settings().set_max_threads(8)?;
+        Ok(dummy_query_context)
     }
 
     pub async fn new_session_with_type(&self, session_type: SessionType) -> Result<Arc<Session>> {
@@ -431,6 +455,31 @@ impl TestFixture {
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
         interpreter.execute(self.default_ctx.clone()).await?;
+        Ok(())
+    }
+
+    /// Create database with prefix.
+    pub async fn create_default_database(&self) -> Result<()> {
+        let tenant = self.default_ctx.get_tenant();
+        let db_name = gen_db_name(&self.prefix);
+        let plan = CreateDatabasePlan {
+            catalog: "default".to_owned(),
+            tenant,
+            if_not_exists: false,
+            database: db_name,
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..Default::default()
+            },
+        };
+
+        self.default_ctx
+            .get_catalog("default")
+            .await
+            .unwrap()
+            .create_database(plan.into())
+            .await?;
+
         Ok(())
     }
 
@@ -963,4 +1012,45 @@ pub async fn history_should_have_item(
         expected,
     )
     .await
+}
+
+pub struct ClusterDescriptor {
+    local_node_id: String,
+    cluster_nodes_list: Vec<Arc<NodeInfo>>,
+}
+
+impl ClusterDescriptor {
+    pub fn new() -> ClusterDescriptor {
+        ClusterDescriptor {
+            local_node_id: String::from(""),
+            cluster_nodes_list: vec![],
+        }
+    }
+
+    pub fn with_node(self, id: impl Into<String>, addr: impl Into<String>) -> ClusterDescriptor {
+        let mut new_nodes = self.cluster_nodes_list.clone();
+        new_nodes.push(Arc::new(NodeInfo::create(
+            id.into(),
+            0,
+            addr.into(),
+            DATABEND_COMMIT_VERSION.to_string(),
+        )));
+        ClusterDescriptor {
+            cluster_nodes_list: new_nodes,
+            local_node_id: self.local_node_id,
+        }
+    }
+
+    pub fn with_local_id(self, id: impl Into<String>) -> ClusterDescriptor {
+        ClusterDescriptor {
+            local_node_id: id.into(),
+            cluster_nodes_list: self.cluster_nodes_list,
+        }
+    }
+}
+
+impl Default for ClusterDescriptor {
+    fn default() -> Self {
+        Self::new()
+    }
 }

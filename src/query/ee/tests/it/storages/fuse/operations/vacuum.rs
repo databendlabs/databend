@@ -27,6 +27,8 @@ async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
         .default_session()
         .get_settings()
         .set_retention_period(0)?;
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let number_of_block = 1;

@@ -23,6 +23,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert

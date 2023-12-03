@@ -42,6 +42,7 @@ pub async fn do_purge_test(
     index_count: u32,
 ) -> Result<()> {
     let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
 
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
     do_insertions(&fixture).await?;

@@ -27,6 +27,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -108,6 +109,8 @@ async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::
 
     let fixture = Arc::new(TestFixture::setup().await?);
     let ctx = fixture.new_query_ctx().await?;
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
     let init_table = fixture.latest_default_table().await?;
 

@@ -126,6 +126,8 @@ use walkdir::WalkDir;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
     let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;
@@ -229,8 +231,9 @@ async fn test_commit_to_meta_server() -> Result<()> {
     impl Case {
         async fn run(&self) -> Result<()> {
             let fixture = TestFixture::setup().await?;
-
+            fixture.create_default_database().await?;
             fixture.create_default_table().await?;
+
             let ctx = fixture.new_query_ctx().await?;
             let catalog = ctx.get_catalog("default").await?;
 

@@ -102,7 +102,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    // create table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
     let db_name = fixture.default_db_name();
     let tb_name = fixture.default_table_name();

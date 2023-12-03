@@ -445,9 +445,9 @@ async fn test_caches_table() -> Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
     let fixture = TestFixture::setup_with_config(&config).await?;
-    let ctx = fixture.new_query_ctx().await?;
+    let cluster_desc = ClusterDescriptor::new().with_local_id("test-node");
+    let ctx = fixture.new_query_ctx_with_cluster(cluster_desc).await?;
 
-    let _cluster_desc = ClusterDescriptor::new().with_local_id("test-node");
     let table = CachesTable::create(1);
     run_table_tests(file, ctx, table).await?;
 
