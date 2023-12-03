@@ -37,7 +37,7 @@ use crate::storages::fuse::operations::mutation::compact_segment;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_case() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture.create_default_table().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let ctx = fixture.new_query_ctx().await?;
@@ -75,7 +75,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture.create_default_table().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let ctx = fixture.new_query_ctx().await?;

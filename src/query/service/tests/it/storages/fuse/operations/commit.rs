@@ -185,7 +185,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture.create_default_table().await?;
+    fixture.create_default_database().await?;
 
     let table = fixture.latest_default_table().await?;
 
