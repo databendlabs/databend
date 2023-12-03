@@ -49,12 +49,10 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::storage::StorageParams;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
-use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::UpdatePlan;
@@ -156,30 +154,6 @@ impl TestFixture {
         let default_ctx = default_session.create_query_context().await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
-
-        // prepare a randomly named default database
-        {
-            let tenant = default_ctx.get_tenant();
-            let db_name = gen_db_name(&random_prefix);
-            let plan = CreateDatabasePlan {
-                catalog: "default".to_owned(),
-                tenant,
-                if_not_exists: false,
-                database: db_name,
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..Default::default()
-                },
-            };
-
-            default_ctx
-                .get_catalog("default")
-                .await
-                .unwrap()
-                .create_database(plan.into())
-                .await?;
-        }
-
         let thread_name = std::thread::current().name().unwrap().to_string();
         let guard = TestGuard::new(thread_name.clone());
         Ok(Self {
