@@ -120,7 +120,7 @@ impl TryFrom<DataPacket> for FlightData {
                 flight_descriptor: None,
             },
             DataPacket::MergeStatus(status) => FlightData {
-                app_metadata: vec![0x06],
+                app_metadata: vec![0x07],
                 data_body: serde_json::to_vec(&status)?,
                 data_header: vec![],
                 flight_descriptor: None,
@@ -171,6 +171,10 @@ impl TryFrom<FlightData> for DataPacket {
             0x06 => {
                 let status = serde_json::from_slice::<CopyStatus>(&flight_data.data_body)?;
                 Ok(DataPacket::CopyStatus(status))
+            }
+            0x07 => {
+                let status = serde_json::from_slice::<MergeStatus>(&flight_data.data_body)?;
+                Ok(DataPacket::MergeStatus(status))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
