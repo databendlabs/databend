@@ -186,6 +186,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
 async fn test_last_snapshot_hint() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
 
