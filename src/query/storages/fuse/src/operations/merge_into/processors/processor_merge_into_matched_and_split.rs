@@ -288,11 +288,6 @@ impl Processor for MatchedSplitProcessor {
 
                         // delete all
                         if !row_ids.is_empty() {
-                            self.ctx.add_merge_status(MergeStatus {
-                                insert_rows: 0,
-                                update_rows: 0,
-                                deleted_rows: row_ids.num_rows(),
-                            });
                             row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
                             self.output_data_row_id_data.push(row_ids);
                         }
