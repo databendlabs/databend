@@ -98,9 +98,9 @@ use crate::GlobalServices;
 
 pub struct TestFixture {
     default_ctx: Arc<QueryContext>,
+    default_session: Arc<Session>,
     conf: InnerConfig,
     prefix: String,
-    default_session: Arc<Session>,
 }
 
 #[async_trait::async_trait]
@@ -122,7 +122,11 @@ impl Setup for OSSSetup {
 
 impl Drop for TestFixture {
     fn drop(&mut self) {
-        // Nothing to do here
+        drop(self.default_session.clone());
+
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&thread_name);
     }
 }
 
