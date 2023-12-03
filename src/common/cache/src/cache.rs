@@ -23,7 +23,7 @@ use crate::Meter;
 /// A trait for a cache.
 pub trait Cache<K, V, S, M>
 where
-    K: Eq + Hash,
+    K: Eq + Hash + Clone,
     S: BuildHasher,
     M: Meter<K, V>,
 {
