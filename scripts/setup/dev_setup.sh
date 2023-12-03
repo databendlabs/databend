@@ -533,6 +533,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo quickinstall cargo-binstall
 	cargo binstall -y sccache
 	cargo binstall -y cargo-zigbuild
+	cargo install cargo-nextest
+
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then

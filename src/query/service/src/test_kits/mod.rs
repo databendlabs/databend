@@ -16,19 +16,10 @@
 
 pub mod block_writer;
 pub mod config;
-pub mod context;
-#[allow(dead_code)]
-pub mod sessions;
-pub mod table_test_fixture;
+pub mod fixture;
 pub mod utils;
 
 pub use config::ConfigBuilder;
-pub use context::create_query_context;
-pub use context::create_query_context_with_cluster;
-pub use context::create_query_context_with_config;
-pub use context::create_query_context_with_session;
-pub use context::ClusterDescriptor;
-pub use sessions::TestGlobalServices;
-pub use sessions::TestGuard;
-pub use table_test_fixture::Setup;
-pub use table_test_fixture::TestFixture;
+pub use fixture::ClusterDescriptor;
+pub use fixture::Setup;
+pub use fixture::TestFixture;
