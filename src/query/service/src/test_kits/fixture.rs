@@ -101,6 +101,24 @@ pub struct TestFixture {
     default_session: Arc<Session>,
     conf: InnerConfig,
     prefix: String,
+    _guard: TestGuard,
+}
+
+pub struct TestGuard {
+    thread_name: String,
+}
+
+impl TestGuard {
+    pub fn new(thread_name: String) -> Self {
+        Self { thread_name }
+    }
+}
+
+impl Drop for TestGuard {
+    fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+    }
 }
 
 #[async_trait::async_trait]
@@ -117,16 +135,6 @@ impl Setup for OSSSetup {
     async fn setup(&self) -> Result<InnerConfig> {
         TestFixture::init_global_with_config(&self.config).await?;
         Ok(self.config.clone())
-    }
-}
-
-impl Drop for TestFixture {
-    fn drop(&mut self) {
-        drop(self.default_session.clone());
-
-        let thread_name = std::thread::current().name().unwrap().to_string();
-        #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&thread_name);
     }
 }
 
@@ -169,11 +177,14 @@ impl TestFixture {
                 .await?;
         }
 
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        let guard = TestGuard::new(thread_name.clone());
         Ok(Self {
             default_ctx,
             default_session,
             conf,
             prefix: random_prefix,
+            _guard: guard,
         })
     }
 
