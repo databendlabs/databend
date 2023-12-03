@@ -15,7 +15,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct MergeStatus {
     pub insert_rows: usize,
     pub deleted_rows: usize,

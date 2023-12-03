@@ -61,9 +61,11 @@ remove @distributed_source_parquet;
 statement ok
 copy into @distributed_source_parquet from (select * from distributed_source_test);
 
-statement ok
+query TTT
 merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @distributed_source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
 when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
+----
+2 4 8
 
 query TT
 select * from distributed_target_test order by a;
@@ -123,6 +125,8 @@ select * from corner_source_table order by a,b;
 
 query TTT
 merge into corner_target_table as t1 using (select * from corner_source_table) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+0 5
 
 query TTT
 select * from corner_target_table order by a,b;

@@ -150,13 +150,17 @@ select * from t1 order by a,b,c;
 statement error 1065
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
-statement ok
+query TTT
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched and t1.b = 'b_1' then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+----
+1 1 1
 
 query TTT
 select * from t1 order by a,b,c;
 ----
-1 1 1
+1 b1 c_5
+3 b_2 c_6
+4 b_8 c_8
 
 query TT
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when not matched and t2.c = 'c_9' then insert (a,b,c) values(t2.a,t2.b,t2.c);
