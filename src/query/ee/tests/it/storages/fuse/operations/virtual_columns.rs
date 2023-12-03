@@ -24,7 +24,7 @@ use storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     fixture
         .default_session()

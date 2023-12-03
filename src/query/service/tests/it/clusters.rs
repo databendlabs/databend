@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
     let config = ConfigBuilder::create().build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let discover_cluster = ClusterDiscovery::instance().discover(&config).await?;
 

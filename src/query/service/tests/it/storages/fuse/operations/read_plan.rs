@@ -150,7 +150,7 @@ fn test_to_partitions() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_exact_statistic() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_table().await?;

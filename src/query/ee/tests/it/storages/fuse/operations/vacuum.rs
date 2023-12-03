@@ -21,7 +21,7 @@ use enterprise_query::storages::fuse::do_vacuum_drop_tables;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     fixture
         .default_session()

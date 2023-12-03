@@ -70,7 +70,7 @@ async fn apply_block_pruning(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let test_tbl_name = "test_index_helper";

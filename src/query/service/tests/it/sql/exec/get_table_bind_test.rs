@@ -702,7 +702,7 @@ impl TableContext for CtxDelegation {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",

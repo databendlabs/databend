@@ -39,7 +39,7 @@ use storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // setup
@@ -99,7 +99,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_update_analyze_statistics() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // create table

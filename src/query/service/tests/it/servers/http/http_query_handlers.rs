@@ -261,7 +261,7 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint().await?;
@@ -330,7 +330,7 @@ async fn test_simple_sql() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_show_databases() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
@@ -351,7 +351,7 @@ async fn test_show_databases() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_return_when_finish() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
@@ -386,7 +386,7 @@ async fn test_return_when_finish() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_client_query_id() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let wait_time_secs = 5;
     let sql = "select * from numbers(1)";
@@ -448,7 +448,7 @@ async fn test_client_query_id() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_wait_time_secs() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let ep = create_endpoint().await?;
     let sql = "select sleep(0.001)";
@@ -498,7 +498,7 @@ async fn test_wait_time_secs() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_buffer_size() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let rows = 100;
     let sql = format!("select * from numbers({})", rows);
@@ -521,7 +521,7 @@ async fn test_buffer_size() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_pagination() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let ep = create_endpoint().await?;
     let sql = "select * from numbers(10)";
@@ -573,7 +573,7 @@ async fn test_pagination() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_session() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let ep = create_endpoint().await?;
     let json =
@@ -612,7 +612,7 @@ async fn test_http_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
@@ -634,7 +634,7 @@ async fn test_result_timeout() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_system_tables() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let session_middleware =
         HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
@@ -688,7 +688,7 @@ async fn test_system_tables() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_insert() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let route = create_endpoint().await?;
 
@@ -717,7 +717,7 @@ async fn test_insert() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_query_log() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let session_middleware =
         HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
@@ -790,7 +790,7 @@ async fn test_query_log() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 #[ignore]
 async fn test_query_log_killed() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let session_middleware =
         HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
@@ -957,7 +957,7 @@ async fn test_auth_jwt() -> Result<()> {
     let config = ConfigBuilder::create()
         .jwt_key_file(format!("http://{}{}", server.address(), json_path))
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let session_middleware =
         HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
@@ -1148,7 +1148,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let config = ConfigBuilder::create()
         .jwt_key_file(format!("http://{}{}", server.address(), json_path))
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let session_middleware =
         HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
@@ -1190,7 +1190,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
         .http_handler_tls_server_key(TEST_SERVER_KEY)
         .http_handler_tls_server_cert(TEST_SERVER_CERT)
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1234,7 +1234,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
         .http_handler_tls_server_key(TEST_SERVER_KEY)
         .http_handler_tls_server_cert(TEST_SERVER_CERT)
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1261,7 +1261,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
         .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
         .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1311,7 +1311,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
         .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
         .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
 
@@ -1339,7 +1339,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_func_object_keys() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
         (
@@ -1370,7 +1370,7 @@ async fn test_func_object_keys() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multi_partition() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
@@ -1398,7 +1398,7 @@ async fn test_multi_partition() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_affect() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
         (
@@ -1487,7 +1487,7 @@ async fn test_affect() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_session_secondary_roles() -> Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let route = create_endpoint().await?;
 
@@ -1533,7 +1533,7 @@ async fn test_auth_configured_user() -> Result<()> {
     let config = ConfigBuilder::create()
         .add_user(user_name, auth_info)
         .build();
-    let _fixture = TestFixture::create_with_config(&config).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);

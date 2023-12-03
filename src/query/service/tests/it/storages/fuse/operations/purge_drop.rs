@@ -20,7 +20,7 @@ use databend_query::test_kits::fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;
@@ -35,7 +35,7 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;

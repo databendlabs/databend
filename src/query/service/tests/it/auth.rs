@@ -82,7 +82,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
     let second_url = format!("http://{}{}", server.address(), second_path);
     conf.query.jwt_key_file = first_url.clone();
     conf.query.jwt_key_files = vec![second_url];
-    let fixture = TestFixture::create_with_config(&conf).await?;
+    let fixture = TestFixture::setup_with_config(&conf).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let auth_mgr = AuthMgr::instance();
@@ -221,7 +221,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
 
-    let fixture = TestFixture::create_with_config(&conf).await?;
+    let fixture = TestFixture::setup_with_config(&conf).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let auth_mgr = AuthMgr::instance();
@@ -426,7 +426,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
 
-    let fixture = TestFixture::create_with_config(&conf).await?;
+    let fixture = TestFixture::setup_with_config(&conf).await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let auth_mgr = AuthMgr::instance();
@@ -626,7 +626,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
 
     let mut conf = ConfigBuilder::create().with_management_mode().config();
     conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
-    let fixture = TestFixture::create_with_config(&conf).await?;
+    let fixture = TestFixture::setup_with_config(&conf).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let auth_mgr = AuthMgr::instance();

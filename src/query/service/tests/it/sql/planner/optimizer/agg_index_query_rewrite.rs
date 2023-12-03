@@ -382,7 +382,7 @@ async fn test_query_rewrite() -> Result<()> {
 }
 
 async fn test_query_rewrite_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let create_table_plan = create_table_plan(&fixture, format);

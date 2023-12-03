@@ -109,7 +109,7 @@ async fn refresh_index(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_refresh_agg_index() -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     fixture
         .execute_command("CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'")
@@ -226,7 +226,7 @@ async fn test_refresh_agg_index() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_refresh_agg_index_with_limit() -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -297,7 +297,7 @@ async fn test_sync_agg_index() -> Result<()> {
 
 async fn test_sync_agg_index_after_update() -> Result<()> {
     // let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()
         .get_settings()
@@ -417,7 +417,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     // ctx.get_settings()
     //    .set_enable_refresh_aggregating_index_after_write(true)?;
 
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()
         .get_settings()
@@ -533,7 +533,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 }
 
 async fn test_sync_agg_index_after_copy_into() -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()
         .get_settings()

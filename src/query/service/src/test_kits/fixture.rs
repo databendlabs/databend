@@ -115,7 +115,7 @@ struct OSSSetup {
 #[async_trait::async_trait]
 impl Setup for OSSSetup {
     async fn setup(&self) -> Result<InnerConfig> {
-        TestFixture::setup_with_config(&self.config).await?;
+        TestFixture::init_global_with_config(&self.config).await?;
         Ok(self.config.clone())
     }
 }
@@ -128,13 +128,13 @@ impl Drop for TestFixture {
 
 impl TestFixture {
     /// Create a new TestFixture with default config.
-    pub async fn create() -> Result<TestFixture> {
+    pub async fn setup() -> Result<TestFixture> {
         let config = ConfigBuilder::create().config();
-        Self::create_with_setup(OSSSetup { config }).await
+        Self::setup_with_custom(OSSSetup { config }).await
     }
 
     /// Create a new TestFixture with setup impl.
-    pub async fn create_with_setup(setup: impl Setup) -> Result<TestFixture> {
+    pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
         let default_session = Self::create_session(SessionType::Dummy).await?;
@@ -173,8 +173,8 @@ impl TestFixture {
         })
     }
 
-    pub async fn create_with_config(config: &InnerConfig) -> Result<TestFixture> {
-        Self::create_with_setup(OSSSetup {
+    pub async fn setup_with_config(config: &InnerConfig) -> Result<TestFixture> {
+        Self::setup_with_custom(OSSSetup {
             config: config.clone(),
         })
         .await
@@ -213,7 +213,7 @@ impl TestFixture {
     /// Init the global services.
     /// Init the license manager.
     /// Register the cluster to the metastore.
-    pub async fn setup_with_config(config: &InnerConfig) -> Result<()> {
+    async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 

@@ -27,7 +27,7 @@ use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_optimize";
@@ -51,7 +51,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let case_name = "test_fuse_snapshot_analyze_and_truncate";
@@ -101,7 +101,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;

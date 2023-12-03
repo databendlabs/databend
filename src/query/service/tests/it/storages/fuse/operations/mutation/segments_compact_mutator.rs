@@ -67,7 +67,7 @@ use storages_common_table_meta::meta::Versioned;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     // setup
     let qry = "create table t(c int)  block_per_segment=10";
@@ -109,7 +109,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_resolvable_conflict() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
     fixture.execute_command(create_tbl_command).await?;
@@ -166,7 +166,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
 
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
@@ -280,7 +280,7 @@ async fn build_mutator(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_segment_compactor() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     {
@@ -963,7 +963,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     let cluster_key_id = 0;
     let chunk_size = 6;
 
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
     let data_accessor = ctx.get_data_operator()?.operator();

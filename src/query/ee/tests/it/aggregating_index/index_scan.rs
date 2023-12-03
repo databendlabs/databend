@@ -100,7 +100,7 @@ async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
 }
 
 async fn test_index_scan_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -241,7 +241,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
 }
 
 async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -361,7 +361,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
 }
 
 async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -476,7 +476,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
 }
 
 async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -527,7 +527,7 @@ async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
 }
 
 async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -983,7 +983,7 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
         None
     };
 
-    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     for num_blocks in [1, 10] {
         for num_rows_per_block in [1, 50] {
             let session = fixture.default_session();

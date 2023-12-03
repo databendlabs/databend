@@ -19,7 +19,7 @@ use databend_query::test_kits::fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 

@@ -402,7 +402,7 @@ async fn test_box_display() {
     let mut mint = Mint::new("tests/it/frame/testdata");
     let mut file = &mint.new_goldenfile("box_display.txt").unwrap();
 
-    let fixture = TestFixture::create().await.unwrap();
+    let fixture = TestFixture::setup().await.unwrap();
     let ctx = fixture.new_query_ctx().await.unwrap();
 
     let cases = vec![

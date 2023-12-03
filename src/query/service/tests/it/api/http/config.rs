@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq; // for `app.oneshot()`
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_config() -> common_exception::Result<()> {
-    let _fixture = TestFixture::create().await?;
+    let _fixture = TestFixture::setup().await?;
 
     let cluster_router = Route::new().at("/v1/config", get(config_handler));
 

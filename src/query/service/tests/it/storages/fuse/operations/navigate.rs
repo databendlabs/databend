@@ -33,7 +33,7 @@ async fn test_fuse_navigate() -> Result<()> {
     // - navigate to the snapshot that generated before the first insertion should fail
 
     // 1. Setup
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;
@@ -127,7 +127,7 @@ async fn test_fuse_navigate() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_navigate_for_purge() -> Result<()> {
     // 1. Setup
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;

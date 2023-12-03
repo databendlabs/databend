@@ -21,7 +21,7 @@ use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_block_table() -> Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.new_query_ctx().await?;

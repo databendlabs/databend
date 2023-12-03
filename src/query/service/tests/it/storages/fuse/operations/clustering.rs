@@ -32,7 +32,7 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
-    let fixture = TestFixture::create().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let create_table_plan = CreateTablePlan {
