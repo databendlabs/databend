@@ -552,7 +552,7 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<
     }
 }
 
-impl<K: Eq + Hash + Clone +Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Extend<(K, V)>
+impl<K: Eq + Hash + Clone + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Extend<(K, V)>
     for LruCache<K, V, S, M>
 {
     fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
@@ -562,8 +562,8 @@ impl<K: Eq + Hash + Clone +Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Ex
     }
 }
 
-impl<K: fmt::Debug + Eq + Hash + Clone, V: fmt::Debug, S: BuildHasher, M: CountableMeter<K, V>> fmt::Debug
-    for LruCache<K, V, S, M>
+impl<K: fmt::Debug + Eq + Hash + Clone, V: fmt::Debug, S: BuildHasher, M: CountableMeter<K, V>>
+    fmt::Debug for LruCache<K, V, S, M>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_map().entries(self.iter().rev()).finish()
