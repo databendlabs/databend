@@ -27,6 +27,7 @@ use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserOption;
 use common_meta_app::principal::UserQuota;
+use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -51,6 +52,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::ClusterDescriptor;
+use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use goldenfile::Mint;
@@ -144,7 +146,10 @@ async fn test_clusters_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_configs_table_basic() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().build();
+    config.storage.params = StorageParams::Fs(StorageFsConfig::default());
+    let fixture = TestFixture::setup_with_config(&config).await?;
+
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(8)?;
 
@@ -243,7 +248,9 @@ async fn test_catalogs_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_databases_table() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().build();
+    config.storage.params = StorageParams::Fs(StorageFsConfig::default());
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = DatabasesTable::create(1);
@@ -435,7 +442,9 @@ async fn test_caches_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
 
-    let fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().build();
+    config.storage.params = StorageParams::Fs(StorageFsConfig::default());
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let _cluster_desc = ClusterDescriptor::new().with_local_id("test-node");

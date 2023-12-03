@@ -101,6 +101,8 @@ pub struct TestFixture {
     default_session: Arc<Session>,
     conf: InnerConfig,
     prefix: String,
+    // Keep in the end.
+    // Session will drop first then the guard.
     _guard: TestGuard,
 }
 
