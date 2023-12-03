@@ -23,7 +23,7 @@ use common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -33,7 +33,7 @@ async fn test_fuse_navigate() -> Result<()> {
     // - navigate to the snapshot that generated before the first insertion should fail
 
     // 1. Setup
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;
@@ -127,7 +127,7 @@ async fn test_fuse_navigate() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_navigate_for_purge() -> Result<()> {
     // 1. Setup
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;

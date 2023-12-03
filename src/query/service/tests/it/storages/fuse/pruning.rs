@@ -42,7 +42,7 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
@@ -70,7 +70,7 @@ async fn apply_block_pruning(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let test_tbl_name = "test_index_helper";

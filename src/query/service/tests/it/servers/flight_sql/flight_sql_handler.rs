@@ -90,7 +90,7 @@ fn prepare_config() -> InnerConfig {
 
 #[tokio::test]
 async fn test_query() -> Result<()> {
-    TestFixture::setup_with_config(&prepare_config()).await?;
+    let _fixture = TestFixture::create_with_config(&prepare_config()).await?;
 
     let file = NamedTempFile::new().unwrap();
     let path = file.into_temp_path().to_str().unwrap().to_string();
@@ -146,6 +146,5 @@ async fn test_query() -> Result<()> {
     serve_future.await.unwrap();
     debug!("Server shutdown!");
 
-    TestFixture::teardown().await?;
     Ok(())
 }

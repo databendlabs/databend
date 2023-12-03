@@ -112,7 +112,7 @@ use common_storage::StageFileInfo;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;
@@ -702,7 +702,7 @@ impl TableContext for CtxDelegation {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
 
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",

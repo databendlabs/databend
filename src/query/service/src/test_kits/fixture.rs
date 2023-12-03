@@ -42,6 +42,8 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_license::license_manager::LicenseManager;
+use common_license::license_manager::OssLicenseManager;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PasswordHashMethod;
@@ -63,15 +65,18 @@ use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+use common_tracing::set_panic_hook;
 use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
+use log::info;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use crate::clusters::ClusterDiscovery;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
@@ -89,6 +94,7 @@ use crate::sessions::TableContext;
 use crate::sql::Planner;
 use crate::storages::Table;
 use crate::test_kits::ConfigBuilder;
+use crate::GlobalServices;
 
 pub struct TestFixture {
     default_ctx: Arc<QueryContext>,
@@ -116,26 +122,19 @@ impl Setup for OSSSetup {
 
 impl Drop for TestFixture {
     fn drop(&mut self) {
-        // Keep the order of dropping.
-        // First drop `default_session`
-        drop(self.default_session.clone());
-
-        // Drop global singleton instance.
-        let thread_name = std::thread::current().name().unwrap().to_string();
-        #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&thread_name);
+        // Nothing to do here
     }
 }
 
 impl TestFixture {
     /// Create a new TestFixture with default config.
-    pub async fn new() -> Result<TestFixture> {
+    pub async fn create() -> Result<TestFixture> {
         let config = ConfigBuilder::create().config();
-        Self::new_with_setup(OSSSetup { config }).await
+        Self::create_with_setup(OSSSetup { config }).await
     }
 
     /// Create a new TestFixture with setup impl.
-    pub async fn new_with_setup(setup: impl Setup) -> Result<TestFixture> {
+    pub async fn create_with_setup(setup: impl Setup) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
         let default_session = Self::create_session(SessionType::Dummy).await?;
@@ -174,8 +173,11 @@ impl TestFixture {
         })
     }
 
-    pub async fn new_with_config(config: InnerConfig) -> Result<TestFixture> {
-        Self::new_with_setup(OSSSetup { config }).await
+    pub async fn create_with_config(config: &InnerConfig) -> Result<TestFixture> {
+        Self::create_with_setup(OSSSetup {
+            config: config.clone(),
+        })
+        .await
     }
 
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
@@ -202,6 +204,38 @@ impl TestFixture {
         dummy_session.get_settings().set_max_threads(8)?;
 
         Ok(dummy_session)
+    }
+
+    /// Setup the test environment.
+    /// Set the panic hook.
+    /// Set the unit test env.
+    /// Init the global instance.
+    /// Init the global services.
+    /// Init the license manager.
+    /// Register the cluster to the metastore.
+    pub async fn setup_with_config(config: &InnerConfig) -> Result<()> {
+        set_panic_hook();
+        std::env::set_var("UNIT_TEST", "TRUE");
+
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::init_testing(&thread_name);
+
+        GlobalServices::init_with(config.clone()).await?;
+        OssLicenseManager::init(config.query.tenant_id.clone())?;
+
+        // Cluster register.
+        {
+            ClusterDiscovery::instance()
+                .register_to_metastore(config)
+                .await?;
+            info!(
+                "Databend query unit test setup registered:{:?} to metasrv:{:?}.",
+                config.query.cluster_id, config.meta.endpoints
+            );
+        }
+
+        Ok(())
     }
 
     pub fn default_session(&self) -> Arc<Session> {

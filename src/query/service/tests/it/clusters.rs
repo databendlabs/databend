@@ -22,9 +22,8 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
-    // Setup
     let config = ConfigBuilder::create().build();
-    TestFixture::setup_with_config(&config).await?;
+    let _fixture = TestFixture::create_with_config(&config).await?;
 
     let discover_cluster = ClusterDiscovery::instance().discover(&config).await?;
 
@@ -33,8 +32,6 @@ async fn test_single_cluster_discovery() -> Result<()> {
     assert!(discover_cluster.is_empty());
     assert!(discover_cluster.is_local(&discover_cluster_nodes[0]));
 
-    // Teardown
-    TestFixture::teardown().await?;
     Ok(())
 }
 

@@ -35,10 +35,9 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     assert_eq!(
         format!("{:?}", create_simple_pipeline(ctx)?),
         "digraph {\
@@ -50,18 +49,14 @@ async fn test_create_simple_pipeline() -> Result<()> {
         \n}\n"
     );
 
-    // Teardown
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     assert_eq!(
         format!("{:?}", create_parallel_simple_pipeline(ctx)?),
         "digraph {\
@@ -78,18 +73,14 @@ async fn test_create_parallel_simple_pipeline() -> Result<()> {
         \n}\n"
     );
 
-    // Teardown
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_resize_pipeline() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     assert_eq!(
         format!("{:?}", create_resize_pipeline(ctx)?),
         "digraph {\
@@ -114,18 +105,14 @@ async fn test_create_resize_pipeline() -> Result<()> {
         \n}\n"
     );
 
-    // Teardown
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_pipeline_init_queue() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     unsafe {
         assert_eq!(
             format!("{:?}", create_simple_pipeline(ctx)?.init_schedule_queue(0)?),
@@ -138,18 +125,14 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
         );
     }
 
-    // Teardown
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     unsafe {
         assert_eq!(
             format!(
@@ -166,18 +149,14 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
         );
     }
 
-    // Teardown
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resize_pipeline_init_queue() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     unsafe {
         assert_eq!(
             format!("{:?}", create_resize_pipeline(ctx)?.init_schedule_queue(0)?),
@@ -190,9 +169,6 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
             }"
         );
     }
-
-    // Teardown
-    TestFixture::teardown().await?;
 
     Ok(())
 }

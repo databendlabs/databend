@@ -39,7 +39,7 @@ fn build_custom_claims(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_parse_license() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
@@ -87,7 +87,7 @@ async fn test_parse_license() -> common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_license_features() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(

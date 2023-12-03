@@ -19,15 +19,15 @@ use common_exception::Result;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-use databend_query::test_kits::test_fixture::analyze_table;
-use databend_query::test_kits::test_fixture::check_data_dir;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::analyze_table;
+use databend_query::test_kits::fixture::check_data_dir;
+use databend_query::test_kits::fixture::TestFixture;
 
 use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_optimize";
@@ -51,7 +51,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let case_name = "test_fuse_snapshot_analyze_and_truncate";
@@ -101,7 +101,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;

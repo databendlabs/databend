@@ -28,7 +28,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_logs() -> Result<()> {
     // Setup.
-    TestFixture::setup().await?;
+    let _fixture = TestFixture::create().await?;
 
     let test_router = Route::new().at("/v1/logs", get(logs_handler));
     {
@@ -45,7 +45,5 @@ async fn test_logs() -> Result<()> {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    // Teardown.
-    TestFixture::teardown().await?;
     Ok(())
 }

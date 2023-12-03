@@ -52,10 +52,7 @@ impl TestFixture {
 
     /// Teardown the test environment.
     pub async fn teardown() -> Result<()> {
-        let thread_name = std::thread::current().name().unwrap().to_string();
-
-        #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&thread_name);
+        // Nothing to do.
 
         Ok(())
     }

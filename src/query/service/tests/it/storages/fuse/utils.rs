@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-use databend_query::test_kits::test_fixture::append_sample_data;
-use databend_query::test_kits::test_fixture::append_sample_data_overwrite;
-use databend_query::test_kits::test_fixture::check_data_dir;
-use databend_query::test_kits::test_fixture::history_should_have_item;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::append_sample_data;
+use databend_query::test_kits::fixture::append_sample_data_overwrite;
+use databend_query::test_kits::fixture::check_data_dir;
+use databend_query::test_kits::fixture::history_should_have_item;
+use databend_query::test_kits::fixture::TestFixture;
 
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
@@ -41,7 +41,7 @@ pub async fn do_purge_test(
     block_count: u32,
     index_count: u32,
 ) -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
 
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
     do_insertions(&fixture).await?;

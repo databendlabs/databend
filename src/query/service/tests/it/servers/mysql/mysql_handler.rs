@@ -39,8 +39,7 @@ use crate::tests::tls_constants::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let _fixture = TestFixture::create().await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -52,14 +51,12 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 
     assert!(result.is_ok());
 
-    TestFixture::teardown().await?;
     Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_connect_with_tls() -> Result<()> {
-    // Setup
-    TestFixture::setup().await?;
+    let _fixture = TestFixture::create().await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let tls_config = MySQLTlsConfig::new(TEST_SERVER_CERT.to_string(), TEST_SERVER_KEY.to_string());
@@ -73,14 +70,13 @@ async fn test_connect_with_tls() -> Result<()> {
 
     assert!(result.is_ok());
 
-    TestFixture::teardown().await?;
     Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_sequence() -> Result<()> {
     let conf = ConfigBuilder::create().max_active_sessions(1).build();
-    TestFixture::setup_with_config(&conf).await?;
+    let _fixture = TestFixture::create_with_config(&conf).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -112,7 +108,6 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     // Accepted connection
     create_connection(listening.port(), false).await?;
 
-    TestFixture::teardown().await?;
     Ok(())
 }
 
@@ -148,7 +143,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 
     // Setup
     let conf = ConfigBuilder::create().max_active_sessions(1).build();
-    TestFixture::setup_with_config(&conf).await?;
+    let _fixture = TestFixture::create_with_config(&conf).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -185,7 +180,6 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     assert_eq!(accept, 1);
     assert_eq!(rejected, 2);
 
-    TestFixture::teardown().await?;
     Ok(())
 }
 

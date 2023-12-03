@@ -77,14 +77,14 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         .mount(&server)
         .await;
 
-    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
+    let mut conf = ConfigBuilder::create().config();
     let first_url = format!("http://{}{}", server.address(), json_path);
     let second_url = format!("http://{}{}", server.address(), second_path);
     conf.query.jwt_key_file = first_url.clone();
     conf.query.jwt_key_files = vec![second_url];
-    TestFixture::setup_with_config(&conf).await?;
+    let fixture = TestFixture::create_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     let auth_mgr = AuthMgr::instance();
     {
         let user_name = "test-user2";
@@ -192,7 +192,6 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         );
     }
 
-    TestFixture::teardown().await?;
     Ok(())
 }
 
@@ -222,10 +221,9 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
 
-    // Setup.
-    TestFixture::setup_with_config(&conf).await?;
+    let fixture = TestFixture::create_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
@@ -397,9 +395,6 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         assert!(res.is_err());
     }
 
-    // Teardown.
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
@@ -430,9 +425,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
 
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
-    let _fixture = TestFixture::new_with_config(conf).await?;
 
-    let ctx = TestFixture::create_query_context().await?;
+    let fixture = TestFixture::create_with_config(&conf).await?;
+
+    let ctx = fixture.new_query_ctx().await?;
     let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
@@ -630,10 +626,9 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
 
     let mut conf = ConfigBuilder::create().with_management_mode().config();
     conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
-    // Setup.
-    TestFixture::setup_with_config(&conf).await?;
+    let fixture = TestFixture::create_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     let auth_mgr = AuthMgr::instance();
 
     // with create user in other tenant
@@ -657,9 +652,6 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
         assert_eq!(current_tenant, tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
     }
-
-    // Tear down.
-    TestFixture::teardown().await?;
 
     Ok(())
 }

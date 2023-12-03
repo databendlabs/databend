@@ -48,7 +48,7 @@ macro_rules! assert_ok {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_select() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
 
@@ -91,13 +91,12 @@ async fn test_select() -> PoemResult<()> {
         assert_eq!(&body, "0\ta\n1\ta\n");
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_values() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -121,13 +120,12 @@ async fn test_insert_values() -> PoemResult<()> {
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_output_formats() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -165,13 +163,12 @@ async fn test_output_formats() -> PoemResult<()> {
         assert_eq!(&body, exp);
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_output_format_compress() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     let sql = "select 1 format TabSeparated";
@@ -188,13 +185,12 @@ async fn test_output_format_compress() -> PoemResult<()> {
     let exp = "DE79CF087FB635049DB816DF195B016B820C0000000200000020310A";
     assert_eq!(&body, exp);
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_format_values() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -218,13 +214,12 @@ async fn test_insert_format_values() -> PoemResult<()> {
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_format_ndjson() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -249,13 +244,12 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
         assert_eq!(&body, "0\ta\n1\tb\n");
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_settings() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
 
@@ -305,13 +299,12 @@ async fn test_settings() -> PoemResult<()> {
         assert_eq!(&body, "1\n1000\n");
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_multi_partition() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -339,13 +332,12 @@ async fn test_multi_partition() -> PoemResult<()> {
         );
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_federated() -> PoemResult<()> {
-    TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::create().await.unwrap();
 
     let server = Server::new().await;
     {
@@ -355,7 +347,6 @@ async fn test_federated() -> PoemResult<()> {
         assert_eq!(&body, &(CLICKHOUSE_VERSION.to_string() + "\n"));
     }
 
-    TestFixture::teardown().await.unwrap();
     Ok(())
 }
 

@@ -38,7 +38,7 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_always_call_on_finished() -> Result<()> {
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
 
     let settings = ExecutorSettings {
         enable_profiling: false,
@@ -62,7 +62,7 @@ async fn test_always_call_on_finished() -> Result<()> {
         }
     }
 
-    let ctx = TestFixture::create_query_context().await?;
+    let ctx = fixture.new_query_ctx().await?;
     {
         let (called_finished, mut pipeline) = create_pipeline();
         let (_rx, sink_pipe) = create_sink_pipe(1)?;
@@ -88,7 +88,6 @@ async fn test_always_call_on_finished() -> Result<()> {
         }
     }
 
-    TestFixture::teardown().await?;
     Ok(())
 }
 

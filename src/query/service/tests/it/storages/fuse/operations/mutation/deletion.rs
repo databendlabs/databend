@@ -14,12 +14,12 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::test_kits::test_fixture::expects_ok;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::expects_ok;
+use databend_query::test_kits::fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 

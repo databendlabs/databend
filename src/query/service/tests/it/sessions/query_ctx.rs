@@ -45,13 +45,10 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         disable_credential_loader: true,
         ..Default::default()
     });
+    let fixture = TestFixture::create_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    TestFixture::setup_with_config(&conf).await?;
-
-    let ctx = TestFixture::create_query_context().await?;
     let _ = ctx.get_data_operator()?;
-
-    TestFixture::teardown().await?;
 
     Ok(())
 }
@@ -62,12 +59,9 @@ async fn test_get_storage_accessor_fs() -> Result<()> {
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: "/tmp".to_string(),
     });
-    TestFixture::setup_with_config(&conf).await?;
-
-    let ctx = TestFixture::create_query_context().await?;
+    let fixture = TestFixture::create_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
     let _ = ctx.get_data_operator()?;
-
-    TestFixture::teardown().await?;
 
     Ok(())
 }

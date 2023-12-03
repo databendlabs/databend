@@ -30,7 +30,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_cluster() -> Result<()> {
     // Setup.
-    TestFixture::setup().await?;
+    let _fixture = TestFixture::create().await?;
 
     let cluster_router = Route::new().at("/v1/cluster/list", get(cluster_list_handler));
 
@@ -52,9 +52,6 @@ async fn test_cluster() -> Result<()> {
         let nodes = serde_json::from_str::<Vec<NodeInfo>>(&String::from_utf8_lossy(&body))?;
         assert_eq!(nodes.len(), 1);
     }
-
-    // Teardown.
-    TestFixture::teardown().await?;
 
     Ok(())
 }

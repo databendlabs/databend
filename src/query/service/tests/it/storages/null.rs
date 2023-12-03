@@ -29,10 +29,9 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
-    // Setup.
-    TestFixture::setup().await?;
+    let fixture = TestFixture::create().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let ctx = TestFixture::create_query_context().await?;
     let table = NullTable::try_create(TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
@@ -67,9 +66,6 @@ async fn test_null_table() -> Result<()> {
     {
         table.truncate(ctx).await?;
     }
-
-    // Teardown.
-    TestFixture::teardown().await?;
 
     Ok(())
 }

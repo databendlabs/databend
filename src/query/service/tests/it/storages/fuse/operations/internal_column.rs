@@ -26,7 +26,7 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -139,7 +139,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_internal_column() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::create().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.new_query_ctx().await?;

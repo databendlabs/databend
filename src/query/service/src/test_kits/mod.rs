@@ -17,12 +17,10 @@
 pub mod block_writer;
 pub mod config;
 pub mod context;
-#[allow(dead_code)]
-pub mod setup;
-pub mod test_fixture;
+pub mod fixture;
 pub mod utils;
 
 pub use config::ConfigBuilder;
 pub use context::ClusterDescriptor;
-pub use test_fixture::Setup;
-pub use test_fixture::TestFixture;
+pub use fixture::Setup;
+pub use fixture::TestFixture;

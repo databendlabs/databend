@@ -14,14 +14,14 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::test_kits::test_fixture::expects_ok;
-use databend_query::test_kits::test_fixture::TestFixture;
+use databend_query::test_kits::fixture::expects_ok;
+use databend_query::test_kits::fixture::TestFixture;
 use enterprise_query::test_kits::context::EESetup;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let fixture = TestFixture::new_with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::create_with_setup(EESetup::new()).await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_computed_table().await?;

@@ -14,19 +14,14 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    // Setup.
-    TestFixture::setup().await?;
-
-    let session = SessionManager::instance()
-        .create_session(SessionType::Dummy)
-        .await?;
+    let fixture = TestFixture::create().await?;
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
     // Tenant.
     {
@@ -47,20 +42,14 @@ async fn test_session() -> Result<()> {
         assert_eq!(actual, 3);
     }
 
-    // Teardown.
-    TestFixture::teardown().await?;
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
-    // Setup.
-    TestFixture::setup_with_config(&ConfigBuilder::create().with_management_mode().build()).await?;
-
-    let session = SessionManager::instance()
-        .create_session(SessionType::Dummy)
-        .await?;
+    let config = ConfigBuilder::create().with_management_mode().build();
+    let fixture = TestFixture::create_with_config(&config).await?;
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
     // Tenant.
     {
@@ -71,9 +60,6 @@ async fn test_session_in_management_mode() -> Result<()> {
         let actual = session.get_current_tenant();
         assert_eq!(&actual, "tenant2");
     }
-
-    // Teardown.
-    TestFixture::teardown().await?;
 
     Ok(())
 }
