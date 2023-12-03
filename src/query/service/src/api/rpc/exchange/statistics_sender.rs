@@ -147,12 +147,14 @@ impl StatisticsSender {
         ctx: &Arc<QueryContext>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
-        let binding = ctx.get_merge_status();
-        let status = binding.read();
-        let merge_status = MergeStatus {
-            insert_rows: status.insert_rows,
-            deleted_rows: status.deleted_rows,
-            update_rows: status.update_rows,
+        let merge_status = {
+            let binding = ctx.get_merge_status();
+            let status = binding.read();
+            MergeStatus {
+                insert_rows: status.insert_rows,
+                deleted_rows: status.deleted_rows,
+                update_rows: status.update_rows,
+            }
         };
         let data_packet = DataPacket::MergeStatus(merge_status);
         flight_sender.send(data_packet).await?;
