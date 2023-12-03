@@ -102,7 +102,7 @@ pub struct TestFixture {
     conf: InnerConfig,
     prefix: String,
     // Keep in the end.
-    // Session will drop first then the guard.
+    // Session will drop first then the guard drop.
     _guard: TestGuard,
 }
 
@@ -151,6 +151,7 @@ impl TestFixture {
     pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
+        // This will use a max_active_sessions number.
         let default_session = Self::create_session(SessionType::Dummy).await?;
         let default_ctx = default_session.create_query_context().await?;
 
@@ -238,7 +239,7 @@ impl TestFixture {
         #[cfg(debug_assertions)]
         common_base::base::GlobalInstance::init_testing(&thread_name);
 
-        GlobalServices::init_with(config.clone()).await?;
+        GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
 
         // Cluster register.

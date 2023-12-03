@@ -33,8 +33,8 @@ impl TestFixture {
         #[cfg(debug_assertions)]
         common_base::base::GlobalInstance::init_testing(&thread_name);
 
-        GlobalServices::init_with(config.clone()).await?;
-        MockServices::init(config.clone(), public_key).await?;
+        GlobalServices::init_with(config).await?;
+        MockServices::init(config, public_key).await?;
 
         // Cluster register.
         {

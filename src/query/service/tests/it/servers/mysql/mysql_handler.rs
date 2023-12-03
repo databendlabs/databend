@@ -75,7 +75,11 @@ async fn test_connect_with_tls() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let conf = ConfigBuilder::create().max_active_sessions(1).build();
+    // TestFixture will create a default session, so we should limit the max_active_sessions to 2.
+    let max_active_sessions = 2;
+    let conf = ConfigBuilder::create()
+        .max_active_sessions(max_active_sessions)
+        .build();
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let tcp_keepalive_timeout_secs = 120;
@@ -95,7 +99,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
                 assert_eq!(error.code(), 1067);
                 assert_eq!(
                     error.message(),
-                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (1) has exceeded the max_active_sessions limit (1)'"
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (2) has exceeded the max_active_sessions limit (2)'"
                 );
             }
         };
@@ -134,15 +138,18 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
                 assert_eq!(error.code(), 1067);
                 assert_eq!(
                     error.message(),
-                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (1) has exceeded the max_active_sessions limit (1)'"
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (2) has exceeded the max_active_sessions limit (2)'"
                 );
                 CreateServerResult::Rejected
             }
         }
     }
 
-    // Setup
-    let conf = ConfigBuilder::create().max_active_sessions(1).build();
+    // TestFixture will create a default session, so we should limit the max_active_sessions to 2.
+    let max_active_sessions = 2;
+    let conf = ConfigBuilder::create()
+        .max_active_sessions(max_active_sessions)
+        .build();
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let tcp_keepalive_timeout_secs = 120;

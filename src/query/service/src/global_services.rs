@@ -48,13 +48,13 @@ pub struct GlobalServices;
 
 impl GlobalServices {
     #[async_backtrace::framed]
-    pub async fn init(config: InnerConfig) -> Result<()> {
+    pub async fn init(config: &InnerConfig) -> Result<()> {
         GlobalInstance::init_production();
         GlobalServices::init_with(config).await
     }
 
     #[async_backtrace::framed]
-    pub async fn init_with(config: InnerConfig) -> Result<()> {
+    pub async fn init_with(config: &InnerConfig) -> Result<()> {
         // app name format: node_id[0..7]@cluster_id
         let app_name_shuffle = format!(
             "databend-query-{}@{}",
@@ -68,7 +68,7 @@ impl GlobalServices {
 
         // The order of initialization is very important
         // 1. global config init.
-        GlobalConfig::init(config.clone())?;
+        GlobalConfig::init(config)?;
 
         // 2. log init.
         let mut log_labels = BTreeMap::new();
@@ -83,7 +83,7 @@ impl GlobalServices {
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.
-        ClusterDiscovery::init(config.clone()).await?;
+        ClusterDiscovery::init(config).await?;
 
         // TODO(xuanwo):
         //
@@ -101,19 +101,19 @@ impl GlobalServices {
                 (CatalogType::Hive, Arc::new(HiveCreator)),
             ];
 
-            CatalogManager::init(&config, Arc::new(default_catalog), catalog_creator).await?;
+            CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
-        HttpQueryManager::init(&config).await?;
+        HttpQueryManager::init(config).await?;
         DataExchangeManager::init()?;
-        SessionManager::init(&config)?;
+        SessionManager::init(config)?;
         LockManager::init()?;
-        AuthMgr::init(&config)?;
+        AuthMgr::init(config)?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
-            config.query.idm,
+            config.query.idm.clone(),
             config.query.tenant_id.as_str(),
-            config.query.tenant_quota,
+            config.query.tenant_quota.clone(),
         )
         .await?;
         RoleCacheManager::init()?;
