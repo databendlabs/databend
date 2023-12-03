@@ -170,6 +170,7 @@ impl PipelineBuilder {
                     partial_block_size,
                     final_block_size,
                     None,
+                    false,
                     true,
                 )?;
 

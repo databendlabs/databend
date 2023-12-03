@@ -65,28 +65,33 @@ impl Sort {
         if matches!(self.after_exchange, Some(true)) {
             // If the plan is after exchange plan in cluster mode,
             // the order column is at the last of the input schema.
+            debug_assert_eq!(fields.last().unwrap().name(), "_order_col");
+            debug_assert_eq!(
+                fields.last().unwrap().data_type(),
+                &self.order_col_type(&input_schema)?
+            );
             fields.pop();
-        }
-
-        if let Some(proj) = &self.pre_projection {
-            let fileted_fields = proj
-                .iter()
-                .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
-                .cloned()
-                .collect::<Vec<_>>();
-            if fileted_fields.len() < fields.len() {
-                // Only if the projection is not a full projection, we need to add a projection transform.
-                fields = fileted_fields
+        } else {
+            if let Some(proj) = &self.pre_projection {
+                let fileted_fields = proj
+                    .iter()
+                    .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if fileted_fields.len() < fields.len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    fields = fileted_fields
+                }
             }
-        }
 
-        if matches!(self.after_exchange, Some(false)) {
-            // If the plan is before exchange plan in cluster mode,
-            // the order column should be added to the output schema.
-            fields.push(DataField::new(
-                "_order_col",
-                self.order_col_type(&input_schema)?,
-            ));
+            if matches!(self.after_exchange, Some(false)) {
+                // If the plan is before exchange plan in cluster mode,
+                // the order column should be added to the output schema.
+                fields.push(DataField::new(
+                    "_order_col",
+                    self.order_col_type(&input_schema)?,
+                ));
+            }
         }
 
         Ok(DataSchemaRefExt::create(fields))

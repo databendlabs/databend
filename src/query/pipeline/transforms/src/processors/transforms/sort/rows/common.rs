@@ -53,7 +53,7 @@ impl Rows for StringColumn {
 
 impl RowConverter<StringColumn> for CommonRowConverter {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self> {
         let sort_fields = sort_columns_descriptions

@@ -524,7 +524,7 @@ where R: Rows + Send + 'static
                     })?;
                     // Remove the order column
                     if self.remove_order_col {
-                        block = block.pop_columns(1)?;
+                        block.pop_columns(1);
                     }
                     let cursor = Cursor::new(input_index, rows);
                     self.heap.push(Reverse(cursor));

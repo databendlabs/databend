@@ -40,7 +40,7 @@ impl PipelineBuilder {
         let input_schema = sort.input.output_schema()?;
 
         if !matches!(sort.after_exchange, Some(true)) {
-            // If the Sort plan is afte exchange, we don't need to do a projection,
+            // If the Sort plan is after exchange, we don't need to do a projection,
             // because the data is already projected in each cluster node.
             if let Some(proj) = &sort.pre_projection {
                 // Do projection to reduce useless data copying during sorting.
@@ -137,6 +137,7 @@ impl PipelineBuilder {
                         block_size,
                         block_size,
                         prof_info,
+                        true,
                         true,
                     )
                 }

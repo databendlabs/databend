@@ -58,6 +58,7 @@ pub fn build_full_sort_pipeline(
         partial_block_size,
         final_block_size,
         prof_info,
+        false,
         remove_order_col_at_last,
     )
 }
@@ -71,10 +72,17 @@ pub fn build_merge_sort_pipeline(
     partial_block_size: usize,
     final_block_size: usize,
     prof_info: Option<(u32, SharedProcessorProfiles)>,
+    order_col_generated: bool,
     remove_order_col_at_last: bool,
 ) -> Result<()> {
     // Merge sort
     let need_multi_merge = pipeline.output_len() > 1;
+    debug_assert!(if order_col_generated {
+        // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
+        !need_multi_merge && remove_order_col_at_last
+    } else {
+        true
+    });
     pipeline.add_transform(|input, output| {
         let transform = match limit {
             Some(limit) => try_create_transform_sort_merge_limit(
@@ -84,6 +92,7 @@ pub fn build_merge_sort_pipeline(
                 sort_desc.clone(),
                 partial_block_size,
                 limit,
+                order_col_generated,
                 need_multi_merge || !remove_order_col_at_last,
             )?,
             _ => try_create_transform_sort_merge(
@@ -92,6 +101,7 @@ pub fn build_merge_sort_pipeline(
                 input_schema.clone(),
                 partial_block_size,
                 sort_desc.clone(),
+                order_col_generated,
                 need_multi_merge || !remove_order_col_at_last,
             )?,
         };
