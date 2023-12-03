@@ -37,6 +37,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::physical_plans::MatchExpr;
+use common_storage::MergeStatus;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
@@ -259,7 +260,6 @@ impl Processor for MatchedSplitProcessor {
         }
     }
 
-    // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.is_empty() {
@@ -288,6 +288,11 @@ impl Processor for MatchedSplitProcessor {
 
                         // delete all
                         if !row_ids.is_empty() {
+                            self.ctx.add_merge_status(MergeStatus {
+                                insert_rows: 0,
+                                update_rows: 0,
+                                deleted_rows: row_ids.num_rows(),
+                            });
                             row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
                             self.output_data_row_id_data.push(row_ids);
                         }
@@ -308,6 +313,11 @@ impl Processor for MatchedSplitProcessor {
             current_block = current_block.filter_boolean_value(&filter)?;
             if !current_block.is_empty() {
                 // add updated row_ids
+                self.ctx.add_merge_status(MergeStatus {
+                    insert_rows: 0,
+                    update_rows: current_block.num_rows(),
+                    deleted_rows: 0,
+                });
                 self.output_data_row_id_data.push(DataBlock::new_with_meta(
                     vec![current_block.get_by_offset(self.row_id_idx).clone()],
                     current_block.num_rows(),

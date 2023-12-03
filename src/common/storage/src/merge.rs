@@ -15,9 +15,29 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct MergeStatus {
     pub insert_rows: usize,
     pub deleted_rows: usize,
     pub update_rows: usize,
+}
+
+impl MergeStatus {
+    pub fn add_insert_rows(&mut self, insert_rows: usize) {
+        self.insert_rows += insert_rows;
+    }
+
+    pub fn add_deleted_rows(&mut self, deleted_rows: usize) {
+        self.deleted_rows += deleted_rows
+    }
+
+    pub fn add_update_rows(&mut self, update_rows: usize) {
+        self.update_rows += update_rows
+    }
+
+    pub fn merge_status(&mut self, merge_status: MergeStatus) {
+        self.insert_rows += merge_status.insert_rows;
+        self.deleted_rows += merge_status.deleted_rows;
+        self.update_rows += merge_status.update_rows;
+    }
 }
