@@ -12,29 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(thread_local)]
-#![feature(int_roundings)]
-#![allow(clippy::diverging_sub_expression)]
-
-extern crate core;
-
-mod api;
-mod auth;
-mod catalogs;
-mod clusters;
-mod configs;
-mod databases;
-mod distributed;
-mod frame;
-mod interpreters;
-mod metrics;
-mod parquet_rs;
-mod pipelines;
-mod servers;
-mod sessions;
-mod spillers;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
+mod cluster;
