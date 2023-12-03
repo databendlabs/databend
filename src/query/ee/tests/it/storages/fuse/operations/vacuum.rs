@@ -14,18 +14,21 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::test_kits::table_test_fixture::append_sample_data;
-use databend_query::test_kits::table_test_fixture::check_data_dir;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::fixture::append_sample_data;
+use databend_query::test_kits::fixture::check_data_dir;
+use databend_query::test_kits::fixture::TestFixture;
 use enterprise_query::storages::fuse::do_vacuum_drop_tables;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+
     fixture
         .default_session()
         .get_settings()
         .set_retention_period(0)?;
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let number_of_block = 1;
@@ -86,5 +89,6 @@ async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
         )
         .await?;
     }
+
     Ok(())
 }

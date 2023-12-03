@@ -22,8 +22,8 @@ use crate::InnerConfig;
 pub struct GlobalConfig;
 
 impl GlobalConfig {
-    pub fn init(config: InnerConfig) -> Result<()> {
-        GlobalInstance::set(Arc::new(config));
+    pub fn init(config: &InnerConfig) -> Result<()> {
+        GlobalInstance::set(Arc::new(config.clone()));
         Ok(())
     }
 
