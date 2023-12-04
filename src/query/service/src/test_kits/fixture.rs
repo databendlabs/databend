@@ -60,7 +60,6 @@ use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
-use log::info;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use uuid::Uuid;
@@ -207,16 +206,9 @@ impl TestFixture {
         GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
 
-        // Cluster register.
-        {
-            ClusterDiscovery::instance()
-                .register_to_metastore(config)
-                .await?;
-            info!(
-                "Databend query unit test setup registered:{:?} to metasrv:{:?}.",
-                config.query.cluster_id, config.meta.endpoints
-            );
-        }
+        ClusterDiscovery::instance()
+            .register_to_metastore(config)
+            .await?;
 
         Ok(())
     }

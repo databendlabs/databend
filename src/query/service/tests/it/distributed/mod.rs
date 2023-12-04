@@ -13,3 +13,6 @@
 // limitations under the License.
 
 mod cluster;
+mod metasrv;
+
+pub use metasrv::MetaSrvContext;

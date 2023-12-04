@@ -20,13 +20,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use databend_query::api::RpcService;
-use databend_query::clusters::ClusterDiscovery;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 
-#[test]
-fn test_simple_cluster() -> Result<()> {
+use crate::distributed::MetaSrvContext;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_simple_cluster() -> Result<()> {
     let configs = setup_node_configs(vec![
         "0.0.0.0:6061", // Node 1 flight address
         "0.0.0.0:6062", // Node 2 flight address
@@ -37,8 +38,9 @@ fn test_simple_cluster() -> Result<()> {
 
     let task_count = configs.len();
     let mut handles = Vec::with_capacity(task_count);
+    let _metasrv = MetaSrvContext::start().await;
 
-    for (i, conf) in configs.into_iter().enumerate() {
+    for (i, conf) in configs.clone().into_iter().enumerate() {
         let thread_name = format!("custom-thread-node-{}", i + 1);
         let is_check_node = i == task_count - 1; // Make the last node the special one
 
@@ -58,11 +60,6 @@ fn test_simple_cluster() -> Result<()> {
                     // Start the query service.
                     let mut srv = RpcService::create(conf_clone.clone())?;
                     srv.start(conf_clone.query.flight_api_address.parse()?)
-                        .await?;
-
-                    // Register the cluster to the metastore.
-                    ClusterDiscovery::instance()
-                        .register_to_metastore(&conf_clone)
                         .await?;
 
                     if is_check_node {
@@ -114,10 +111,12 @@ fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
     addresses
         .into_iter()
         .enumerate()
-        .map(|(_i, address)| {
+        .map(|(i, address)| {
             let mut conf = ConfigBuilder::create().build();
+            conf.meta.endpoints = vec!["127.0.0.1:9191".to_string()];
             conf.query.flight_api_address = address.to_string();
             conf.query.cluster_id = "test_cluster".to_string();
+            conf.query.node_id = format!("node{}", i + 1);
             conf
         })
         .collect()

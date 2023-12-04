@@ -168,6 +168,7 @@ walkdir = "2.3.2"
 [dev-dependencies]
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
+databend-meta = { path = "../../meta/service" }
 
 base64 = "0.21.0"
 criterion = "0.4"
