@@ -67,6 +67,9 @@ pub struct HashJoin {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+
+    // probe keys for runtime filter
+    pub probe_keys_rt: Vec<RemoteExpr<String>>,
 }
 
 impl HashJoin {
@@ -169,6 +172,7 @@ impl PhysicalPlanBuilder {
         assert_eq!(join.left_conditions.len(), join.right_conditions.len());
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
         for (left_condition, right_condition) in join
             .left_conditions
@@ -181,6 +185,11 @@ impl PhysicalPlanBuilder {
             let left_expr = left_condition
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+
+            let left_expr_for_runtime_filter = left_condition
+                .as_raw_expr()
+                .type_check(&*self.metadata.read())?
+                .project_column_ref(|col| col.column_name.clone());
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
@@ -238,13 +247,28 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?;
 
+            let left_expr_for_runtime_filter = check_cast(
+                left_expr_for_runtime_filter.span(),
+                false,
+                left_expr_for_runtime_filter,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?;
+
             let (left_expr, _) =
                 ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
+            let (left_expr_for_runtime_filter, _) = ConstantFolder::fold(
+                &left_expr_for_runtime_filter,
+                &self.func_ctx,
+                &BUILTIN_FUNCTIONS,
+            );
+
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
+            left_join_conditions_rt.push(left_expr_for_runtime_filter.as_remote_expr());
         }
 
         let mut probe_projections = ColumnSet::new();
@@ -400,6 +424,7 @@ impl PhysicalPlanBuilder {
             join_type: join.join_type.clone(),
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
+            probe_keys_rt: left_join_conditions_rt,
             non_equi_conditions: join
                 .non_equi_conditions
                 .iter()

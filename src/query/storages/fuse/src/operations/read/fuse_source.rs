@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
@@ -134,6 +135,7 @@ pub fn build_fuse_native_source_pipeline(
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     plan: &DataSourcePlan,
@@ -159,6 +161,7 @@ pub fn build_fuse_parquet_source_pipeline(
                     ReadParquetDataSource::<true>::create(
                         i,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -182,6 +185,7 @@ pub fn build_fuse_parquet_source_pipeline(
                     ReadParquetDataSource::<false>::create(
                         i,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),

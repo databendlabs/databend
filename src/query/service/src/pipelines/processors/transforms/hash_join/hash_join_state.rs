@@ -123,7 +123,7 @@ pub struct HashJoinState {
     pub(crate) partition_id: AtomicI8,
 
     /// Runtime filters
-    pub(crate) runtime_filters: RwLock<HashMap<ColumnId, Expr>>,
+    pub(crate) runtime_filters: RwLock<HashMap<ColumnId, Expr<String>>>,
 }
 
 impl HashJoinState {
@@ -251,22 +251,26 @@ impl HashJoinState {
 
     // Generate runtime filters
     pub(crate) fn generate_runtime_filters(&self) -> Result<()> {
+        // If build side rows < 10k, using inlist filter
+        // Else using bloom filter
         let func_ctx = self.ctx.get_function_context()?;
         let data_blocks = &mut unsafe { &mut *self.build_state.get() }.build_chunks;
+
+        let num_rows = unsafe { &*self.build_state.get() }
+            .generation_state
+            .build_num_rows;
+        if num_rows > 10_000 {
+            data_blocks.clear();
+            return Ok(());
+        }
         let mut runtime_filters = self.runtime_filters.write();
         for (build_key, probe_key) in self
             .hash_join_desc
             .build_keys
             .iter()
-            .zip(self.hash_join_desc.probe_keys.iter())
+            .zip(self.hash_join_desc.probe_keys_rt.iter())
         {
-            if let Some(filter) = inlist_filter(
-                &func_ctx,
-                &self.hash_join_desc.probe_schema,
-                build_key,
-                probe_key,
-                data_blocks,
-            )? {
+            if let Some(filter) = inlist_filter(&func_ctx, build_key, probe_key, data_blocks)? {
                 runtime_filters.insert(filter.0, filter.1);
             }
         }

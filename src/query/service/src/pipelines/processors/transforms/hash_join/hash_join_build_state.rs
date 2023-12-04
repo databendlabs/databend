@@ -694,7 +694,9 @@ impl HashJoinBuildState {
             let data_blocks = &mut build_state.generation_state.chunks;
 
             // Todo(xudong): make runtime filter adaptive
-            if self.ctx.get_settings().get_runtime_filter()? {
+            if self.ctx.get_settings().get_runtime_filter()?
+                && self.hash_join_state.hash_join_desc.join_type == JoinType::Inner
+            {
                 // Collect all build keys values and make inlist filter
                 self.hash_join_state.generate_runtime_filters()?;
             }

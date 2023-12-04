@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::type_check;
 use common_expression::Column;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
@@ -51,11 +52,10 @@ pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSc
 // Construct inlist runtime filter
 pub(crate) fn inlist_filter(
     func_ctx: &FunctionContext,
-    probe_schema: &DataSchemaRef,
     build_key: &Expr,
-    probe_key: &Expr,
+    probe_key: &Expr<String>,
     build_blocks: &[DataBlock],
-) -> Result<Option<(ColumnId, Expr)>> {
+) -> Result<Option<(ColumnId, Expr<String>)>> {
     // Currently, only support key is a column, will support more later.
     // Such as t1.a + 1 = t2.a, or t1.a + t1.b = t2.a (left side is probe side)
     if let Expr::ColumnRef {
@@ -65,10 +65,9 @@ pub(crate) fn inlist_filter(
         display_name,
     } = probe_key
     {
-        let column_id: usize = probe_schema.fields[*id].name().parse().unwrap();
         let raw_probe_key = RawExpr::ColumnRef {
             span: *span,
-            id: column_id,
+            id: id.to_string(),
             data_type: data_type.clone(),
             display_name: display_name.clone(),
         };
@@ -113,12 +112,8 @@ pub(crate) fn inlist_filter(
             params: vec![],
             args,
         };
-        return Ok(Some((
-            *id as ColumnId,
-            contain_func
-                .type_check(probe_schema.as_ref())?
-                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap()),
-        )));
+        let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
+        return Ok(Some((0 as ColumnId, expr)));
     }
     Ok(None)
 }
