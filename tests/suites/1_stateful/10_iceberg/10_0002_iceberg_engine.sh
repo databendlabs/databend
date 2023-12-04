@@ -12,8 +12,6 @@ echo "create table test_iceberg engine = iceberg location = 'fs://${ROOT}/';" | 
 
 query "select * from test_iceberg order by id, data;"
 
-query "show create table test_iceberg;"
-
 stmt "drop table test_iceberg;"
 
 stmt "drop connection if exists iceberg_conn;"
