@@ -19,14 +19,13 @@ use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::Setup;
-use databend_query::test_kits::TestGuard;
 use jwt_simple::algorithms::ECDSAP256KeyPairLike;
 use jwt_simple::prelude::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::ES256KeyPair;
 use tempfile::TempDir;
 
-use crate::test_kits::sessions::TestGlobalServices;
+use crate::test_kits::setup::TestFixture;
 
 fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
     LicenseInfo {
@@ -74,10 +73,8 @@ impl Default for EESetup {
 
 #[async_trait::async_trait]
 impl Setup for EESetup {
-    async fn setup(&self) -> Result<(TestGuard, InnerConfig)> {
-        Ok((
-            TestGlobalServices::setup(&self.config, self.pk.clone()).await?,
-            self.config.clone(),
-        ))
+    async fn setup(&self) -> Result<InnerConfig> {
+        TestFixture::setup(&self.config, self.pk.clone()).await?;
+        Ok(self.config.clone())
     }
 }

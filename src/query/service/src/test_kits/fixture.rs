@@ -18,9 +18,11 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::cluster_info::Cluster;
 use common_catalog::table::AppendMode;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
@@ -42,14 +44,16 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_license::license_manager::LicenseManager;
+use common_license::license_manager::OssLicenseManager;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
+use common_meta_types::NodeInfo;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
@@ -64,16 +68,19 @@ use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+use common_tracing::set_panic_hook;
 use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
+use log::info;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use crate::clusters::ClusterDiscovery;
+use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
@@ -84,6 +91,7 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -91,20 +99,38 @@ use crate::sessions::TableContext;
 use crate::sql::Planner;
 use crate::storages::Table;
 use crate::test_kits::ConfigBuilder;
-use crate::test_kits::TestGlobalServices;
-use crate::test_kits::TestGuard;
+use crate::GlobalServices;
 
 pub struct TestFixture {
     default_ctx: Arc<QueryContext>,
     default_session: Arc<Session>,
     conf: InnerConfig,
     prefix: String,
+    // Keep in the end.
+    // Session will drop first then the guard drop.
     _guard: TestGuard,
+}
+
+pub struct TestGuard {
+    thread_name: String,
+}
+
+impl TestGuard {
+    pub fn new(thread_name: String) -> Self {
+        Self { thread_name }
+    }
+}
+
+impl Drop for TestGuard {
+    fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+    }
 }
 
 #[async_trait::async_trait]
 pub trait Setup {
-    async fn setup(&self) -> Result<(TestGuard, InnerConfig)>;
+    async fn setup(&self) -> Result<InnerConfig>;
 }
 
 struct OSSSetup {
@@ -113,53 +139,30 @@ struct OSSSetup {
 
 #[async_trait::async_trait]
 impl Setup for OSSSetup {
-    async fn setup(&self) -> Result<(TestGuard, InnerConfig)> {
-        Ok((
-            TestGlobalServices::setup(&self.config).await?,
-            self.config.clone(),
-        ))
+    async fn setup(&self) -> Result<InnerConfig> {
+        TestFixture::init_global_with_config(&self.config).await?;
+        Ok(self.config.clone())
     }
 }
 
 impl TestFixture {
-    pub async fn new() -> Result<TestFixture> {
-        let mut config = ConfigBuilder::create().config();
-        let tmp_dir = TempDir::new().expect("create tmp dir failed");
-        let root = tmp_dir.path().to_str().unwrap().to_string();
-        config.storage.params = StorageParams::Fs(StorageFsConfig { root });
-        Self::with_setup(OSSSetup { config }).await
+    /// Create a new TestFixture with default config.
+    pub async fn setup() -> Result<TestFixture> {
+        let config = ConfigBuilder::create().config();
+        Self::setup_with_custom(OSSSetup { config }).await
     }
-    pub async fn with_setup(setup: impl Setup) -> Result<TestFixture> {
-        let (guard, conf) = setup.setup().await?;
 
+    /// Create a new TestFixture with setup impl.
+    pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
+        let conf = setup.setup().await?;
+
+        // This will use a max_active_sessions number.
         let default_session = Self::create_session(SessionType::Dummy).await?;
         let default_ctx = default_session.create_query_context().await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
-
-        // prepare a randomly named default database
-        {
-            let tenant = default_ctx.get_tenant();
-            let db_name = gen_db_name(&random_prefix);
-            let plan = CreateDatabasePlan {
-                catalog: "default".to_owned(),
-                tenant,
-                if_not_exists: false,
-                database: db_name,
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..Default::default()
-                },
-            };
-
-            default_ctx
-                .get_catalog("default")
-                .await
-                .unwrap()
-                .create_database(plan.into())
-                .await?;
-        }
-
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        let guard = TestGuard::new(thread_name.clone());
         Ok(Self {
             default_ctx,
             default_session,
@@ -168,11 +171,12 @@ impl TestFixture {
             _guard: guard,
         })
     }
-    pub async fn with_config(mut config: InnerConfig) -> Result<TestFixture> {
-        let tmp_dir = TempDir::new().expect("create tmp dir failed");
-        let root = tmp_dir.path().to_str().unwrap().to_string();
-        config.storage.params = StorageParams::Fs(StorageFsConfig { root });
-        Self::with_setup(OSSSetup { config }).await
+
+    pub async fn setup_with_config(config: &InnerConfig) -> Result<TestFixture> {
+        Self::setup_with_custom(OSSSetup {
+            config: config.clone(),
+        })
+        .await
     }
 
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
@@ -201,6 +205,38 @@ impl TestFixture {
         Ok(dummy_session)
     }
 
+    /// Setup the test environment.
+    /// Set the panic hook.
+    /// Set the unit test env.
+    /// Init the global instance.
+    /// Init the global services.
+    /// Init the license manager.
+    /// Register the cluster to the metastore.
+    async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
+        set_panic_hook();
+        std::env::set_var("UNIT_TEST", "TRUE");
+
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::init_testing(&thread_name);
+
+        GlobalServices::init_with(config).await?;
+        OssLicenseManager::init(config.query.tenant_id.clone())?;
+
+        // Cluster register.
+        {
+            ClusterDiscovery::instance()
+                .register_to_metastore(config)
+                .await?;
+            info!(
+                "Databend query unit test setup registered:{:?} to metasrv:{:?}.",
+                config.query.cluster_id, config.meta.endpoints
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn default_session(&self) -> Arc<Session> {
         self.default_session.clone()
     }
@@ -210,18 +246,25 @@ impl TestFixture {
         self.default_session.create_query_context().await
     }
 
-    /// returns a new session, for test cases that need to tweak session setting,
-    /// please use this method.
-    pub async fn new_session(&self) -> Result<Arc<Session>> {
-        Self::create_session(SessionType::Dummy).await
+    /// returns new QueryContext of default session with cluster
+    pub async fn new_query_ctx_with_cluster(
+        &self,
+        desc: ClusterDescriptor,
+    ) -> Result<Arc<QueryContext>> {
+        let local_id = desc.local_node_id;
+        let nodes = desc.cluster_nodes_list;
+
+        let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
+            self.default_session.clone(),
+            Cluster::create(nodes, local_id),
+        )?);
+
+        dummy_query_context.get_settings().set_max_threads(8)?;
+        Ok(dummy_query_context)
     }
 
     pub async fn new_session_with_type(&self, session_type: SessionType) -> Result<Arc<Session>> {
         Self::create_session(session_type).await
-    }
-
-    pub fn conf(&self) -> &InnerConfig {
-        &self.conf
     }
 
     pub fn storage_root(&self) -> &str {
@@ -415,6 +458,31 @@ impl TestFixture {
         Ok(())
     }
 
+    /// Create database with prefix.
+    pub async fn create_default_database(&self) -> Result<()> {
+        let tenant = self.default_ctx.get_tenant();
+        let db_name = gen_db_name(&self.prefix);
+        let plan = CreateDatabasePlan {
+            catalog: "default".to_owned(),
+            tenant,
+            if_not_exists: false,
+            database: db_name,
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..Default::default()
+            },
+        };
+
+        self.default_ctx
+            .get_catalog("default")
+            .await
+            .unwrap()
+            .create_database(plan.into())
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn create_computed_table(&self) -> Result<()> {
         let create_table_plan = self.computed_create_table_plan();
         let interpreter =
@@ -554,16 +622,6 @@ impl TestFixture {
         Box::pin(futures::stream::iter(blocks))
     }
 
-    pub fn gen_variant_sample_blocks_stream_ex(
-        num_of_block: usize,
-        rows_perf_block: usize,
-        val_start_from: i32,
-    ) -> SendableDataBlockStream {
-        let (_, blocks) =
-            Self::gen_variant_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
-        Box::pin(futures::stream::iter(blocks))
-    }
-
     pub fn gen_computed_sample_blocks(
         num_of_blocks: usize,
         start: i32,
@@ -602,16 +660,6 @@ impl TestFixture {
 
     pub fn gen_computed_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
         let (_, blocks) = Self::gen_computed_sample_blocks(num, start);
-        Box::pin(futures::stream::iter(blocks))
-    }
-
-    pub fn gen_computed_sample_blocks_stream_ex(
-        num_of_block: usize,
-        rows_perf_block: usize,
-        val_start_from: i32,
-    ) -> SendableDataBlockStream {
-        let (_, blocks) =
-            Self::gen_computed_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -964,4 +1012,45 @@ pub async fn history_should_have_item(
         expected,
     )
     .await
+}
+
+pub struct ClusterDescriptor {
+    local_node_id: String,
+    cluster_nodes_list: Vec<Arc<NodeInfo>>,
+}
+
+impl ClusterDescriptor {
+    pub fn new() -> ClusterDescriptor {
+        ClusterDescriptor {
+            local_node_id: String::from(""),
+            cluster_nodes_list: vec![],
+        }
+    }
+
+    pub fn with_node(self, id: impl Into<String>, addr: impl Into<String>) -> ClusterDescriptor {
+        let mut new_nodes = self.cluster_nodes_list.clone();
+        new_nodes.push(Arc::new(NodeInfo::create(
+            id.into(),
+            0,
+            addr.into(),
+            DATABEND_COMMIT_VERSION.to_string(),
+        )));
+        ClusterDescriptor {
+            cluster_nodes_list: new_nodes,
+            local_node_id: self.local_node_id,
+        }
+    }
+
+    pub fn with_local_id(self, id: impl Into<String>) -> ClusterDescriptor {
+        ClusterDescriptor {
+            local_node_id: id.into(),
+            cluster_nodes_list: self.cluster_nodes_list,
+        }
+    }
+}
+
+impl Default for ClusterDescriptor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
