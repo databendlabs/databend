@@ -165,12 +165,18 @@ impl TestFixture {
         .await
     }
 
+    /// This is a mock as start_services in binaries/query/entry.rs
     pub async fn start_global_services(&self) -> Result<()> {
         let config = self.conf.clone();
 
         // Flight service.
         let mut srv = RpcService::create(config.clone())?;
         srv.start(config.query.flight_api_address.parse()?).await?;
+
+        // Register to metastore.
+        ClusterDiscovery::instance()
+            .register_to_metastore(&config)
+            .await?;
 
         sleep(tokio::time::Duration::from_secs(5)).await;
 
@@ -220,10 +226,6 @@ impl TestFixture {
 
         GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
-
-        ClusterDiscovery::instance()
-            .register_to_metastore(config)
-            .await?;
 
         Ok(())
     }
