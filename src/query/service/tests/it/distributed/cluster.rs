@@ -61,8 +61,6 @@ async fn test_simple_cluster() -> Result<()> {
 
                 let inner_async = async move {
                     let fixture = TestFixture::setup_with_config(&conf_clone).await?;
-                    // Setup the global services.
-                    fixture.start_global_services().await?;
 
                     if is_execute_node {
                         sleep(tokio::time::Duration::from_secs(5)).await;

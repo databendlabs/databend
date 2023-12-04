@@ -127,6 +127,7 @@ struct OSSSetup {
 impl Setup for OSSSetup {
     async fn setup(&self) -> Result<InnerConfig> {
         TestFixture::init_global_with_config(&self.config).await?;
+        TestFixture::start_global_services(&self.config).await?;
         Ok(self.config.clone())
     }
 }
@@ -163,24 +164,6 @@ impl TestFixture {
             config: config.clone(),
         })
         .await
-    }
-
-    /// This is a mock as start_services in binaries/query/entry.rs
-    pub async fn start_global_services(&self) -> Result<()> {
-        let config = self.conf.clone();
-
-        // Flight service.
-        let mut srv = RpcService::create(config.clone())?;
-        srv.start(config.query.flight_api_address.parse()?).await?;
-
-        // Register to metastore.
-        ClusterDiscovery::instance()
-            .register_to_metastore(&config)
-            .await?;
-
-        sleep(tokio::time::Duration::from_secs(5)).await;
-
-        Ok(())
     }
 
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
@@ -226,6 +209,22 @@ impl TestFixture {
 
         GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
+
+        Ok(())
+    }
+
+    /// This is a mock as start_services in binaries/query/entry.rs
+    pub async fn start_global_services(config: &InnerConfig) -> Result<()> {
+        // Flight service.
+        let mut srv = RpcService::create(config.clone())?;
+        srv.start(config.query.flight_api_address.parse()?).await?;
+
+        // Register to metastore.
+        ClusterDiscovery::instance()
+            .register_to_metastore(&config)
+            .await?;
+
+        sleep(tokio::time::Duration::from_secs(5)).await;
 
         Ok(())
     }
