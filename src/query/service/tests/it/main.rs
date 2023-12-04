@@ -25,6 +25,7 @@ mod catalogs;
 mod clusters;
 mod configs;
 mod databases;
+mod distributed;
 mod frame;
 mod interpreters;
 mod metrics;

@@ -23,7 +23,7 @@ use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[test]
