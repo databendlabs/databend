@@ -112,6 +112,7 @@ pub struct ExecuteStopped {
     pub reason: Result<()>,
     pub session_state: ExecutorSessionState,
     pub query_duration_ms: i64,
+    pub warnings: Vec<String>,
 }
 
 pub struct Executor {
@@ -155,6 +156,14 @@ impl Executor {
             Starting(_) => None,
             Running(r) => r.ctx.get_affect(),
             Stopped(r) => r.affect.clone(),
+        }
+    }
+
+    pub fn get_warnings(&self) -> Vec<String> {
+        match &self.state {
+            Starting(_) => vec![],
+            Running(r) => r.ctx.get_warnings(),
+            Stopped(r) => r.warnings.clone(),
         }
     }
 
@@ -212,6 +221,7 @@ impl Executor {
                     reason,
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
+                    warnings: s.ctx.get_warnings(),
                     affect: Default::default(),
                 }))
             }
@@ -232,6 +242,7 @@ impl Executor {
                     reason,
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
+                    warnings: r.ctx.get_warnings(),
                     affect: r.ctx.get_affect(),
                 }))
             }
