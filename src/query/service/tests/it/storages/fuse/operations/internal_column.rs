@@ -26,7 +26,7 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;

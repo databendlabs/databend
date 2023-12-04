@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::LicenseManager;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use enterprise_query::license::RealLicenseManager;
 use jwt_simple::algorithms::ES256KeyPair;
 use jwt_simple::claims::Claims;

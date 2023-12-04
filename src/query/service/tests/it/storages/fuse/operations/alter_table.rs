@@ -38,7 +38,7 @@ use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use ordered_float::OrderedFloat;
 use storages_common_cache::LoadParams;
