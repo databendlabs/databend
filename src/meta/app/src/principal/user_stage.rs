@@ -56,6 +56,12 @@ use crate::storage::StorageParams;
 // ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
 // SIZE_LIMIT = <num>
 
+/// Maximum files per 'copy into table' commit.
+pub const COPY_MAX_FILES_PER_COMMIT: usize = 15000;
+
+/// Instruction for exceeding 'copy into table' file limit.
+pub const COPY_MAX_FILES_COMMIT_MSG: &str = "Limit for 'copy into table': 15,000 files per commit. To handle more files, adjust 'CopyOption' with 'max_files=<num>' and perform several operations until all files are processed.";
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
     /// LegacyInternal will be deprecated.
@@ -555,6 +561,7 @@ pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
+    pub is_from_uri: bool,
     pub file_format_params: FileFormatParams,
     pub copy_options: CopyOptions,
     pub comment: String,
@@ -573,10 +580,11 @@ impl StageInfo {
         }
     }
 
-    pub fn new_external_stage(storage: StorageParams, path: &str) -> StageInfo {
+    pub fn new_external_stage(storage: StorageParams, path: &str, from_uri: bool) -> StageInfo {
         StageInfo {
             stage_name: format!("{storage},path={path}"),
             stage_type: StageType::External,
+            is_from_uri: from_uri,
             stage_params: StageParams { storage },
             ..Default::default()
         }

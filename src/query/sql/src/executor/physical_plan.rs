@@ -33,7 +33,6 @@ use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
@@ -49,7 +48,6 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -69,7 +67,6 @@ pub enum PhysicalPlan {
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
     Window(Window),
-    Lambda(Lambda),
     Sort(Sort),
     Limit(Limit),
     RowFetch(RowFetch),
@@ -77,7 +74,6 @@ pub enum PhysicalPlan {
     RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
-    RuntimeFilterSource(RuntimeFilterSource),
     CteScan(CteScan),
     MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
@@ -134,7 +130,6 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(v) => v.plan_id,
             PhysicalPlan::AggregateFinal(v) => v.plan_id,
             PhysicalPlan::Window(v) => v.plan_id,
-            PhysicalPlan::Lambda(v) => v.plan_id,
             PhysicalPlan::Sort(v) => v.plan_id,
             PhysicalPlan::Limit(v) => v.plan_id,
             PhysicalPlan::RowFetch(v) => v.plan_id,
@@ -142,7 +137,6 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(v) => v.plan_id,
             PhysicalPlan::Exchange(v) => v.plan_id,
             PhysicalPlan::UnionAll(v) => v.plan_id,
-            PhysicalPlan::RuntimeFilterSource(v) => v.plan_id,
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
@@ -177,7 +171,6 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
             PhysicalPlan::Window(plan) => plan.output_schema(),
-            PhysicalPlan::Lambda(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::RowFetch(plan) => plan.output_schema(),
@@ -187,7 +180,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
-            PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
@@ -221,7 +213,6 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
             PhysicalPlan::Window(_) => "Window".to_string(),
-            PhysicalPlan::Lambda(_) => "Lambda".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::RowFetch(_) => "RowFetch".to_string(),
@@ -232,7 +223,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
-            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::CompactSource(_) => "CompactBlock".to_string(),
             PhysicalPlan::DeleteSource(_) => "DeleteSource".to_string(),
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
@@ -274,7 +264,6 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::Lambda(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RowFetch(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -291,10 +280,6 @@ impl PhysicalPlan {
             }
             PhysicalPlan::CommitSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
-                std::iter::once(plan.left_side.as_ref())
-                    .chain(std::iter::once(plan.right_side.as_ref())),
-            ),
             PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -326,7 +311,6 @@ impl PhysicalPlan {
             PhysicalPlan::Project(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Window(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::Lambda(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Sort(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Limit(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
@@ -335,8 +319,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::RuntimeFilterSource(_)
-            | PhysicalPlan::UnionAll(_)
+            PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
             | PhysicalPlan::RangeJoin(_)

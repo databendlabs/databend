@@ -37,6 +37,7 @@ use common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
 
+use super::Finder;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -60,6 +61,7 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -78,6 +80,7 @@ use crate::Visibility;
 /// - Build `Metadata`
 pub struct Binder {
     pub ctx: Arc<dyn TableContext>,
+    pub dialect: Dialect,
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
@@ -100,8 +103,10 @@ impl<'a> Binder {
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
     ) -> Self {
+        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         Binder {
             ctx,
+            dialect,
             catalogs,
             name_resolution_ctx,
             metadata,
@@ -136,7 +141,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         hints: &Hint,
     ) -> Result<()> {
-        let mut type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::try_create(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
@@ -144,7 +149,7 @@ impl<'a> Binder {
             &[],
             false,
             false,
-        );
+        )?;
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;
@@ -600,7 +605,7 @@ impl<'a> Binder {
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
@@ -652,5 +657,142 @@ impl<'a> Binder {
         self.eq_scalars
             .iter()
             .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
+    }
+
+    pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::SubqueryExpr(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
+    // add check for SExpr to disable invalid source for copy/insert/merge/replace
+    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_));
+        let mut finder = Finder::new(&f);
+        Self::check_sexpr(s_expr, &mut finder)
+    }
+
+    pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
+    where F: Fn(&ScalarExpr) -> bool {
+        let result = match s_expr.plan.as_ref() {
+            RelOperator::Scan(scan) => {
+                f.reset_finder();
+                if let Some(agg_info) = &scan.agg_index {
+                    for predicate in &agg_info.predicates {
+                        f.visit(predicate)?;
+                    }
+                    for selection in &agg_info.selection {
+                        f.visit(&selection.scalar)?;
+                    }
+                }
+                if let Some(predicates) = &scan.push_down_predicates {
+                    for predicate in predicates {
+                        f.visit(predicate)?;
+                    }
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Join(join) => {
+                f.reset_finder();
+                for condition in &join.left_conditions {
+                    f.visit(condition)?;
+                }
+                for condition in &join.right_conditions {
+                    f.visit(condition)?;
+                }
+                for condition in &join.non_equi_conditions {
+                    f.visit(condition)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::EvalScalar(eval) => {
+                f.reset_finder();
+                for item in &eval.items {
+                    f.visit(&item.scalar)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Filter(filter) => {
+                f.reset_finder();
+                for predicate in &filter.predicates {
+                    f.visit(predicate)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Aggregate(aggregate) => {
+                f.reset_finder();
+                for item in &aggregate.group_items {
+                    f.visit(&item.scalar)?;
+                }
+                for item in &aggregate.aggregate_functions {
+                    f.visit(&item.scalar)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Exchange(exchange) => {
+                f.reset_finder();
+                if let crate::plans::Exchange::Hash(hash) = exchange {
+                    for scalar in hash {
+                        f.visit(scalar)?;
+                    }
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Window(window) => {
+                f.reset_finder();
+                for scalar_item in &window.arguments {
+                    f.visit(&scalar_item.scalar)?;
+                }
+                for scalar_item in &window.partition_by {
+                    f.visit(&scalar_item.scalar)?;
+                }
+                for info in &window.order_by {
+                    f.visit(&info.order_by_item.scalar)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Udf(_) => false,
+            _ => true,
+        };
+
+        match result {
+            true => {
+                for child in &s_expr.children {
+                    let mut finder = Finder::new(f.find_fn());
+                    let flag = Self::check_sexpr(child.as_ref(), &mut finder)?;
+                    if !flag {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            false => Ok(false),
+        }
+    }
+
+    pub(crate) fn check_allowed_scalar_expr_with_subquery(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::UDFServerCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
     }
 }

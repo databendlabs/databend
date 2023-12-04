@@ -103,7 +103,6 @@ use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::Planner;
 use common_storage::CopyStatus;
@@ -113,7 +112,7 @@ use common_storage::StageFileInfo;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;
@@ -600,14 +599,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
-        todo!()
-    }
-
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        todo!()
-    }
-
     fn get_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_data_operator()
     }
@@ -711,7 +702,9 @@ impl TableContext for CtxDelegation {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let query = format!(
         "select * from {}.{} join {}.{} as t2 join {}.{} as t3",
         fixture.default_db_name().as_str(),
@@ -743,5 +736,6 @@ async fn test_get_same_table_once() -> Result<()> {
             .load(std::sync::atomic::Ordering::SeqCst),
         2
     );
+
     Ok(())
 }

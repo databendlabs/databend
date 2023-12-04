@@ -17,7 +17,10 @@ use std::collections::HashMap;
 use common_base::base::GlobalUniqName;
 use common_config::InnerConfig;
 use common_meta_app::principal::AuthInfo;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageParams;
 use common_users::idm_config::IDMConfig;
+use tempfile::TempDir;
 
 pub struct ConfigBuilder {
     conf: InnerConfig,
@@ -35,6 +38,11 @@ impl ConfigBuilder {
 
         // set node_id to a unique value
         conf.query.node_id = GlobalUniqName::unique();
+
+        // set storage to fs
+        let tmp_dir = TempDir::new().expect("create tmp dir failed");
+        let root = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.params = StorageParams::Fs(StorageFsConfig { root });
 
         ConfigBuilder { conf }
     }

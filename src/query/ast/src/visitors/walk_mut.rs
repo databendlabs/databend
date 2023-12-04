@@ -198,6 +198,35 @@ pub fn walk_set_expr_mut<V: VisitorMut>(visitor: &mut V, set_expr: &mut SetExpr)
     }
 }
 
+pub fn walk_window_definition_mut<V: VisitorMut>(
+    visitor: &mut V,
+    window_definition: &mut WindowDefinition,
+) {
+    let WindowDefinition { name, spec: window } = window_definition;
+
+    visitor.visit_identifier(name);
+
+    let WindowSpec {
+        partition_by,
+        order_by,
+        window_frame,
+        ..
+    } = window;
+
+    for expr in partition_by {
+        visitor.visit_expr(expr);
+    }
+
+    for order_by in order_by {
+        visitor.visit_order_by(order_by);
+    }
+
+    if let Some(frame) = window_frame {
+        visitor.visit_frame_bound(&mut frame.start_bound);
+        visitor.visit_frame_bound(&mut frame.end_bound);
+    }
+}
+
 pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut SelectTarget) {
     match target {
         SelectTarget::AliasedExpr { expr, alias } => {
@@ -206,9 +235,9 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
                 visitor.visit_identifier(alias);
             }
         }
-        SelectTarget::QualifiedName {
+        SelectTarget::StarColumns {
             qualified: names,
-            exclude,
+            column_filter,
         } => {
             for indirection in names {
                 match indirection {
@@ -218,9 +247,17 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
                     Indirection::Star(_) => {}
                 }
             }
-            if let Some(cols) = exclude {
-                for ident in cols {
-                    visitor.visit_column_id(ident);
+
+            if let Some(col_filter) = column_filter {
+                match col_filter {
+                    ColumnFilter::Excludes(excludes) => {
+                        for ident in excludes.iter_mut() {
+                            visitor.visit_identifier(ident);
+                        }
+                    }
+                    ColumnFilter::Lambda(lambda) => {
+                        visitor.visit_expr(lambda.expr.as_mut());
+                    }
                 }
             }
         }

@@ -37,7 +37,6 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::Project;
@@ -46,7 +45,6 @@ use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
 use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -203,11 +201,7 @@ fn to_format_tree(
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::RuntimeFilterSource(plan) => {
-            runtime_filter_source_to_format_tree(plan, metadata, profs)
-        }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
         PhysicalPlan::ReplaceAsyncSourcer(_) => {
@@ -1128,48 +1122,6 @@ fn project_set_to_format_tree(
     ))
 }
 
-fn lambda_to_format_tree(
-    plan: &Lambda,
-    metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
-) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![FormatTreeNode::new(format!(
-        "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata, true)
-    ))];
-
-    if let Some(info) = &plan.stat_info {
-        let items = plan_stats_info_to_format_tree(info);
-        children.extend(items);
-    }
-
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
-
-    children.extend(vec![FormatTreeNode::new(format!(
-        "lambda functions: {}",
-        plan.lambda_funcs
-            .iter()
-            .map(|func| {
-                let arg_exprs = func.arg_exprs.join(", ");
-                let params = func.params.join(", ");
-                let lambda_expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
-                format!(
-                    "{}({}, {} -> {})",
-                    func.func_name, arg_exprs, params, lambda_expr
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    ))]);
-
-    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
-
-    Ok(FormatTreeNode::with_children(
-        "Lambda".to_string(),
-        children,
-    ))
-}
-
 fn udf_to_format_tree(
     plan: &Udf,
     metadata: &Metadata,
@@ -1202,25 +1154,6 @@ fn udf_to_format_tree(
     children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
 
     Ok(FormatTreeNode::with_children("Udf".to_string(), children))
-}
-
-fn runtime_filter_source_to_format_tree(
-    plan: &RuntimeFilterSource,
-    metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![
-        FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata, true)
-        )),
-        to_format_tree(&plan.left_side, metadata, prof_span_set)?,
-        to_format_tree(&plan.right_side, metadata, prof_span_set)?,
-    ];
-    Ok(FormatTreeNode::with_children(
-        "RuntimeFilterSource".to_string(),
-        children,
-    ))
 }
 
 fn materialized_cte_to_format_tree(

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
+use common_expression::BASE_BLOCK_IDS_COL_NAME;
 use common_expression::BLOCK_NAME_COL_NAME;
 use common_expression::ROW_ID_COL_NAME;
 use common_expression::SEGMENT_NAME_COL_NAME;
@@ -51,6 +52,11 @@ impl InternalColumnFactory {
         internal_columns.insert(
             SNAPSHOT_NAME_COL_NAME.to_string(),
             InternalColumn::new(SNAPSHOT_NAME_COL_NAME, InternalColumnType::SnapshotName),
+        );
+
+        internal_columns.insert(
+            BASE_BLOCK_IDS_COL_NAME.to_string(),
+            InternalColumn::new(BASE_BLOCK_IDS_COL_NAME, InternalColumnType::BaseBlockIds),
         );
 
         InternalColumnFactory { internal_columns }

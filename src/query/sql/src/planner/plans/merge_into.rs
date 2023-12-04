@@ -20,6 +20,7 @@ use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_meta_types::MetaId;
 
+use crate::binder::MergeIntoType;
 use crate::optimizer::SExpr;
 use crate::BindContext;
 use crate::IndexType;
@@ -58,6 +59,8 @@ pub struct MergeInto {
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_idx: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
+    pub merge_type: MergeIntoType,
+    pub distributed: bool,
 }
 
 impl std::fmt::Debug for MergeInto {
@@ -70,6 +73,7 @@ impl std::fmt::Debug for MergeInto {
             .field("join", &self.input)
             .field("matched", &self.matched_evaluators)
             .field("unmateched", &self.unmatched_evaluators)
+            .field("distributed", &self.distributed)
             .finish()
     }
 }

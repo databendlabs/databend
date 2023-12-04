@@ -57,13 +57,14 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
+use common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_metrics::storage::*;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
 use common_storage::CopyStatus;
@@ -99,7 +100,7 @@ use crate::storages::Table;
 
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
-const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
+const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -579,12 +580,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_changed_settings();
+        if !self.query_settings.is_changed() {
             unsafe {
-                self.query_settings.unchecked_apply_changes(session_change);
+                self.query_settings
+                    .unchecked_apply_changes(&self.shared.get_settings());
             }
         }
+
         self.query_settings.clone()
     }
 
@@ -661,20 +663,6 @@ impl TableContext for QueryContext {
         None
     }
 
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.shared.apply_changed_settings(changes)
-    }
-
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_changed_settings();
-            unsafe {
-                self.query_settings.unchecked_apply_changes(session_change);
-            }
-        }
-        self.query_settings.get_changes()
-    }
-
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
@@ -733,9 +721,9 @@ impl TableContext for QueryContext {
             .await?;
         let table_id = table.get_id();
 
-        let mut limit: usize = 0;
+        let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
-        let batch_size = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
+        let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
 
         let mut results = Vec::with_capacity(files.len());
 
@@ -755,9 +743,12 @@ impl TableContext for QueryContext {
             for file in chunk {
                 if !copied_files.contains_key(&file.path) {
                     results.push(file.clone());
-                    limit += 1;
-                    if limit == max_files {
+                    result_size += 1;
+                    if result_size == max_files {
                         return Ok(results);
+                    }
+                    if result_size > COPY_MAX_FILES_PER_COMMIT {
+                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
                     }
                 }
             }
@@ -814,9 +805,11 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        self.get_settings()
-            .get_enterprise_license()
-            .unwrap_or_default()
+        unsafe {
+            self.get_settings()
+                .get_enterprise_license()
+                .unwrap_or_default()
+        }
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {

@@ -278,7 +278,7 @@ SELECT array_sort(list(id), 'asc'), array_sort(list(arr), 'asc') FROM t2;
 query I
 select kurtosis(10) from numbers(5)
 ----
-NULL
+0.0
 
 statement ok
 create table aggr(k int, v int, v2 int null);
@@ -305,8 +305,8 @@ select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
 query I
 select  kurtosis(v2) from aggr group by v order by v;
 ----
-NULL
-NULL
+0.0
+0.0
 NULL
 -3.9775993237531697
 
@@ -367,7 +367,38 @@ select string_agg(s, '|') from t3;
 abc|def|xyz
 
 statement ok
+create table aggavg(shopid string, goodsid string, avgcostvalue decimal(16, 8), sdate_rn uint64, md string)
+
+statement ok
+insert into aggavg values('R010', '149350', 18.66635193, 1, 246), ('R010', '149350', 19.33000000, 1, 246)
+
+statement ok
+create table aggavg1 as select t.goodsid, t.md, avg(t.avgcostvalue) avgcostvalue_1, sum(t.avgcostvalue) ss, count(t.avgcostvalue) cnt from aggavg t where t.sdate_rn = 1 group by t.goodsid, t.md
+
+query TTFFF
+select * from aggavg1
+----
+149350 246 18.998175965000 37.99635193 2
+
+statement ok
 DROP TABLE aggr
+
+statement ok
+DROP TABLE IF EXISTS d
+
+statement ok
+create table d(value decimal(10, 2))
+
+statement ok
+insert into d values(20), (10)
+
+query F
+select stddev_samp(value) from d;
+----
+7.0710
+
+statement ok
+DROP TABLE d
 
 statement ok
 DROP DATABASE db1

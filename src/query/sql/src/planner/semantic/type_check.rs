@@ -54,6 +54,8 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::Expr as EExpr;
 use common_expression::FunctionContext;
 use common_expression::FunctionKind;
@@ -88,6 +90,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
+use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -104,6 +107,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFLambdaCall;
 use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
@@ -131,6 +135,7 @@ use crate::Visibility;
 pub struct TypeChecker<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
+    dialect: Dialect,
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -151,7 +156,7 @@ pub struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(
+    pub fn try_create(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
@@ -159,11 +164,13 @@ impl<'a> TypeChecker<'a> {
         aliases: &'a [(String, ScalarExpr)],
         allow_pushdown: bool,
         forbid_udf: bool,
-    ) -> Self {
-        let func_ctx = ctx.get_function_context().unwrap();
-        Self {
+    ) -> Result<Self> {
+        let func_ctx = ctx.get_function_context()?;
+        let dialect = ctx.get_settings().get_sql_dialect()?;
+        Ok(Self {
             bind_context,
             ctx,
+            dialect,
             func_ctx,
             name_resolution_ctx,
             metadata,
@@ -174,7 +181,7 @@ impl<'a> TypeChecker<'a> {
             in_window_function: false,
             allow_pushdown,
             forbid_udf,
-        }
+        })
     }
 
     pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {
@@ -245,7 +252,7 @@ impl<'a> TypeChecker<'a> {
                     NameResolutionResult::Column(column) => {
                         if let Some(virtual_computed_expr) = column.virtual_computed_expr {
                             let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+                            let expr = parse_expr(&sql_tokens, self.dialect)?;
                             return self.resolve(&expr).await;
                         } else {
                             let data_type = *column.data_type.clone();
@@ -346,8 +353,7 @@ impl<'a> TypeChecker<'a> {
                         },
                     ])
                     .await?;
-                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])
-                    .await?
+                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])?
             }
 
             Expr::InList {
@@ -469,8 +475,7 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_scalar_function_call(*span, "and", vec![], vec![
                         ge_func.clone(),
                         le_func.clone(),
-                    ])
-                    .await?
+                    ])?
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
@@ -481,8 +486,7 @@ impl<'a> TypeChecker<'a> {
                         .resolve_binary_op(*span, &BinaryOperator::Gt, expr.as_ref(), high.as_ref())
                         .await?;
 
-                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])
-                        .await?
+                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])?
                 }
             }
 
@@ -694,10 +698,7 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Literal { span, lit } => {
-                let box (value, data_type) = self.resolve_literal(lit)?;
-                Box::new((ConstantExpr { span: *span, value }.into(), data_type))
-            }
+            Expr::Literal { span, lit } => self.resolve_literal(*span, lit)?,
 
             Expr::FunctionCall {
                 span,
@@ -754,26 +755,28 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 // check window function legal
-                if window.is_some() {
-                    let supported_window_funcs = AggregateFunctionFactory::instance()
-                        .registered_names()
-                        .into_iter()
-                        .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
-                        .collect::<Vec<String>>();
-                    let name = func_name.to_lowercase();
-                    if !supported_window_funcs.contains(&name) {
-                        return Err(ErrorCode::SemanticError(
-                            "only general and aggregate functions allowed in window syntax",
-                        )
-                        .set_span(*span));
-                    }
+                if window.is_some()
+                    && !AggregateFunctionFactory::instance().contains(func_name)
+                    && !GENERAL_WINDOW_FUNCTIONS.contains(&func_name)
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "only window and aggregate functions allowed in window syntax",
+                    )
+                    .set_span(*span));
+                }
+                // check lambda function legal
+                if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
+                    return Err(ErrorCode::SemanticError(
+                        "only lambda functions allowed in lambda syntax",
+                    )
+                    .set_span(*span));
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
 
                 // Check assumptions if it is a set returning function
                 if BUILTIN_FUNCTIONS
-                    .get_property(&name.name)
+                    .get_property(func_name)
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
@@ -805,8 +808,7 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::Internal("Logical error, there is a bug!"));
                 }
 
-                let name = func_name.to_lowercase();
-                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -819,17 +821,17 @@ impl<'a> TypeChecker<'a> {
                     // general window function
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
-                            "window function {name} can only be used in window clause"
+                            "window function {func_name} can only be used in window clause"
                         )));
                     }
                     let func = self
-                        .resolve_general_window_function(*span, &name, &args)
+                        .resolve_general_window_function(*span, func_name, &args)
                         .await?;
                     let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, window, func)
                         .await?
-                } else if AggregateFunctionFactory::instance().contains(&name) {
+                } else if AggregateFunctionFactory::instance().contains(func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -844,7 +846,9 @@ impl<'a> TypeChecker<'a> {
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
-                        .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
+                        .resolve_aggregate_function(
+                            *span, func_name, expr, *distinct, params, &args,
+                        )
                         .await?;
                     self.in_window_function = in_window;
                     self.in_aggregate_function = in_aggregate_function;
@@ -858,7 +862,7 @@ impl<'a> TypeChecker<'a> {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
-                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&name.as_str()) {
+                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -870,7 +874,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
-                            "function {name} must have a lambda expression",
+                            "function {func_name} must have a lambda expression",
                         )));
                     }
                     let lambda = lambda.as_ref().unwrap();
@@ -878,24 +882,59 @@ impl<'a> TypeChecker<'a> {
                     let params = lambda
                         .params
                         .iter()
-                        .map(|param| param.name.clone())
+                        .map(|param| param.name.to_lowercase())
                         .collect::<Vec<_>>();
 
                     // TODO: support multiple params
                     if params.len() != 1 {
                         return Err(ErrorCode::SemanticError(format!(
-                            "incorrect number of parameters in lambda function, {name} expects 1 parameter",
+                            "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
                         )));
                     }
 
                     if args.len() != 1 {
                         return Err(ErrorCode::SemanticError(format!(
-                            "invalid arguments for lambda function, {name} expects 1 argument"
+                            "invalid arguments for lambda function, {func_name} expects 1 argument"
                         )));
                     }
                     let box (arg, arg_type) = self.resolve(args[0]).await?;
+
+                    let inner_ty = match arg_type.remove_nullable() {
+                        DataType::Array(box inner_ty) => inner_ty.clone(),
+                        DataType::Null | DataType::EmptyArray => DataType::Null,
+                        _ => {
+                            return Err(ErrorCode::SemanticError(
+                                "invalid arguments for lambda function, argument data type must be array".to_string()
+                            ));
+                        }
+                    };
+                    let box (lambda_expr, lambda_type) =
+                        parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
+
+                    let return_type = if func_name == "array_filter" {
+                        if lambda_type.remove_nullable() == DataType::Boolean {
+                            arg_type.clone()
+                        } else {
+                            return Err(ErrorCode::SemanticError(
+                                "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
+                            ));
+                        }
+                    } else if arg_type.is_nullable() {
+                        DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
+                    } else {
+                        DataType::Array(Box::new(lambda_type))
+                    };
+
                     match arg_type.remove_nullable() {
-                        // Empty array will always return an Empty array
+                        // Null and Empty array can convert to ConstantExpr
+                        DataType::Null => Box::new((
+                            ConstantExpr {
+                                span: *span,
+                                value: Scalar::Null,
+                            }
+                            .into(),
+                            DataType::Null,
+                        )),
                         DataType::EmptyArray => Box::new((
                             ConstantExpr {
                                 span: *span,
@@ -904,45 +943,31 @@ impl<'a> TypeChecker<'a> {
                             .into(),
                             DataType::EmptyArray,
                         )),
-                        DataType::Array(box inner_ty) => {
-                            let box (lambda_expr, lambda_type) = parse_lambda_expr(
-                                self.ctx.clone(),
-                                &params[0],
-                                &inner_ty,
-                                &lambda.expr,
-                            )?;
+                        _ => {
+                            // generate lambda expression
+                            let lambda_field = DataField::new("0", inner_ty.clone());
+                            let lambda_schema = DataSchema::new(vec![lambda_field]);
 
-                            let return_type = if name == "array_filter" {
-                                if lambda_type.remove_nullable() == DataType::Boolean {
-                                    arg_type
-                                } else {
-                                    return Err(ErrorCode::SemanticError(
-                                        "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
-                                    ));
-                                }
-                            } else if arg_type.is_nullable() {
-                                DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
-                            } else {
-                                DataType::Array(Box::new(lambda_type))
-                            };
+                            let expr = lambda_expr.type_check(&lambda_schema)?.project_column_ref(
+                                |index| lambda_schema.index_of(&index.to_string()).unwrap(),
+                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            let remote_lambda_expr = expr.as_remote_expr();
+                            let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
+
                             Box::new((
                                 LambdaFunc {
                                     span: *span,
-                                    func_name: name.clone(),
-                                    display_name: format!("{:#}", expr),
+                                    func_name: func_name.to_string(),
                                     args: vec![arg],
-                                    params: vec![(params[0].clone(), inner_ty)],
-                                    lambda_expr: Box::new(lambda_expr),
+                                    lambda_expr: Box::new(remote_lambda_expr),
+                                    lambda_display,
                                     return_type: Box::new(return_type.clone()),
                                 }
                                 .into(),
                                 return_type,
                             ))
-                        }
-                        _ => {
-                            return Err(ErrorCode::SemanticError(
-                                "invalid arguments for lambda function, argument data type must be array".to_string()
-                            ));
                         }
                     }
                 } else {
@@ -1049,9 +1074,7 @@ impl<'a> TypeChecker<'a> {
                             }
                             lit.clone()
                         }
-                        MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
-                            Literal::String(key.name.clone())
-                        }
+                        MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(
@@ -1236,7 +1259,7 @@ impl<'a> TypeChecker<'a> {
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
         if let Expr::Literal { lit, .. } = expr {
-            let box (value, _) = self.resolve_literal(lit)?;
+            let box (value, _) = self.resolve_literal_scalar(lit)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -1256,6 +1279,18 @@ impl<'a> TypeChecker<'a> {
             "Only unsigned numbers are allowed in ROWS offset".to_string(),
         )
         .set_span(expr.span()))
+    }
+
+    #[inline]
+    fn resolve_literal(
+        &self,
+        span: Span,
+        literal: &common_ast::ast::Literal,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (value, data_type) = self.resolve_literal_scalar(literal)?;
+
+        let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
+        Ok(Box::new((scalar_expr, data_type)))
     }
 
     fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
@@ -1691,7 +1726,10 @@ impl<'a> TypeChecker<'a> {
         // Check aggregate function
         let params = params
             .iter()
-            .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
+            .map(|literal| {
+                self.resolve_literal_scalar(literal)
+                    .map(|box (value, _)| value)
+            })
             .collect::<Result<Vec<_>>>()?;
 
         self.in_aggregate_function = true;
@@ -1825,12 +1863,10 @@ impl<'a> TypeChecker<'a> {
         };
 
         self.resolve_scalar_function_call(span, &func_name, params, args)
-            .await
     }
 
-    #[async_backtrace::framed]
-    pub async fn resolve_scalar_function_call(
-        &mut self,
+    pub fn resolve_scalar_function_call(
+        &self,
         span: Span,
         func_name: &str,
         params: Vec<usize>,
@@ -1914,19 +1950,16 @@ impl<'a> TypeChecker<'a> {
                     .resolve_binary_op(span, &positive_op, left, right)
                     .await?;
                 self.resolve_scalar_function_call(span, "not", vec![], vec![positive])
-                    .await
             }
             BinaryOperator::SoundsLike => {
                 // rewrite "expr1 SOUNDS LIKE expr2" to "SOUNDEX(expr1) = SOUNDEX(expr2)"
                 let box (left, _) = self.resolve(left).await?;
                 let box (right, _) = self.resolve(right).await?;
 
-                let (left, _) = *self
-                    .resolve_scalar_function_call(span, "soundex", vec![], vec![left])
-                    .await?;
-                let (right, _) = *self
-                    .resolve_scalar_function_call(span, "soundex", vec![], vec![right])
-                    .await?;
+                let (left, _) =
+                    *self.resolve_scalar_function_call(span, "soundex", vec![], vec![left])?;
+                let (right, _) =
+                    *self.resolve_scalar_function_call(span, "soundex", vec![], vec![right])?;
 
                 self.resolve_scalar_function_call(
                     span,
@@ -1934,7 +1967,6 @@ impl<'a> TypeChecker<'a> {
                     vec![],
                     vec![left, right],
                 )
-                .await
             }
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
@@ -2049,7 +2081,6 @@ impl<'a> TypeChecker<'a> {
         arg_types.push(interval_type);
 
         self.resolve_scalar_function_call(span, &func_name, vec![], args)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2208,6 +2239,7 @@ impl<'a> TypeChecker<'a> {
             "try_to_variant",
             "greatest",
             "least",
+            "stream_has_data",
         ]
     }
 
@@ -2578,20 +2610,14 @@ impl<'a> TypeChecker<'a> {
                     .resolve_function(span, "array", vec![], args)
                     .await
                     .ok()?;
-                Some(
-                    self.resolve_scalar_function_call(span, "array_max", vec![], vec![array])
-                        .await,
-                )
+                Some(self.resolve_scalar_function_call(span, "array_max", vec![], vec![array]))
             }
             ("least", args) => {
                 let (array, _) = *self
                     .resolve_function(span, "array", vec![], args)
                     .await
                     .ok()?;
-                Some(
-                    self.resolve_scalar_function_call(span, "array_min", vec![], vec![array])
-                        .await,
-                )
+                Some(self.resolve_scalar_function_call(span, "array_min", vec![], vec![array]))
             }
             _ => None,
         }
@@ -2628,11 +2654,10 @@ impl<'a> TypeChecker<'a> {
         let args = vec![trim_source, trim_scalar];
 
         self.resolve_scalar_function_call(span, func_name, vec![], args)
-            .await
     }
 
     /// Resolve literal values.
-    pub fn resolve_literal(
+    pub fn resolve_literal_scalar(
         &self,
         literal: &common_ast::ast::Literal,
     ) -> Result<Box<(Scalar, DataType)>> {
@@ -2650,9 +2675,6 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
-            Literal::CurrentTimestamp => Err(ErrorCode::SemanticError(format!(
-                "Unsupported literal value: {literal}"
-            )))?,
         };
         let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
@@ -2675,7 +2697,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         self.resolve_scalar_function_call(span, "array", vec![], elems)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2688,27 +2709,18 @@ impl<'a> TypeChecker<'a> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
-            let box (key_arg, _data_type) = self.resolve_literal(key_expr)?;
-            keys.push(
-                ConstantExpr {
-                    span,
-                    value: key_arg,
-                }
-                .into(),
-            );
+            let box (key_arg, _data_type) = self.resolve_literal(span, key_expr)?;
+            keys.push(key_arg);
             let box (val_arg, _data_type) = self.resolve(val_expr).await?;
             vals.push(val_arg);
         }
-        let box (key_arg, _data_type) = self
-            .resolve_scalar_function_call(span, "array", vec![], keys)
-            .await?;
-        let box (val_arg, _data_type) = self
-            .resolve_scalar_function_call(span, "array", vec![], vals)
-            .await?;
+        let box (key_arg, _data_type) =
+            self.resolve_scalar_function_call(span, "array", vec![], keys)?;
+        let box (val_arg, _data_type) =
+            self.resolve_scalar_function_call(span, "array", vec![], vals)?;
         let args = vec![key_arg, val_arg];
 
         self.resolve_scalar_function_call(span, "map", vec![], args)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2725,7 +2737,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         self.resolve_scalar_function_call(span, "tuple", vec![], args)
-            .await
     }
 
     #[async_recursion::async_recursion]
@@ -2762,7 +2773,6 @@ impl<'a> TypeChecker<'a> {
                 })
                 .await?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
-                .await
         } else {
             let name = op.to_func_name();
             self.resolve_function(span, name.as_str(), vec![], &[left, right])
@@ -2792,9 +2802,12 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         };
 
+        let name = udf.name;
+
         match udf.definition {
             UDFDefinition::LambdaUDF(udf_def) => Ok(Some(
-                self.resolve_lambda_udf(span, arguments, udf_def).await?,
+                self.resolve_lambda_udf(span, name, arguments, udf_def)
+                    .await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
                 self.resolve_udf_server(span, arguments, udf_def).await?,
@@ -2870,6 +2883,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_lambda_udf(
         &mut self,
         span: Span,
+        func_name: String,
         arguments: &[Expr],
         udf_definition: LambdaUDF,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2902,8 +2916,16 @@ impl<'a> TypeChecker<'a> {
                 Ok(None)
             })
             .map_err(|e| e.set_span(span))?;
-
-        self.resolve(&udf_expr).await
+        let scalar = self.resolve(&udf_expr).await?;
+        Ok(Box::new((
+            UDFLambdaCall {
+                span,
+                func_name,
+                scalar: Box::new(scalar.0),
+            }
+            .into(),
+            scalar.1,
+        )))
     }
 
     #[async_recursion::async_recursion]
@@ -3109,12 +3131,7 @@ impl<'a> TypeChecker<'a> {
                 .into();
                 continue;
             }
-            let box (path_value, _) = self.resolve_literal(&path_lit)?;
-            let path_scalar: ScalarExpr = ConstantExpr {
-                span,
-                value: path_value,
-            }
-            .into();
+            let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
             if let TableDataType::Array(inner_type) = table_data_type {
                 table_data_type = *inner_type;
             }

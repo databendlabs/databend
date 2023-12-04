@@ -23,7 +23,7 @@ use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
@@ -32,7 +32,9 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let ctx = fixture.new_query_ctx().await?;
 
     let create_table_plan = CreateTablePlan {

@@ -120,6 +120,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             group_by: None,
             having: None,
             window_list: None,
+            qualify: None,
         };
         let body = SetExpr::Select(Box::new(select));
 
@@ -311,6 +312,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             group_by,
             having: self.gen_selection(),
             window_list: self.gen_window_list(),
+            qualify: None, // todo: add qualify.
         }
     }
 

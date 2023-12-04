@@ -35,11 +35,9 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
-use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Exchange;
-use crate::plans::Lambda;
 use crate::plans::ProjectSet;
 use crate::plans::Udf;
 use crate::plans::Window;
@@ -80,11 +78,9 @@ pub enum RelOp {
     Exchange,
     UnionAll,
     DummyTableScan,
-    RuntimeFilterSource,
     Window,
     ProjectSet,
     MaterializedCte,
-    Lambda,
     ConstantTableScan,
     AddRowNumber,
     Udf,
@@ -108,11 +104,9 @@ pub enum RelOperator {
     AddRowNumber(AddRowNumber),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
-    RuntimeFilterSource(RuntimeFilterSource),
     Window(Window),
     ProjectSet(ProjectSet),
     MaterializedCte(MaterializedCte),
-    Lambda(Lambda),
     ConstantTableScan(ConstantTableScan),
     Udf(Udf),
     Pattern(PatternPlan),
@@ -132,12 +126,10 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.rel_op(),
             RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
             RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
-            RelOperator::RuntimeFilterSource(rel_op) => rel_op.rel_op(),
             RelOperator::ProjectSet(rel_op) => rel_op.rel_op(),
             RelOperator::Window(rel_op) => rel_op.rel_op(),
             RelOperator::CteScan(rel_op) => rel_op.rel_op(),
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
-            RelOperator::Lambda(rel_op) => rel_op.rel_op(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
@@ -157,12 +149,10 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Lambda(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -182,12 +172,10 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Lambda(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -207,12 +195,10 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_cardinality(rel_expr),
-            RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::CteScan(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_cardinality(rel_expr),
-            RelOperator::Lambda(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_cardinality(rel_expr),
@@ -260,9 +246,6 @@ impl Operator for RelOperator {
             RelOperator::DummyTableScan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
-            RelOperator::RuntimeFilterSource(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
             RelOperator::Window(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
@@ -273,9 +256,6 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::MaterializedCte(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Lambda(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::ConstantTableScan(rel_op) => {
@@ -552,26 +532,6 @@ impl TryFrom<RelOperator> for DummyTableScan {
     }
 }
 
-impl From<RuntimeFilterSource> for RelOperator {
-    fn from(value: RuntimeFilterSource) -> Self {
-        Self::RuntimeFilterSource(value)
-    }
-}
-
-impl TryFrom<RelOperator> for RuntimeFilterSource {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::RuntimeFilterSource(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to RuntimeFilterSource",
-            ))
-        }
-    }
-}
-
 impl From<ProjectSet> for RelOperator {
     fn from(value: ProjectSet) -> Self {
         Self::ProjectSet(value)
@@ -588,24 +548,6 @@ impl TryFrom<RelOperator> for ProjectSet {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to ProjectSet",
             ))
-        }
-    }
-}
-
-impl From<Lambda> for RelOperator {
-    fn from(value: Lambda) -> Self {
-        Self::Lambda(value)
-    }
-}
-
-impl TryFrom<RelOperator> for Lambda {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::Lambda(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Lambda"))
         }
     }
 }

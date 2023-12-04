@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -26,6 +25,7 @@ use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StreamTablePart;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -90,7 +90,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let start = std::time::Instant::now();
 
-        let (statistics, parts) = if let Some(PushDownInfo {
+        let (statistics, mut parts) = if let Some(PushDownInfo {
             filters:
                 Some(Filters {
                     filter:
@@ -109,6 +109,15 @@ impl ToReadDataSourcePlan for dyn Table {
             self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
                 .await
         }?;
+
+        let mut base_block_ids = None;
+        if parts.partitions.len() == 1 {
+            let part = parts.partitions[0].clone();
+            if let Some(part) = StreamTablePart::from_part(&part) {
+                parts = part.inner();
+                base_block_ids = Some(part.base_block_ids());
+            }
+        }
 
         ctx.set_status_info(&format!(
             "build physical plan - got data source partitions, time used {:?}",
@@ -226,13 +235,14 @@ impl ToReadDataSourcePlan for dyn Table {
 
                                 let body = &policy.body;
                                 let tokens = tokenize_sql(body)?;
-                                let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                                let ast_expr =
+                                    parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
                                 let settings = Settings::create("".to_string());
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
-                                let mut type_checker = TypeChecker::new(
+                                let mut type_checker = TypeChecker::try_create(
                                     &mut bind_context,
                                     ctx.clone(),
                                     &name_resolution_ctx,
@@ -240,7 +250,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                     &aliases,
                                     false,
                                     false,
-                                );
+                                )?;
 
                                 ctx.set_status_info(
                                     &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
@@ -279,6 +289,7 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            base_block_ids,
             update_stream_columns: false,
             data_mask_policy,
         })

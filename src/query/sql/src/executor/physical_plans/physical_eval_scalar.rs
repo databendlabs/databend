@@ -93,11 +93,11 @@ impl PhysicalPlanBuilder {
         } else {
             let input = self.build(s_expr.child(0)?, required).await?;
             let eval_scalar = crate::plans::EvalScalar { items: used };
-            self.crate_eval_scalar(&eval_scalar, column_projections, input, stat_info)
+            self.create_eval_scalar(&eval_scalar, column_projections, input, stat_info)
         }
     }
 
-    pub(crate) fn crate_eval_scalar(
+    pub(crate) fn create_eval_scalar(
         &mut self,
         eval_scalar: &crate::plans::EvalScalar,
         column_projections: Vec<IndexType>,

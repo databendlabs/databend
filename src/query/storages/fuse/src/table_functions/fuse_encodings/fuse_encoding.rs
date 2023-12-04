@@ -343,5 +343,26 @@ pub fn as_expr(
                 return_type: return_type.clone(),
             }
         }
+        RemoteExpr::LambdaFunctionCall {
+            span,
+            name,
+            args,
+            lambda_expr,
+            lambda_display,
+            return_type,
+        } => {
+            let args = args
+                .iter()
+                .map(|arg| as_expr(arg, fn_registry, schema))
+                .collect();
+            Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args,
+                lambda_expr: *lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            }
+        }
     }
 }

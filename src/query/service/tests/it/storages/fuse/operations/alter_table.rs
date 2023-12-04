@@ -38,7 +38,7 @@ use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::fixture::TestFixture;
 use futures_util::TryStreamExt;
 use ordered_float::OrderedFloat;
 use storages_common_cache::LoadParams;
@@ -131,7 +131,9 @@ async fn check_segment_column_ids(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize_alter_table() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
     let catalog_name = fixture.default_catalog_name();

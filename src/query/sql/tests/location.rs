@@ -46,7 +46,7 @@ async fn test_parse_uri_location() -> Result<()> {
         .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(InnerConfig::default())?;
+    GlobalConfig::init(&InnerConfig::default())?;
 
     let cases = vec![
         (
@@ -287,7 +287,7 @@ async fn test_parse_uri_location() -> Result<()> {
                     security_token: "".to_string(),
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
-                    disable_credential_loader: true,
+                    disable_credential_loader: false,
                     enable_virtual_host_style: false,
                     role_arn: "aws::iam::xxxx".to_string(),
                     external_id: "".to_string(),

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Range;
+
 use common_expression::block_debug::assert_block_value_eq;
 use common_expression::types::number::*;
 use common_expression::types::DataType;
@@ -202,7 +204,23 @@ pub fn test_pass() {
     );
 }
 
-/// This test covers take.rs, take_chunks.rs, take_compact.rs, filter.rs, concat.rs.
+// Build a range selection from a selection array.
+pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<Range<u32>> {
+    let mut range_selection = Vec::with_capacity(count);
+    let mut start = selection[0];
+    let mut idx = 1;
+    while idx < count {
+        if selection[idx] != selection[idx - 1] + 1 {
+            range_selection.push(start..selection[idx - 1] + 1);
+            start = selection[idx];
+        }
+        idx += 1;
+    }
+    range_selection.push(start..selection[count - 1] + 1);
+    range_selection
+}
+
+/// This test covers take.rs, take_chunks.rs, take_compact.rs, take_ranges.rs, filter.rs, concat.rs.
 #[test]
 pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     use common_expression::types::DataType;
@@ -286,6 +304,10 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
         &mut None,
     );
     let block_4 = DataBlock::concat(&filtered_blocks)?;
+    let block_5 = concated_blocks.take_ranges(
+        &build_range_selection(&take_indices, take_indices.len()),
+        take_indices.len(),
+    )?;
 
     assert_eq!(block_1.num_columns(), block_2.num_columns());
     assert_eq!(block_1.num_rows(), block_2.num_rows());
@@ -293,11 +315,14 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     assert_eq!(block_1.num_rows(), block_3.num_rows());
     assert_eq!(block_1.num_columns(), block_4.num_columns());
     assert_eq!(block_1.num_rows(), block_4.num_rows());
+    assert_eq!(block_1.num_columns(), block_5.num_columns());
+    assert_eq!(block_1.num_rows(), block_5.num_rows());
 
     let columns_1 = block_1.columns();
     let columns_2 = block_2.columns();
     let columns_3 = block_3.columns();
     let columns_4 = block_4.columns();
+    let columns_5 = block_5.columns();
     for idx in 0..columns_1.len() {
         assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
         assert_eq!(columns_1[idx].value, columns_2[idx].value);
@@ -305,6 +330,8 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
         assert_eq!(columns_1[idx].value, columns_3[idx].value);
         assert_eq!(columns_1[idx].data_type, columns_4[idx].data_type);
         assert_eq!(columns_1[idx].value, columns_4[idx].value);
+        assert_eq!(columns_1[idx].data_type, columns_5[idx].data_type);
+        assert_eq!(columns_1[idx].value, columns_5[idx].value);
     }
 
     Ok(())

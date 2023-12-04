@@ -17,7 +17,6 @@ use common_ast::ast::CopyIntoLocationStmt;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
@@ -45,7 +44,7 @@ impl<'a> Binder {
                     );
                 let subquery = format!("SELECT * FROM {catalog_name}.{database_name}.{table_name}");
                 let tokens = tokenize_sql(&subquery)?;
-                let sub_stmt_msg = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;
                 let sub_stmt = sub_stmt_msg.0;
                 match &sub_stmt {
                     Statement::Query(query) => {
@@ -60,8 +59,17 @@ impl<'a> Binder {
                 }
             }
             CopyIntoLocationSource::Query(query) => {
-                self.bind_statement(bind_context, &Statement::Query(query.clone()))
-                    .await
+                let select_plan = self
+                    .bind_statement(bind_context, &Statement::Query(query.clone()))
+                    .await?;
+                if let Plan::Query { s_expr, .. } = &select_plan {
+                    if !self.check_sexpr_top(s_expr)? {
+                        return Err(ErrorCode::SemanticError(
+                            "copy into location source can't contain udf functions".to_string(),
+                        ));
+                    }
+                }
+                Ok(select_plan)
             }
         }?;
 

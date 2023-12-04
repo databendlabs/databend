@@ -159,7 +159,6 @@ impl DPhpy {
                     left_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
-                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
@@ -172,7 +171,6 @@ impl DPhpy {
                     right_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
-                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
@@ -217,7 +215,6 @@ impl DPhpy {
             }
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
-            | RelOperator::Lambda(_)
             | RelOperator::Sort(_)
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
@@ -255,10 +252,9 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((new_s_expr, optimized))
             }
-            RelOperator::Exchange(_)
-            | RelOperator::AddRowNumber(_)
-            | RelOperator::Pattern(_)
-            | RelOperator::RuntimeFilterSource(_) => unreachable!(),
+            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) | RelOperator::Pattern(_) => {
+                unreachable!()
+            }
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)

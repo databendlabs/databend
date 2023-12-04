@@ -32,7 +32,6 @@ use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
@@ -49,7 +48,6 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -79,8 +77,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
-            PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
-            PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
             PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
@@ -235,7 +231,6 @@ pub trait PhysicalPlanReplacer {
             from_correlated_subquery: plan.from_correlated_subquery,
             probe_to_build: plan.probe_to_build.clone(),
             output_schema: plan.output_schema.clone(),
-            contain_runtime_filter: plan.contain_runtime_filter,
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
         }))
@@ -484,31 +479,6 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_lambda(&mut self, plan: &Lambda) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Lambda(Lambda {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            lambda_funcs: plan.lambda_funcs.clone(),
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
-    fn replace_runtime_filter_source(
-        &mut self,
-        plan: &RuntimeFilterSource,
-    ) -> Result<PhysicalPlan> {
-        let left_side = self.replace(&plan.left_side)?;
-        let right_side = self.replace(&plan.right_side)?;
-        Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
-            plan_id: plan.plan_id,
-            left_side: Box::new(left_side),
-            right_side: Box::new(right_side),
-            left_runtime_filters: plan.left_runtime_filters.clone(),
-            right_runtime_filters: plan.right_runtime_filters.clone(),
-        }))
-    }
-
     fn replace_udf(&mut self, plan: &Udf) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::Udf(Udf {
@@ -589,19 +559,12 @@ impl PhysicalPlan {
                 PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
-                PhysicalPlan::Lambda(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
-                }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
                     CopyIntoTableSource::Query(input) => {
                         Self::traverse(&input.plan, pre_visit, visit, post_visit);
                     }
                     CopyIntoTableSource::Stage(_) => {}
                 },
-                PhysicalPlan::RuntimeFilterSource(plan) => {
-                    Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
-                    Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
-                }
                 PhysicalPlan::RangeJoin(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);

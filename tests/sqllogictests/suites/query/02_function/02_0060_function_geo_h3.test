@@ -31,12 +31,12 @@ select h3_get_resolution(644325524701193974)
 query F
 select h3_edge_length_m(1)
 ----
-418676.0055
+483056.8390711111
 
 query F
 select h3_edge_length_km(1)
 ----
-418.6760055
+483.0568390711111
 
 statement ok
 DROP TABLE IF EXISTS t1
@@ -99,18 +99,18 @@ INSERT INTO t2 VALUES(1), (2), (3), (4)
 query F
 select h3_edge_length_m(res) as m from t2 order by m
 ----
-22606.3794
-59810.85794
-158244.6558
-418676.0055
+26071.75968017739
+68979.22178775584
+182512.95648916735
+483056.8390711111
 
 query F
 select h3_edge_length_km(res) as km from t2 order by km
 ----
-22.6063794
-59.81085794
-158.2446558
-418.6760055
+26.07175968017739
+68.97922178775585
+182.51295648916735
+483.0568390711111
 
 query I
 select h3_get_base_cell(644325524701193974)
@@ -258,7 +258,7 @@ select h3_is_res_class_iii(h3) as i from t4 order by i
 1
 1
 
-query B 
+query B
 select h3_is_pentagon(h3) as i from t4 order by i
 ----
 0
@@ -430,7 +430,7 @@ select h3_get_unidirectional_edge_boundary(1248204388774707199)
 query F
 select h3_edge_angle(10)
 ----
-0.0005927224846720883
+0.0006822586214153981
 
 statement ok
 DROP TABLE IF EXISTS t6
@@ -484,8 +484,8 @@ select h3_get_unidirectional_edge_boundary(h3) from t6
 query F
 select h3_edge_angle(res) as angle from t6 order by angle
 ----
-4.583956425628968e-6
-0.0005927224846720883
+5.2535487801633385e-6
+0.0006822586214153981
 
 statement ok
 DROP TABLE t1
