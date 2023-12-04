@@ -1282,7 +1282,7 @@ impl TokenKind {
             // | TokenKind::XMLSERIALIZE
             // | TokenKind::XMLTABLE
             | TokenKind::WHEN
-            | TokenKind::ARRAY
+            // | TokenKind::ARRAY
             | TokenKind::AS
             // | TokenKind::CHAR
             | TokenKind::CHARACTER
