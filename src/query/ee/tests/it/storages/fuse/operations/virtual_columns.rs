@@ -17,18 +17,19 @@ use common_exception::Result;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
-use databend_query::test_kits::table_test_fixture::append_variant_sample_data;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
 use storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+
     fixture
         .default_session()
         .get_settings()
         .set_retention_period(0)?;
+    fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
     let number_of_block = 2;

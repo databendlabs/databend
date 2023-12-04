@@ -298,6 +298,12 @@ pub enum TokenKind {
     /// Used as JSON operator.
     #[token("@>")]
     AtArrow,
+    /// Used as JSON operator.
+    #[token("@?")]
+    AtQuestion,
+    /// Used as JSON operator.
+    #[token("@@")]
+    AtAt,
 
     // Keywords
     //

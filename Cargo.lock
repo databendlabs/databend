@@ -2006,7 +2006,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "lexical-core",
  "log",
  "match-template",
@@ -2040,7 +2040,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -2087,7 +2087,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "lexical-core",
  "libm",
  "match-template",
@@ -2571,7 +2571,7 @@ dependencies = [
  "common-expression",
  "common-pipeline-core",
  "common-profile",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "match-template",
 ]
 
@@ -2806,7 +2806,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "log",
  "metrics",
  "minitrace",
@@ -3128,7 +3128,7 @@ dependencies = [
  "common-users",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "log",
  "once_cell",
  "opendal",
@@ -3229,6 +3229,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c278839b831783b70278b14df4d45e1beb1aad306c07bb796637de9a0e323e8e"
 dependencies = [
  "crossbeam-utils",
+]
+
+[[package]]
+name = "config"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23738e11972c7643e4ec947840fc463b6a571afcd3e735bdfce7d03c7a784aca"
+dependencies = [
+ "async-trait",
+ "json5",
+ "lazy_static",
+ "nom",
+ "pathdiff",
+ "ron",
+ "rust-ini 0.18.0",
+ "serde",
+ "serde_json",
+ "toml 0.5.11",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -3979,6 +3998,7 @@ dependencies = [
  "common-storages-view",
  "common-tracing",
  "common-users",
+ "config",
  "criterion",
  "ctor",
  "dashmap",
@@ -3995,7 +4015,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "jwt-simple",
  "lazy_static",
  "log",
@@ -4115,7 +4135,7 @@ dependencies = [
  "databend-sql",
  "ethnum",
  "itertools 0.11.0",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -4295,6 +4315,12 @@ dependencies = [
  "redox_users",
  "winapi",
 ]
+
+[[package]]
+name = "dlv-list"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0688c2a7f92e427f44895cd63841bff7b29f8d7a1648b9e7e07a4a365b2e1257"
 
 [[package]]
 name = "dlv-list"
@@ -4493,7 +4519,7 @@ dependencies = [
  "databend-query",
  "futures",
  "futures-util",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "jwt-simple",
  "log",
  "opendal",
@@ -7265,6 +7291,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "json5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b0db21af676c1ce64250b5f40f3ce2cf27e4e47cb91ed91eb6fe9350b430c1"
+dependencies = [
+ "pest",
+ "pest_derive",
+ "serde",
+]
+
+[[package]]
 name = "jsonb"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7281,7 +7318,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.3.0"
-source = "git+https://github.com/datafuselabs/jsonb?rev=1d7a3e9#1d7a3e94e45271086510ed4c8b71acc5bf2104bc"
+source = "git+https://github.com/datafuselabs/jsonb?rev=582c139#582c139d884248bcb357e995d8ea4501fc264e60"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -8693,11 +8730,21 @@ dependencies = [
 
 [[package]]
 name = "ordered-multimap"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccd746e37177e1711c20dd619a1620f34f5c8b569c53590a72dedd5344d8924a"
+dependencies = [
+ "dlv-list 0.3.0",
+ "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "ordered-multimap"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ed8acf08e98e744e5384c8bc63ceb0364e68a6854187221c18df61c4797690e"
 dependencies = [
- "dlv-list",
+ "dlv-list 0.5.0",
  "hashbrown 0.13.2",
 ]
 
@@ -8907,6 +8954,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
 
 [[package]]
+name = "pathdiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
+
+[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8954,6 +9007,51 @@ name = "percent-encoding"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
+
+[[package]]
+name = "pest"
+version = "2.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae9cee2a55a544be8b89dc6848072af97a20f2422603c10865be2a42b580fff5"
+dependencies = [
+ "memchr",
+ "thiserror",
+ "ucd-trie",
+]
+
+[[package]]
+name = "pest_derive"
+version = "2.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81d78524685f5ef2a3b3bd1cafbc9fcabb036253d9b1463e726a91cd16e2dfc2"
+dependencies = [
+ "pest",
+ "pest_generator",
+]
+
+[[package]]
+name = "pest_generator"
+version = "2.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68bd1206e71118b5356dae5ddc61c8b11e28b09ef6a31acbd15ea48a28e0c227"
+dependencies = [
+ "pest",
+ "pest_meta",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
+name = "pest_meta"
+version = "2.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c747191d4ad9e4a4ab9c8798f1e82a39affe7ef9648390b7e5548d18e099de6"
+dependencies = [
+ "once_cell",
+ "pest",
+ "sha2",
+]
 
 [[package]]
 name = "petgraph"
@@ -10065,7 +10163,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "rsa 0.9.2",
- "rust-ini",
+ "rust-ini 0.19.0",
  "serde",
  "serde_json",
  "sha1",
@@ -10288,6 +10386,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5864e7ef1a6b7bcf1d6ca3f655e65e724ed3b52546a0d0a663c991522f552ea"
 
 [[package]]
+name = "ron"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88073939a61e5b7680558e6be56b419e208420c2adb92be54921fa6b72283f1a"
+dependencies = [
+ "base64 0.13.1",
+ "bitflags 1.3.2",
+ "serde",
+]
+
+[[package]]
 name = "rsa"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10352,12 +10461,22 @@ dependencies = [
 
 [[package]]
 name = "rust-ini"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d5f2436026b4f6e79dc829837d467cc7e9a55ee40e750d716713540715a2df"
+dependencies = [
+ "cfg-if",
+ "ordered-multimap 0.4.3",
+]
+
+[[package]]
+name = "rust-ini"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e2a3bcec1f113553ef1c88aae6c020a369d03d55b58de9869a0908930385091"
 dependencies = [
  "cfg-if",
- "ordered-multimap",
+ "ordered-multimap 0.6.0",
 ]
 
 [[package]]
@@ -12394,6 +12513,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ucd-trie"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed646292ffc8188ef8ea4d1e0e0150fb15a5c2e12ad9b8fc191ae7a8a7f3c4b9"
+
+[[package]]
 name = "uluru"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13129,6 +13254,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388c44dc09d76f1536602ead6d325eb532f5c122f17782bd57fb47baeeb767e2"
 dependencies = [
  "lzma-sys",
+]
+
+[[package]]
+name = "yaml-rust"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+dependencies = [
+ "linked-hash-map",
 ]
 
 [[package]]

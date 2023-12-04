@@ -78,12 +78,8 @@ impl StreamTablePart {
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&StreamTablePart> {
-        info.as_any()
-            .downcast_ref::<StreamTablePart>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to StreamTablePart.",
-            ))
+    pub fn from_part(info: &PartInfoPtr) -> Option<&StreamTablePart> {
+        info.as_any().downcast_ref::<StreamTablePart>()
     }
 
     pub fn inner(&self) -> Partitions {

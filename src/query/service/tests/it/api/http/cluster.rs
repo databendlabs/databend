@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 use databend_query::api::http::v1::cluster::*;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -29,9 +29,9 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_cluster() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
-            .await?;
+    // Setup.
+    let _fixture = TestFixture::setup().await?;
+
     let cluster_router = Route::new().at("/v1/cluster/list", get(cluster_list_handler));
 
     // List Node

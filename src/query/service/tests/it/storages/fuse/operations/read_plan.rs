@@ -30,7 +30,7 @@ use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use common_storages_fuse::FusePartInfo;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
@@ -150,9 +150,10 @@ fn test_to_partitions() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_exact_statistic() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let mut table = fixture.latest_default_table().await?;
@@ -187,5 +188,6 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let fuse_part = FusePartInfo::from_part(&part)?;
         assert!(fuse_part.create_on.is_some())
     }
+
     Ok(())
 }

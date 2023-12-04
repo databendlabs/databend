@@ -93,8 +93,9 @@ pub fn via_exchange_source(
 
     pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
 
-    if resize_back {
+    if params.allow_adjust_parallelism {
         pipeline.try_resize(last_output_len)?;
     }
+
     injector.apply_merge_deserializer(params, pipeline)
 }

@@ -16,17 +16,18 @@ use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use databend_query::test_kits::table_test_fixture::*;
+use databend_query::test_kits::*;
 use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_block_table() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.new_query_ctx().await?;
 
     // test db & table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     {

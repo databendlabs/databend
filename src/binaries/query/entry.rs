@@ -78,7 +78,7 @@ pub async fn init_services(conf: &InnerConfig) -> Result<()> {
         ));
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf.clone()).await
+    GlobalServices::init(conf).await
 }
 
 async fn precheck_services(conf: &InnerConfig) -> Result<()> {
