@@ -124,6 +124,7 @@ impl OptimizeTableInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                expand_pipeline: true,
                 ignore_exchange: false,
             });
         }

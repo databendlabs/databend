@@ -88,6 +88,9 @@ pub fn via_exchange_source(
 
     pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
 
-    pipeline.try_resize(last_output_len)?;
+    if params.expand_pipeline {
+        pipeline.try_resize(last_output_len)?;
+    }
+
     injector.apply_merge_deserializer(params, pipeline)
 }

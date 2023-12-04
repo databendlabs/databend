@@ -34,6 +34,8 @@ pub struct Exchange {
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
+    // expand pipeline for greater parallelism
+    pub expand_pipeline: bool,
 }
 
 impl Exchange {
@@ -82,6 +84,7 @@ impl PhysicalPlanBuilder {
             input,
             kind,
             keys,
+            expand_pipeline: true,
             ignore_exchange: false,
         }))
     }

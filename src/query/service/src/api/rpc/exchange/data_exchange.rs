@@ -58,13 +58,19 @@ impl ShuffleDataExchange {
 pub struct MergeExchange {
     pub destination_id: String,
     pub ignore_exchange: bool,
+    pub expand_pipeline: bool,
 }
 
 impl MergeExchange {
-    pub fn create(destination_id: String, ignore_exchange: bool) -> DataExchange {
+    pub fn create(
+        destination_id: String,
+        ignore_exchange: bool,
+        expand_pipeline: bool,
+    ) -> DataExchange {
         DataExchange::Merge(MergeExchange {
             destination_id,
             ignore_exchange,
+            expand_pipeline,
         })
     }
 }

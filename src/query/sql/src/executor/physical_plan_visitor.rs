@@ -314,6 +314,7 @@ pub trait PhysicalPlanReplacer {
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
             ignore_exchange: plan.ignore_exchange,
+            expand_pipeline: plan.expand_pipeline,
         }))
     }
 
@@ -336,6 +337,7 @@ pub trait PhysicalPlanReplacer {
             destination_fragment_id: plan.destination_fragment_id,
             query_id: plan.query_id.clone(),
             ignore_exchange: plan.ignore_exchange,
+            expand_pipeline: plan.expand_pipeline,
         }))
     }
 
