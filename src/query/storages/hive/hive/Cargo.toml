@@ -35,12 +35,11 @@ async-recursion = "1.0.0"
 async-trait = "0.1.57"
 chrono = { workspace = true }
 futures = "0.3.24"
-hive_metastore = "0.0.1"
+hive_metastore = { git = "https://github.com/Xuanwo/hive_metastore_rs", rev = "3ba709f" }
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 serde = { workspace = true }
-thrift = { package = "tent-thrift", version = "0.18.1" }
-
 typetag = "0.2.3"
+volo-thrift = "0.8"

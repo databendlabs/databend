@@ -46,7 +46,7 @@ impl From<hms::Database> for HiveDatabase {
                 ident: DatabaseIdent { db_id: 0, seq: 0 },
                 name_ident: DatabaseNameIdent {
                     tenant: "TODO".to_owned(),
-                    db_name: hms_database.name.unwrap_or_default(),
+                    db_name: hms_database.name.unwrap_or_default().to_string(),
                 },
                 meta: DatabaseMeta {
                     engine: HIVE_DATABASE_ENGINE.to_owned(),
@@ -66,7 +66,7 @@ pub fn try_into_table_info(
     let partition_keys = if let Some(partitions) = &hms_table.partition_keys {
         let r = partitions
             .iter()
-            .filter_map(|field| field.name.clone())
+            .filter_map(|field| field.name.clone().map(|v| v.to_string()))
             .collect();
         Some(r)
     } else {
@@ -110,7 +110,7 @@ pub fn try_into_table_info(
             seq: 0,
         },
         desc: real_name,
-        name: hms_table.table_name.unwrap_or_default(),
+        name: hms_table.table_name.unwrap_or_default().to_string(),
         meta,
         ..Default::default()
     };
@@ -122,7 +122,7 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<TableSchema> {
     let mut fields = Vec::new();
     for field in hive_fields {
         let name = field.name.unwrap_or_default();
-        let type_name = field.type_.unwrap_or_default();
+        let type_name = field.r#type.unwrap_or_default();
 
         let table_type = try_from_field_type_name(type_name)?;
         let table_type = table_type.wrap_nullable();
