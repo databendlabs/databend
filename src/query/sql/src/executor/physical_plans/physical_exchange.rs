@@ -34,6 +34,7 @@ pub struct Exchange {
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
+    pub allow_adjust_parallelism: bool,
 }
 
 impl Exchange {
@@ -82,6 +83,7 @@ impl PhysicalPlanBuilder {
             input,
             kind,
             keys,
+            allow_adjust_parallelism: true,
             ignore_exchange: false,
         }))
     }

@@ -278,6 +278,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: FragmentKind::Expansive,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
         }
@@ -331,6 +332,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
         }

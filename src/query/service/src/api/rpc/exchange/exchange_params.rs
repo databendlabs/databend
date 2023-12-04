@@ -49,6 +49,7 @@ pub struct MergeExchangeParams {
     pub destination_id: String,
     pub schema: DataSchemaRef,
     pub ignore_exchange: bool,
+    pub allow_adjust_parallelism: bool,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
