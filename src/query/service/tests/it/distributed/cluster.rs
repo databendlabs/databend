@@ -15,34 +15,39 @@
 use std::thread;
 
 use common_base::base::tokio;
+use common_base::base::tokio::time::sleep;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use databend_query::api::RpcService;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 
-use crate::distributed::MetaSrvContext;
+use crate::distributed::MetaSrvMock;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_simple_cluster() -> Result<()> {
-    let configs = setup_node_configs(vec![
-        "0.0.0.0:6061", // Node 1 flight address
-        "0.0.0.0:6062", // Node 2 flight address
-        "0.0.0.0:6063", // Node 3 flight address
-        "0.0.0.0:6064", // Node 4 flight address
-        "0.0.0.0:6065", // Node 5 flight address
-    ]);
+    // Start the meta service.
+    let metasrv_mock = MetaSrvMock::start().await;
+
+    let configs = setup_node_configs(
+        vec![
+            "127.0.0.1:16061", // Node 1 flight address
+            "127.0.0.1:16062", // Node 2 flight address
+            "127.0.0.1:16063", // Node 3 flight address
+            "127.0.0.1:16064", // Node 4 flight address
+            "127.0.0.1:16065", // Node 5 flight address
+        ],
+        metasrv_mock.config.grpc_api_address.to_string(),
+    );
 
     let task_count = configs.len();
     let mut handles = Vec::with_capacity(task_count);
-    let _metasrv = MetaSrvContext::start().await;
 
     for (i, conf) in configs.clone().into_iter().enumerate() {
         let thread_name = format!("custom-thread-node-{}", i + 1);
-        let is_check_node = i == task_count - 1; // Make the last node the special one
+        let is_execute_node = i == task_count - 1; // Make the last node the special one
 
         let conf_clone = conf.clone(); // Clone the configuration as well
 
@@ -56,17 +61,40 @@ async fn test_simple_cluster() -> Result<()> {
 
                 let inner_async = async move {
                     let fixture = TestFixture::setup_with_config(&conf_clone).await?;
+                    // Setup the global services.
+                    fixture.start_global_services().await?;
 
-                    // Start the query service.
-                    let mut srv = RpcService::create(conf_clone.clone())?;
-                    srv.start(conf_clone.query.flight_api_address.parse()?)
-                        .await?;
-
-                    if is_check_node {
-                        // Check the cluster table.
+                    if is_execute_node {
+                        sleep(tokio::time::Duration::from_secs(5)).await;
+                        // Case1: Check the cluster table.
                         {
                             let res = fixture
                                 .execute_query("select name, host, port from system.clusters")
+                                .await?;
+                            let blocks = res.try_collect::<Vec<DataBlock>>().await?;
+                            let expected = vec![
+                                "+----------+-----------+----------+",
+                                "| Column 0 | Column 1  | Column 2 |",
+                                "+----------+-----------+----------+",
+                                "| 'node1'  | '0.0.0.0' | 6061     |",
+                                "| 'node2'  | '0.0.0.0' | 6062     |",
+                                "| 'node3'  | '0.0.0.0' | 6063     |",
+                                "| 'node4'  | '0.0.0.0' | 6064     |",
+                                "| 'node5'  | '0.0.0.0' | 6065     |",
+                                "+----------+-----------+----------+",
+                            ];
+                            common_expression::block_debug::assert_blocks_sorted_eq(
+                                expected,
+                                blocks.as_slice(),
+                            );
+                        }
+
+                        // Case2: Check the distributed pipeline.
+                        {
+                            let res = fixture
+                                .execute_query(
+                                    "explain pipeline select sum(number) from numbers(10000000)",
+                                )
                                 .await?;
                             let blocks = res.try_collect::<Vec<DataBlock>>().await?;
                             let expected = vec![
@@ -107,13 +135,13 @@ async fn test_simple_cluster() -> Result<()> {
 }
 
 /// Setup the configurations for the nodes in the cluster.
-fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
+fn setup_node_configs(addresses: Vec<&str>, metasrv_address: String) -> Vec<InnerConfig> {
     addresses
         .into_iter()
         .enumerate()
         .map(|(i, address)| {
             let mut conf = ConfigBuilder::create().build();
-            conf.meta.endpoints = vec!["127.0.0.1:9191".to_string()];
+            conf.meta.endpoints = vec![metasrv_address.clone()];
             conf.query.flight_api_address = address.to_string();
             conf.query.cluster_id = "test_cluster".to_string();
             conf.query.node_id = format!("node{}", i + 1);

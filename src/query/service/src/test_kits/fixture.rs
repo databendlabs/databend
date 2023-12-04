@@ -17,6 +17,8 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
+use common_base::base::tokio;
+use common_base::base::tokio::time::sleep;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::cluster_info::Cluster;
 use common_catalog::table::AppendMode;
@@ -64,6 +66,7 @@ use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use uuid::Uuid;
 
+use crate::api::RpcService;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
@@ -160,6 +163,18 @@ impl TestFixture {
             config: config.clone(),
         })
         .await
+    }
+
+    pub async fn start_global_services(&self) -> Result<()> {
+        let config = self.conf.clone();
+
+        // Flight service.
+        let mut srv = RpcService::create(config.clone())?;
+        srv.start(config.query.flight_api_address.parse()?).await?;
+
+        sleep(tokio::time::Duration::from_secs(5)).await;
+
+        Ok(())
     }
 
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
