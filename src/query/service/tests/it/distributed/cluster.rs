@@ -22,10 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use databend_query::api::RpcService;
-use databend_query::test_kits::fixture::execute_query;
-use databend_query::test_kits::ClusterDescriptor;
-use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 

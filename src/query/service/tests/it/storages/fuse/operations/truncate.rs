@@ -19,7 +19,7 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_expression::DataBlock;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]

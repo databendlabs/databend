@@ -14,7 +14,7 @@
 
 use common_base::base::tokio;
 use databend_query::api::http::v1::config::config_handler;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
