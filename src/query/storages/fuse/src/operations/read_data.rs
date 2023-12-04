@@ -240,7 +240,7 @@ impl FuseTable {
                 .transpose()?,
         );
 
-        Self::build_fuse_source_pipeline(
+        self.build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
             self.storage_format,
@@ -260,6 +260,7 @@ impl FuseTable {
 
     #[allow(clippy::too_many_arguments)]
     fn build_fuse_source_pipeline(
+        &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         storage_format: FuseStorageFormat,
@@ -271,7 +272,7 @@ impl FuseTable {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-
+        let table_schema = self.schema_with_stream();
         match storage_format {
             FuseStorageFormat::Native => build_fuse_native_source_pipeline(
                 ctx,
@@ -286,6 +287,7 @@ impl FuseTable {
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
+                table_schema,
                 pipeline,
                 block_reader,
                 plan,

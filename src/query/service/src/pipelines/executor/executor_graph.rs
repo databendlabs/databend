@@ -336,22 +336,21 @@ impl ExecutingGraph {
     unsafe fn push_down_runtime_filters(
         locker: &StateLockGuard,
         current_node: NodeIndex,
-        rt_filters: &HashMap<ColumnId, Expr>,
+        rt_filters: &HashMap<ColumnId, Expr<String>>,
         neighbors: Neighbors<EdgeInfo>,
     ) -> Result<()> {
         if neighbors.clone().next().is_none() {
             // Source node
-            let source_node = locker.graph[current_node].clone();
-            source_node
+            locker.graph[current_node]
                 .processor
-                .add_runtime_filters(rt_filters.clone())?;
+                .add_runtime_filters(rt_filters)?;
             return Ok(());
         }
         for neighbor in neighbors {
             let nodes = locker
                 .graph
                 .neighbors_directed(neighbor, Direction::Incoming);
-            ExecutingGraph::push_down_runtime_filters(locker, neighbor, rt_filters, nodes)?;
+            ExecutingGraph::push_down_runtime_filters(locker, neighbor, &rt_filters, nodes)?;
         }
         Ok(())
     }

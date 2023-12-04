@@ -40,7 +40,7 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) probe_schema: DataSchemaRef,
+    pub(crate) probe_keys_rt: Vec<Expr<String>>,
 }
 
 impl HashJoinDesc {
@@ -58,6 +58,12 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
+        let probe_keys_rt: Vec<Expr<String>> = join
+            .probe_keys_rt
+            .iter()
+            .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
+            .collect();
+
         Ok(HashJoinDesc {
             join_type: join.join_type.clone(),
             build_keys,
@@ -68,7 +74,7 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            probe_schema: join.probe.output_schema()?,
+            probe_keys_rt,
         })
     }
 

@@ -28,6 +28,9 @@ analyze table region
 statement ok
 analyze table supplier
 
+statement ok
+set enable_runtime_filter = 1;
+
 # Q1
 query I
 select

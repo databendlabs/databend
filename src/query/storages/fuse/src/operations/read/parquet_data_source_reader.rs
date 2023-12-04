@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Expr;
+use common_expression::TableSchema;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -55,13 +56,15 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
-    runtime_filters: HashMap<ColumnId, Expr>,
+    runtime_filters: HashMap<ColumnId, Expr<String>>,
+    table_schema: Arc<TableSchema>,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
     pub fn create(
         id: usize,
         ctx: Arc<dyn TableContext>,
+        table_schema: Arc<TableSchema>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
@@ -82,6 +85,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 runtime_filters: HashMap::new(),
+                table_schema,
             })
         } else {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
@@ -97,6 +101,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 runtime_filters: HashMap::new(),
+                table_schema,
             })))
         }
     }
@@ -110,6 +115,7 @@ impl SyncSource for ReadParquetDataSource<true> {
             None => Ok(None),
             Some(part) => {
                 if runtime_filter_pruner(
+                    self.table_schema.clone(),
                     &part,
                     &self.runtime_filters,
                     &self.partitions.ctx.get_function_context()?,
@@ -174,8 +180,12 @@ impl SyncSource for ReadParquetDataSource<true> {
         true
     }
 
-    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
-        self.runtime_filters.extend(filters);
+    fn add_runtime_filters(&mut self, filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
+        for (column_id, filter) in filters.iter() {
+            if self.runtime_filters.get(column_id).is_none() {
+                self.runtime_filters.insert(*column_id, filter.clone());
+            }
+        }
         Ok(())
     }
 }
@@ -190,8 +200,12 @@ impl Processor for ReadParquetDataSource<false> {
         self
     }
 
-    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
-        self.runtime_filters.extend(filters);
+    fn add_runtime_filters(&mut self, filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
+        for (column_id, filter) in filters.iter() {
+            if self.runtime_filters.get(column_id).is_none() {
+                self.runtime_filters.insert(*column_id, filter.clone());
+            }
+        }
         Ok(())
     }
 
@@ -231,6 +245,7 @@ impl Processor for ReadParquetDataSource<false> {
             let mut chunks = Vec::with_capacity(parts.len());
             for part in &parts {
                 if runtime_filter_pruner(
+                    self.table_schema.clone(),
                     part,
                     &self.runtime_filters,
                     &self.partitions.ctx.get_function_context()?,

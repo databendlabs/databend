@@ -92,7 +92,7 @@ pub trait Processor: Send {
     }
 
     // Get runtime filter from hash join, only hash join probe processor may return non-empty filters.
-    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
+    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr<String>>> {
         Ok(HashMap::new())
     }
 
@@ -102,7 +102,7 @@ pub trait Processor: Send {
     }
 
     // Add runtime filter to the processor, only source related processors may implement this function.
-    fn add_runtime_filters(&mut self, _filters: HashMap<ColumnId, Expr>) -> Result<()> {
+    fn add_runtime_filters(&mut self, _filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "{} can't add runtime filters",
             self.name()
@@ -190,7 +190,7 @@ impl ProcessorPtr {
     }
 
     /// # Safety
-    pub unsafe fn get_runtime_filters(&self) -> Result<HashMap<ColumnId, Expr>> {
+    pub unsafe fn get_runtime_filters(&self) -> Result<HashMap<ColumnId, Expr<String>>> {
         (*self.inner.get()).get_runtime_filters()
     }
 
@@ -200,7 +200,10 @@ impl ProcessorPtr {
     }
 
     /// # Safety
-    pub unsafe fn add_runtime_filters(&self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
+    pub unsafe fn add_runtime_filters(
+        &self,
+        filters: &HashMap<ColumnId, Expr<String>>,
+    ) -> Result<()> {
         (*self.inner.get()).add_runtime_filters(filters)
     }
 
@@ -283,7 +286,7 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
         (**self).details_status()
     }
 
-    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
+    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr<String>>> {
         (**self).get_runtime_filters()
     }
 
@@ -291,7 +294,7 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
         (**self).can_add_runtime_filter()
     }
 
-    fn add_runtime_filters(&mut self, filters: HashMap<ColumnId, Expr>) -> Result<()> {
+    fn add_runtime_filters(&mut self, filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
         (**self).add_runtime_filters(filters)
     }
 }

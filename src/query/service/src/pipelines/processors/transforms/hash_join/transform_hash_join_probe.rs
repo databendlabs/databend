@@ -74,6 +74,8 @@ pub struct TransformHashJoinProbe {
     // If input data can't find proper partitions to spill,
     // directly probe them with hashtable.
     need_spill: bool,
+
+    runtime_filters: HashMap<ColumnId, Expr<String>>,
 }
 
 impl TransformHashJoinProbe {
@@ -113,6 +115,7 @@ impl TransformHashJoinProbe {
             spill_state: probe_spill_state,
             processor_id: id,
             need_spill: true,
+            runtime_filters: Default::default(),
         }))
     }
 
@@ -269,13 +272,10 @@ impl Processor for TransformHashJoinProbe {
         self
     }
 
-    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr>> {
-        Ok(self
-            .join_probe_state
-            .hash_join_state
-            .runtime_filters
-            .read()
-            .clone())
+    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr<String>>> {
+        let mut runtime_filters = HashMap::new();
+        runtime_filters.extend(self.runtime_filters.drain());
+        Ok(runtime_filters)
     }
 
     fn event(&mut self) -> Result<Event> {
@@ -412,6 +412,12 @@ impl Processor for TransformHashJoinProbe {
                         .hash_join_state
                         .wait_first_round_build_done()
                         .await?;
+                    self.runtime_filters = self
+                        .join_probe_state
+                        .hash_join_state
+                        .runtime_filters
+                        .read()
+                        .clone();
                 } else {
                     self.join_probe_state
                         .hash_join_state
