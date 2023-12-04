@@ -1014,6 +1014,7 @@ pub async fn history_should_have_item(
     .await
 }
 
+#[derive(Clone)]
 pub struct ClusterDescriptor {
     local_node_id: String,
     cluster_nodes_list: Vec<Arc<NodeInfo>>,
