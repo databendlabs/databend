@@ -44,9 +44,6 @@ pub enum BlockOperator {
         projections: Option<ColumnSet>,
     },
 
-    /// Filter the input [`DataBlock`] with the predicate `eval`.
-    Filter { projections: ColumnSet, expr: Expr },
-
     /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
 }
@@ -82,25 +79,6 @@ impl BlockOperator {
                         Some(projections) => Ok(input.project(projections)),
                         None => Ok(input),
                     }
-                }
-            }
-
-            BlockOperator::Filter { projections, expr } => {
-                assert_eq!(expr.data_type(), &DataType::Boolean);
-
-                let num_evals = input
-                    .get_meta()
-                    .and_then(AggIndexMeta::downcast_ref_from)
-                    .map(|a| a.num_evals);
-
-                if let Some(num_evals) = num_evals {
-                    // It's from aggregating index.
-                    Ok(input.project_with_agg_index(projections, num_evals))
-                } else {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
-                    let data_block = input.project(projections);
-                    data_block.filter_boolean_value(&filter)
                 }
             }
 
@@ -193,7 +171,6 @@ impl Transform for CompoundBlockOperator {
                 .map(|op| {
                     match op {
                         BlockOperator::Map { .. } => "Map",
-                        BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
                     }
                     .to_string()
