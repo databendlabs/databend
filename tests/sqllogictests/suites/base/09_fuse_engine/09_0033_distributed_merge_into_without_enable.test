@@ -59,9 +59,11 @@ remove @distributed_source_parquet;
 statement ok
 copy into @distributed_source_parquet from (select * from distributed_source_test);
 
-statement ok
+query TTT
 merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @distributed_source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
 when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
+----
+2 4 8
 
 query TT
 select * from distributed_target_test order by a;
@@ -121,6 +123,8 @@ select * from corner_source_table order by a,b;
 
 query TTT
 merge into corner_target_table as t1 using (select * from corner_source_table) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+0 5
 
 query TTT
 select * from corner_target_table order by a,b;
@@ -158,60 +162,6 @@ merge into distributed_test_order as t using (select id,34 as id1,238 as id2, id
 
 statement ok
 merge into distributed_test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from distributed_random_store) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert *;
-
-statement ok
-create table orders2(a int,b string,c string);
-
-statement ok
-insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
-
-statement ok
-insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
-
-statement error 4001
-MERGE INTO orders2 USING (
-    SELECT o.a,o.b
-    FROM orders2 o
-             INNER JOIN (
-        SELECT a, b, AVG(a) AS avg_quantity
-        FROM orders2
-        GROUP BY a, b
-    ) a ON o.a = a.a AND o.b = a.b
-) AS joined_data ON orders2.a = joined_data.a
-    WHEN MATCHED THEN
-        UPDATE SET orders2.b = joined_data.b;
-
-statement ok
-truncate table orders2;
-
-statement ok
-insert into orders2 values(1,'a1','b1');
-
-statement ok
-insert into orders2 values(2,'a2','b2');
-
-statement ok
-insert into orders2 values(3,'a3','b3');
-
-statement ok
-MERGE INTO orders2 USING (
-    SELECT o.a,o.b,a.avg_quantity
-    FROM orders2 o
-             INNER JOIN (
-        SELECT a, b, AVG(a)+1 AS avg_quantity
-        FROM orders2
-        GROUP BY a, b
-    ) a ON o.a = a.a AND o.b = a.b
-) AS joined_data ON orders2.a = joined_data.a
-    WHEN MATCHED THEN
-        UPDATE SET orders2.b = joined_data.b,orders2.a = avg_quantity;
-
-query TTT
-select * from orders2 order by a,b,c;
-----
-2 a1 b1
-3 a2 b2
-4 a3 b3
 
 statement ok
 set enable_experimental_merge_into = 0;

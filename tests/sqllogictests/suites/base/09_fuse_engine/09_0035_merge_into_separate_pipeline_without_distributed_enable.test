@@ -42,8 +42,10 @@ select * from t2_separate order by a,b,c;
 9 a9 b9
 
 ## 1.test matched only
-statement ok
+query T
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched and t2.b = 'a5' then update * when matched then update *;
+----
+2
 
 query TTT
 select * from t1_separate order by a,b,c;
@@ -54,8 +56,10 @@ select * from t1_separate order by a,b,c;
 4 a4 b4
 
 ## 2.test insert only
-statement ok
+query T
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
+----
+2
 
 query TTT
 select * from t1_separate order by a,b,c;
@@ -75,8 +79,10 @@ statement ok
 truncate table t1_separate;
 
 ## test merge into empty table for insert-only
-statement ok
+query T
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
+----
+4
 
 query TTT
 select * from t1_separate order by a,b,c;
