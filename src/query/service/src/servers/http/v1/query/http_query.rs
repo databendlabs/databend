@@ -162,6 +162,7 @@ pub struct ResponseState {
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
     pub error: Option<ErrorCode>,
+    pub warnings: Vec<String>,
 }
 
 pub struct HttpQueryResponseInternal {
@@ -439,6 +440,7 @@ impl HttpQuery {
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
+            warnings: state.get_warnings(),
             affect: state.get_affect(),
         }
     }
