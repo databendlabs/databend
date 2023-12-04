@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
