@@ -37,6 +37,7 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_metrics::storage::*;
+use common_storage::MergeStatus;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -71,6 +72,7 @@ struct AggregationContext {
 }
 
 pub struct MatchedAggregator {
+    ctx: Arc<dyn TableContext>,
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -109,7 +111,7 @@ impl MatchedAggregator {
 
         Ok(Self {
             aggregation_ctx: Arc::new(AggregationContext {
-                ctx,
+                ctx: ctx.clone(),
                 write_settings,
                 read_settings,
                 data_accessor,
@@ -120,6 +122,7 @@ impl MatchedAggregator {
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
             segment_locations: AHashMap::from_iter(segment_locations),
+            ctx: ctx.clone(),
         })
     }
 
@@ -153,6 +156,23 @@ impl MatchedAggregator {
             RowIdKind::Delete => {
                 for row_id in row_ids {
                     let (prefix, offset) = split_row_id(row_id);
+                    let value = self.block_mutation_row_offset.get(&prefix);
+                    if value.is_none() {
+                        self.ctx.add_merge_status(MergeStatus {
+                            insert_rows: 0,
+                            update_rows: 0,
+                            deleted_rows: 1,
+                        });
+                    } else {
+                        let s = value.unwrap();
+                        if !s.1.contains(&(offset as usize)) {
+                            self.ctx.add_merge_status(MergeStatus {
+                                insert_rows: 0,
+                                update_rows: 0,
+                                deleted_rows: 1,
+                            });
+                        }
+                    }
                     // support idempotent delete
                     self.block_mutation_row_offset
                         .entry(prefix)

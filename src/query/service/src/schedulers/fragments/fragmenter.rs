@@ -105,6 +105,7 @@ impl Fragmenter {
                 FragmentKind::Merge => Ok(Some(MergeExchange::create(
                     Self::get_local_executor(ctx),
                     plan.ignore_exchange,
+                    plan.allow_adjust_parallelism,
                 ))),
                 FragmentKind::Expansive => Ok(Some(BroadcastExchange::create(
                     from_multiple_nodes,
@@ -264,6 +265,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             // set the fragment id to a invalid value here.
             destination_fragment_id: usize::MAX,
             ignore_exchange: plan.ignore_exchange,
+            allow_adjust_parallelism: plan.allow_adjust_parallelism,
         });
         let fragment_type = match self.state {
             State::SelectLeaf => FragmentType::Source,
