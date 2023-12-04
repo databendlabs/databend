@@ -184,7 +184,7 @@ impl AsyncSource for ListStagesSource {
         self.is_finished = true;
 
         let (stage_info, path) =
-            resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
+            resolve_stage_location(self.ctx.as_ref(), &self.args_parsed.location).await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()
