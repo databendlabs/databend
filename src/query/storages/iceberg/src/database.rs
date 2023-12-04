@@ -91,7 +91,7 @@ impl Database for IcebergDatabase {
         let table_sp = table_sp.auto_detect().await?;
         let tbl_root = DataOperator::try_create(&table_sp).await?;
 
-        let tbl = IcebergTable::try_create(
+        let tbl = IcebergTable::try_create_from_iceberg_catalog(
             &self.ctl_name,
             &self.info.name_ident.db_name,
             table_name,

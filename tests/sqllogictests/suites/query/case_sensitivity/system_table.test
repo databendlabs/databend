@@ -3,6 +3,7 @@ query I
 select "Engine" as engine from system.engines order by engine
 ----
 FUSE
+ICEBERG
 MEMORY
 NULL
 RANDOM

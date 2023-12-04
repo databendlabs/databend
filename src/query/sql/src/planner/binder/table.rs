@@ -737,7 +737,7 @@ impl Binder {
             }),
             _ => location.clone(),
         };
-        let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
+        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &location).await?;
         if let Some(f) = &options.file_format {
             stage_info.file_format_params = match StageFileFormatType::from_str(f) {
                 Ok(t) => FileFormatParams::default_by_type(t)?,

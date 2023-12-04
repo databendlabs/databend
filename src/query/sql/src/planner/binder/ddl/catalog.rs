@@ -198,7 +198,7 @@ async fn parse_catalog_url(
     };
 
     let mut location = UriLocation::from_uri(uri, "".to_string(), options)?;
-    let (sp, _) = parse_uri_location(&mut location, Some(ctx)).await?;
+    let (sp, _) = parse_uri_location(&mut location, Some(ctx.as_ref())).await?;
 
     Ok(Some(sp))
 }

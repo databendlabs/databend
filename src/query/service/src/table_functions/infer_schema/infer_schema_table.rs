@@ -210,7 +210,7 @@ impl AsyncSource for InferSchemaSource {
             )?;
             FileLocation::Uri(uri)
         };
-        let (stage_info, path) = resolve_file_location(&self.ctx, &file_location).await?;
+        let (stage_info, path) = resolve_file_location(self.ctx.as_ref(), &file_location).await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()

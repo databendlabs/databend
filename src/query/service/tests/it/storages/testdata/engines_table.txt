@@ -1,15 +1,16 @@
 ---------- TABLE INFO ------------
 DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEngines
 -------- TABLE CONTENTS ----------
-+----------+-------------------------------+
-| Column 0 | Column 1                      |
-+----------+-------------------------------+
-| 'FUSE'   | 'FUSE Storage Engine'         |
-| 'MEMORY' | 'MEMORY Storage Engine'       |
-| 'NULL'   | 'NULL Storage Engine'         |
-| 'RANDOM' | 'RANDOM Storage Engine'       |
-| 'STREAM' | 'STREAM STORAGE Engine'       |
-| 'VIEW'   | 'VIEW STORAGE (LOGICAL VIEW)' |
-+----------+-------------------------------+
++-----------+-------------------------------+
+| Column 0  | Column 1                      |
++-----------+-------------------------------+
+| 'FUSE'    | 'FUSE Storage Engine'         |
+| 'ICEBERG' | 'ICEBERG STORAGE Engine'      |
+| 'MEMORY'  | 'MEMORY Storage Engine'       |
+| 'NULL'    | 'NULL Storage Engine'         |
+| 'RANDOM'  | 'RANDOM Storage Engine'       |
+| 'STREAM'  | 'STREAM STORAGE Engine'       |
+| 'VIEW'    | 'VIEW STORAGE (LOGICAL VIEW)' |
++-----------+-------------------------------+
 
 
