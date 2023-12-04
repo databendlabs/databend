@@ -93,7 +93,7 @@ pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
                 false,
             )
         }
-        _ => unreachable!("build_select_expr: {:?}", expr),
+        _ => (SelectExpr::Others(expr.clone()), false),
     }
 }
 

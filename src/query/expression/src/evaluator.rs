@@ -1274,7 +1274,25 @@ impl<'a> Evaluator<'a> {
                     count,
                 )
             }
-            _ => unreachable!(),
+            Expr::Cast { span, is_try, expr, dest_type } => {
+                let value = self.get_select_child(expr, validity.clone())?.0;
+                let result = if *is_try {
+                    self.run_try_cast(*span, expr.data_type(), dest_type, value)?
+                } else {
+                    self.run_cast(*span, expr.data_type(), dest_type, value, validity)?
+                };
+                update_selection_by_boolean_value(
+                    result,
+                    dest_type,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                )
+            }
+            _ => unreachable!("expr: {expr}"),
         };
         Ok(count)
     }
