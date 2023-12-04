@@ -66,6 +66,7 @@ pub struct QueryContextShared {
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
+    pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -118,6 +119,7 @@ impl QueryContextShared {
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
             error: Arc::new(Mutex::new(None)),
+            warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
@@ -150,6 +152,16 @@ impl QueryContextShared {
 
     pub fn get_error(&self) -> Option<ErrorCode> {
         let guard = self.error.lock();
+        (*guard).clone()
+    }
+
+    pub fn add_warning(&self, warn: String) {
+        let mut guard = self.warnings.lock();
+        (*guard).push(warn);
+    }
+
+    pub fn get_warnings(&self) -> Vec<String> {
+        let guard = self.warnings.lock();
         (*guard).clone()
     }
 
