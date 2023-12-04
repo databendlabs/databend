@@ -33,7 +33,13 @@ pub async fn bind_table_args(
     named_params: &Vec<(String, Expr)>,
 ) -> Result<TableArgs> {
     let mut args = Vec::with_capacity(params.len());
+    let mut params_function_name = Vec::with_capacity(params.len());
     for arg in params.iter() {
+        if let Expr::FunctionCall { name, .. } = arg {
+            params_function_name.push(Some(name.name.clone()));
+        } else {
+            params_function_name.push(None);
+        }
         args.push(scalar_binder.bind(arg).await?.0);
     }
 
@@ -70,6 +76,7 @@ pub async fn bind_table_args(
         .collect::<Result<HashMap<_, _>>>()?;
 
     Ok(TableArgs {
+        params_function_name: Some(params_function_name),
         positioned: positioned_args,
         named: named_args,
     })

@@ -20,6 +20,7 @@ use common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TableArgs {
+    pub params_function_name: Option<Vec<Option<String>>>,
     pub positioned: Vec<Scalar>,
     pub named: HashMap<String, Scalar>,
 }
@@ -31,6 +32,7 @@ impl TableArgs {
 
     pub fn new_positioned(args: Vec<Scalar>) -> Self {
         Self {
+            params_function_name: None,
             positioned: args,
             named: HashMap::new(),
         }
@@ -38,6 +40,7 @@ impl TableArgs {
 
     pub fn new_named(args: HashMap<String, Scalar>) -> Self {
         Self {
+            params_function_name: None,
             positioned: vec![],
             named: args,
         }

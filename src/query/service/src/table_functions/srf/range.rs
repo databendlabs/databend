@@ -87,10 +87,7 @@ impl RangeTable {
 
         let start = table_args.positioned[0].clone();
         let end = table_args.positioned[1].clone();
-        let mut step = Scalar::Number(NumberScalar::Int64(1));
-        if table_args.positioned.len() == 3 {
-            step = table_args.positioned[2].clone();
-        }
+        let step = RangeTable::unify_step(&table_args);
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -116,6 +113,36 @@ impl RangeTable {
             step,
             data_type,
         }))
+    }
+
+    fn unify_step(table_args: &TableArgs) -> Scalar {
+        let start = &table_args.positioned[0];
+
+        // if all table args(exclude the last one) is `to_timestamp`, step will be 1000000
+        // since `to_timestamp` return micro seconds
+        if let &Scalar::Timestamp(_) = start {
+            if let Some(params_function_name) = &table_args.params_function_name {
+                let all_func_is_to_timestamp = params_function_name
+                    [..params_function_name.len() - 1]
+                    .iter()
+                    .all(|function_name| {
+                        if let Some(function_name) = function_name {
+                            return function_name == "to_timestamp";
+                        }
+                        false
+                    });
+
+                if all_func_is_to_timestamp {
+                    return Scalar::Number(NumberScalar::Int64(1000000));
+                }
+            }
+        }
+
+        if table_args.positioned.len() == 3 {
+            table_args.positioned[2].clone()
+        } else {
+            Scalar::Number(NumberScalar::Int64(1))
+        }
     }
 }
 
