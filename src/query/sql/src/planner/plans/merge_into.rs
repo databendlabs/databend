@@ -124,10 +124,7 @@ impl MergeInto {
                 field_insertd.clone(),
                 field_deleted.clone(),
             ])),
-            (true, false, false) => Ok(DataSchemaRefExt::create(vec![
-                field_insertd.clone(),
-                field_updated.clone(),
-            ])),
+            (true, false, false) => Ok(DataSchemaRefExt::create(vec![field_insertd.clone()])),
             (false, true, true) => Ok(DataSchemaRefExt::create(vec![
                 field_updated.clone(),
                 field_deleted.clone(),
