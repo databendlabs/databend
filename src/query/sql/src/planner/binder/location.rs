@@ -510,7 +510,7 @@ pub async fn get_storage_params_from_options(
     let connection = options.get("connection_name");
 
     let mut location = if let Some(connection) = connection {
-        let connection = ctx.get_connection(&connection).await?;
+        let connection = ctx.get_connection(connection).await?;
         let location = UriLocation::from_uri(
             location.to_string(),
             "".to_string(),
