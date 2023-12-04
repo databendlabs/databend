@@ -65,10 +65,12 @@ pub use stage::StageFilesInfo;
 pub use stage::STDIN_FD;
 
 mod copy;
+mod merge;
 mod statistics;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
 pub use copy::FileStatus;
+pub use merge::MergeStatus;
 pub use statistics::Datum;
 pub use statistics::F64;

@@ -70,6 +70,7 @@ use common_sql::IndexType;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
+use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
@@ -802,6 +803,14 @@ impl TableContext for QueryContext {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.shared.copy_status.clone()
+    }
+
+    fn add_merge_status(&self, merge_status: MergeStatus) {
+        self.shared.merge_status.write().merge_status(merge_status)
+    }
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        self.shared.merge_status.clone()
     }
 
     fn get_license_key(&self) -> String {

@@ -23,6 +23,7 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storage::CopyStatus;
+use common_storage::MergeStatus;
 use log::error;
 
 use crate::api::rpc::packets::ProgressInfo;
@@ -55,6 +56,7 @@ pub enum DataPacket {
     FetchProgress,
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
+    MergeStatus(MergeStatus),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -67,6 +69,7 @@ impl DataPacket {
             DataPacket::ErrorCode(_) => 0,
             DataPacket::FetchProgress => 0,
             DataPacket::CopyStatus(_) => 0,
+            DataPacket::MergeStatus(_) => 0,
             DataPacket::SerializeProgress(_) => 0,
             DataPacket::Dictionary(v) => calc_size(v),
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
@@ -112,6 +115,12 @@ impl TryFrom<DataPacket> for FlightData {
             }
             DataPacket::CopyStatus(status) => FlightData {
                 app_metadata: vec![0x06],
+                data_body: serde_json::to_vec(&status)?,
+                data_header: vec![],
+                flight_descriptor: None,
+            },
+            DataPacket::MergeStatus(status) => FlightData {
+                app_metadata: vec![0x07],
                 data_body: serde_json::to_vec(&status)?,
                 data_header: vec![],
                 flight_descriptor: None,
@@ -162,6 +171,10 @@ impl TryFrom<FlightData> for DataPacket {
             0x06 => {
                 let status = serde_json::from_slice::<CopyStatus>(&flight_data.data_body)?;
                 Ok(DataPacket::CopyStatus(status))
+            }
+            0x07 => {
+                let status = serde_json::from_slice::<MergeStatus>(&flight_data.data_body)?;
+                Ok(DataPacket::MergeStatus(status))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
