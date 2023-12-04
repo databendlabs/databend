@@ -39,7 +39,7 @@ impl Binder {
         location: &str,
         pattern: &str,
     ) -> Result<Plan> {
-        let (stage, path) = resolve_stage_location(&self.ctx, location).await?;
+        let (stage, path) = resolve_stage_location(self.ctx.as_ref(), location).await?;
         let plan_node = RemoveStagePlan {
             path,
             stage,
@@ -82,7 +82,8 @@ impl Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
+                let (stage_storage, path) =
+                    parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
 
                 if !path.ends_with('/') {
                     return Err(ErrorCode::SyntaxException(
