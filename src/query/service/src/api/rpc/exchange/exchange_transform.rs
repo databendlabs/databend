@@ -38,11 +38,10 @@ impl ExchangeTransform {
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
         injector: Arc<dyn ExchangeInjector>,
-        resize_back: bool,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
-                via_exchange_source(ctx.clone(), params, injector, pipeline, resize_back)
+                via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;

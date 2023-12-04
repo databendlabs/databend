@@ -17,9 +17,11 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
+use crate::plans::Exchange;
 use crate::plans::Limit;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::Sort;
 
 pub(super) struct SortAndLimitPushDownOptimizer {
@@ -134,8 +136,12 @@ impl SortAndLimitPushDownOptimizer {
         let mut sort: Sort = s_expr.plan().clone().try_into()?;
         sort.after_exchange = Some(false);
         let exchange_sexpr = s_expr.child(0)?;
-
+        debug_assert!(matches!(
+            exchange_sexpr.plan.as_ref(),
+            RelOperator::Exchange(Exchange::Merge)
+        ));
         debug_assert!(exchange_sexpr.children.len() == 1);
+        let exchange_sexpr = exchange_sexpr.replace_plan(Arc::new(Exchange::MergeSort.into()));
 
         let child = exchange_sexpr.child(0)?.clone();
         let before_exchange_sort =

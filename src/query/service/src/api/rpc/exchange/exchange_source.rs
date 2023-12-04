@@ -32,15 +32,11 @@ use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
 /// Add Exchange Source to the pipeline.
-///
-/// The parameter `resize_back` is used to determine whether to resize the pipeline back to the original size.
-/// It's always be true except for the sort pipeline.
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
     params: &MergeExchangeParams,
     injector: Arc<dyn ExchangeInjector>,
     pipeline: &mut Pipeline,
-    resize_back: bool,
 ) -> Result<()> {
     // UpstreamTransform --->  DummyTransform   --->    DummyTransform      --->  DownstreamTransform
     //      ...          --->      ...          --->        ...             --->        ...

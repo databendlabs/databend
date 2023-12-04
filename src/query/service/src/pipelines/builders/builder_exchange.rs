@@ -20,18 +20,12 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub fn build_exchange_source(&mut self, exchange_source: &ExchangeSource) -> Result<()> {
-        // If the next parent plan of current exchange source is a sort plan,
-        // we will build a `MultiSortMerge` transform for every exchange source,
-        // so should not resize the pipeline size back.
-        let resize_back = !self.before_sort_and_after_exchange;
-        self.before_sort_and_after_exchange = false;
         let exchange_manager = self.ctx.get_exchange_manager();
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
             self.enable_profiling,
             self.exchange_injector.clone(),
-            resize_back,
         )?;
         // add sharing data
         self.join_state = build_res.builder_data.input_join_state;
