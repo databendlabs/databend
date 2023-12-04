@@ -12,10 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
 use std::thread;
 
 use common_base::base::tokio;
-use common_base::base::tokio::time::sleep;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,6 +23,7 @@ use common_expression::DataBlock;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
+use tokio::sync::Barrier;
 
 use crate::distributed::MetaSrvMock;
 
@@ -43,9 +44,11 @@ async fn test_simple_cluster() -> Result<()> {
     );
 
     let task_count = configs.len();
+    let barrier = Arc::new(Barrier::new(task_count + 1)); // +1 for the main thread
     let mut handles = Vec::with_capacity(task_count);
 
     for (i, conf) in configs.clone().into_iter().enumerate() {
+        let barrier_clone = barrier.clone();
         let thread_name = format!("custom-thread-node-{}", i + 1);
         let is_execute_node = i == task_count - 1; // Make the last node the special one
 
@@ -63,7 +66,6 @@ async fn test_simple_cluster() -> Result<()> {
                     let fixture = TestFixture::setup_with_config(&conf_clone).await?;
 
                     if is_execute_node {
-                        sleep(tokio::time::Duration::from_secs(5)).await;
                         // Case1: Check the cluster table.
                         {
                             let res = fixture
@@ -71,15 +73,15 @@ async fn test_simple_cluster() -> Result<()> {
                                 .await?;
                             let blocks = res.try_collect::<Vec<DataBlock>>().await?;
                             let expected = vec![
-                                "+----------+-----------+----------+",
-                                "| Column 0 | Column 1  | Column 2 |",
-                                "+----------+-----------+----------+",
-                                "| 'node1'  | '0.0.0.0' | 6061     |",
-                                "| 'node2'  | '0.0.0.0' | 6062     |",
-                                "| 'node3'  | '0.0.0.0' | 6063     |",
-                                "| 'node4'  | '0.0.0.0' | 6064     |",
-                                "| 'node5'  | '0.0.0.0' | 6065     |",
-                                "+----------+-----------+----------+",
+                                "+----------+-------------+----------+",
+                                "| Column 0 | Column 1    | Column 2 |",
+                                "+----------+-------------+----------+",
+                                "| 'node1'  | '127.0.0.1' | 16061    |",
+                                "| 'node2'  | '127.0.0.1' | 16062    |",
+                                "| 'node3'  | '127.0.0.1' | 16063    |",
+                                "| 'node4'  | '127.0.0.1' | 16064    |",
+                                "| 'node5'  | '127.0.0.1' | 16065    |",
+                                "+----------+-------------+----------+",
                             ];
                             common_expression::block_debug::assert_blocks_sorted_eq(
                                 expected,
@@ -96,15 +98,18 @@ async fn test_simple_cluster() -> Result<()> {
                                 .await?;
                             let blocks = res.try_collect::<Vec<DataBlock>>().await?;
                             let expected = vec![
-                                "+----------+-----------+----------+",
-                                "| Column 0 | Column 1  | Column 2 |",
-                                "+----------+-----------+----------+",
-                                "| 'node1'  | '0.0.0.0' | 6061     |",
-                                "| 'node2'  | '0.0.0.0' | 6062     |",
-                                "| 'node3'  | '0.0.0.0' | 6063     |",
-                                "| 'node4'  | '0.0.0.0' | 6064     |",
-                                "| 'node5'  | '0.0.0.0' | 6065     |",
-                                "+----------+-----------+----------+",
+                                "+----------------------------------------------------------------------------------------------+",
+                                "| Column 0                                                                                     |",
+                                "+----------------------------------------------------------------------------------------------+",
+                                "| '              NumbersSourceTransform × 8 processors'                                        |",
+                                "| '            AggregatorPartialTransform × 8 processors'                                      |",
+                                "| '          Merge (AggregatorPartialTransform × 8 processors) to (Resize × 12)'               |",
+                                "| '        Merge (DummyTransform × 12 processors) to (TransformExchangeDeserializer × 8)'      |",
+                                "| '      TransformExchangeDeserializer × 8 processors'                                         |",
+                                "| '    Merge (TransformExchangeDeserializer × 8 processors) to (AggregatorFinalTransform × 1)' |",
+                                "| '  AggregatorFinalTransform × 1 processor'                                                   |",
+                                "| 'CompoundBlockOperator(Project) × 1 processor'                                               |",
+                                "+----------------------------------------------------------------------------------------------+",
                             ];
                             common_expression::block_debug::assert_blocks_sorted_eq(
                                 expected,
@@ -113,6 +118,8 @@ async fn test_simple_cluster() -> Result<()> {
                         }
                     }
 
+                    // Before ending the async block, wait on the barrier
+                    barrier_clone.wait().await;
                     Ok::<(), ErrorCode>(())
                 };
 
@@ -125,6 +132,8 @@ async fn test_simple_cluster() -> Result<()> {
         handles.push(handle);
     }
 
+    // Wait on the barrier in the main test thread too
+    barrier.wait().await;
     for handle in handles {
         handle.join().expect("Thread failed to complete");
     }
