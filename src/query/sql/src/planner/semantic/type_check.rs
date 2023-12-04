@@ -3255,7 +3255,7 @@ impl<'a> TypeChecker<'a> {
         for (_, path) in paths.iter() {
             let key_path = match path {
                 Literal::UInt64(idx) => KeyPath::Index(*idx as i32),
-                Literal::String(field) => KeyPath::Name(std::borrow::Cow::Borrowed(field)),
+                Literal::String(field) => KeyPath::QuotedName(std::borrow::Cow::Borrowed(field)),
                 _ => unreachable!(),
             };
             key_paths.push(key_path);
