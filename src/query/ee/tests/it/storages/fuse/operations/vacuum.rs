@@ -14,9 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::test_kits::fixture::append_sample_data;
-use databend_query::test_kits::fixture::check_data_dir;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use enterprise_query::storages::fuse::do_vacuum_drop_tables;
 
 #[tokio::test(flavor = "multi_thread")]

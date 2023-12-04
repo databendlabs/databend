@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 use databend_query::api::http::v1::cluster::*;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;

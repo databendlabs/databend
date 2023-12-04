@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_sql::Planner;
 use common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 use crate::storages::fuse::utils::do_purge_test;

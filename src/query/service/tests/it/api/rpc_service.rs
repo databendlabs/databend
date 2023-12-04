@@ -26,7 +26,7 @@ use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientTlsConfig;
 use databend_query::api::RpcService;
-use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::*;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
