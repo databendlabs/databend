@@ -2988,7 +2988,7 @@ impl<'a> TypeChecker<'a> {
         let mut table_data_type = infer_schema_type(&data_type)?;
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
-        if let TableDataType::Tuple { .. } = table_data_type {
+        if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
             if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
