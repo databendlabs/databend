@@ -25,6 +25,8 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;
+use common_sql::plans::DeletePlan;
+use common_sql::plans::UpdatePlan;
 use common_storages_factory::Table;
 use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::io::SegmentWriter;
@@ -49,6 +51,12 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
+use crate::interpreters::DeleteInterpreter;
+use crate::interpreters::Interpreter;
+use crate::interpreters::UpdateInterpreter;
+use crate::sessions::QueryContext;
+
+/// This file contains some helper functions for testing fuse table.
 
 pub async fn generate_snapshot_with_segments(
     fuse_table: &FuseTable,
@@ -255,4 +263,59 @@ pub async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> 
         }
     }
     Ok(count)
+}
+
+pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    append_sample_data_overwrite(num_blocks, false, fixture).await
+}
+
+pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
+    let table = fixture.latest_default_table().await?;
+    table.analyze(fixture.default_ctx.clone()).await
+}
+
+pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
+    let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
+    delete_interpreter.execute(ctx).await?;
+    Ok(())
+}
+
+pub async fn do_update(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<()> {
+    let update_interpreter = UpdateInterpreter::try_create(ctx.clone(), plan)?;
+    update_interpreter.execute(ctx).await?;
+    Ok(())
+}
+
+pub async fn append_sample_data_overwrite(
+    num_blocks: usize,
+    overwrite: bool,
+    fixture: &TestFixture,
+) -> Result<()> {
+    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, overwrite, true)
+        .await
+}
+
+pub async fn append_variant_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    let stream = TestFixture::gen_variant_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, true, true)
+        .await
+}
+
+pub async fn append_computed_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    let stream = TestFixture::gen_computed_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, true, true)
+        .await
 }
