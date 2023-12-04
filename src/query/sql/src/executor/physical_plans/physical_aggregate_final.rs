@@ -214,7 +214,7 @@ impl PhysicalPlanBuilder {
                         PhysicalPlan::Exchange(Exchange {
                             plan_id: self.next_plan_id(),
                             kind,
-                            expand_pipeline: true,
+                            allow_adjust_parallelism: true,
                             ignore_exchange: false,
                             input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
                             keys: vec![RemoteExpr::ColumnRef {

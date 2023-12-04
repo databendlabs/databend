@@ -815,7 +815,7 @@ impl FragmentCoordinator {
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
                         destination_id: exchange.destination_id.clone(),
-                        expand_pipeline: exchange.expand_pipeline,
+                        allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                         ignore_exchange: exchange.ignore_exchange,
                     }))
                 }

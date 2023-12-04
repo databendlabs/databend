@@ -185,7 +185,7 @@ impl CopyIntoTableInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
-                expand_pipeline: true,
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             });
         }

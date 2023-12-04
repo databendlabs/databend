@@ -401,7 +401,7 @@ impl MergeIntoInterpreter {
                     input: Box::new(merge_append),
                     kind: FragmentKind::Merge,
                     keys: vec![],
-                    expand_pipeline: true,
+                    allow_adjust_parallelism: true,
                     ignore_exchange: false,
                 })),
                 table_info: table_info.clone(),
