@@ -42,5 +42,4 @@ opendal = { workspace = true }
 ordered-float = { workspace = true }
 serde = { workspace = true }
 typetag = "0.2.3"
-url = "2"
 volo-thrift = "0.8"

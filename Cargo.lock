@@ -2904,7 +2904,6 @@ dependencies = [
  "storages-common-index",
  "storages-common-table-meta",
  "typetag",
- "url",
  "volo-thrift",
 ]
 

@@ -151,14 +151,8 @@ impl HiveCatalog {
     ) -> Result<HiveCatalog> {
         let client_address = hms_address.into();
 
-        let url = url::Url::parse(&client_address).map_err(|e| {
-            ErrorCode::InvalidConfig(format!(
-                "hms address {} is not valid: {}",
-                client_address, e
-            ))
-        })?;
-
-        let address = format!("{}:{}", url.host().unwrap(), url.port().unwrap())
+        let address = client_address
+            .as_str()
             .to_socket_addrs()
             .map_err(|e| {
                 ErrorCode::InvalidConfig(format!(
