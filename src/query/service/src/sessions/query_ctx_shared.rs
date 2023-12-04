@@ -30,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
@@ -37,6 +38,7 @@ use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::MergeStatus;
 use common_storage::StorageMetrics;
+use common_users::UserApiProvider;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -400,6 +402,12 @@ impl QueryContextShared {
     pub fn get_status_info(&self) -> String {
         let status = self.status.read();
         status.clone()
+    }
+
+    pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let user_mgr = UserApiProvider::instance();
+        let tenant = self.get_tenant();
+        user_mgr.get_connection(&tenant, name).await
     }
 }
 
