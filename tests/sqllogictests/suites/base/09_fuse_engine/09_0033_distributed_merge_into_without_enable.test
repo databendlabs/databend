@@ -197,7 +197,7 @@ insert into orders2 values(2,'a2','b2');
 statement ok
 insert into orders2 values(3,'a3','b3');
 
-query TTT
+query T
 MERGE INTO orders2 USING (
     SELECT o.a,o.b,a.avg_quantity
     FROM orders2 o
