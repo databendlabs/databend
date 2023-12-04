@@ -107,15 +107,16 @@ function install_ziglang {
 	fi
 	echo "==> installing ziglang..."
 
+	arch=$(uname -m)
 	case "$PACKAGE_MANAGER" in
-	apt-get)
-		curl -sSfLo /tmp/zig.tar.xz https://ziglang.org/download/0.11.0/zig-linux-x86_64-0.11.0.tar.xz
+	apt-get | yum | dnf | pacman)
+		curl -sSfLo /tmp/zig.tar.xz "https://ziglang.org/download/0.11.0/zig-linux-${arch}-0.11.0.tar.xz"
 		tar -xf /tmp/zig.tar.xz -C /tmp
-		"${PRE_COMMAND[@]}" cp /tmp/zig-linux-x86_64-0.11.0/zig /usr/local/bin/
+		"${PRE_COMMAND[@]}" cp "/tmp/zig-linux-${arch}-0.11.0/zig" /usr/local/bin/
 		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/zig
 		rm -rf /tmp/zig*
 		;;
-	yum | dnf | brew | pacman)
+	brew)
 		install_pkg zig "$PACKAGE_MANAGER"
 		;;
 	*)
