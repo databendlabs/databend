@@ -186,7 +186,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
     let mut labels = vec![];
 
     // Plain text error has the highest priority. Only display it if exists.
-    for kind in &inner.errors {
+    for kind in error.errors.iter().chain(&inner.errors) {
         if let ErrorKind::Other(msg) = kind {
             labels = vec![(inner.span, msg.to_string())];
             break;

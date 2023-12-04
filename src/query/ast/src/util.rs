@@ -318,14 +318,16 @@ pub fn map_res<'a, O1, O2, F, G>(
 ) -> impl FnMut(Input<'a>) -> IResult<'a, O2>
 where
     F: nom::Parser<Input<'a>, O1, Error<'a>>,
-    G: FnMut(O1) -> Result<O2, ErrorKind>,
+    G: FnMut(O1) -> Result<O2, nom::Err<ErrorKind>>,
 {
     move |input: Input| {
         let i = input;
         let (input, o1) = parser.parse(input)?;
         match f(o1) {
             Ok(o2) => Ok((input, o2)),
-            Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
+            Err(nom::Err::Error(e)) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
+            Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(Error::from_error_kind(i, e))),
+            Err(nom::Err::Incomplete(_)) => unimplemented!(),
         }
     }
 }
@@ -443,3 +445,4 @@ macro_rules! declare_experimental_feature {
 }
 
 declare_experimental_feature!(check_experimental_chain_function, "chain function");
+declare_experimental_feature!(check_experimental_list_comprehension, "list comprehension");
