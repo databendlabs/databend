@@ -525,6 +525,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
+	install_pkg zig "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 
 	# Any call to cargo will make rustup install the correct toolchain
@@ -533,7 +534,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo quickinstall cargo-binstall
 	cargo binstall -y sccache
 	cargo binstall -y cargo-zigbuild
-	cargo install cargo-nextest
+	cargo binstall -y cargo-nextest
 
 fi
 
