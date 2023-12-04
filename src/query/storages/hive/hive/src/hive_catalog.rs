@@ -14,7 +14,7 @@
 
 use std::any::Any;
 use std::fmt::Debug;
-use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
@@ -151,12 +151,25 @@ impl HiveCatalog {
     ) -> Result<HiveCatalog> {
         let client_address = hms_address.into();
 
-        let address: SocketAddr = client_address.as_str().parse().map_err(|e| {
+        let url = url::Url::parse(&client_address).map_err(|e| {
             ErrorCode::InvalidConfig(format!(
                 "hms address {} is not valid: {}",
                 client_address, e
             ))
         })?;
+
+        let address = format!("{}:{}", url.host().unwrap(), url.port().unwrap())
+            .to_socket_addrs()
+            .map_err(|e| {
+                ErrorCode::InvalidConfig(format!(
+                    "hms address {} is not valid: {}",
+                    client_address, e
+                ))
+            })?
+            .next()
+            .ok_or_else(|| {
+                ErrorCode::InvalidConfig(format!("hms address {} is not valid", client_address))
+            })?;
 
         let client = ThriftHiveMetastoreClientBuilder::new("hms")
             .address(address)
