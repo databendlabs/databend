@@ -22,7 +22,6 @@ use common_catalog::cluster_info::Cluster;
 use common_catalog::table::AppendMode;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
-use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
@@ -53,7 +52,6 @@ use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::storage::StorageParams;
-use common_meta_types::NodeInfo;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
@@ -98,6 +96,7 @@ use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
 use crate::storages::Table;
+use crate::test_kits::ClusterDescriptor;
 use crate::test_kits::ConfigBuilder;
 use crate::GlobalServices;
 
@@ -1012,46 +1011,4 @@ pub async fn history_should_have_item(
         expected,
     )
     .await
-}
-
-#[derive(Clone)]
-pub struct ClusterDescriptor {
-    local_node_id: String,
-    cluster_nodes_list: Vec<Arc<NodeInfo>>,
-}
-
-impl ClusterDescriptor {
-    pub fn new() -> ClusterDescriptor {
-        ClusterDescriptor {
-            local_node_id: String::from(""),
-            cluster_nodes_list: vec![],
-        }
-    }
-
-    pub fn with_node(self, id: impl Into<String>, addr: impl Into<String>) -> ClusterDescriptor {
-        let mut new_nodes = self.cluster_nodes_list.clone();
-        new_nodes.push(Arc::new(NodeInfo::create(
-            id.into(),
-            0,
-            addr.into(),
-            DATABEND_COMMIT_VERSION.to_string(),
-        )));
-        ClusterDescriptor {
-            cluster_nodes_list: new_nodes,
-            local_node_id: self.local_node_id,
-        }
-    }
-
-    pub fn with_local_id(self, id: impl Into<String>) -> ClusterDescriptor {
-        ClusterDescriptor {
-            local_node_id: id.into(),
-            cluster_nodes_list: self.cluster_nodes_list,
-        }
-    }
-}
-
-impl Default for ClusterDescriptor {
-    fn default() -> Self {
-        Self::new()
-    }
 }

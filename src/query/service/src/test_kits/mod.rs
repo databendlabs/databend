@@ -15,11 +15,12 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod block_writer;
+mod cluster;
 pub mod config;
 pub mod fixture;
 pub mod utils;
 
+pub use cluster::ClusterDescriptor;
 pub use config::ConfigBuilder;
-pub use fixture::ClusterDescriptor;
 pub use fixture::Setup;
 pub use fixture::TestFixture;

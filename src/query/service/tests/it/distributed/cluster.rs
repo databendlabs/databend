@@ -33,9 +33,12 @@ use tokio::runtime::Builder as TokioRuntimeBuilder;
 fn test_simple_cluster() -> Result<()> {
     let configs = setup_node_configs(vec![
         "0.0.0.0:6061", // Node 1 flight address
-        "0.0.0.0:6062", /* Node 2 flight address
-                         * Add more addresses as needed */
+        "0.0.0.0:6062", // Node 2 flight address
+        "0.0.0.0:6063", // Node 2 flight address
+        "0.0.0.0:6064", // Node 4 flight address
+        "0.0.0.0:6065", // Node 5 flight address
     ]);
+
     let task_count = configs.len();
     let barrier = Arc::new(Barrier::new(task_count + 1));
     let mut handles = Vec::with_capacity(task_count);
@@ -72,7 +75,7 @@ fn test_simple_cluster() -> Result<()> {
 
                         let res = execute_query(ctx, "select * from system.clusters").await?;
                         let blocks = res.try_collect::<Vec<DataBlock>>().await?;
-                        println!("blocks: {:?}", blocks);
+                        common_expression::block_debug::pretty_format_blocks(&blocks).unwrap();
                     }
 
                     barrier_clone.wait();
@@ -96,6 +99,7 @@ fn test_simple_cluster() -> Result<()> {
     Ok(())
 }
 
+/// Setup the configurations for the nodes in the cluster
 fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
     addresses
         .into_iter()
@@ -109,6 +113,7 @@ fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
         .collect()
 }
 
+/// Setup the cluster descriptor for the nodes in the cluster
 fn setup_cluster(configs: &[InnerConfig]) -> ClusterDescriptor {
     let mut cluster_desc = ClusterDescriptor::new();
     for conf in configs.iter() {
