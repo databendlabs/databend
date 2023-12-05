@@ -1,3 +1,5 @@
+1
+2 INSERT 0 1
 test_s default default db_stream.t
 test_s default default db_stream.t NULL test append_only
 test_s default default db_stream.t NULL test append_only

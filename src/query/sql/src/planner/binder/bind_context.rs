@@ -25,6 +25,7 @@ use common_catalog::plan::InternalColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::is_internal_stream_column_id;
 use common_expression::ColumnId;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -527,6 +528,7 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
+        visible: bool,
     ) -> Result<ColumnBinding> {
         if !self.allow_internal_columns {
             return Err(ErrorCode::SemanticError(format!(
@@ -554,16 +556,30 @@ impl BindContext {
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
+        if table.table().engine() != "STREAM" && is_internal_stream_column_id(column_id) {
+            return Err(ErrorCode::SemanticError(format!(
+                "Internal column `{}` is not allowed in table `{}`",
+                column_binding.internal_column.column_name(),
+                table.table().name()
+            )));
+        }
+
         let column = metadata.column(column_index);
+        let virtual_computed_expr = column_binding.internal_column.virtual_computed_expr();
         let column_binding = ColumnBindingBuilder::new(
             column.name(),
             column_index,
             Box::new(column.data_type()),
-            Visibility::Visible,
+            if visible {
+                Visibility::Visible
+            } else {
+                Visibility::InVisible
+            },
         )
         .database_name(Some(table.database().to_string()))
         .table_name(Some(table.name().to_string()))
         .table_index(Some(table_index))
+        .virtual_computed_expr(virtual_computed_expr)
         .build();
 
         if new {

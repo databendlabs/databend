@@ -18,6 +18,8 @@ use std::io::Write;
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use bstr::ByteSlice;
+use common_base::base::uuid::Uuid;
+use common_expression::types::decimal::Decimal128Type;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
@@ -259,6 +261,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_u8(*x);
                 }
             });
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
+        "to_uuid",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
+            let uuid = Uuid::from_u128(arg as u128);
+            let str = uuid.as_simple().to_string();
+            output.put_slice(str.as_bytes());
             output.commit_row();
         }),
     );
