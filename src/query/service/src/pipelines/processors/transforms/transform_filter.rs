@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
@@ -25,9 +24,10 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_transforms::processors::BlockingTransform;
+use common_pipeline_transforms::processors::BlockingTransformer;
 use common_sql::optimizer::ColumnSet;
 
-use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
@@ -71,86 +71,63 @@ impl FilterState {
 }
 
 pub struct TransformFilter {
-    input_port: Arc<InputPort>,
-    output_port: Arc<OutputPort>,
-    input_data: Option<DataBlock>,
+    expr: Expr,
+    projections: ColumnSet,
+    func_ctx: FunctionContext,
     output_data: Option<DataBlock>,
-
-    filter_state: FilterState,
 }
 
 impl TransformFilter {
-    #[allow(clippy::too_many_arguments)]
     pub fn create(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
         expr: Expr,
         projections: ColumnSet,
         func_ctx: FunctionContext,
-    ) -> Result<Box<dyn Processor>> {
-        let filter_state = FilterState::new(expr, projections, func_ctx);
-        Ok(Box::new(TransformFilter {
-            input_port,
-            output_port,
-            input_data: None,
+    ) -> Box<dyn Processor> {
+        BlockingTransformer::create(input, output, TransformFilter {
+            expr,
+            projections,
+            func_ctx,
             output_data: None,
-            filter_state,
-        }))
+        })
     }
 }
 
-#[async_trait::async_trait]
-impl Processor for TransformFilter {
-    fn name(&self) -> String {
-        "Filter".to_string()
-    }
+impl BlockingTransform for TransformFilter {
+    const NAME: &'static str = "TransformFilter";
 
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn consume(&mut self, input: DataBlock) -> Result<()> {
+        let num_evals = input
+            .get_meta()
+            .and_then(AggIndexMeta::downcast_ref_from)
+            .map(|a| a.num_evals);
 
-    fn event(&mut self) -> Result<Event> {
-        if self.output_port.is_finished() {
-            self.input_port.finish();
-            return Ok(Event::Finished);
+        let data_block = if let Some(num_evals) = num_evals {
+            // It's from aggregating index.
+            input.project_with_agg_index(&self.projections, num_evals)
+        } else {
+            let evaluator = Evaluator::new(&input, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let filter = evaluator
+                .run(&self.expr)?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+            let data_block = input.project(&self.projections);
+            data_block.filter_boolean_value(&filter)?
+        };
+
+        if data_block.num_rows() > 0 {
+            self.output_data = Some(data_block)
         }
 
-        if !self.output_port.can_push() {
-            self.input_port.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if let Some(output_data) = self.output_data.take() {
-            self.output_port.push_data(Ok(output_data));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input_data.is_some() {
-            return Ok(Event::Sync);
-        }
-
-        if self.input_port.has_data() {
-            let data = self.input_port.pull_data().unwrap()?;
-            self.input_data = Some(data);
-            return Ok(Event::Sync);
-        }
-
-        if self.input_port.is_finished() {
-            self.output_port.finish();
-            return Ok(Event::Finished);
-        }
-
-        self.input_port.set_need_data();
-        Ok(Event::NeedData)
-    }
-
-    fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
-            let data_block = self.filter_state.filter(data_block)?;
-            if data_block.num_rows() > 0 {
-                self.output_data = Some(data_block)
-            }
-        }
         Ok(())
+    }
+
+    fn transform(&mut self) -> Result<Option<DataBlock>> {
+        if self.output_data.is_none() {
+            return Ok(None);
+        }
+        let data_block = self.output_data.take().unwrap();
+        Ok(Some(data_block))
     }
 }
