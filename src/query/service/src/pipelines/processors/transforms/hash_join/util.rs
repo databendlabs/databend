@@ -102,7 +102,17 @@ pub(crate) fn inlist_filter(
             args: vec![array],
         };
 
-        let args = vec![distinct_list, raw_probe_key];
+        // Deduplicate build key column
+        let empty_key_block = DataBlock::empty();
+        let evaluator = Evaluator::new(&empty_key_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let build_key_column =
+            evaluator.run(&type_check::check(&distinct_list, &BUILTIN_FUNCTIONS)?)?;
+        let array = RawExpr::Constant {
+            span: None,
+            scalar: build_key_column.as_scalar().unwrap().to_owned(),
+        };
+
+        let args = vec![array, raw_probe_key];
         // Make contain function
         let contain_func = RawExpr::FunctionCall {
             span: None,
