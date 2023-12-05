@@ -284,11 +284,17 @@ pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + C
             // A workaround for auto translating timestamp back to int64.
             let mut auto_cast_rule = BUILTIN_FUNCTIONS.get_auto_cast_rules(func_name).to_vec();
             auto_cast_rule.push((DataType::Number(NumberDataType::Int64), DataType::Timestamp));
+            auto_cast_rule.push((
+                DataType::Number(NumberDataType::UInt64),
+                DataType::Timestamp,
+            ));
+            dbg!(left.data_type(), right.data_type());
             if let Some(common_ty) = common_super_type(
                 left.data_type().unwrap(),
                 right.data_type().unwrap(),
                 &auto_cast_rule,
             ) {
+                dbg!(&common_ty);
                 left = wrap_cast(&left, &common_ty);
                 right = wrap_cast(&right, &common_ty);
             }
