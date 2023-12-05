@@ -64,6 +64,7 @@ fi
 
 # shellcheck disable=SC2086
 exec docker run --rm --tty ${EXTRA_ARGS} \
+	--env CARGO_ZIGBUILD_CACHE_DIR=/workspace/target/cache/zigbuild \
 	--user "${_UID}:${_GID}" \
 	--volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
 	--volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
