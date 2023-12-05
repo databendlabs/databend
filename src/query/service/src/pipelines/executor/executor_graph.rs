@@ -336,7 +336,7 @@ impl ExecutingGraph {
     unsafe fn push_down_runtime_filters(
         locker: &StateLockGuard,
         current_node: NodeIndex,
-        rt_filters: &HashMap<ColumnId, Expr<String>>,
+        rt_filters: &HashMap<String, Expr<String>>,
         neighbors: Neighbors<EdgeInfo>,
     ) -> Result<()> {
         if neighbors.clone().next().is_none() {

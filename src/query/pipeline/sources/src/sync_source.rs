@@ -41,7 +41,7 @@ pub trait SyncSource: Send {
         false
     }
 
-    fn add_runtime_filters(&mut self, _filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
+    fn add_runtime_filters(&mut self, _filters: &HashMap<String, Expr<String>>) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "{} can't add runtime filters",
             Self::NAME
@@ -85,7 +85,7 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         self
     }
 
-    fn add_runtime_filters(&mut self, filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
+    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
         self.inner.add_runtime_filters(filters)
     }
 

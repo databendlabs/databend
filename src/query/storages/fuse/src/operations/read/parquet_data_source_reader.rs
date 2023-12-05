@@ -56,7 +56,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
-    runtime_filters: HashMap<ColumnId, Expr<String>>,
+    runtime_filters: HashMap<String, Expr<String>>,
     table_schema: Arc<TableSchema>,
 }
 
@@ -180,10 +180,13 @@ impl SyncSource for ReadParquetDataSource<true> {
         true
     }
 
-    fn add_runtime_filters(&mut self, filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
+    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
         for (column_id, filter) in filters.iter() {
             if self.runtime_filters.get(column_id).is_none() {
-                self.runtime_filters.insert(*column_id, filter.clone());
+                if self.table_schema.has_field(column_id) {
+                    self.runtime_filters
+                        .insert(column_id.to_string(), filter.clone());
+                }
             }
         }
         Ok(())
@@ -200,10 +203,13 @@ impl Processor for ReadParquetDataSource<false> {
         self
     }
 
-    fn add_runtime_filters(&mut self, filters: &HashMap<ColumnId, Expr<String>>) -> Result<()> {
+    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
         for (column_id, filter) in filters.iter() {
             if self.runtime_filters.get(column_id).is_none() {
-                self.runtime_filters.insert(*column_id, filter.clone());
+                if self.table_schema.has_field(column_id) {
+                    self.runtime_filters
+                        .insert(column_id.to_string(), filter.clone());
+                }
             }
         }
         Ok(())
