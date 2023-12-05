@@ -43,12 +43,7 @@ impl UserDefinedConnection {
     pub fn storage_params_display(&self) -> String {
         self.storage_params
             .iter()
-            .map(|(k, v)| {
-                if k.to_lowercase() == "access_key_id" || k.to_lowercase() == "secret_access_key" {
-                    return format!("{}={}", k, mask_string(v, 3));
-                }
-                format!("{}={}", k, v)
-            })
+            .map(|(k, v)| format!("{}={}", k, v))
             .join(" ")
     }
 }
