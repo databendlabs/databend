@@ -95,6 +95,21 @@ impl SessionManager {
         self.create_with_settings(typ, settings)
     }
 
+    pub fn add_session(&self, typ: SessionType, session: Arc<Session>) -> Result<()> {
+        let mut sessions = self.active_sessions.write();
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+        }
+
+        incr_session_connect_numbers();
+        set_session_active_connections(sessions.len());
+
+        if !matches!(typ, SessionType::FlightRPC) {
+            sessions.insert(session.get_id(), Arc::downgrade(&session));
+        }
+        Ok(())
+    }
+
     pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
         let query_config = &GlobalConfig::instance().query;
         if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
@@ -127,19 +142,7 @@ impl SessionManager {
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
-        {
-            let mut sessions = self.active_sessions.write();
-            if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-                self.validate_max_active_sessions(sessions.len(), "active sessions")?;
-            }
-
-            incr_session_connect_numbers();
-            set_session_active_connections(sessions.len());
-
-            if !matches!(typ, SessionType::FlightRPC) {
-                sessions.insert(session.get_id(), Arc::downgrade(&session));
-            }
-        }
+        self.add_session(typ.clone(), session.clone())?;
 
         if let SessionType::MySQL = typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();

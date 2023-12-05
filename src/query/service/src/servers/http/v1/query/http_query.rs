@@ -235,7 +235,8 @@ impl HttpQuery {
             }
             session
         } else {
-            ctx.get_session(SessionType::HTTPQuery)
+            ctx.upgrade_session(SessionType::HTTPQuery)
+                .map_err(|err| ErrorCode::Internal(format!("{err}")))?
         };
 
         // Read the session variables in the request, and set them to the current session.
