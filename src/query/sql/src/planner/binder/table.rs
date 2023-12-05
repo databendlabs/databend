@@ -367,8 +367,6 @@ impl Binder {
                         plan.items.len()
                     )));
                 }
-                // Delete result tuple column
-                let _ = bind_context.columns.pop();
                 let scalar = &plan.items[0].scalar;
 
                 // Add tuple inner columns
@@ -412,8 +410,9 @@ impl Binder {
                 return Err(ErrorCode::Internal("Invalid table function subquery"));
             }
         }
-        // Set name for srf result column
+        // Set name for srf result column and make it as a visible column
         bind_context.columns[0].column_name = "value".to_string();
+        bind_context.columns[0].visibility = Visibility::Visible;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -473,7 +472,7 @@ impl Binder {
                             srf.to_string(),
                             index,
                             Box::new(data_type),
-                            Visibility::Visible,
+                            Visibility::InVisible,
                         )
                         .build();
                         bind_context.add_column_binding(column_binding);

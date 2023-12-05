@@ -65,11 +65,11 @@ fn build_unnest(
                 signature: FunctionSignature {
                     name: "unnest".to_string(),
                     args_type: vec![wrap_type(arg_type.clone())],
-                    return_type: DataType::Tuple(vec![DataType::Null]),
+                    return_type: DataType::Null,
                 },
                 eval: FunctionEval::SRF {
                     eval: Box::new(|_, ctx, _| {
-                        vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
+                        vec![(Value::Scalar(Scalar::Null), 0); ctx.num_rows]
                     }),
                 },
             })
@@ -78,16 +78,14 @@ fn build_unnest(
             signature: FunctionSignature {
                 name: "unnest".to_string(),
                 args_type: vec![wrap_type(DataType::Nullable(Box::new(DataType::Variant)))],
-                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
+                return_type: DataType::Nullable(Box::new(DataType::Variant)),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| match arg.index(row).unwrap() {
-                            ScalarRef::Null => {
-                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
-                            }
+                            ScalarRef::Null => (Value::Scalar(Scalar::Null), 0),
                             ScalarRef::Variant(val) => {
                                 unnest_variant_array(val, row, max_nums_per_row)
                             }
@@ -113,9 +111,7 @@ fn build_unnest(
                 args_type: vec![wrap_type(DataType::Nullable(Box::new(DataType::Generic(
                     0,
                 ))))],
-                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
-                    DataType::Generic(0),
-                ))]),
+                return_type: DataType::Nullable(Box::new(DataType::Generic(0))),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
@@ -135,15 +131,13 @@ fn build_unnest(
                             }
 
                             match arg.index(row).unwrap() {
-                                ScalarRef::Null => {
-                                    (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
-                                }
+                                ScalarRef::Null => (Value::Scalar(Scalar::Null), 0),
                                 ScalarRef::Array(col) => {
                                     let unnest_array = unnest_column(col);
                                     let array_len = unnest_array.len();
                                     max_nums_per_row[row] =
                                         std::cmp::max(max_nums_per_row[row], array_len);
-                                    (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
+                                    (Value::Column(unnest_array), array_len)
                                 }
                                 _ => unreachable!(),
                             }

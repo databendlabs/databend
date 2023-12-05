@@ -20,7 +20,6 @@ use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
 use common_ast::ast::Window;
 use common_ast::Visitor;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::FunctionKind;
@@ -146,13 +145,6 @@ impl Binder {
             };
 
             let srf_expr = srf_scalar.as_expr()?;
-            let return_types = srf_expr.data_type().as_tuple().unwrap();
-
-            if return_types.len() > 1 {
-                return Err(ErrorCode::Unimplemented(
-                    "set-returning functions with more than one return type are not supported yet",
-                ));
-            }
 
             // Add result column to metadata
             let column_index = self
@@ -173,20 +165,13 @@ impl Binder {
             };
             items.push(item);
 
-            // Flatten the tuple fields of the srfs to the top level columns
-            // TODO(andylokandy/leisky): support multiple return types
-            let flatten_result = ScalarExpr::FunctionCall(FunctionCall {
+            let result_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: srf.span(),
-                func_name: "get".to_string(),
-                params: vec![1],
-                arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: srf.span(),
-                    column,
-                })],
+                column,
             });
 
             // Add the srf to bind context, so we can replace the srfs later.
-            bind_context.srfs.insert(srf.to_string(), flatten_result);
+            bind_context.srfs.insert(srf.to_string(), result_column);
         }
 
         let project_set = ProjectSet { srfs: items };
