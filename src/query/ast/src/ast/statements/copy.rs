@@ -291,7 +291,7 @@ impl Display for CopyIntoLocationSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
     visited_keys: HashSet<String>,
-    conns: BTreeMap<String, String>,
+    pub conns: BTreeMap<String, String>,
 }
 
 impl Connection {
@@ -305,7 +305,11 @@ impl Connection {
     pub fn mask(&self) -> Self {
         let mut conns = BTreeMap::new();
         for (k, v) in &self.conns {
-            conns.insert(k.to_string(), mask_string(v, 3));
+            let mut value = v.clone();
+            if k.to_lowercase() == "access_key_id" || k.to_lowercase() == "secret_access_key" {
+                value = mask_string(&v, 3);
+            }
+            conns.insert(k.to_string(), value);
         }
         Self {
             visited_keys: self.visited_keys.clone(),
