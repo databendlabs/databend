@@ -380,9 +380,6 @@ pub fn select_scalar_and_column(
             unimplemented!()
         }
         _ => {
-            dbg!(column_data_type);
-            dbg!(scalar);
-            dbg!(column);
             unreachable!("Here is no Nullable(_) and Generic(_)")
         }
     }

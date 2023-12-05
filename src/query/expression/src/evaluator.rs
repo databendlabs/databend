@@ -1071,15 +1071,29 @@ impl<'a> Evaluator<'a> {
                 args,
                 generics,
                 ..
-            } if function.signature.name == "if" => Ok((
-                self.eval_if(args, generics, validity)?,
-                function.signature.return_type.clone(),
-            )),
+            } if function.signature.name == "if" => {
+                let return_type = if let DataType::Generic(index) = &function.signature.return_type
+                {
+                    generics[*index].clone()
+                } else {
+                    function.signature.return_type.clone()
+                };
+                Ok((self.eval_if(args, generics, validity)?, return_type))
+            }
 
-            Expr::FunctionCall { function, args, .. }
-                if function.signature.name == "and_filters" =>
-            {
-                Ok((self.eval_and_filters(args, validity)?, DataType::Boolean))
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "and_filters" => {
+                let return_type = if let DataType::Generic(index) = &function.signature.return_type
+                {
+                    generics[*index].clone()
+                } else {
+                    function.signature.return_type.clone()
+                };
+                Ok((self.eval_and_filters(args, validity)?, return_type))
             }
 
             Expr::FunctionCall {
@@ -1115,7 +1129,13 @@ impl<'a> Evaluator<'a> {
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                Ok((result, function.signature.return_type.clone()))
+                let return_type = if let DataType::Generic(index) = &function.signature.return_type
+                {
+                    generics[*index].clone()
+                } else {
+                    function.signature.return_type.clone()
+                };
+                Ok((result, return_type))
             }
             Expr::LambdaFunctionCall {
                 name,

@@ -15,7 +15,6 @@
 use core::ops::Range;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-
 pub enum SelectStrategy {
     True,
     False,

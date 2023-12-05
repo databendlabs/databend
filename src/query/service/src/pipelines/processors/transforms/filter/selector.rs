@@ -242,14 +242,14 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> Result<usize> {
         let children = self.evaluator.get_children(exprs, validity)?;
-        let left = children[0].clone();
-        let right = children[1].clone();
+        let (left_value, left_data_type) = children[0].clone();
+        let (right_value, right_data_type) = children[1].clone();
         let count = select_values(
             *select_op,
-            left.0.clone(),
-            right.0.clone(),
-            left.1.clone(),
-            right.1.clone(),
+            left_value,
+            right_value,
+            left_data_type,
+            right_data_type,
             true_selection,
             false_selection,
             true_idx,
