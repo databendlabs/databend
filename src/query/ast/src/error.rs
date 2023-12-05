@@ -176,7 +176,6 @@ impl From<ParseIntError> for ErrorKind {
 }
 
 pub fn display_parser_error(error: Error, source: &str) -> String {
-    dbg!(error.clone());
     let inner = &*error.backtrace.inner.borrow();
     let inner = match inner {
         Some(inner) => inner,
