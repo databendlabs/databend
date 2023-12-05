@@ -258,7 +258,7 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
     ) -> Result<ProcessorPtr> {
         let start = get_i64_number(&start)?;
         let mut end = get_i64_number(&end)?;
-        let mut step = get_i64_number(&step)?;
+        let step = get_i64_number(&step)?;
 
         if INCLUSIVE {
             if step > 0 {
