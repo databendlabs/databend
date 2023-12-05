@@ -743,3 +743,18 @@ error:
   | while parsing `CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`
 
 
+---------- Input ----------
+select $0 from t1
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | select $0 from t1
+  | ------ ^^
+  | |      |
+  | |      column position must be greater than 0
+  | |      while parsing expression
+  | |      while parsing <column>
+  | while parsing `SELECT ...`
+
+

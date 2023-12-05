@@ -623,6 +623,7 @@ fn test_statement_error() {
                     error_on_column_count_mismatch = 1
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
+        r#"select $0 from t1"#,
     ];
 
     for case in cases {

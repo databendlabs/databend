@@ -14,11 +14,12 @@ error:
 from t1 select * from t2
 ---------- Output ---------
 error: 
-  --> SQL:1:25
+  --> SQL:1:1
   |
 1 | from t1 select * from t2
-  | ----                    ^ duplicated FROM clause
-  | |                       
+  | ^^^^
+  | |
+  | duplicated FROM clause
   | while parsing `SELECT ...`
 
 
@@ -26,11 +27,12 @@ error:
 from t1 select * from t2 where a = b
 ---------- Output ---------
 error: 
-  --> SQL:1:37
+  --> SQL:1:1
   |
 1 | from t1 select * from t2 where a = b
-  | ----                                ^ duplicated FROM clause
-  | |                                   
+  | ^^^^
+  | |
+  | duplicated FROM clause
   | while parsing `SELECT ...`
 
 
