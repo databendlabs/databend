@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -46,7 +45,6 @@ pub fn runtime_filter_pruner(
         debug_assert!(column_refs.len() == 1);
         let ty = column_refs.values().last().unwrap();
         let name = column_refs.keys().last().unwrap();
-        let filters = filters.clone();
         if let Some(stats) = &part.columns_stat {
             let column_ids = table_schema.leaf_columns_of(name);
             debug_assert!(column_ids.len() == 1);
