@@ -111,9 +111,9 @@ impl BlockMetaInfo for StreamColumnMeta {
 
 impl StreamColumnMeta {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&StreamColumnMeta> {
-        StreamColumnMeta::downcast_ref_from(info).ok_or(ErrorCode::Internal(
-            "Cannot downcast from BlockMetaInfo to StreamColumnMeta.",
-        ))
+        StreamColumnMeta::downcast_ref_from(info).ok_or_else(|| {
+            ErrorCode::Internal("Cannot downcast from BlockMetaInfo to StreamColumnMeta.")
+        })
     }
 
     pub fn build_origin_block_id(&self) -> Value<AnyType> {

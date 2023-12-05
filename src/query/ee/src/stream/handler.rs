@@ -90,13 +90,13 @@ impl StreamHandler for RealStreamHandler {
                 let stream_opts = stream.get_table_info().options();
                 let stream_table_name = stream_opts
                     .get(OPT_KEY_TABLE_NAME)
-                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
+                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
                 let stream_database_name = stream_opts
                     .get(OPT_KEY_DATABASE_NAME)
-                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
+                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
                 let stream_table_id = stream_opts
                     .get(OPT_KEY_TABLE_ID)
-                    .ok_or(ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?
+                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?
                     .parse::<u64>()?;
                 if stream_table_name != &plan.table_name
                     || stream_database_name != &plan.table_database

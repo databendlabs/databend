@@ -135,7 +135,9 @@ where
             .collect::<Vec<_>>();
 
         if blocks.len() == 1 {
-            let block = blocks.get_mut(0).ok_or(ErrorCode::Internal("It's a bug"))?;
+            let block = blocks
+                .get_mut(0)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
             if self.order_col_generated {
                 // Need to remove order column.
                 block.pop_columns(1);
