@@ -327,19 +327,9 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn pop_columns(self, num: usize) -> Result<Self> {
-        let mut columns = self.columns.clone();
-        let len = columns.len();
-
-        for _ in 0..num.min(len) {
-            columns.pop().unwrap();
-        }
-
-        Ok(Self {
-            columns,
-            num_rows: self.num_rows,
-            meta: self.meta,
-        })
+    pub fn pop_columns(&mut self, num: usize) {
+        debug_assert!(num <= self.columns.len());
+        self.columns.truncate(self.columns.len() - num);
     }
 
     /// Resort the columns according to the schema.

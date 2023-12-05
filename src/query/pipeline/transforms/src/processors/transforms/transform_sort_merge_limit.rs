@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::containers::FixedHeap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::row::RowConverter as CommonRowConverter;
 use common_expression::types::string::StringColumn;
@@ -44,17 +45,21 @@ use super::sort::SimpleRows;
 use super::AccumulatingTransform;
 use super::AccumulatingTransformer;
 
+/// This is a specific version of [`super::transform_sort_merge::SortMergeCompactor`] which sort blocks with limit.
+///
+/// Definitions of some same fields can be found in [`super::transform_sort_merge::SortMergeCompactor`].
 pub struct TransformSortMergeLimit<R: Rows, Converter> {
     row_converter: Converter,
-    order_by_cols: Vec<usize>,
     heap: FixedHeap<Reverse<Cursor<Arc<R>>>>,
+    sort_desc: Vec<SortColumnDescription>,
 
     buffer: HashMap<usize, DataBlock>,
     cur_index: usize,
 
     block_size: usize,
 
-    gen_order_col: bool,
+    order_col_generated: bool,
+    output_order_col: bool,
 }
 
 impl<R, Converter> TransformSortMergeLimit<R, Converter>
@@ -67,18 +72,25 @@ where
         sort_desc: Vec<SortColumnDescription>,
         block_size: usize,
         limit: usize,
-        gen_order_col: bool,
+        order_col_generated: bool,
+        output_order_col: bool,
     ) -> Result<Self> {
-        let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
-        let row_converter = Converter::create(sort_desc, schema)?;
+        debug_assert!(if order_col_generated {
+            !output_order_col
+        } else {
+            true
+        });
+
+        let row_converter = Converter::create(&sort_desc, schema)?;
         Ok(TransformSortMergeLimit {
             row_converter,
-            order_by_cols,
+            sort_desc,
             heap: FixedHeap::new(limit),
             buffer: HashMap::with_capacity(limit),
             block_size,
             cur_index: 0,
-            gen_order_col,
+            order_col_generated,
+            output_order_col,
         })
     }
 }
@@ -100,23 +112,39 @@ where
             return Ok(vec![]);
         }
 
-        let order_by_cols = self
-            .order_by_cols
-            .iter()
-            .map(|i| data.get_by_offset(*i).clone())
-            .collect::<Vec<_>>();
-        let rows = Arc::new(
-            self.row_converter
-                .convert(&order_by_cols, data.num_rows())?,
-        );
-
-        if self.gen_order_col {
-            let order_col = rows.to_column();
-            data.add_column(BlockEntry {
-                data_type: order_col.data_type(),
-                value: Value::Column(order_col),
-            });
-        }
+        let rows = if self.order_col_generated {
+            let order_col = data
+                .columns()
+                .last()
+                .unwrap()
+                .value
+                .as_column()
+                .unwrap()
+                .clone();
+            let rows = R::from_column(order_col, &self.sort_desc)
+                .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
+            // Need to remove order column.
+            data.pop_columns(1);
+            Arc::new(rows)
+        } else {
+            let order_by_cols = self
+                .sort_desc
+                .iter()
+                .map(|d| data.get_by_offset(d.offset).clone())
+                .collect::<Vec<_>>();
+            let rows = Arc::new(
+                self.row_converter
+                    .convert(&order_by_cols, data.num_rows())?,
+            );
+            if self.output_order_col {
+                let order_col = rows.to_column();
+                data.add_column(BlockEntry {
+                    data_type: order_col.data_type(),
+                    value: Value::Column(order_col),
+                });
+            }
+            rows
+        };
 
         let mut cursor = Cursor::new(self.cur_index, rows);
         self.buffer.insert(self.cur_index, data);
@@ -200,6 +228,7 @@ type SimpleStringSort = AccumulatingTransformer<SimpleStringTransform>;
 type CommonTransform = TransformSortMergeLimit<StringColumn, CommonRowConverter>;
 type CommonSort = AccumulatingTransformer<CommonTransform>;
 
+#[allow(clippy::too_many_arguments)]
 pub fn try_create_transform_sort_merge_limit(
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -207,7 +236,8 @@ pub fn try_create_transform_sort_merge_limit(
     sort_desc: Vec<SortColumnDescription>,
     block_size: usize,
     limit: usize,
-    gen_order_col: bool,
+    order_col_generated: bool,
+    output_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     Ok(if sort_desc.len() == 1 {
         let sort_type = input_schema.field(sort_desc[0].offset).data_type();
@@ -225,7 +255,12 @@ pub fn try_create_transform_sort_merge_limit(
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
                     >::try_create(
-                        input_schema, sort_desc, block_size, limit, gen_order_col
+                        input_schema,
+                        sort_desc,
+                        block_size,
+                        limit,
+                        order_col_generated,
+                        output_order_col
                     )?
                 ),
             }),
@@ -237,7 +272,8 @@ pub fn try_create_transform_sort_merge_limit(
                     sort_desc,
                     block_size,
                     limit,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
             DataType::Timestamp => SimpleTimestampSort::create(
@@ -248,7 +284,8 @@ pub fn try_create_transform_sort_merge_limit(
                     sort_desc,
                     block_size,
                     limit,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
             DataType::String => SimpleStringSort::create(
@@ -259,7 +296,8 @@ pub fn try_create_transform_sort_merge_limit(
                     sort_desc,
                     block_size,
                     limit,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
             _ => CommonSort::create(
@@ -270,7 +308,8 @@ pub fn try_create_transform_sort_merge_limit(
                     sort_desc,
                     block_size,
                     limit,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
         }
@@ -278,7 +317,14 @@ pub fn try_create_transform_sort_merge_limit(
         CommonSort::create(
             input,
             output,
-            CommonTransform::try_create(input_schema, sort_desc, block_size, limit, gen_order_col)?,
+            CommonTransform::try_create(
+                input_schema,
+                sort_desc,
+                block_size,
+                limit,
+                order_col_generated,
+                output_order_col,
+            )?,
         )
     })
 }
