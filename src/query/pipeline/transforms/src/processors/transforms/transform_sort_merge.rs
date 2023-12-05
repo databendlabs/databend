@@ -54,13 +54,18 @@ use super::TransformCompact;
 pub struct SortMergeCompactor<R, Converter> {
     block_size: usize,
     row_converter: Converter,
-    order_by_cols: Vec<usize>,
+    sort_desc: Vec<SortColumnDescription>,
 
     aborting: Arc<AtomicBool>,
 
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
-    /// we can generate the order column to avoid the extra converting in the next transform.
-    gen_order_col: bool,
+    /// we can generate and output the order column to avoid the extra converting in the next transform.
+    output_order_col: bool,
+    /// If this transform is after an Exchange transform,
+    /// it means it will compact the data from cluster nodes.
+    /// And the order column is already generated in each cluster node,
+    /// so we don't need to generate the order column again.
+    order_col_generated: bool,
 
     _c: PhantomData<Converter>,
     _r: PhantomData<R>,
@@ -75,16 +80,26 @@ where
         schema: DataSchemaRef,
         block_size: usize,
         sort_desc: Vec<SortColumnDescription>,
-        gen_order_col: bool,
+        order_col_generated: bool,
+        output_order_col: bool,
     ) -> Result<Self> {
-        let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
-        let row_converter = Converter::create(sort_desc, schema)?;
+        debug_assert!(if order_col_generated {
+            // If the order column is already generated,
+            // it means this transform is after a exchange source and it's the last transform for sorting.
+            // We should remove the order column.
+            !output_order_col
+        } else {
+            true
+        });
+
+        let row_converter = Converter::create(&sort_desc, schema)?;
         Ok(SortMergeCompactor {
-            order_by_cols,
             row_converter,
             block_size,
+            sort_desc,
             aborting: Arc::new(AtomicBool::new(false)),
-            gen_order_col,
+            order_col_generated,
+            output_order_col,
             _c: PhantomData,
             _r: PhantomData,
         })
@@ -120,21 +135,28 @@ where
             .collect::<Vec<_>>();
 
         if blocks.len() == 1 {
-            if self.gen_order_col {
-                let block = blocks
-                    .get_mut(0)
-                    .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            let block = blocks
+                .get_mut(0)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            if self.order_col_generated {
+                // Need to remove order column.
+                block.pop_columns(1);
+                return Ok(blocks);
+            }
+            if self.output_order_col {
                 let columns = self
-                    .order_by_cols
+                    .sort_desc
                     .iter()
-                    .map(|i| block.get_by_offset(*i).clone())
+                    .map(|d| block.get_by_offset(d.offset).clone())
                     .collect::<Vec<_>>();
                 let rows = self.row_converter.convert(&columns, block.num_rows())?;
                 let order_col = rows.to_column();
-                block.add_column(BlockEntry {
-                    data_type: order_col.data_type(),
-                    value: Value::Column(order_col),
-                });
+                if self.output_order_col {
+                    block.add_column(BlockEntry {
+                        data_type: order_col.data_type(),
+                        value: Value::Column(order_col),
+                    });
+                }
             }
             return Ok(blocks);
         }
@@ -146,20 +168,36 @@ where
 
         // 1. Put all blocks into a min-heap.
         for (i, block) in blocks.iter_mut().enumerate() {
-            let columns = self
-                .order_by_cols
-                .iter()
-                .map(|i| block.get_by_offset(*i).clone())
-                .collect::<Vec<_>>();
-            let rows = self.row_converter.convert(&columns, block.num_rows())?;
-
-            if self.gen_order_col {
-                let order_col = rows.to_column();
-                block.add_column(BlockEntry {
-                    data_type: order_col.data_type(),
-                    value: Value::Column(order_col),
-                });
-            }
+            let rows = if self.order_col_generated {
+                let order_col = block
+                    .columns()
+                    .last()
+                    .unwrap()
+                    .value
+                    .as_column()
+                    .unwrap()
+                    .clone();
+                let rows = R::from_column(order_col, &self.sort_desc)
+                    .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
+                // Need to remove order column.
+                block.pop_columns(1);
+                rows
+            } else {
+                let columns = self
+                    .sort_desc
+                    .iter()
+                    .map(|d| block.get_by_offset(d.offset).clone())
+                    .collect::<Vec<_>>();
+                let rows = self.row_converter.convert(&columns, block.num_rows())?;
+                if self.output_order_col {
+                    let order_col = rows.to_column();
+                    block.add_column(BlockEntry {
+                        data_type: order_col.data_type(),
+                        value: Value::Column(order_col),
+                    });
+                }
+                rows
+            };
             let cursor = Cursor::new(i, rows);
             heap.push(Reverse(cursor));
         }
@@ -248,7 +286,8 @@ pub fn try_create_transform_sort_merge(
     output_schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
-    gen_order_col: bool,
+    order_col_generated: bool,
+    output_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     if sort_desc.len() == 1 {
         let sort_type = output_schema.field(sort_desc[0].offset).data_type();
@@ -266,7 +305,11 @@ pub fn try_create_transform_sort_merge(
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
                     >::try_create(
-                        output_schema, block_size, sort_desc, gen_order_col
+                        output_schema,
+                        block_size,
+                        sort_desc,
+                        order_col_generated,
+                        output_order_col
                     )?
                 ),
             }),
@@ -277,7 +320,8 @@ pub fn try_create_transform_sort_merge(
                     output_schema,
                     block_size,
                     sort_desc,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
             DataType::Timestamp => SimpleTimestampSort::try_create(
@@ -287,7 +331,8 @@ pub fn try_create_transform_sort_merge(
                     output_schema,
                     block_size,
                     sort_desc,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
             DataType::String => SimpleStringSort::try_create(
@@ -297,20 +342,33 @@ pub fn try_create_transform_sort_merge(
                     output_schema,
                     block_size,
                     sort_desc,
-                    gen_order_col,
+                    order_col_generated,
+                    output_order_col,
                 )?,
             ),
             _ => CommonSort::try_create(
                 input,
                 output,
-                CommonCompactor::try_create(output_schema, block_size, sort_desc, gen_order_col)?,
+                CommonCompactor::try_create(
+                    output_schema,
+                    block_size,
+                    sort_desc,
+                    order_col_generated,
+                    output_order_col,
+                )?,
             ),
         }
     } else {
         CommonSort::try_create(
             input,
             output,
-            CommonCompactor::try_create(output_schema, block_size, sort_desc, gen_order_col)?,
+            CommonCompactor::try_create(
+                output_schema,
+                block_size,
+                sort_desc,
+                order_col_generated,
+                output_order_col,
+            )?,
         )
     }
 }
@@ -321,6 +379,7 @@ pub fn sort_merge(
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: Vec<DataBlock>,
 ) -> Result<Vec<DataBlock>> {
-    let mut compactor = CommonCompactor::try_create(data_schema, block_size, sort_desc, false)?;
+    let mut compactor =
+        CommonCompactor::try_create(data_schema, block_size, sort_desc, false, false)?;
     compactor.compact_final(data_blocks)
 }

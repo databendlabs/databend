@@ -50,7 +50,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
