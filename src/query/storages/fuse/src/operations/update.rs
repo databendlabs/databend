@@ -30,7 +30,6 @@ use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::BlockOperator;
-use common_sql::plans::PREDICATE_COLUMN_NAME;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::MutationAction;
