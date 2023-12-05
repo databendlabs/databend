@@ -24,7 +24,6 @@ use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::Expr;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::processors::EventCause;
@@ -350,7 +349,7 @@ impl ExecutingGraph {
             let nodes = locker
                 .graph
                 .neighbors_directed(neighbor, Direction::Incoming);
-            ExecutingGraph::push_down_runtime_filters(locker, neighbor, &rt_filters, nodes)?;
+            ExecutingGraph::push_down_runtime_filters(locker, neighbor, rt_filters, nodes)?;
         }
         Ok(())
     }

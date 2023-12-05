@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_expression::type_check::check_function;
-use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;

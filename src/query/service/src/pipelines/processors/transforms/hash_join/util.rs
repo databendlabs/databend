@@ -15,7 +15,6 @@
 use common_exception::Result;
 use common_expression::type_check;
 use common_expression::Column;
-use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -25,7 +24,6 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::TypeCheck;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(build_schema.fields().len());

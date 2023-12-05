@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::Expr;
 use futures::future::BoxFuture;
 use futures::FutureExt;

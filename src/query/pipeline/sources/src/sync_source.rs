@@ -21,7 +21,6 @@ use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_pipeline_core::processors::Event;

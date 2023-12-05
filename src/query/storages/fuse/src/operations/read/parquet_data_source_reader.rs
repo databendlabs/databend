@@ -22,7 +22,6 @@ use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::TableSchema;
@@ -61,6 +60,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         id: usize,
         ctx: Arc<dyn TableContext>,
@@ -182,11 +182,11 @@ impl SyncSource for ReadParquetDataSource<true> {
 
     fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
         for (column_id, filter) in filters.iter() {
-            if self.runtime_filters.get(column_id).is_none() {
-                if self.table_schema.has_field(column_id) {
-                    self.runtime_filters
-                        .insert(column_id.to_string(), filter.clone());
-                }
+            if self.runtime_filters.get(column_id).is_none()
+                && self.table_schema.has_field(column_id)
+            {
+                self.runtime_filters
+                    .insert(column_id.to_string(), filter.clone());
             }
         }
         Ok(())
@@ -205,11 +205,11 @@ impl Processor for ReadParquetDataSource<false> {
 
     fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
         for (column_id, filter) in filters.iter() {
-            if self.runtime_filters.get(column_id).is_none() {
-                if self.table_schema.has_field(column_id) {
-                    self.runtime_filters
-                        .insert(column_id.to_string(), filter.clone());
-                }
+            if self.runtime_filters.get(column_id).is_none()
+                && self.table_schema.has_field(column_id)
+            {
+                self.runtime_filters
+                    .insert(column_id.to_string(), filter.clone());
             }
         }
         Ok(())
