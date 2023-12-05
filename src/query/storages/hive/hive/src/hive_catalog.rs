@@ -394,7 +394,7 @@ impl Catalog for HiveCatalog {
         let mut tables = Vec::with_capacity(table_names.len());
 
         for name in table_names {
-            let table = self.get_table(_tenant, db_name, &name).await?;
+            let table = self.get_table(_tenant, db_name, name.as_str()).await?;
             tables.push(table)
         }
 
