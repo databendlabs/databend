@@ -123,7 +123,7 @@ pub struct HashJoinState {
     pub(crate) partition_id: AtomicI8,
 
     /// Runtime filters
-    pub(crate) runtime_filters: RwLock<HashMap<ColumnId, Expr<String>>>,
+    pub(crate) runtime_filters: RwLock<HashMap<String, Expr<String>>>,
 }
 
 impl HashJoinState {

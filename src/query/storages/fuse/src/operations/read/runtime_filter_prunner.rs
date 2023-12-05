@@ -32,7 +32,7 @@ use crate::FusePartInfo;
 pub fn runtime_filter_pruner(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
-    filters: &HashMap<ColumnId, Expr<String>>,
+    filters: &HashMap<String, Expr<String>>,
     func_ctx: &FunctionContext,
 ) -> Result<bool> {
     if filters.is_empty() {
@@ -46,6 +46,7 @@ pub fn runtime_filter_pruner(
         debug_assert!(column_refs.len() == 1);
         let ty = column_refs.values().last().unwrap();
         let name = column_refs.keys().last().unwrap();
+        let filters = filters.clone();
         if let Some(stats) = &part.columns_stat {
             let column_ids = table_schema.leaf_columns_of(name);
             debug_assert!(column_ids.len() == 1);

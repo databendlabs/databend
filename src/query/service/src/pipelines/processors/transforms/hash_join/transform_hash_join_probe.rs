@@ -75,7 +75,7 @@ pub struct TransformHashJoinProbe {
     // directly probe them with hashtable.
     need_spill: bool,
 
-    runtime_filters: HashMap<ColumnId, Expr<String>>,
+    runtime_filters: HashMap<String, Expr<String>>,
 }
 
 impl TransformHashJoinProbe {
@@ -272,7 +272,7 @@ impl Processor for TransformHashJoinProbe {
         self
     }
 
-    fn get_runtime_filters(&mut self) -> Result<HashMap<ColumnId, Expr<String>>> {
+    fn get_runtime_filters(&mut self) -> Result<HashMap<String, Expr<String>>> {
         let mut runtime_filters = HashMap::new();
         runtime_filters.extend(self.runtime_filters.drain());
         Ok(runtime_filters)
