@@ -94,7 +94,7 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                 None => {
                     let current_dir = env::current_dir()?;
                     let mut builder = Fs::default();
-                    builder.root(current_dir.to_str().ok_or("Invalid path")?);
+                    builder.root(current_dir.to_str().ok_or_else(|| "Invalid path")?);
                     Operator::new(builder)?.finish()
                 }
             };

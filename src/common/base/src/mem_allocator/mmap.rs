@@ -60,7 +60,7 @@ pub mod linux {
             if addr == libc::MAP_FAILED {
                 return Err(AllocError);
             }
-            let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            let addr = NonNull::new(addr as *mut ()).ok_or_else(|| AllocError)?;
             Ok(NonNull::<[u8]>::from_raw_parts(addr, layout.size()))
         }
 
@@ -95,7 +95,7 @@ pub mod linux {
             if addr == libc::MAP_FAILED {
                 return Err(AllocError);
             }
-            let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            let addr = NonNull::new(addr as *mut ()).ok_or_else(|| AllocError)?;
             if linux_kernel_version() >= (5, 14, 0) {
                 libc::madvise(addr.cast().as_ptr(), new_layout.size(), MADV_POPULATE_WRITE);
             }
@@ -125,7 +125,7 @@ pub mod linux {
             if addr == libc::MAP_FAILED {
                 return Err(AllocError);
             }
-            let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            let addr = NonNull::new(addr as *mut ()).ok_or_else(|| AllocError)?;
 
             Ok(NonNull::<[u8]>::from_raw_parts(addr, new_layout.size()))
         }

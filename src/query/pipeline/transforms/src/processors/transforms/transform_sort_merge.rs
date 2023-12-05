@@ -121,7 +121,9 @@ where
 
         if blocks.len() == 1 {
             if self.gen_order_col {
-                let block = blocks.get_mut(0).ok_or(ErrorCode::Internal("It's a bug"))?;
+                let block = blocks
+                    .get_mut(0)
+                    .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
                 let columns = self
                     .order_by_cols
                     .iter()

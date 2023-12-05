@@ -127,7 +127,9 @@ impl<O: Offset> Offsets<O> {
     pub fn try_push(&mut self, length: O) -> Result<(), Error> {
         let old_length = self.last();
         assert!(length >= O::zero());
-        let new_length = old_length.checked_add(&length).ok_or(Error::Overflow)?;
+        let new_length = old_length
+            .checked_add(&length)
+            .ok_or_else(|| Error::Overflow)?;
         self.0.push(new_length);
         Ok(())
     }
@@ -140,10 +142,12 @@ impl<O: Offset> Offsets<O> {
     /// * checks that this length does not overflow
     #[inline]
     pub fn try_push_usize(&mut self, length: usize) -> Result<(), Error> {
-        let length = O::from_usize(length).ok_or(Error::Overflow)?;
+        let length = O::from_usize(length).ok_or_else(|| Error::Overflow)?;
 
         let old_length = self.last();
-        let new_length = old_length.checked_add(&length).ok_or(Error::Overflow)?;
+        let new_length = old_length
+            .checked_add(&length)
+            .ok_or_else(|| Error::Overflow)?;
         self.0.push(new_length);
         Ok(())
     }
@@ -267,8 +271,8 @@ impl<O: Offset> Offsets<O> {
 
         let last_offset = original_offset
             .checked_add(total_length)
-            .ok_or(Error::Overflow)?;
-        O::from_usize(last_offset).ok_or(Error::Overflow)?;
+            .ok_or_else(|| Error::Overflow)?;
+        O::from_usize(last_offset).ok_or_else(|| Error::Overflow)?;
         Ok(())
     }
 
@@ -279,7 +283,9 @@ impl<O: Offset> Offsets<O> {
         let mut length = *self.last();
         let other_length = *other.last();
         // check if the operation would overflow
-        length.checked_add(&other_length).ok_or(Error::Overflow)?;
+        length
+            .checked_add(&other_length)
+            .ok_or_else(|| Error::Overflow)?;
 
         let lengths = other.as_slice().windows(2).map(|w| w[1] - w[0]);
         let offsets = lengths.map(|new_length| {
@@ -306,7 +312,9 @@ impl<O: Offset> Offsets<O> {
         let other_length = other.last().expect("Length to be non-zero");
         let mut length = *self.last();
         // check if the operation would overflow
-        length.checked_add(other_length).ok_or(Error::Overflow)?;
+        length
+            .checked_add(other_length)
+            .ok_or_else(|| Error::Overflow)?;
 
         let lengths = other.windows(2).map(|w| w[1] - w[0]);
         let offsets = lengths.map(|new_length| {

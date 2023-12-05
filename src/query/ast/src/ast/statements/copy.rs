@@ -413,7 +413,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or(common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| common_exception::ErrorCode::BadArguments("invalid uri"))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()
