@@ -14,140 +14,58 @@
 
 use std::cmp::Reverse;
 use std::collections::HashMap;
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 
 use common_base::containers::FixedHeap;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::row::RowConverter as CommonRowConverter;
-use common_expression::types::string::StringColumn;
+use common_expression::row::RowConverter as CommonConverter;
 use common_expression::types::DataType;
-use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
 use common_expression::with_number_mapped_type;
-use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
-use common_expression::Value;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 
+use super::sort::CommonRows;
 use super::sort::Cursor;
-use super::sort::RowConverter;
+use super::sort::DateConverter;
+use super::sort::DateRows;
 use super::sort::Rows;
 use super::sort::SimpleRowConverter;
 use super::sort::SimpleRows;
-use super::AccumulatingTransform;
+use super::sort::StringConverter;
+use super::sort::StringRows;
+use super::sort::TimestampConverter;
+use super::sort::TimestampRows;
+use super::transform_sort_merge_base::MergeSort;
+use super::transform_sort_merge_base::Status;
+use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransformer;
 
-/// This is a specific version of [`super::transform_sort_merge::SortMergeCompactor`] which sort blocks with limit.
-///
-/// Definitions of some same fields can be found in [`super::transform_sort_merge::SortMergeCompactor`].
-pub struct TransformSortMergeLimit<R: Rows, Converter> {
-    row_converter: Converter,
-    heap: FixedHeap<Reverse<Cursor<Arc<R>>>>,
-    sort_desc: Vec<SortColumnDescription>,
-
+/// This is a specific version of [`super::transform_sort_merge::TransformSortMerge`] which sort blocks with limit.
+pub struct TransformSortMergeLimit<R: Rows> {
+    heap: FixedHeap<Reverse<Cursor<R>>>,
     buffer: HashMap<usize, DataBlock>,
-    cur_index: usize,
 
     block_size: usize,
-
-    order_col_generated: bool,
-    output_order_col: bool,
 }
 
-impl<R, Converter> TransformSortMergeLimit<R, Converter>
-where
-    R: Rows,
-    Converter: RowConverter<R>,
-{
-    pub fn try_create(
-        schema: DataSchemaRef,
-        sort_desc: Vec<SortColumnDescription>,
-        block_size: usize,
-        limit: usize,
-        order_col_generated: bool,
-        output_order_col: bool,
-    ) -> Result<Self> {
-        debug_assert!(if order_col_generated {
-            !output_order_col
-        } else {
-            true
-        });
-
-        let row_converter = Converter::create(&sort_desc, schema)?;
-        Ok(TransformSortMergeLimit {
-            row_converter,
-            sort_desc,
-            heap: FixedHeap::new(limit),
-            buffer: HashMap::with_capacity(limit),
-            block_size,
-            cur_index: 0,
-            order_col_generated,
-            output_order_col,
-        })
-    }
-}
-
-impl<R, Converter> AccumulatingTransform for TransformSortMergeLimit<R, Converter>
-where
-    R: Rows + Send + Sync,
-    Converter: RowConverter<R> + Send + Sync,
-{
+impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
     const NAME: &'static str = "TransformSortMergeLimit";
 
-    fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
-        if self.heap.cap() == 0 {
-            // limit is 0
-            return Ok(vec![]);
+    fn add_block(&mut self, block: DataBlock, mut cursor: Cursor<R>) -> Result<Status> {
+        if unlikely(self.heap.cap() == 0 || block.is_empty()) {
+            // limit is 0 or block is empty.
+            return Ok(Status::Continue);
         }
 
-        if data.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let rows = if self.order_col_generated {
-            let order_col = data
-                .columns()
-                .last()
-                .unwrap()
-                .value
-                .as_column()
-                .unwrap()
-                .clone();
-            let rows = R::from_column(order_col, &self.sort_desc)
-                .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
-            // Need to remove order column.
-            data.pop_columns(1);
-            Arc::new(rows)
-        } else {
-            let order_by_cols = self
-                .sort_desc
-                .iter()
-                .map(|d| data.get_by_offset(d.offset).clone())
-                .collect::<Vec<_>>();
-            let rows = Arc::new(
-                self.row_converter
-                    .convert(&order_by_cols, data.num_rows())?,
-            );
-            if self.output_order_col {
-                let order_col = rows.to_column();
-                data.add_column(BlockEntry {
-                    data_type: order_col.data_type(),
-                    value: Value::Column(order_col),
-                });
-            }
-            rows
-        };
-
-        let mut cursor = Cursor::new(self.cur_index, rows);
-        self.buffer.insert(self.cur_index, data);
+        let cur_index = cursor.input_index;
+        self.buffer.insert(cur_index, block);
 
         while !cursor.is_finished() {
             if let Some(Reverse(evict)) = self.heap.push(Reverse(cursor.clone())) {
@@ -157,7 +75,7 @@ where
                     self.buffer.remove(&evict.input_index);
                 }
 
-                if evict.input_index == self.cur_index {
+                if evict.input_index == cur_index {
                     // The Top-N heap is full, and later rows in current block cannot be put into the heap.
                     break;
                 }
@@ -165,11 +83,10 @@ where
             cursor.advance();
         }
 
-        self.cur_index += 1;
-        Ok(vec![])
+        Ok(Status::Continue)
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+    fn on_finish(&mut self) -> Result<Vec<DataBlock>> {
         if self.heap.is_empty() {
             return Ok(vec![]);
         }
@@ -213,118 +130,118 @@ where
     }
 }
 
-type SimpleDateTransform =
-    TransformSortMergeLimit<SimpleRows<DateType>, SimpleRowConverter<DateType>>;
-type SimpleDateSort = AccumulatingTransformer<SimpleDateTransform>;
+impl<R: Rows> TransformSortMergeLimit<R> {
+    pub fn create(block_size: usize, limit: usize) -> Self {
+        TransformSortMergeLimit {
+            heap: FixedHeap::new(limit),
+            buffer: HashMap::with_capacity(limit),
+            block_size,
+        }
+    }
+}
 
-type SimpleTimestampTransform =
-    TransformSortMergeLimit<SimpleRows<TimestampType>, SimpleRowConverter<TimestampType>>;
-type SimpleTimestampSort = AccumulatingTransformer<SimpleTimestampTransform>;
+type MergeSortDateImpl = TransformSortMergeLimit<DateRows>;
+type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
 
-type SimpleStringTransform =
-    TransformSortMergeLimit<SimpleRows<StringType>, SimpleRowConverter<StringType>>;
-type SimpleStringSort = AccumulatingTransformer<SimpleStringTransform>;
+type MergeSortTimestampImpl = TransformSortMergeLimit<TimestampRows>;
+type MergeSortTimestamp =
+    TransformSortMergeBase<MergeSortTimestampImpl, TimestampRows, TimestampConverter>;
 
-type CommonTransform = TransformSortMergeLimit<StringColumn, CommonRowConverter>;
-type CommonSort = AccumulatingTransformer<CommonTransform>;
+type MergeSortStringImpl = TransformSortMergeLimit<StringRows>;
+type MergeSortString = TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
+
+type MergeSortCommonImpl = TransformSortMergeLimit<CommonRows>;
+type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
 
 #[allow(clippy::too_many_arguments)]
 pub fn try_create_transform_sort_merge_limit(
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    input_schema: DataSchemaRef,
+    schema: DataSchemaRef,
     sort_desc: Vec<SortColumnDescription>,
     block_size: usize,
     limit: usize,
     order_col_generated: bool,
     output_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
-    Ok(if sort_desc.len() == 1 {
-        let sort_type = input_schema.field(sort_desc[0].offset).data_type();
+    let processor = if sort_desc.len() == 1 {
+        let sort_type = schema.field(sort_desc[0].offset).data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => AccumulatingTransformer::<
-                    TransformSortMergeLimit<
-                        SimpleRows<NumberType<NUM_TYPE>>,
-                        SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >,
-                >::create(
+                NumberDataType::NUM_TYPE => AccumulatingTransformer::create(
                     input,
                     output,
-                    TransformSortMergeLimit::<
+                    TransformSortMergeBase::<
+                        TransformSortMergeLimit<SimpleRows<NumberType<NUM_TYPE>>>,
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
                     >::try_create(
-                        input_schema,
+                        schema,
                         sort_desc,
-                        block_size,
-                        limit,
                         order_col_generated,
-                        output_order_col
-                    )?
+                        output_order_col,
+                        TransformSortMergeLimit::create(block_size, limit),
+                    )?,
                 ),
             }),
-            DataType::Date => SimpleDateSort::create(
+            DataType::Date => AccumulatingTransformer::create(
                 input,
                 output,
-                SimpleDateTransform::try_create(
-                    input_schema,
+                MergeSortDate::try_create(
+                    schema,
                     sort_desc,
-                    block_size,
-                    limit,
                     order_col_generated,
                     output_order_col,
+                    MergeSortDateImpl::create(block_size, limit),
                 )?,
             ),
-            DataType::Timestamp => SimpleTimestampSort::create(
+            DataType::Timestamp => AccumulatingTransformer::create(
                 input,
                 output,
-                SimpleTimestampTransform::try_create(
-                    input_schema,
+                MergeSortTimestamp::try_create(
+                    schema,
                     sort_desc,
-                    block_size,
-                    limit,
                     order_col_generated,
                     output_order_col,
+                    MergeSortTimestampImpl::create(block_size, limit),
                 )?,
             ),
-            DataType::String => SimpleStringSort::create(
+            DataType::String => AccumulatingTransformer::create(
                 input,
                 output,
-                SimpleStringTransform::try_create(
-                    input_schema,
+                MergeSortString::try_create(
+                    schema,
                     sort_desc,
-                    block_size,
-                    limit,
                     order_col_generated,
                     output_order_col,
+                    MergeSortStringImpl::create(block_size, limit),
                 )?,
             ),
-            _ => CommonSort::create(
+            _ => AccumulatingTransformer::create(
                 input,
                 output,
-                CommonTransform::try_create(
-                    input_schema,
+                MergeSortCommon::try_create(
+                    schema,
                     sort_desc,
-                    block_size,
-                    limit,
                     order_col_generated,
                     output_order_col,
+                    MergeSortCommonImpl::create(block_size, limit),
                 )?,
             ),
         }
     } else {
-        CommonSort::create(
+        AccumulatingTransformer::create(
             input,
             output,
-            CommonTransform::try_create(
-                input_schema,
+            MergeSortCommon::try_create(
+                schema,
                 sort_desc,
-                block_size,
-                limit,
                 order_col_generated,
                 output_order_col,
+                MergeSortCommonImpl::create(block_size, limit),
             )?,
         )
-    })
+    };
+
+    Ok(processor)
 }
