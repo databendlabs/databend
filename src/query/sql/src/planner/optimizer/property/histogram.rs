@@ -253,10 +253,7 @@ impl SampleSet for UniformSampleSet {
                 let min = *min;
                 let max = *max;
                 // TODO(xudong): better histogram computation.
-                let bucket_range = max
-                    .saturating_add(1)
-                    .checked_sub(min)
-                    .ok_or_else(|| "overflowed")?
+                let bucket_range = max.saturating_add(1).checked_sub(min).ok_or("overflowed")?
                     / num_buckets as i64;
                 let upper_bound = min + bucket_range * bucket_index as i64;
                 Ok(Datum::Int(upper_bound))
@@ -274,8 +271,7 @@ impl SampleSet for UniformSampleSet {
                 let min = *min;
                 let max = *max;
                 // TODO(xudong): better histogram computation.
-                let bucket_range =
-                    max.checked_sub(min).ok_or_else(|| "overflowed")? / num_buckets as f64;
+                let bucket_range = max.checked_sub(min).ok_or("overflowed")? / num_buckets as f64;
                 let upper_bound = min + bucket_range * bucket_index as f64;
                 Ok(Datum::Float(upper_bound))
             }

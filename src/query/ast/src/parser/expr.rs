@@ -1444,9 +1444,9 @@ pub fn literal_string(i: Input) -> IResult<String> {
                 .is_some()
             {
                 let str = &token.text()[1..token.text().len() - 1];
-                let unescaped = unescape_string(str, '\'').ok_or_else(|| {
-                    nom::Err::Failure(ErrorKind::Other("invalid escape or unicode"))
-                })?;
+                let unescaped = unescape_string(str, '\'').ok_or(nom::Err::Failure(
+                    ErrorKind::Other("invalid escape or unicode"),
+                ))?;
                 Ok(unescaped)
             } else {
                 Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))

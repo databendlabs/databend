@@ -23,6 +23,7 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 
 pub fn catch_unwind<F: FnOnce() -> R, R>(f: F) -> Result<R> {
+    #[expect(clippy::disallowed_methods)]
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(res) => Ok(res),
         Err(cause) => match cause.downcast_ref::<&'static str>() {
