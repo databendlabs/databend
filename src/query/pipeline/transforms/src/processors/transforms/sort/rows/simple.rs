@@ -129,7 +129,7 @@ where
     T::Scalar: Ord,
 {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         _: DataSchemaRef,
     ) -> Result<Self> {
         assert!(sort_columns_descriptions.len() == 1);
