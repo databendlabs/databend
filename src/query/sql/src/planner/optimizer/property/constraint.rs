@@ -22,7 +22,6 @@ use common_constraint::simplify::simplify;
 use common_expression::cast_scalar;
 use common_expression::shrink_scalar;
 use common_expression::type_check::common_super_type;
-use common_expression::type_check::unify;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
@@ -267,8 +266,8 @@ pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + C
             .into()
         }
         MirExpr::BinaryOperator { op, left, right } => {
-            let left = from_mir(left, name_mapping);
-            let right = from_mir(right, name_mapping);
+            let mut left = from_mir(left, name_mapping);
+            let mut right = from_mir(right, name_mapping);
             let func_name = match op {
                 MirBinaryOperator::Plus => "plus",
                 MirBinaryOperator::Minus => "minus",
@@ -285,10 +284,14 @@ pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + C
             // A workaround for auto translating timestamp back to int64.
             let mut auto_cast_rule = BUILTIN_FUNCTIONS.get_auto_cast_rules(func_name).to_vec();
             auto_cast_rule.push((DataType::Number(NumberDataType::Int64), DataType::Timestamp));
-            let common_ty =
-                common_super_type(left.data_type()?, right.data_type()?, &auto_cast_rule)?;
-            let lhs = wrap_cast(&left, &common_ty);
-            let rhs = wrap_cast(&right, &common_ty);
+            if let Some(common_ty) = common_super_type(
+                left.data_type().unwrap(),
+                right.data_type().unwrap(),
+                &auto_cast_rule,
+            ) {
+                left = wrap_cast(&left, &common_ty);
+                right = wrap_cast(&right, &common_ty);
+            }
 
             FunctionCall {
                 span: None,
