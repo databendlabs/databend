@@ -58,8 +58,10 @@ use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
+use storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -435,6 +437,11 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(OPT_KEY_CHANGE_TRACKING);
 
     r.insert(OPT_KEY_ENGINE);
+
+    r.insert(OPT_KEY_ENGINE);
+
+    r.insert(OPT_KEY_LOCATION);
+    r.insert(OPT_KEY_CONNECTION_NAME);
 
     r.insert("transient");
     r

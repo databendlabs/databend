@@ -99,7 +99,7 @@ impl UpdateByExprMutator {
             let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
             let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
             // pop filter
-            data_block = data_block.pop_columns(1)?;
+            data_block.pop_columns(1);
             // has pop old filter
             let origin_block = data_block.clone();
             // add filter

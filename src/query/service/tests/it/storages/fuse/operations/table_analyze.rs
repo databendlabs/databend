@@ -27,19 +27,14 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
-use databend_query::test_kits::table_test_fixture::analyze_table;
-use databend_query::test_kits::table_test_fixture::do_deletion;
-use databend_query::test_kits::table_test_fixture::do_update;
-use databend_query::test_kits::table_test_fixture::execute_command;
-use databend_query::test_kits::table_test_fixture::TestFixture;
-use databend_query::test_kits::utils::query_count;
+use databend_query::test_kits::*;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // setup
@@ -99,10 +94,10 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_update_analyze_statistics() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    // create table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
     let db_name = fixture.default_db_name();
     let tb_name = fixture.default_table_name();

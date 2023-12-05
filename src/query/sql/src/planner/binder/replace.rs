@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_ast::ast::InsertSource;
 use common_ast::ast::ReplaceStmt;
 use common_ast::ast::Statement;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::OnErrorMode;
@@ -136,6 +137,13 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
+                if let Plan::Query { s_expr, .. } = &select_plan {
+                    if !self.check_sexpr_top(s_expr)? {
+                        return Err(ErrorCode::SemanticError(
+                            "replace source can't contain udf functions".to_string(),
+                        ));
+                    }
+                }
                 let enable_distributed_optimization = false;
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
                     enable_distributed_optimization,

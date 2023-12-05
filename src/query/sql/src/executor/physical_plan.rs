@@ -48,7 +48,6 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -75,7 +74,6 @@ pub enum PhysicalPlan {
     RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
-    RuntimeFilterSource(RuntimeFilterSource),
     CteScan(CteScan),
     MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
@@ -139,7 +137,6 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(v) => v.plan_id,
             PhysicalPlan::Exchange(v) => v.plan_id,
             PhysicalPlan::UnionAll(v) => v.plan_id,
-            PhysicalPlan::RuntimeFilterSource(v) => v.plan_id,
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
@@ -183,7 +180,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
-            PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
@@ -227,7 +223,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
-            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::CompactSource(_) => "CompactBlock".to_string(),
             PhysicalPlan::DeleteSource(_) => "DeleteSource".to_string(),
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
@@ -285,10 +280,6 @@ impl PhysicalPlan {
             }
             PhysicalPlan::CommitSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
-                std::iter::once(plan.left_side.as_ref())
-                    .chain(std::iter::once(plan.right_side.as_ref())),
-            ),
             PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -328,8 +319,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::RuntimeFilterSource(_)
-            | PhysicalPlan::UnionAll(_)
+            PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
             | PhysicalPlan::RangeJoin(_)

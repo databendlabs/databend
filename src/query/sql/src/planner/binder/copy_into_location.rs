@@ -59,12 +59,21 @@ impl<'a> Binder {
                 }
             }
             CopyIntoLocationSource::Query(query) => {
-                self.bind_statement(bind_context, &Statement::Query(query.clone()))
-                    .await
+                let select_plan = self
+                    .bind_statement(bind_context, &Statement::Query(query.clone()))
+                    .await?;
+                if let Plan::Query { s_expr, .. } = &select_plan {
+                    if !self.check_sexpr_top(s_expr)? {
+                        return Err(ErrorCode::SemanticError(
+                            "copy into location source can't contain udf functions".to_string(),
+                        ));
+                    }
+                }
+                Ok(select_plan)
             }
         }?;
 
-        let (mut stage_info, path) = resolve_file_location(&self.ctx, &stmt.dst).await?;
+        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
         self.apply_copy_into_location_options(stmt, &mut stage_info)
             .await?;
 

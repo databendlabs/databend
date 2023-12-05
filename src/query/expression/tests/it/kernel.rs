@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Range;
+
 use common_expression::block_debug::assert_block_value_eq;
 use common_expression::build_range_selection;
 use common_expression::types::number::*;

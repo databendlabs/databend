@@ -78,8 +78,6 @@ mod physical_replace_into;
 pub use physical_replace_into::ReplaceInto;
 mod physical_row_fetch;
 pub use physical_row_fetch::RowFetch;
-mod physical_runtime_filter_source;
-pub use physical_runtime_filter_source::RuntimeFilterSource;
 mod physical_sort;
 pub use physical_sort::Sort;
 mod physical_table_scan;

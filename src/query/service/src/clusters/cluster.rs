@@ -150,9 +150,9 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(cfg: InnerConfig) -> Result<()> {
-        let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
-        GlobalInstance::set(Self::try_create(&cfg, metastore).await?);
+    pub async fn init(cfg: &InnerConfig) -> Result<()> {
+        let metastore = ClusterDiscovery::create_meta_client(cfg).await?;
+        GlobalInstance::set(Self::try_create(cfg, metastore).await?);
 
         Ok(())
     }

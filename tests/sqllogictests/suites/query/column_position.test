@@ -30,7 +30,7 @@ select * from t1 where $1 = 1;
 ----
 1 a
 
-statement error 1065
+statement error 1005
 select $0 from t1
 
 statement error 1065

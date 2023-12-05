@@ -56,13 +56,14 @@ impl AsyncSystemTable for StagesTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
-        let enable_stage_udf_priv_check = ctx.get_settings().get_enable_stage_udf_priv_check()?;
-        let stages = if enable_stage_udf_priv_check {
+        let enable_experimental_rbac_check =
+            ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let stages = if enable_experimental_rbac_check {
             let visibility_checker = ctx.get_visibility_checker().await?;
             stages
                 .into_iter()
                 .filter(|stage| {
-                    !stage.is_from_uri
+                    !stage.is_temporary
                         && visibility_checker.check_stage_visibility(&stage.stage_name)
                 })
                 .collect::<Vec<_>>()

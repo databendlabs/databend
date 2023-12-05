@@ -117,6 +117,8 @@ pub struct NativeDeserializeDataTransform {
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+
+    base_block_ids: Option<Scalar>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -249,6 +251,8 @@ impl NativeDeserializeDataTransform {
 
                 index_reader,
                 virtual_reader,
+
+                base_block_ids: plan.base_block_ids.clone(),
             },
         )))
     }
@@ -457,7 +461,12 @@ impl NativeDeserializeDataTransform {
         }
 
         if self.block_reader.query_internal_columns() {
-            data_block = fill_internal_column_meta(data_block, fuse_part, None)?;
+            data_block = fill_internal_column_meta(
+                data_block,
+                fuse_part,
+                None,
+                self.base_block_ids.clone(),
+            )?;
         }
 
         if self.block_reader.update_stream_columns() {
@@ -486,7 +495,7 @@ impl NativeDeserializeDataTransform {
         let num_rows = fuse_part.nums_rows;
         let data_block = DataBlock::new(vec![], num_rows);
         let data_block = if self.block_reader.query_internal_columns() {
-            fill_internal_column_meta(data_block, fuse_part, None)?
+            fill_internal_column_meta(data_block, fuse_part, None, self.base_block_ids.clone())?
         } else {
             data_block
         };
@@ -845,7 +854,12 @@ impl Processor for NativeDeserializeDataTransform {
                 };
 
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-                block = fill_internal_column_meta(block, fuse_part, Some(offsets))?;
+                block = fill_internal_column_meta(
+                    block,
+                    fuse_part,
+                    Some(offsets),
+                    self.base_block_ids.clone(),
+                )?;
             }
 
             if self.block_reader.update_stream_columns() {

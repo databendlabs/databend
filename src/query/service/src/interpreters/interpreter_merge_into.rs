@@ -17,15 +17,18 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::UInt32Type;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_expression::FromData;
 use common_expression::RemoteExpr;
+use common_expression::SendableDataBlockStream;
 use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
@@ -39,6 +42,7 @@ use common_sql::executor::physical_plans::MergeIntoSource;
 use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::plans;
 use common_sql::plans::MergeInto as MergePlan;
 use common_sql::plans::RelOperator;
 use common_sql::plans::UpdatePlan;
@@ -49,7 +53,6 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
@@ -61,6 +64,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::stream::DataBlockStream;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
@@ -85,15 +89,16 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let start = Instant::now();
-        let (physical_plan, table_info) = self.build_physical_plan().await?;
+        let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
         // Add table lock before execution.
-        let table_lock = LockManager::create_table_lock(table_info)?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
+        // let table_lock = LockManager::create_table_lock(table_info)?;
+        // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        // build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -113,12 +118,17 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
-                false,
+                true,
             )
             .await;
         }
 
         Ok(build_res)
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let blocks = self.get_merge_into_table_result()?;
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 
@@ -402,6 +412,7 @@ impl MergeIntoInterpreter {
                     input: Box::new(merge_append),
                     kind: FragmentKind::Merge,
                     keys: vec![],
+                    allow_adjust_parallelism: true,
                     ignore_exchange: false,
                 })),
                 table_info: table_info.clone(),
@@ -442,5 +453,27 @@ impl MergeIntoInterpreter {
             &BUILTIN_FUNCTIONS,
         );
         Ok(filer.as_remote_expr())
+    }
+
+    fn get_merge_into_table_result(&self) -> Result<Vec<DataBlock>> {
+        let binding = self.ctx.get_merge_status();
+        let status = binding.read();
+        let schema = self.plan.schema();
+        let mut columns = Vec::new();
+        for field in schema.as_ref().fields() {
+            match field.name().as_str() {
+                plans::INSERT_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
+                }
+                plans::UPDTAE_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
+                }
+                plans::DELETE_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.deleted_rows as u32]))
+                }
+                _ => unreachable!(),
+            }
+        }
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }

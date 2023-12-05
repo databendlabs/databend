@@ -113,6 +113,7 @@ byte-unit = "4.0.19"
 byteorder = "1.4.3"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+config = { version = "0.13.4", features = [] }
 ctor = "0.1.26"
 dashmap = "5.4"
 ethnum = { workspace = true }

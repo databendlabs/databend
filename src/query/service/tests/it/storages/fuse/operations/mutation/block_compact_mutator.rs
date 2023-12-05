@@ -30,8 +30,7 @@ use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::schedulers::build_query_pipeline_without_render_result_set;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -43,11 +42,12 @@ use crate::storages::fuse::operations::mutation::segments_compact_mutator::Compa
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert
@@ -100,6 +100,7 @@ async fn test_compact() -> Result<()> {
         expected,
     )
     .await?;
+
     Ok(())
 }
 
@@ -140,7 +141,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_data_operator()?.operator();
     let settings = ctx.get_settings();

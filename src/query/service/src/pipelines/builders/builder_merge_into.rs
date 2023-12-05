@@ -37,6 +37,7 @@ use common_sql::executor::physical_plans::MergeInto;
 use common_sql::executor::physical_plans::MergeIntoAddRowNumber;
 use common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
 use common_sql::executor::physical_plans::MergeIntoSource;
+use common_sql::executor::physical_plans::MutationKind;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::MatchedSplitProcessor;
 use common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
@@ -140,6 +141,7 @@ impl PipelineBuilder {
             unmatched.clone(),
             input_schema.clone(),
             self.func_ctx.clone(),
+            self.ctx.clone(),
         )?;
         let pipe_items = vec![
             merge_into_not_matched_processor.into_pipe_item(),
@@ -212,6 +214,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen,
+            MutationKind::MergeInto,
         )?;
 
         let pipe_items = vec![
@@ -331,6 +334,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen.clone(),
+            MutationKind::MergeInto,
         )?
         .get_block_builder();
 
@@ -397,6 +401,7 @@ impl PipelineBuilder {
                         unmatched.clone(),
                         input.output_schema()?,
                         self.func_ctx.clone(),
+                        self.ctx.clone(),
                     )?;
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
@@ -649,6 +654,7 @@ impl PipelineBuilder {
                 OutputPort::create(),
                 table,
                 cluster_stats_gen.clone(),
+                MutationKind::MergeInto,
             )?;
             pipe_items.push(serialize_block_transform.into_pipe_item());
         }

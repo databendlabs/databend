@@ -159,7 +159,7 @@ pub enum TokenKind {
     #[regex(r"0[xX][a-fA-F0-9]+")]
     MySQLLiteralHex,
 
-    #[regex(r"[0-9]+")]
+    #[regex(r"[0-9]+(_|[0-9])*")]
     LiteralInteger,
 
     #[regex(r"[0-9]+[eE][+-]?[0-9]+")]
@@ -298,6 +298,12 @@ pub enum TokenKind {
     /// Used as JSON operator.
     #[token("@>")]
     AtArrow,
+    /// Used as JSON operator.
+    #[token("@?")]
+    AtQuestion,
+    /// Used as JSON operator.
+    #[token("@@")]
+    AtAt,
 
     // Keywords
     //
@@ -1282,7 +1288,7 @@ impl TokenKind {
             // | TokenKind::XMLSERIALIZE
             // | TokenKind::XMLTABLE
             | TokenKind::WHEN
-            | TokenKind::ARRAY
+            // | TokenKind::ARRAY
             | TokenKind::AS
             // | TokenKind::CHAR
             | TokenKind::CHARACTER
@@ -1358,6 +1364,7 @@ impl TokenKind {
             | TokenKind::FALSE
             // | TokenKind::FOREIGN
             // | TokenKind::FREEZE
+            | TokenKind::FOR
             | TokenKind::FULL
             // | TokenKind::ILIKE
             | TokenKind::IN
@@ -1407,7 +1414,6 @@ impl TokenKind {
             | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
-            | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
             | TokenKind::GROUP

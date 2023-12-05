@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod runtime_filter_connector;
-mod runtime_filter_source;
-
-pub use runtime_filter_connector::RuntimeFilterConnector;
-pub use runtime_filter_source::RuntimeFilterState;
+mod cluster;

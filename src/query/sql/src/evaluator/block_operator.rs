@@ -16,10 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
-use common_expression::build_range_selection;
-use common_expression::build_select_expr;
-use common_expression::filter::SelectStrategy;
-use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -45,9 +41,6 @@ pub enum BlockOperator {
         /// The index of the output columns, based on the exprs.
         projections: Option<ColumnSet>,
     },
-
-    /// Filter the input [`DataBlock`] with the predicate `eval`.
-    Filter { projections: ColumnSet, expr: Expr },
 
     /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
@@ -83,54 +76,6 @@ impl BlockOperator {
                     match projections {
                         Some(projections) => Ok(input.project(projections)),
                         None => Ok(input),
-                    }
-                }
-            }
-
-            BlockOperator::Filter { projections, expr } => {
-                assert_eq!(expr.data_type(), &DataType::Boolean);
-
-                let num_evals = input
-                    .get_meta()
-                    .and_then(AggIndexMeta::downcast_ref_from)
-                    .map(|a| a.num_evals);
-
-                if let Some(num_evals) = num_evals {
-                    // It's from aggregating index.
-                    Ok(input.project_with_agg_index(projections, num_evals))
-                } else {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let (select_expr, has_or) = build_select_expr(expr);
-                    // TODO(Dousir9): reuse the selection buffer
-                    let mut true_selection = vec![0; input.num_rows()];
-                    let mut false_selection = if has_or {
-                        vec![0; input.num_rows()]
-                    } else {
-                        vec![]
-                    };
-                    let mut true_idx = 0;
-                    let mut false_idx = 0;
-                    let count = evaluator.process_selection(
-                        &select_expr,
-                        None,
-                        &mut true_selection,
-                        (&mut false_selection, false),
-                        &mut true_idx,
-                        &mut false_idx,
-                        SelectStrategy::ALL,
-                        input.num_rows(),
-                    )?;
-
-                    let data_block = input.project(projections);
-                    if count == data_block.num_rows() {
-                        Ok(data_block)
-                    } else if count as f64 > data_block.num_rows() as f64 * 0.8
-                        && data_block.num_columns() > 1
-                    {
-                        let selection_ranges = build_range_selection(&true_selection, count);
-                        data_block.take_ranges(&selection_ranges, count)
-                    } else {
-                        data_block.take(&true_selection[0..count], &mut None)
                     }
                 }
             }
@@ -224,7 +169,6 @@ impl Transform for CompoundBlockOperator {
                 .map(|op| {
                     match op {
                         BlockOperator::Map { .. } => "Map",
-                        BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
                     }
                     .to_string()

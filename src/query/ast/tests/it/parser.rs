@@ -623,6 +623,7 @@ fn test_statement_error() {
                     error_on_column_count_mismatch = 1
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
+        r#"select $0 from t1"#,
     ];
 
     for case in cases {
@@ -704,6 +705,8 @@ fn test_query_error() {
     let file = &mut mint.new_goldenfile("query-error.txt").unwrap();
     let cases = &[
         r#"select * from customer join where a = b"#,
+        r#"from t1 select * from t2"#,
+        r#"from t1 select * from t2 where a = b"#,
         r#"select * from join customer"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
@@ -731,6 +734,8 @@ fn test_expr() {
         r#"123456789012345678901234567890"#,
         r#"x'123456789012345678901234567890'"#,
         r#"1e100000000000000"#,
+        r#"100_100_000"#,
+        r#"1_12200_00"#,
         r#".1"#,
         r#"-1"#,
         r#"(1)"#,
@@ -813,7 +818,7 @@ fn test_expr() {
 #[test]
 fn test_experimental_expr() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("experimental_expr.txt").unwrap();
+    let file = &mut mint.new_goldenfile("experimental-expr.txt").unwrap();
 
     let cases = &[
         r#"a"#,
@@ -823,6 +828,7 @@ fn test_experimental_expr() {
         r#"1 + {'k1': 4}.k1"#,
         r#"'3'.plus(4)"#,
         r#"(3).add({'k1': 4 }.k1)"#,
+        r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
     ];
 
     for case in cases {
@@ -842,6 +848,7 @@ fn test_expr_error() {
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"a.add(b)"#,
+        r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
                 AND 1 + col3 DIV sum(col4)"#,

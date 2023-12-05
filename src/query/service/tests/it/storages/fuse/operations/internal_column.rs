@@ -26,7 +26,7 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -51,6 +51,7 @@ fn expected_data_block(
             segment_location: block_meta.segment_location.clone(),
             snapshot_location: block_meta.snapshot_location.clone(),
             offsets: None,
+            base_block_ids: None,
         };
         for internal_column in internal_columns {
             let column = internal_column.generate_column_values(&internal_column_meta, num_rows);
@@ -138,10 +139,11 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_internal_column() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.new_query_ctx().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let internal_columns = vec![

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::CatalogInfo;
 
@@ -40,6 +41,7 @@ pub struct DataSourcePlan {
     pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
     pub query_internal_columns: bool,
+    pub base_block_ids: Option<Scalar>,
     // used for recluster to update stream columns
     pub update_stream_columns: bool,
 

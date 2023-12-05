@@ -195,6 +195,7 @@ impl Processor for MutationSource {
                             segment_location: block_meta.segment_location.clone(),
                             snapshot_location: None,
                             offsets: None,
+                            base_block_ids: None,
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),
@@ -229,7 +230,7 @@ impl Processor for MutationSource {
                     if affect_rows != 0 {
                         // Pop the row_id column
                         if self.query_row_id_col {
-                            data_block = data_block.pop_columns(1)?;
+                            data_block.pop_columns(1);
                         }
 
                         let progress_values = ProgressValues {

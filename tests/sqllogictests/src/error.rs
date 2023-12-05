@@ -55,9 +55,6 @@ pub enum DSqlLogicTestError {
     // Error from databend
     #[error("Databend error: {0}")]
     Databend(#[from] ErrorCode),
-    // ClickHouseClient Text Error
-    #[error("ClickHouse client error: {0}")]
-    ClickHouseClient(#[from] TextError),
     // Error from mysql client
     #[error("mysql client error: {0}")]
     MysqlClient(#[from] MysqlClientError),

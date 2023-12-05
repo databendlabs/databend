@@ -32,6 +32,7 @@ use crate::parser::statement::hint;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
+use crate::ErrorKind;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(
@@ -41,7 +42,7 @@ pub fn query(i: Input) -> IResult<Query> {
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
+    let (rest, set_operation_elements) = rule! { #set_operation_element+ }(i)?;
     let iter = &mut set_operation_elements.into_iter();
     run_pratt_parser(SetOperationParser, iter, rest, i)
 }
@@ -52,13 +53,13 @@ pub enum SetOperationElement {
     SelectStmt {
         hints: Option<Hint>,
         distinct: bool,
-        select_list: Box<Vec<SelectTarget>>,
-        from: Box<Vec<TableReference>>,
-        selection: Box<Option<Expr>>,
+        select_list: Vec<SelectTarget>,
+        from: Vec<TableReference>,
+        selection: Option<Expr>,
         group_by: Option<GroupBy>,
-        having: Box<Option<Expr>>,
+        having: Option<Expr>,
         window_list: Option<Vec<WindowDefinition>>,
-        qualify: Box<Option<Expr>>,
+        qualify: Option<Expr>,
     },
     SetOperation {
         op: SetOperator,
@@ -97,84 +98,50 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
-    let select_stmt = map(
+    let select_stmt = map_res(
         rule! {
-             SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
-                ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
-                ~ ( WHERE ~ ^#expr )?
-                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
-                ~ ( HAVING ~ ^#expr )?
-                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
-                ~ ( QUALIFY ~ ^#expr )?
+            ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+            ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ ( WHERE ~ ^#expr )?
+            ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
+            ~ ( HAVING ~ ^#expr )?
+            ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+            ~ ( QUALIFY ~ ^#expr )?
         },
         |(
+            opt_from_block_first,
             _select,
             opt_hints,
             opt_distinct,
             select_list,
-            opt_from_block,
+            opt_from_block_second,
             opt_where_block,
             opt_group_by_block,
             opt_having_block,
             opt_window_block,
             opt_qualify_block,
         )| {
-            SetOperationElement::SelectStmt {
-                hints: opt_hints,
-                distinct: opt_distinct.is_some(),
-                select_list: Box::new(select_list),
-                from: Box::new(
-                    opt_from_block
-                        .map(|(_, table_refs)| table_refs)
-                        .unwrap_or_default(),
-                ),
-                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
-                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
-                having: Box::new(opt_having_block.map(|(_, having)| having)),
-                window_list: opt_window_block.map(|(_, windows)| windows),
-                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
+            if opt_from_block_first.is_some() && opt_from_block_second.is_some() {
+                return Err(nom::Err::Failure(ErrorKind::Other(
+                    "duplicated FROM clause",
+                )));
             }
-        },
-    );
 
-    // From ... Select
-    let select_stmt_from_first = map(
-        rule! {
-                ( FROM ~ ^#comma_separated_list1(table_reference) )?
-                ~ SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
-                ~ ( WHERE ~ ^#expr )?
-                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
-                ~ ( HAVING ~ ^#expr )?
-                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
-                ~ ( QUALIFY ~ ^#expr )?
-        },
-        |(
-            opt_from_block,
-            _select,
-            opt_hints,
-            opt_distinct,
-            select_list,
-            opt_where_block,
-            opt_group_by_block,
-            opt_having_block,
-            opt_window_block,
-            opt_qualify_block,
-        )| {
-            SetOperationElement::SelectStmt {
+            Ok(SetOperationElement::SelectStmt {
                 hints: opt_hints,
                 distinct: opt_distinct.is_some(),
-                select_list: Box::new(select_list),
-                from: Box::new(
-                    opt_from_block
-                        .map(|(_, table_refs)| table_refs)
-                        .unwrap_or_default(),
-                ),
-                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
+                select_list,
+                from: opt_from_block_first
+                    .or(opt_from_block_second)
+                    .map(|(_, table_refs)| table_refs)
+                    .unwrap_or_default(),
+                selection: opt_where_block.map(|(_, selection)| selection),
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
-                having: Box::new(opt_having_block.map(|(_, having)| having)),
+                having: opt_having_block.map(|(_, having)| having),
                 window_list: opt_window_block.map(|(_, windows)| windows),
-                qualify: Box::new(opt_qualify_block.map(|(_, qualify)| qualify)),
-            }
+                qualify: opt_qualify_block.map(|(_, qualify)| qualify),
+            })
         },
     );
 
@@ -220,7 +187,6 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         | #with
         | #set_operator
         | #select_stmt
-        | #select_stmt_from_first
         | #values
         | #order_by
         | #limit
@@ -274,13 +240,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 span: transform_span(input.span.0),
                 hints,
                 distinct,
-                select_list: *select_list,
-                from: *from,
-                selection: *selection,
+                select_list,
+                from,
+                selection,
                 group_by,
-                having: *having,
+                having,
                 window_list,
-                qualify: *qualify,
+                qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
                 span: transform_span(input.span.0),
@@ -626,7 +592,7 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule!(#table_reference_element+)(i)?;
+    let (rest, table_reference_elements) = rule! { #table_reference_element+ }(i)?;
     let iter = &mut table_reference_elements.into_iter();
     run_pratt_parser(TableReferenceParser, iter, rest, i)
 }

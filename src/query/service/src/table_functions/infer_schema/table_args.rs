@@ -21,6 +21,7 @@ use common_storages_fuse::table_functions::string_value;
 #[derive(Clone)]
 pub(crate) struct InferSchemaArgsParsed {
     pub(crate) location: String,
+    pub(crate) connection_name: Option<String>,
     pub(crate) file_format: Option<String>,
     pub(crate) files_info: StageFilesInfo,
 }
@@ -30,6 +31,7 @@ impl InferSchemaArgsParsed {
         let args = table_args.expect_all_named("infer_schema")?;
 
         let mut location = None;
+        let mut connection_name = None;
         let mut file_format = None;
         let mut files_info = StageFilesInfo {
             path: "".to_string(),
@@ -40,15 +42,10 @@ impl InferSchemaArgsParsed {
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
                 "location" => {
-                    let v = string_value(v)?;
-                    if let Some(name) = v.strip_prefix('@') {
-                        location = Some(name.to_string());
-                    } else {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "location must start with @, but got {}",
-                            v
-                        )));
-                    }
+                    location = Some(string_value(v)?);
+                }
+                "connection_name" => {
+                    connection_name = Some(string_value(v)?);
                 }
                 "pattern" => {
                     files_info.pattern = Some(string_value(v)?);
@@ -71,6 +68,7 @@ impl InferSchemaArgsParsed {
 
         Ok(Self {
             location,
+            connection_name,
             file_format,
             files_info,
         })

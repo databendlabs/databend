@@ -58,7 +58,8 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_union_output_type() -> Result<()> {
     {
-        let fixture = TestFixture::new().await?;
+        let fixture = TestFixture::setup().await?;
+
         let (_, schema) = get_interpreter(
             fixture.new_query_ctx().await?,
             "select 1 union all select 2.0::FLOAT64",
@@ -74,6 +75,7 @@ async fn test_simple_union_output_type() -> Result<()> {
             "select 1.0::FLOAT64 union all select 2",
         )
         .await?;
+
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
@@ -81,7 +83,8 @@ async fn test_simple_union_output_type() -> Result<()> {
     }
 
     {
-        let fixture = TestFixture::new().await?;
+        let fixture = TestFixture::setup().await?;
+
         execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
         execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
         let (_, schema) = get_interpreter(
@@ -159,7 +162,7 @@ fn create_all_types_table_sql(table_name: &str) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_union_output_type() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
 
     // Prepare tables
     let sql1 = create_all_types_table_sql("t1");
