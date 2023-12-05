@@ -204,6 +204,22 @@ pub fn test_pass() {
     );
 }
 
+// Build a range selection from a selection array.
+pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<Range<u32>> {
+    let mut range_selection = Vec::with_capacity(count);
+    let mut start = selection[0];
+    let mut idx = 1;
+    while idx < count {
+        if selection[idx] != selection[idx - 1] + 1 {
+            range_selection.push(start..selection[idx - 1] + 1);
+            start = selection[idx];
+        }
+        idx += 1;
+    }
+    range_selection.push(start..selection[count - 1] + 1);
+    range_selection
+}
+
 /// This test covers take.rs, take_chunks.rs, take_compact.rs, take_ranges.rs, filter.rs, concat.rs.
 #[test]
 pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
