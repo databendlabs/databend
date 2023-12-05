@@ -162,7 +162,7 @@ impl Executor {
     pub fn get_warnings(&self) -> Vec<String> {
         match &self.state {
             Starting(_) => vec![],
-            Running(r) => r.ctx.get_warnings(),
+            Running(r) => r.ctx.pop_warnings(),
             Stopped(r) => r.warnings.clone(),
         }
     }
@@ -221,7 +221,7 @@ impl Executor {
                     reason,
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
-                    warnings: s.ctx.get_warnings(),
+                    warnings: s.ctx.pop_warnings(),
                     affect: Default::default(),
                 }))
             }
@@ -242,7 +242,7 @@ impl Executor {
                     reason,
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
-                    warnings: r.ctx.get_warnings(),
+                    warnings: r.ctx.pop_warnings(),
                     affect: r.ctx.get_affect(),
                 }))
             }

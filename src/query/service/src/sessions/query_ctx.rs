@@ -241,8 +241,8 @@ impl QueryContext {
         self.shared.get_affect()
     }
 
-    pub fn get_warnings(&self) -> Vec<String> {
-        self.shared.get_warnings()
+    pub fn pop_warnings(&self) -> Vec<String> {
+        self.shared.pop_warnings()
     }
 
     pub fn get_data_metrics(&self) -> StorageMetrics {

@@ -155,14 +155,16 @@ impl QueryContextShared {
         (*guard).clone()
     }
 
-    pub fn add_warning(&self, warn: String) {
+    pub fn push_warning(&self, warn: String) {
         let mut guard = self.warnings.lock();
         (*guard).push(warn);
     }
 
-    pub fn get_warnings(&self) -> Vec<String> {
-        let guard = self.warnings.lock();
-        (*guard).clone()
+    pub fn pop_warnings(&self) -> Vec<String> {
+        let mut guard = self.warnings.lock();
+        let warnings = (*guard).clone();
+        (*guard).clear();
+        warnings
     }
 
     pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
@@ -177,6 +179,7 @@ impl QueryContextShared {
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
         self.on_error_mode.read().clone()
     }
+
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
         let mut guard = self.on_error_mode.write();
         *guard = Some(mode);

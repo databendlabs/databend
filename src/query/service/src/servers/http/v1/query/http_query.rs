@@ -364,7 +364,7 @@ impl HttpQuery {
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
-                        warnings: ctx_clone.get_warnings(),
+                        warnings: ctx_clone.pop_warnings(),
                     };
                     info!(
                         "{}: http query change state to Stopped, fail to start {:?}",
