@@ -106,13 +106,14 @@ use common_settings::Settings;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
+use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;
@@ -125,7 +126,9 @@ use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;
@@ -182,7 +185,8 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -228,8 +232,10 @@ async fn test_commit_to_meta_server() -> Result<()> {
 
     impl Case {
         async fn run(&self) -> Result<()> {
-            let fixture = TestFixture::new().await?;
+            let fixture = TestFixture::setup().await?;
+            fixture.create_default_database().await?;
             fixture.create_default_table().await?;
+
             let ctx = fixture.new_query_ctx().await?;
             let catalog = ctx.get_catalog("default").await?;
 
@@ -296,6 +302,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 "case name {}",
                 self.case_name
             );
+
             Ok(())
         }
     }
@@ -651,6 +658,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        todo!()
+    }
+
+    fn add_merge_status(&self, _merge_status: MergeStatus) {
+        todo!()
+    }
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
         todo!()
     }
 }

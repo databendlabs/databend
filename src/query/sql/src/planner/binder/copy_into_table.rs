@@ -119,7 +119,7 @@ impl<'a> Binder {
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
+        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
         self.apply_copy_into_table_options(stmt, &mut stage_info)
             .await?;
         let files_info = StageFilesInfo {
@@ -218,7 +218,7 @@ impl<'a> Binder {
         attachment: StageAttachment,
     ) -> Result<(StageInfo, StageFilesInfo)> {
         let (mut stage_info, path) =
-            resolve_stage_location(&self.ctx, &attachment.location[1..]).await?;
+            resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
 
         if let Some(ref options) = attachment.file_format_options {
             stage_info.file_format_params = FileFormatOptionsAst {
@@ -527,7 +527,7 @@ fn check_transform_query(
 /// - @internal/abc => (internal, "/stage/internal/abc")
 #[async_backtrace::framed]
 pub async fn resolve_stage_location(
-    ctx: &Arc<dyn TableContext>,
+    ctx: &dyn TableContext,
     location: &str,
 ) -> Result<(StageInfo, String)> {
     // my_named_stage/abc/
@@ -550,7 +550,7 @@ pub async fn resolve_stage_location(
 
 #[async_backtrace::framed]
 pub async fn resolve_file_location(
-    ctx: &Arc<dyn TableContext>,
+    ctx: &dyn TableContext,
     location: &FileLocation,
 ) -> Result<(StageInfo, String)> {
     match location.clone() {

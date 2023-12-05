@@ -2936,6 +2936,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
+        value(Engine::Iceberg, rule! { ICEBERG }),
     ));
 
     map(

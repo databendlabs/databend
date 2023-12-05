@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::LicenseManager;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use enterprise_query::license::RealLicenseManager;
 use jwt_simple::algorithms::ES256KeyPair;
 use jwt_simple::claims::Claims;
@@ -39,7 +39,7 @@ fn build_custom_claims(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_parse_license() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
@@ -87,7 +87,7 @@ async fn test_parse_license() -> common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_license_features() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(

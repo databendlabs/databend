@@ -209,7 +209,7 @@ impl AsyncSource for InspectParquetSource {
         }
         self.is_finished = true;
         let uri = self.uri.strip_prefix('@').unwrap().to_string();
-        let (stage_info, path) = resolve_stage_location(&self.ctx, &uri).await?;
+        let (stage_info, path) = resolve_stage_location(self.ctx.as_ref(), &uri).await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()

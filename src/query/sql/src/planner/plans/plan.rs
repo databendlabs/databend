@@ -410,7 +410,7 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
-
+            Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
@@ -457,6 +457,7 @@ impl Plan {
                 | Plan::DescribeTask(_)
                 | Plan::DescConnection(_)
                 | Plan::ShowConnections(_)
+                | Plan::MergeInto(_)
         )
     }
 }

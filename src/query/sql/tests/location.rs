@@ -46,7 +46,7 @@ async fn test_parse_uri_location() -> Result<()> {
         .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(InnerConfig::default())?;
+    GlobalConfig::init(&InnerConfig::default())?;
 
     let cases = vec![
         (

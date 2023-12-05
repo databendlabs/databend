@@ -56,6 +56,9 @@ fn test_variant() {
     test_exists_all_keys_op(file);
     test_contains_in_left_op(file);
     test_contains_in_right_op(file);
+    test_json_path_match(file);
+    test_json_path_match_op(file);
+    test_json_path_exists_op(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1015,6 +1018,144 @@ fn test_json_path_exists(file: &mut impl Write) {
         r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')"#,
         &[],
     );
+}
+
+fn test_json_path_exists_op(file: &mut impl Write) {
+    run_ast(file, "NULL @? '$.a'", &[]);
+    run_ast(file, r#"parse_json('{"a": 1, "b": 2}') @? NULL"#, &[]);
+    run_ast(file, r#"parse_json('{"a": 1, "b": 2}') @? '$.a'"#, &[]);
+    run_ast(file, r#"parse_json('{"a": 1, "b": 2}') @? '$.c'"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ == 1)'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ > 1)'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[0]'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[3]'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[1 to last] ? (@ >=2 && @ <=3)'"#,
+        &[],
+    );
+}
+
+fn test_json_path_match(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')"#,
+        &[],
+    );
+    run_ast(file, "json_path_match(parse_json(s), p)", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                vec!["true", "[{\"k\":1},{\"k\":2}]", "", "[1,2,3,4]"],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "p",
+            StringType::from_data(vec!["$.a > 0", "$[*].k == 1", "$[*] > 1", "$[*] > 2"]),
+        ),
+    ]);
+}
+
+fn test_json_path_match_op(file: &mut impl Write) {
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.a == 1'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.a > 1'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.c > 0'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.b < 2'"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] == 1'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] > 1'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[3] == 0'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] >= 2'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] == 2 || $.b[1 to last] == 3'"#,
+        &[],
+    );
+    run_ast(file, "parse_json(s) @@ p", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                vec!["true", "[{\"k\":1},{\"k\":2}]", "", "[1,2,3,4]"],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "p",
+            StringType::from_data(vec!["$.a > 0", "$[*].k == 1", "$[*] > 1", "$[*] > 2"]),
+        ),
+    ]);
 }
 
 fn test_get_by_keypath_op(file: &mut impl Write) {

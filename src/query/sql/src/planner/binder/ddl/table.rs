@@ -69,6 +69,7 @@ use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
+use common_storages_iceberg::IcebergTable;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use log::debug;
@@ -80,7 +81,8 @@ use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
-use crate::binder::location::parse_uri_location;
+use crate::binder::get_storage_params_from_options;
+use crate::binder::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -418,8 +420,8 @@ impl Binder {
             )?;
         }
 
-        let (storage_params, part_prefix) = match uri_location {
-            Some(uri) => {
+        let (mut storage_params, part_prefix) = match (uri_location, engine) {
+            (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
@@ -427,7 +429,7 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
+                let (sp, _) = parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -441,7 +443,11 @@ impl Binder {
 
                 (Some(sp), fp)
             }
-            None => (None, "".to_string()),
+            (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
+                "Incorrect CREATE query: CREATE TABLE with external location is only supported for FUSE engine, but got {:?} for {:?}",
+                engine, uri
+            )))?,
+            _ => (None, "".to_string()),
         };
 
         // If table is TRANSIENT, set a flag in table option
@@ -495,9 +501,23 @@ impl Binder {
                 Self::validate_create_table_schema(&source_schema)?;
                 (source_schema, source_comments)
             }
-            _ => Err(ErrorCode::BadArguments(
-                "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
-            ))?,
+            _ => {
+                if engine == Engine::Iceberg {
+                    let sp = get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
+                    let dop = DataOperator::try_new(&sp)?;
+                    let table = IcebergTable::load_iceberg_table(dop).await?;
+                    let table_schema = IcebergTable::get_schema(&table).await?;
+                    // the first version of current iceberg table do not need to persist the storage_params,
+                    // since we get it from table options location and connection when load table each time.
+                    // we do this in case we change this idea.
+                    storage_params = Some(sp);
+                    (Arc::new(table_schema), vec![])
+                } else {
+                    Err(ErrorCode::BadArguments(
+                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG table engine",
+                    ))?
+                }
+            }
         };
 
         // for fuse engine, we will insert database_id, so if we check it in execute phase,
@@ -646,7 +666,7 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
+        let (sp, _) = parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;

@@ -14,4 +14,4 @@
 
 pub mod context;
 pub mod mock_services;
-pub mod sessions;
+pub mod setup;

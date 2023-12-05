@@ -35,6 +35,7 @@ pub struct ExchangeSink {
     // Addresses of destination nodes
     pub query_id: String,
     pub ignore_exchange: bool,
+    pub allow_adjust_parallelism: bool,
 }
 
 impl ExchangeSink {

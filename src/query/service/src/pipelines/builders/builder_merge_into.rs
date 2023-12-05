@@ -141,6 +141,7 @@ impl PipelineBuilder {
             unmatched.clone(),
             input_schema.clone(),
             self.func_ctx.clone(),
+            self.ctx.clone(),
         )?;
         let pipe_items = vec![
             merge_into_not_matched_processor.into_pipe_item(),
@@ -400,6 +401,7 @@ impl PipelineBuilder {
                         unmatched.clone(),
                         input.output_schema()?,
                         self.func_ctx.clone(),
+                        self.ctx.clone(),
                     )?;
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {

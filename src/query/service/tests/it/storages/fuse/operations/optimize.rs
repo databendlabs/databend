@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_sql::Planner;
 use common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 use crate::storages::fuse::utils::do_purge_test;
@@ -34,11 +34,12 @@ async fn test_fuse_snapshot_optimize_all() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert 5 times

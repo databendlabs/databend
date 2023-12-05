@@ -34,7 +34,7 @@ use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_table_meta::meta;
@@ -50,7 +50,7 @@ use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_block_select() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
@@ -154,7 +154,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety_for_recluster() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_data_operator()?.operator();
 

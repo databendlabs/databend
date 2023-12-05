@@ -16,14 +16,13 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
-use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::*;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
     let config = ConfigBuilder::create().build();
-    let _guard = TestGlobalServices::setup(config.clone()).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let discover_cluster = ClusterDiscovery::instance().discover(&config).await?;
 
@@ -31,6 +30,7 @@ async fn test_single_cluster_discovery() -> Result<()> {
     assert_eq!(discover_cluster_nodes.len(), 1);
     assert!(discover_cluster.is_empty());
     assert!(discover_cluster.is_local(&discover_cluster_nodes[0]));
+
     Ok(())
 }
 
