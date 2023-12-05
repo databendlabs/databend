@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::INTERNAL_COLUMN_KEYS;
 use common_expression::types::decimal::Decimal128Type;
 use common_expression::types::decimal::Decimal256Type;
 use common_expression::types::decimal::DecimalDataType;
@@ -82,6 +83,10 @@ impl RangeIndex {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
+                if INTERNAL_COLUMN_KEYS.contains(name.as_str()) {
+                    return Ok((name, Domain::full(&ty)));
+                }
+
                 let column_ids = self.schema.leaf_columns_of(&name);
                 if column_ids.is_empty() {
                     dbg!(self.expr.sql_display());

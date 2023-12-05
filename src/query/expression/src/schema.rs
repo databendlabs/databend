@@ -24,6 +24,7 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -57,8 +58,8 @@ pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
 pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
-
 pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
+pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
 // stream column id.
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
@@ -68,6 +69,19 @@ pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
+
+/// The internal occupied coulmn that cannot be create.
+pub static INTERNAL_COLUMN_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+
+    r.insert(ROW_ID_COL_NAME);
+    r.insert(SNAPSHOT_NAME_COL_NAME);
+    r.insert(SEGMENT_NAME_COL_NAME);
+    r.insert(BLOCK_NAME_COL_NAME);
+    r.insert(PREDICATE_COLUMN_NAME);
+
+    r
+});
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
