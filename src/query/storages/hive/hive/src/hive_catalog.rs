@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogCreator;
@@ -90,6 +91,7 @@ use hive_metastore::Partition;
 use hive_metastore::ThriftHiveMetastoreClient;
 use hive_metastore::ThriftHiveMetastoreClientBuilder;
 use hive_metastore::ThriftHiveMetastoreGetTableException;
+use volo_thrift::transport::pool;
 
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
@@ -167,7 +169,10 @@ impl HiveCatalog {
 
         let client = ThriftHiveMetastoreClientBuilder::new("hms")
             .address(address)
+            // Framed thrift rpc is not enabled by default, we use buffered instead.
             .make_codec(volo_thrift::codec::default::DefaultMakeCodec::buffered())
+            // TODO: Disable connection pool now to avoid cross runtime issues.
+            .pool_config(pool::Config::new(0, Duration::NANOSECOND))
             .build();
 
         Ok(HiveCatalog {
