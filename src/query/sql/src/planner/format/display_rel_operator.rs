@@ -197,6 +197,9 @@ pub fn format_exchange(
         Exchange::Merge => {
             write!(f, "Exchange(Merge)")
         }
+        Exchange::MergeSort => {
+            write!(f, "Exchange(MergeSort)")
+        }
     }
 }
 

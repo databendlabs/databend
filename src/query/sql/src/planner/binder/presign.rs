@@ -33,7 +33,8 @@ impl Binder {
     ) -> Result<Plan> {
         match &stmt.location {
             PresignLocation::StageLocation(stage_location) => {
-                let (stage_info, path) = resolve_stage_location(&self.ctx, stage_location).await?;
+                let (stage_info, path) =
+                    resolve_stage_location(self.ctx.as_ref(), stage_location).await?;
 
                 Ok(Plan::Presign(Box::new(PresignPlan {
                     stage: Box::new(stage_info),

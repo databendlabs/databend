@@ -30,7 +30,7 @@ use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use common_storages_fuse::FusePartInfo;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;

@@ -19,9 +19,7 @@ use common_exception::Result;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-use databend_query::test_kits::fixture::analyze_table;
-use databend_query::test_kits::fixture::check_data_dir;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 
 use crate::storages::fuse::utils::do_insertions;
 

@@ -14,8 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::test_kits::fixture::expects_ok;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {

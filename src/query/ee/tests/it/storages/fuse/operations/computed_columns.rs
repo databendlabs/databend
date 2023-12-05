@@ -14,8 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::test_kits::fixture::expects_ok;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use enterprise_query::test_kits::context::EESetup;
 use futures::TryStreamExt;
 

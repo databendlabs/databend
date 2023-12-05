@@ -17,6 +17,8 @@ use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_transforms::processors::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::build_merge_sort_pipeline;
+use common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::Sort;
@@ -24,31 +26,36 @@ use common_sql::executor::physical_plans::Sort;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
+    // The pipeline graph of distributed sort can be found in https://github.com/datafuselabs/databend/pull/13881
     pub(crate) fn build_sort(&mut self, sort: &Sort) -> Result<()> {
         self.build_pipeline(&sort.input)?;
 
         let input_schema = sort.input.output_schema()?;
 
-        if let Some(proj) = &sort.pre_projection {
-            // Do projection to reduce useless data copying during sorting.
-            let projection = proj
-                .iter()
-                .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
-                .collect::<Vec<_>>();
+        if !matches!(sort.after_exchange, Some(true)) {
+            // If the Sort plan is after exchange, we don't need to do a projection,
+            // because the data is already projected in each cluster node.
+            if let Some(proj) = &sort.pre_projection {
+                // Do projection to reduce useless data copying during sorting.
+                let projection = proj
+                    .iter()
+                    .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
+                    .collect::<Vec<_>>();
 
-            if projection.len() < input_schema.fields().len() {
-                // Only if the projection is not a full projection, we need to add a projection transform.
-                self.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                        input,
-                        output,
-                        input_schema.num_fields(),
-                        self.func_ctx.clone(),
-                        vec![BlockOperator::Project {
-                            projection: projection.clone(),
-                        }],
-                    )))
-                })?;
+                if projection.len() < input_schema.fields().len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    self.main_pipeline.add_transform(|input, output| {
+                        Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                            input,
+                            output,
+                            input_schema.num_fields(),
+                            self.func_ctx.clone(),
+                            vec![BlockOperator::Project {
+                                projection: projection.clone(),
+                            }],
+                        )))
+                    })?;
+                }
             }
         }
 
@@ -83,7 +90,7 @@ impl PipelineBuilder {
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
-        after_exchange: bool,
+        after_exchange: Option<bool>,
     ) -> Result<()> {
         let block_size = self.settings.get_max_block_size()? as usize;
         let max_threads = self.settings.get_max_threads()? as usize;
@@ -98,15 +105,64 @@ impl PipelineBuilder {
             None
         };
 
-        build_full_sort_pipeline(
-            &mut self.main_pipeline,
-            input_schema,
-            sort_desc,
-            limit,
-            block_size,
-            block_size,
-            prof_info,
-            after_exchange,
-        )
+        match after_exchange {
+            Some(true) => {
+                // Build for the coordinator node.
+                // We only build a `MultiSortMergeTransform`,
+                // as the data is already sorted in each cluster node.
+                // The input number of the transform is equal to the number of cluster nodes.
+                if self.main_pipeline.output_len() > 1 {
+                    try_add_multi_sort_merge(
+                        &mut self.main_pipeline,
+                        input_schema,
+                        block_size,
+                        limit,
+                        sort_desc,
+                        prof_info,
+                        true,
+                    )
+                } else {
+                    build_merge_sort_pipeline(
+                        &mut self.main_pipeline,
+                        input_schema,
+                        sort_desc,
+                        limit,
+                        block_size,
+                        block_size,
+                        prof_info,
+                        true,
+                        true,
+                    )
+                }
+            }
+            Some(false) => {
+                // Build for each cluster node.
+                // We build the full sort pipeline for it.
+                build_full_sort_pipeline(
+                    &mut self.main_pipeline,
+                    input_schema,
+                    sort_desc,
+                    limit,
+                    block_size,
+                    block_size,
+                    prof_info,
+                    false,
+                )
+            }
+            None => {
+                // Build for single node mode.
+                // We build the full sort pipeline for it.
+                build_full_sort_pipeline(
+                    &mut self.main_pipeline,
+                    input_schema,
+                    sort_desc,
+                    limit,
+                    block_size,
+                    block_size,
+                    prof_info,
+                    true,
+                )
+            }
+        }
     }
 }

@@ -39,10 +39,12 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
+use common_profile::SharedProcessorProfiles;
 
 use super::sort::Cursor;
 use super::sort::Rows;
 use super::sort::SimpleRows;
+use crate::processors::ProcessorProfileWrapper;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
@@ -50,6 +52,8 @@ pub fn try_add_multi_sort_merge(
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
+    prof_info: Option<(u32, SharedProcessorProfiles)>,
+    remove_order_col: bool,
 ) -> Result<()> {
     if pipeline.is_empty() {
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
@@ -71,7 +75,18 @@ pub fn try_add_multi_sort_merge(
                 block_size,
                 limit,
                 sort_columns_descriptions,
+                remove_order_col,
             )?;
+
+            let processor = if let Some((plan_id, prof)) = &prof_info {
+                ProcessorPtr::create(ProcessorProfileWrapper::create(
+                    processor,
+                    *plan_id,
+                    prof.clone(),
+                ))
+            } else {
+                ProcessorPtr::create(processor)
+            };
 
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 processor,
@@ -91,67 +106,71 @@ fn create_processor(
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
-) -> Result<ProcessorPtr> {
+    remove_order_col: bool,
+) -> Result<Box<dyn Processor>> {
     Ok(if sort_columns_descriptions.len() == 1 {
         let sort_type = input_schema
             .field(sort_columns_descriptions[0].offset)
             .data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE =>
-                    ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-                        SimpleRows<NumberType<NUM_TYPE>>,
-                    >::create(
-                        inputs,
-                        output,
-                        block_size,
-                        limit,
-                        sort_columns_descriptions,
-                    )?)),
+                NumberDataType::NUM_TYPE => Box::new(MultiSortMergeProcessor::<
+                    SimpleRows<NumberType<NUM_TYPE>>,
+                >::create(
+                    inputs,
+                    output,
+                    block_size,
+                    limit,
+                    sort_columns_descriptions,
+                    remove_order_col,
+                )?),
             }),
-            DataType::Date => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-                SimpleRows<DateType>,
-            >::create(
+            DataType::Date => Box::new(MultiSortMergeProcessor::<SimpleRows<DateType>>::create(
                 inputs,
                 output,
                 block_size,
                 limit,
                 sort_columns_descriptions,
-            )?)),
-            DataType::Timestamp => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-                SimpleRows<TimestampType>,
-            >::create(
+                remove_order_col,
+            )?),
+            DataType::Timestamp => Box::new(
+                MultiSortMergeProcessor::<SimpleRows<TimestampType>>::create(
+                    inputs,
+                    output,
+                    block_size,
+                    limit,
+                    sort_columns_descriptions,
+                    remove_order_col,
+                )?,
+            ),
+            DataType::String => {
+                Box::new(MultiSortMergeProcessor::<SimpleRows<StringType>>::create(
+                    inputs,
+                    output,
+                    block_size,
+                    limit,
+                    sort_columns_descriptions,
+                    remove_order_col,
+                )?)
+            }
+            _ => Box::new(MultiSortMergeProcessor::<StringColumn>::create(
                 inputs,
                 output,
                 block_size,
                 limit,
                 sort_columns_descriptions,
-            )?)),
-            DataType::String => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-                SimpleRows<StringType>,
-            >::create(
-                inputs,
-                output,
-                block_size,
-                limit,
-                sort_columns_descriptions,
-            )?)),
-            _ => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<StringColumn>::create(
-                inputs,
-                output,
-                block_size,
-                limit,
-                sort_columns_descriptions,
-            )?)),
+                remove_order_col,
+            )?),
         }
     } else {
-        ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<StringColumn>::create(
+        Box::new(MultiSortMergeProcessor::<StringColumn>::create(
             inputs,
             output,
             block_size,
             limit,
             sort_columns_descriptions,
-        )?))
+            remove_order_col,
+        )?)
     })
 }
 
@@ -168,6 +187,11 @@ where R: Rows
     // Parameters
     block_size: usize,
     limit: Option<usize>,
+    /// Indicate if we need to remove the order column.
+    /// In cluster sorting, the final processor on the cluster node will be [`MultiSortMergeProcessor`],
+    /// and the first processor on the coordinator node will be it, too.
+    /// Therefore, we don't need to remove the order column if it's a cluster node.
+    remove_order_col: bool,
 
     /// For each input port, maintain a dequeue of data blocks.
     blocks: Vec<VecDeque<DataBlock>>,
@@ -195,6 +219,7 @@ where R: Rows
         block_size: usize,
         limit: Option<usize>,
         sort_desc: Vec<SortColumnDescription>,
+        remove_order_col: bool,
     ) -> Result<Self> {
         let input_size = inputs.len();
         Ok(Self {
@@ -203,6 +228,7 @@ where R: Rows
             sort_desc,
             block_size,
             limit,
+            remove_order_col,
             blocks: vec![VecDeque::with_capacity(2); input_size],
             heap: BinaryHeap::with_capacity(input_size),
             in_progress_rows: vec![],
@@ -484,7 +510,7 @@ where R: Rows + Send + 'static
                     if block.is_empty() {
                         continue;
                     }
-                    let block = block.convert_to_full();
+                    let mut block = block.convert_to_full();
                     let order_col = block
                         .columns()
                         .last()
@@ -497,7 +523,9 @@ where R: Rows + Send + 'static
                         ErrorCode::BadDataValueType("Order column type mismatched.")
                     })?;
                     // Remove the order column
-                    let block = block.pop_columns(1)?;
+                    if self.remove_order_col {
+                        block.pop_columns(1);
+                    }
                     let cursor = Cursor::new(input_index, rows);
                     self.heap.push(Reverse(cursor));
                     self.cursor_finished[input_index] = false;

@@ -137,10 +137,17 @@ pub fn optimize(
                 plan.meta_data.clone(),
                 plan.input.child(1)?.clone(),
             )?;
-            // we need to remove exchange of right_source, because it's
-            // not an end query.
-            if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
-                right_source = right_source.child(0)?.clone();
+
+            // if it's not distributed execution, we should reserve
+            // exchange to merge source data.
+            if opt_ctx.config.enable_distributed_optimization
+                && ctx.get_settings().get_enable_distributed_merge_into()?
+            {
+                // we need to remove exchange of right_source, because it's
+                // not an end query.
+                if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
+                    right_source = right_source.child(0)?.clone();
+                }
             }
             // replace right source
             let mut join_sexpr = plan.input.clone();

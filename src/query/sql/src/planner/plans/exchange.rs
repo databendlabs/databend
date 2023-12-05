@@ -33,6 +33,7 @@ pub enum Exchange {
     Hash(Vec<ScalarExpr>),
     Broadcast,
     Merge,
+    MergeSort, // For distributed sort
 }
 
 impl Operator for Exchange {
@@ -51,6 +52,7 @@ impl Operator for Exchange {
                 Exchange::Hash(hash_keys) => Distribution::Hash(hash_keys.clone()),
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge => Distribution::Serial,
+                Exchange::MergeSort => Distribution::Serial,
             },
         })
     }

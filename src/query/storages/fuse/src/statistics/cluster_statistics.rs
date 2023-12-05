@@ -83,11 +83,11 @@ impl ClusterStatsGenerator {
     // The input block contains the cluster key block.
     pub fn gen_stats_for_append(
         &self,
-        data_block: DataBlock,
+        mut data_block: DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
         let cluster_stats = self.clusters_statistics(&data_block, self.level)?;
-        let block = data_block.pop_columns(self.extra_key_num)?;
-        Ok((cluster_stats, block))
+        data_block.pop_columns(self.extra_key_num);
+        Ok((cluster_stats, data_block))
     }
 
     // This can be used in deletion, for an existing block.

@@ -73,7 +73,7 @@ impl<'a> Binder {
             }
         }?;
 
-        let (mut stage_info, path) = resolve_file_location(&self.ctx, &stmt.dst).await?;
+        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
         self.apply_copy_into_location_options(stmt, &mut stage_info)
             .await?;
 
