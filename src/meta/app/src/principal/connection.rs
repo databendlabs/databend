@@ -18,8 +18,6 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::storage::mask_string;
-
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct UserDefinedConnection {
