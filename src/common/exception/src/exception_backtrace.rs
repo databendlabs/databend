@@ -65,7 +65,6 @@ fn backtrace_style() -> BacktraceStyle {
 }
 
 pub fn capture() -> Option<ErrorCodeBacktrace> {
-    println!("create bt {:?}", std::backtrace::Backtrace::capture());
     match enable_rust_backtrace() {
         false => None,
         true => match backtrace_style() {
