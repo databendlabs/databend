@@ -48,7 +48,7 @@ impl PipelineBuilder {
                 predicate.clone(),
                 filter.projections.clone(),
                 self.func_ctx.clone(),
-            )?;
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
