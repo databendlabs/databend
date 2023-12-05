@@ -39,37 +39,6 @@ pub struct FilterState {
     func_ctx: FunctionContext,
 }
 
-impl FilterState {
-    fn new(expr: Expr, projections: ColumnSet, func_ctx: FunctionContext) -> Self {
-        assert_eq!(expr.data_type(), &DataType::Boolean);
-        Self {
-            expr,
-            projections,
-            func_ctx,
-        }
-    }
-
-    fn filter(&self, data_block: DataBlock) -> Result<DataBlock> {
-        let num_evals = data_block
-            .get_meta()
-            .and_then(AggIndexMeta::downcast_ref_from)
-            .map(|a| a.num_evals);
-
-        if let Some(num_evals) = num_evals {
-            // It's from aggregating index.
-            Ok(data_block.project_with_agg_index(&self.projections, num_evals))
-        } else {
-            let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let filter = evaluator
-                .run(&self.expr)?
-                .try_downcast::<BooleanType>()
-                .unwrap();
-            let data_block = data_block.project(&self.projections);
-            data_block.filter_boolean_value(&filter)
-        }
-    }
-}
-
 pub struct TransformFilter {
     expr: Expr,
     projections: ColumnSet,
