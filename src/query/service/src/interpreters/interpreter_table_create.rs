@@ -451,21 +451,6 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
     CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-/// The internal occupied coulmn that cannot be create.
-pub static INTERNAL_COLUMN_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let mut r = HashSet::new();
-
-    // The key in INTERNAL_COLUMN_FACTORY.
-    r.insert(ROW_ID_COL_NAME);
-    r.insert(SNAPSHOT_NAME_COL_NAME);
-    r.insert(SEGMENT_NAME_COL_NAME);
-    r.insert(BLOCK_NAME_COL_NAME);
-
-    r.insert(PREDICATE_COLUMN_NAME);
-
-    r
-});
-
 pub fn is_valid_column(name: &str) -> Result<()> {
     if INTERNAL_COLUMN_KEYS.contains(name) {
         return Err(ErrorCode::TableWithInternalColumnName(format!(
