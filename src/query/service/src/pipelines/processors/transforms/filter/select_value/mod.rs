@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod select;
-mod select_columns;
+mod select_column;
+mod select_scalar;
 mod select_scalar_column;
 
-pub use select::build_range_selection;
-pub use select::build_select_expr;
-pub use select::select_values;
-pub use select::selection_op;
-pub use select::update_selection_by_boolean_value;
-pub use select::SelectExpr;
-pub use select::SelectOp;
-pub use select::SelectStrategy;
-pub use select_columns::select_columns;
+pub use select_column::select_boolean_column_adapt;
+pub use select_column::select_columns;
+pub use select_scalar::select_boolean_scalar_adapt;
+pub use select_scalar::select_scalars;
 pub use select_scalar_column::select_scalar_and_column;

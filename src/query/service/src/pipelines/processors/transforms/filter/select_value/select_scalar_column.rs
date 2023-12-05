@@ -14,18 +14,18 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::string::StringColumn;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
+use common_expression::Scalar;
 
-use crate::selection_op;
-use crate::types::array::ArrayColumn;
-use crate::types::string::StringColumn;
-use crate::types::AnyType;
-use crate::types::DataType;
-use crate::types::DecimalDataType;
-use crate::types::NumberDataType;
-use crate::Column;
-use crate::Scalar;
-use crate::SelectOp;
-use crate::SelectStrategy;
+use crate::pipelines::processors::transforms::filter::selection_op;
+use crate::pipelines::processors::transforms::filter::SelectOp;
+use crate::pipelines::processors::transforms::filter::SelectStrategy;
 
 #[allow(clippy::too_many_arguments)]
 pub fn select_scalar_and_column(
@@ -379,12 +379,17 @@ pub fn select_scalar_and_column(
             // let column = column.into_tuple().unwrap();
             unimplemented!()
         }
-        _ => unreachable!("Here is no Nullable(_) and Generic(_)"),
+        _ => {
+            dbg!(column_data_type);
+            dbg!(scalar);
+            dbg!(column);
+            unreachable!("Here is no Nullable(_) and Generic(_)")
+        }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_primitive_scalar_and_column_adapt<T: Copy>(
+fn select_primitive_scalar_and_column_adapt<T: Copy>(
     op: SelectOp,
     scalar: T,
     column: Buffer<T>,
@@ -397,7 +402,7 @@ pub fn select_primitive_scalar_and_column_adapt<T: Copy>(
     count: usize,
 ) -> usize
 where
-    T: std::cmp::PartialOrd + std::fmt::Display,
+    T: std::cmp::PartialOrd,
 {
     let has_true = !true_selection.is_empty();
     let has_false = false_selection.1;
@@ -444,7 +449,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_string_scalar_and_column_adapt(
+fn select_string_scalar_and_column_adapt(
     op: SelectOp,
     scalar: &[u8],
     column: StringColumn,
@@ -501,7 +506,7 @@ pub fn select_string_scalar_and_column_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_boolean_scalar_and_column_adapt(
+fn select_boolean_scalar_and_column_adapt(
     op: SelectOp,
     scalar: bool,
     column: Bitmap,
@@ -558,7 +563,7 @@ pub fn select_boolean_scalar_and_column_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_array_scalar_and_column_adapt(
+fn select_array_scalar_and_column_adapt(
     op: SelectOp,
     scalar: &Column,
     column: ArrayColumn<AnyType>,
@@ -615,7 +620,7 @@ pub fn select_array_scalar_and_column_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_primitive_scalar_and_column<T: Copy, const TRUE: bool, const FALSE: bool>(
+fn select_primitive_scalar_and_column<T: Copy, const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: T,
     column: Buffer<T>,
@@ -628,7 +633,7 @@ pub fn select_primitive_scalar_and_column<T: Copy, const TRUE: bool, const FALSE
     count: usize,
 ) -> usize
 where
-    T: std::cmp::PartialOrd + std::fmt::Display,
+    T: std::cmp::PartialOrd,
 {
     let op = selection_op::<T>(op);
     let mut true_idx = *true_start_idx;
@@ -704,7 +709,7 @@ where
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -748,7 +753,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
+fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: &[u8],
     column: StringColumn,
@@ -834,7 +839,7 @@ pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -878,7 +883,7 @@ pub fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
+fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: bool,
     column: Bitmap,
@@ -964,7 +969,7 @@ pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -1008,7 +1013,7 @@ pub fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
+fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: &Column,
     column: ArrayColumn<AnyType>,
@@ -1094,7 +1099,7 @@ pub fn select_array_scalar_and_column<const TRUE: bool, const FALSE: bool>(
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {

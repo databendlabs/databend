@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_expression::arrow::and_validities;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::string::StringColumn;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
 
-use crate::arrow::and_validities;
-use crate::selection_op;
-use crate::types::array::ArrayColumn;
-use crate::types::string::StringColumn;
-use crate::types::AnyType;
-use crate::types::DataType;
-use crate::types::DecimalDataType;
-use crate::types::NumberDataType;
-use crate::Column;
-use crate::SelectOp;
-use crate::SelectStrategy;
+use crate::pipelines::processors::transforms::filter::selection_op;
+use crate::pipelines::processors::transforms::filter::SelectOp;
+use crate::pipelines::processors::transforms::filter::SelectStrategy;
 
 #[allow(clippy::too_many_arguments)]
 pub fn select_columns(
@@ -397,8 +395,52 @@ pub fn select_columns(
     }
 }
 
+pub fn select_boolean_column_adapt(
+    column: Bitmap,
+    true_selection: &mut [u32],
+    false_selection: (&mut [u32], bool),
+    true_idx: &mut usize,
+    false_idx: &mut usize,
+    select_strategy: SelectStrategy,
+    count: usize,
+) -> usize {
+    let has_true = !true_selection.is_empty();
+    let has_false = false_selection.1;
+    if has_true && has_false {
+        select_boolean_column::<true, true>(
+            column,
+            true_selection,
+            false_selection.0,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        )
+    } else if has_true {
+        select_boolean_column::<true, false>(
+            column,
+            true_selection,
+            false_selection.0,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        )
+    } else {
+        select_boolean_column::<false, true>(
+            column,
+            true_selection,
+            false_selection.0,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        )
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-pub fn select_primitive_adapt<T>(
+fn select_primitive_adapt<T>(
     op: SelectOp,
     left: Buffer<T>,
     right: Buffer<T>,
@@ -411,7 +453,7 @@ pub fn select_primitive_adapt<T>(
     count: usize,
 ) -> usize
 where
-    T: std::cmp::PartialOrd + Display + Copy,
+    T: std::cmp::PartialOrd + Copy,
 {
     let has_true = !true_selection.is_empty();
     let has_false = false_selection.1;
@@ -458,7 +500,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_string_adapt(
+fn select_string_adapt(
     op: SelectOp,
     left: StringColumn,
     right: StringColumn,
@@ -515,7 +557,7 @@ pub fn select_string_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_boolean_adapt(
+fn select_boolean_adapt(
     op: SelectOp,
     left: Bitmap,
     right: Bitmap,
@@ -572,7 +614,7 @@ pub fn select_boolean_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_array_adapt(
+fn select_array_adapt(
     op: SelectOp,
     left: ArrayColumn<AnyType>,
     right: ArrayColumn<AnyType>,
@@ -629,7 +671,7 @@ pub fn select_array_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_tuple_adapt(
+fn select_tuple_adapt(
     op: SelectOp,
     left: &[Column],
     right: &[Column],
@@ -686,7 +728,7 @@ pub fn select_tuple_adapt(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_primitive<T, const TRUE: bool, const FALSE: bool>(
+fn select_primitive<T, const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: Buffer<T>,
     right: Buffer<T>,
@@ -699,7 +741,7 @@ pub fn select_primitive<T, const TRUE: bool, const FALSE: bool>(
     count: usize,
 ) -> usize
 where
-    T: std::cmp::PartialOrd + Display + Copy,
+    T: std::cmp::PartialOrd + Copy,
 {
     let op = selection_op::<T>(op);
     let mut true_idx = *true_start_idx;
@@ -787,7 +829,7 @@ where
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -837,7 +879,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_string<const TRUE: bool, const FALSE: bool>(
+fn select_string<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: StringColumn,
     right: StringColumn,
@@ -935,7 +977,7 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -985,7 +1027,7 @@ pub fn select_string<const TRUE: bool, const FALSE: bool>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
+fn select_boolean<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: Bitmap,
     right: Bitmap,
@@ -1083,7 +1125,7 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -1133,7 +1175,7 @@ pub fn select_boolean<const TRUE: bool, const FALSE: bool>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_array<const TRUE: bool, const FALSE: bool>(
+fn select_array<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: ArrayColumn<AnyType>,
     right: ArrayColumn<AnyType>,
@@ -1231,7 +1273,7 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
                 }
             }
         },
-        SelectStrategy::ALL => unsafe {
+        SelectStrategy::All => unsafe {
             match validity {
                 Some(validity) => {
                     for idx in 0u32..count as u32 {
@@ -1281,7 +1323,7 @@ pub fn select_array<const TRUE: bool, const FALSE: bool>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn select_tuple<const TRUE: bool, const FALSE: bool>(
+fn select_tuple<const TRUE: bool, const FALSE: bool>(
     _op: SelectOp,
     _left: &[Column],
     _right: &[Column],
@@ -1294,4 +1336,73 @@ pub fn select_tuple<const TRUE: bool, const FALSE: bool>(
     _count: usize,
 ) -> usize {
     unimplemented!("select_tuple")
+}
+
+fn select_boolean_column<const TRUE: bool, const FALSE: bool>(
+    column: Bitmap,
+    true_selection: &mut [u32],
+    false_selection: &mut [u32],
+    true_start_idx: &mut usize,
+    false_start_idx: &mut usize,
+    select_strategy: SelectStrategy,
+    count: usize,
+) -> usize {
+    let mut true_idx = *true_start_idx;
+    let mut false_idx = *false_start_idx;
+    match select_strategy {
+        SelectStrategy::True => unsafe {
+            let start = *true_start_idx;
+            let end = *true_start_idx + count;
+            for i in start..end {
+                let idx = *true_selection.get_unchecked(i);
+                if column.get_bit_unchecked(idx as usize) {
+                    if TRUE {
+                        true_selection[true_idx] = idx;
+                        true_idx += 1;
+                    }
+                } else if FALSE {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
+                }
+            }
+        },
+        SelectStrategy::False => unsafe {
+            let start = *false_start_idx;
+            let end = *false_start_idx + count;
+            for i in start..end {
+                let idx = *false_selection.get_unchecked(i);
+                if column.get_bit_unchecked(idx as usize) {
+                    if TRUE {
+                        true_selection[true_idx] = idx;
+                        true_idx += 1;
+                    }
+                } else if FALSE {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
+                }
+            }
+        },
+        SelectStrategy::All => unsafe {
+            for idx in 0u32..count as u32 {
+                if column.get_bit_unchecked(idx as usize) {
+                    if TRUE {
+                        true_selection[true_idx] = idx;
+                        true_idx += 1;
+                    }
+                } else if FALSE {
+                    false_selection[false_idx] = idx;
+                    false_idx += 1;
+                }
+            }
+        },
+    }
+    let true_count = true_idx - *true_start_idx;
+    let false_count = false_idx - *false_start_idx;
+    *true_start_idx = true_idx;
+    *false_start_idx = false_idx;
+    if TRUE {
+        true_count
+    } else {
+        count - false_count
+    }
 }

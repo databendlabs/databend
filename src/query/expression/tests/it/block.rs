@@ -18,7 +18,7 @@ fn test_split_block() {
         StringColumnBuilder::repeat(&value[..], n).build(),
     )]);
     let sizes = block
-        .split_by_rows_no_tail(3)
+        .split_by_rows_if_needed_no_tail(3)
         .iter()
         .map(|b| b.num_rows())
         .collect::<Vec<_>>();

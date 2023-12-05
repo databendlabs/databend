@@ -12,46 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
-use common_expression::types::BooleanType;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::BlockingTransform;
 use common_pipeline_transforms::processors::BlockingTransformer;
 use common_sql::optimizer::ColumnSet;
 
+use crate::pipelines::processors::transforms::filter::FilterExecutor;
+use crate::pipelines::processors::transforms::SelectExpr;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
 /// Filter the input [`DataBlock`] with the predicate `expr`.
 pub struct TransformFilter {
-    expr: Expr,
     projections: ColumnSet,
-    func_ctx: FunctionContext,
-    output_data: Option<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
+    max_block_size: usize,
+    filter: FilterExecutor,
 }
 
 impl TransformFilter {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        expr: Expr,
+        select_expr: SelectExpr,
+        has_or: bool,
         projections: ColumnSet,
         func_ctx: FunctionContext,
+        max_block_size: usize,
     ) -> Box<dyn Processor> {
-        BlockingTransformer::create(input, output, TransformFilter {
-            expr,
-            projections,
+        let filter = FilterExecutor::new(
+            select_expr,
             func_ctx,
-            output_data: None,
+            has_or,
+            max_block_size,
+            Some(projections.clone()),
+        );
+        BlockingTransformer::create(input, output, TransformFilter {
+            projections,
+            output_data_blocks: VecDeque::new(),
+            max_block_size,
+            filter,
         })
     }
 }
@@ -65,31 +73,27 @@ impl BlockingTransform for TransformFilter {
             .and_then(AggIndexMeta::downcast_ref_from)
             .map(|a| a.num_evals);
 
-        let data_block = if let Some(num_evals) = num_evals {
+        if let Some(num_evals) = num_evals {
             // It's from aggregating index.
-            input.project_with_agg_index(&self.projections, num_evals)
+            self.output_data_blocks
+                .push_back(input.project_with_agg_index(&self.projections, num_evals));
         } else {
-            let evaluator = Evaluator::new(&input, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let filter = evaluator
-                .run(&self.expr)?
-                .try_downcast::<BooleanType>()
-                .unwrap();
-            let data_block = input.project(&self.projections);
-            data_block.filter_boolean_value(&filter)?
-        };
-
-        if data_block.num_rows() > 0 {
-            self.output_data = Some(data_block)
+            let blocks = input.split_by_rows_no_tail(self.max_block_size);
+            for block in blocks.into_iter() {
+                let data_block = self.filter.filter(block)?;
+                if data_block.num_rows() > 0 {
+                    self.output_data_blocks.push_back(data_block);
+                }
+            }
         }
 
         Ok(())
     }
 
     fn transform(&mut self) -> Result<Option<DataBlock>> {
-        if self.output_data.is_none() {
-            return Ok(None);
+        match !self.output_data_blocks.is_empty() {
+            true => Ok(Some(self.output_data_blocks.pop_front().unwrap())),
+            false => Ok(None),
         }
-        let data_block = self.output_data.take().unwrap();
-        Ok(Some(data_block))
     }
 }

@@ -15,7 +15,6 @@
 use core::ops::Range;
 
 use common_expression::block_debug::assert_block_value_eq;
-use common_expression::build_range_selection;
 use common_expression::types::number::*;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;

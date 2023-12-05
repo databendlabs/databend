@@ -33,9 +33,6 @@ use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::eval_function;
-use common_expression::filter::build_range_selection;
-use common_expression::filter::build_select_expr;
-use common_expression::filter::SelectStrategy;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -709,12 +706,12 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }
 
-            let (selection, selection_count) = match self.prewhere_filter.as_ref() {
+            let filter = match self.prewhere_filter.as_ref() {
                 Some(filter) => {
                     // Arrays are empty means all prewhere columns are default values,
                     // the filter have checked in the first process, don't need check again.
                     if arrays.is_empty() {
-                        (None, 0)
+                        None
                     } else {
                         let mut prewhere_block = if arrays.len() < self.prewhere_columns.len() {
                             self.block_reader
@@ -732,35 +729,20 @@ impl Processor for NativeDeserializeDataTransform {
 
                         let evaluator =
                             Evaluator::new(&prewhere_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let (select_expr, has_or) = build_select_expr(filter);
-                        // TODO(Dousir9): reuse the selection buffer
-                        let mut true_selection = vec![0; prewhere_block.num_rows()];
-                        let mut false_selection = if has_or {
-                            vec![0; prewhere_block.num_rows()]
-                        } else {
-                            vec![]
-                        };
-                        let mut true_idx = 0;
-                        let mut false_idx = 0;
-                        let count = evaluator.process_selection(
-                            &select_expr,
-                            None,
-                            &mut true_selection,
-                            (&mut false_selection, false),
-                            &mut true_idx,
-                            &mut false_idx,
-                            SelectStrategy::ALL,
-                            prewhere_block.num_rows(),
-                        )?;
+                        let filter = evaluator
+                            .run(filter)
+                            .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                            .try_downcast::<BooleanType>()
+                            .unwrap();
 
                         // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
-                        if count == 0 {
+                        if FilterHelpers::is_all_unset(&filter) {
                             self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
 
                         // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                        let count = if let Some((_, sorter, index)) = &mut self.top_k {
+                        let filter = if let Some((_, sorter, index)) = &mut self.top_k {
                             let index_prewhere = self
                                 .prewhere_columns
                                 .iter()
@@ -771,24 +753,23 @@ impl Processor for NativeDeserializeDataTransform {
                                 .value
                                 .as_column()
                                 .unwrap();
-                            sorter.push_column_with_selection(
-                                top_k_column,
-                                &mut true_selection,
-                                count,
-                            )
+
+                            let mut bitmap =
+                                FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
+                            sorter.push_column(top_k_column, &mut bitmap);
+                            Value::Column(bitmap.into())
                         } else {
-                            count
+                            filter
                         };
 
-                        if count == 0 {
+                        if FilterHelpers::is_all_unset(&filter) {
                             self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
-
-                        (Some(true_selection), count)
+                        Some(filter)
                     }
                 }
-                None => (None, 0),
+                None => None,
             };
 
             // Step 5: read remain columns and filter block if needed.
@@ -825,17 +806,8 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-            let block = if let Some(selection) = &selection {
-                if selection_count == origin_num_rows {
-                    block
-                } else if selection_count as f64 > origin_num_rows as f64 * 0.8
-                    && block.num_columns() > 1
-                {
-                    let selection_ranges = build_range_selection(selection, selection_count);
-                    block.take_ranges(&selection_ranges, selection_count)?
-                } else {
-                    block.take(&selection[0..selection_count], &mut None)?
-                }
+            let block = if let Some(filter) = &filter {
+                block.filter_boolean_value(filter)?
             } else {
                 block
             };
@@ -844,11 +816,10 @@ impl Processor for NativeDeserializeDataTransform {
             // `FillInternalColumnProcessor` will generate internal columns using `InternalColumnMeta` in next pipeline.
             let mut block = block.resort(&self.src_schema, &self.output_schema)?;
             if self.block_reader.query_internal_columns() {
-                let offsets = if let Some(selection) = selection {
-                    selection
-                        .into_iter()
-                        .map(|idx| idx as usize + self.offset_in_part)
-                        .collect::<Vec<_>>()
+                let offsets = if let Some(Value::Column(bitmap)) = filter.as_ref() {
+                    (self.offset_in_part..self.offset_in_part + origin_num_rows)
+                        .filter(|i| unsafe { bitmap.get_bit_unchecked(i - self.offset_in_part) })
+                        .collect()
                 } else {
                     (self.offset_in_part..self.offset_in_part + origin_num_rows).collect()
                 };

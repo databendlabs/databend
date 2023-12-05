@@ -28,7 +28,6 @@ mod utils;
 pub use group_by::*;
 pub use group_by_hash::*;
 pub use sort::*;
-pub use take::*;
 pub use take_chunks::*;
 pub use topk::*;
 pub use utils::*;
