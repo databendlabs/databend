@@ -39,7 +39,7 @@ pub struct Client {
     dsn: String,
 }
 
-impl<'c> Client {
+impl Client {
     pub fn new(dsn: String) -> Self {
         Self { dsn }
     }
@@ -131,15 +131,11 @@ pub trait Connection: DynClone + Send + Sync {
             let entry = entry?;
             let filename = entry
                 .file_name()
-                .ok_or(Error::BadArgument(format!(
-                    "Invalid local file path: {:?}",
-                    entry
-                )))?
+                .ok_or_else(|| Error::BadArgument(format!("Invalid local file path: {:?}", entry)))?
                 .to_str()
-                .ok_or(Error::BadArgument(format!(
-                    "Invalid local file path: {:?}",
-                    entry
-                )))?;
+                .ok_or_else(|| {
+                    Error::BadArgument(format!("Invalid local file path: {:?}", entry))
+                })?;
             let stage_file = stage_location.file_path(filename);
             let data = tokio::fs::File::open(&entry).await?;
             let size = data.metadata().await?.len();

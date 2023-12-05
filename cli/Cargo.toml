@@ -16,9 +16,9 @@ databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = { version = "0.4.31", default-features = false, features = ["clock"] }
-clap = { version = "4.3", features = ["derive", "env"] }
-comfy-table = "7.0"
-csv = "1.2"
+clap = { version = "4.4", features = ["derive", "env"] }
+comfy-table = "7.1"
+csv = "1.3"
 fern = "0.6"
 indicatif = "0.17"
 log = "0.4"
@@ -30,7 +30,7 @@ sqlformat = "0.2"
 strum = "0.25"
 strum_macros = "0.25"
 terminal_size = "0.3"
-tokio = { version = "1.28", features = [
+tokio = { version = "1.34", features = [
     "macros",
     "rt",
     "rt-multi-thread",
@@ -41,7 +41,7 @@ tokio-stream = "0.1"
 toml = "0.8"
 tracing-appender = "0.2"
 unicode-segmentation = "1.10"
-url = { version = "2.4", default-features = false }
+url = { version = "2.5", default-features = false }
 
 [build-dependencies]
 vergen = { version = "8.2", features = ["build", "git", "gix"] }

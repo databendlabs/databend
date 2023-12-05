@@ -85,7 +85,7 @@ impl Connection for FlightSQLConnection {
         let ticket = flight_info.endpoint[0]
             .ticket
             .as_ref()
-            .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
+            .ok_or_else(|| Error::Protocol("Ticket is empty".to_string()))?;
         let flight_data = client.do_get(ticket.clone()).await?;
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
         Ok(RowStatsIterator::new(Arc::new(schema), Box::pin(rows)))
@@ -93,9 +93,9 @@ impl Connection for FlightSQLConnection {
 
     async fn get_presigned_url(&self, operation: &str, stage: &str) -> Result<PresignedResponse> {
         let sql = format!("PRESIGN {} {}", operation, stage);
-        let row = self.query_row(&sql).await?.ok_or(Error::InvalidResponse(
-            "Empty response from server for presigned request".to_string(),
-        ))?;
+        let row = self.query_row(&sql).await?.ok_or_else(|| {
+            Error::InvalidResponse("Empty response from server for presigned request".to_string())
+        })?;
         let (method, headers, url): (String, String, String) =
             row.try_into().map_err(Error::Parsing)?;
         let headers: BTreeMap<String, String> = serde_json::from_str(&headers)?;
@@ -302,11 +302,11 @@ impl Args {
         });
         let host = u
             .host()
-            .ok_or(Error::BadArgument("Host is empty".to_string()))?;
+            .ok_or_else(|| Error::BadArgument("Host is empty".to_string()))?;
         args.host = host.to_string();
         let port = u
             .port()
-            .ok_or(Error::BadArgument("Port is empty".to_string()))?;
+            .ok_or_else(|| Error::BadArgument("Port is empty".to_string()))?;
         args.port = port;
         args.uri = match args.database {
             Some(ref db) => format!("{}://{}:{}/{}", scheme, host, port, db),
@@ -332,12 +332,12 @@ impl FlightSQLRows {
         let datum = data
             .try_next()
             .await?
-            .ok_or(Error::Protocol("No flight data in stream".to_string()))?;
+            .ok_or_else(|| Error::Protocol("No flight data in stream".to_string()))?;
         let message = root_as_message(&datum.data_header[..])
             .map_err(|err| Error::Protocol(format!("InvalidFlatbuffer: {}", err)))?;
-        let ipc_schema = message.header_as_schema().ok_or(Error::Protocol(
-            "Invalid Message: Cannot get header as Schema".to_string(),
-        ))?;
+        let ipc_schema = message.header_as_schema().ok_or_else(|| {
+            Error::Protocol("Invalid Message: Cannot get header as Schema".to_string())
+        })?;
         let arrow_schema = Arc::new(fb_to_schema(ipc_schema));
         let schema = arrow_schema.clone().try_into()?;
         let rows = Self {

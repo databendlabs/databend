@@ -16,13 +16,13 @@ doc = false
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
 chrono = { version = "0.4", default-features = false }
-napi = { version = "2.13", default-features = false, features = [
+napi = { version = "2.14", default-features = false, features = [
     "napi6",
     "async",
     "serde-json",
     "chrono_date",
 ] }
-napi-derive = "2.13"
+napi-derive = "2.14"
 tokio-stream = "0.1"
 
 [build-dependencies]

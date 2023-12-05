@@ -14,6 +14,7 @@
 
 mod client;
 
+pub mod auth;
 pub mod error;
 pub mod presign;
 pub mod request;
