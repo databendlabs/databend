@@ -167,6 +167,7 @@ impl HiveCatalog {
 
         let client = ThriftHiveMetastoreClientBuilder::new("hms")
             .address(address)
+            .make_codec(volo_thrift::codec::default::DefaultMakeCodec::framed())
             .build();
 
         Ok(HiveCatalog {
