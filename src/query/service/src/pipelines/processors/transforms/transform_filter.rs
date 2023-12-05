@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
 use common_expression::types::BooleanType;
-use common_expression::types::DataType;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
@@ -33,12 +32,6 @@ use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
 /// Filter the input [`DataBlock`] with the predicate `expr`.
-pub struct FilterState {
-    expr: Expr,
-    projections: ColumnSet,
-    func_ctx: FunctionContext,
-}
-
 pub struct TransformFilter {
     expr: Expr,
     projections: ColumnSet,
