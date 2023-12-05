@@ -20,12 +20,16 @@ use common_constraint::mir::MirUnaryOperator;
 use common_constraint::problem::variable_must_not_null;
 use common_constraint::simplify::simplify;
 use common_expression::cast_scalar;
+use common_expression::shrink_scalar;
+use common_expression::type_check::common_super_type;
+use common_expression::type_check::unify;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::wrap_cast;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -209,6 +213,7 @@ pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + C
                 MirConstant::Int(value) => Scalar::Number(NumberScalar::Int64(*value)),
                 MirConstant::Null => Scalar::Null,
             };
+            let value = shrink_scalar(value);
             ConstantExpr { span: None, value }.into()
         }
         MirExpr::Variable { name, .. } => name_mapping(name).into(),
@@ -276,6 +281,15 @@ pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + C
                 MirBinaryOperator::Gte => "gte",
                 MirBinaryOperator::Eq => "eq",
             };
+
+            // A workaround for auto translating timestamp back to int64.
+            let mut auto_cast_rule = BUILTIN_FUNCTIONS.get_auto_cast_rules(func_name).to_vec();
+            auto_cast_rule.push((DataType::Number(NumberDataType::Int64), DataType::Timestamp));
+            let common_ty =
+                common_super_type(left.data_type()?, right.data_type()?, &auto_cast_rule)?;
+            let lhs = wrap_cast(&left, &common_ty);
+            let rhs = wrap_cast(&right, &common_ty);
+
             FunctionCall {
                 span: None,
                 func_name: func_name.to_string(),
