@@ -307,7 +307,7 @@ impl Connection {
         for (k, v) in &self.conns {
             let mut value = v.clone();
             if k.to_lowercase() == "access_key_id" || k.to_lowercase() == "secret_access_key" {
-                value = mask_string(&v, 3);
+                value = mask_string(v, 3);
             }
             conns.insert(k.to_string(), value);
         }
