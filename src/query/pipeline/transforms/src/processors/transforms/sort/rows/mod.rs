@@ -29,7 +29,7 @@ pub trait RowConverter<T: Rows>
 where Self: Sized
 {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self>;
     fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;

@@ -170,6 +170,8 @@ impl PipelineBuilder {
                     partial_block_size,
                     final_block_size,
                     None,
+                    false,
+                    true,
                 )?;
 
                 let output_block_num = task.total_rows.div_ceil(final_block_size);

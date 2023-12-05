@@ -113,7 +113,6 @@ pub fn apply_cse(
                 input_num_columns = projection.len();
                 results.push(BlockOperator::Project { projection });
             }
-            _ => results.push(op),
         }
     }
 

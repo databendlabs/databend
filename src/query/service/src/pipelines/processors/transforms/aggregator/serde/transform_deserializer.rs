@@ -223,6 +223,7 @@ where
             DataPacket::FetchProgress => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
+            DataPacket::MergeStatus { .. } => unreachable!(),
             DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
         }
     }

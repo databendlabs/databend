@@ -14,12 +14,18 @@
 
 #![allow(clippy::too_many_arguments)]
 
-pub mod block_writer;
+mod block_writer;
+mod check;
+mod cluster;
 pub mod config;
-pub mod fixture;
-pub mod utils;
+mod context;
+mod fixture;
+mod fuse;
 
+pub use block_writer::BlockWriter;
+pub use check::*;
+pub use cluster::ClusterDescriptor;
 pub use config::ConfigBuilder;
-pub use fixture::ClusterDescriptor;
-pub use fixture::Setup;
-pub use fixture::TestFixture;
+pub use context::*;
+pub use fixture::*;
+pub use fuse::*;

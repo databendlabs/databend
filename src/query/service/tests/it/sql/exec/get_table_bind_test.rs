@@ -108,11 +108,12 @@ use common_sql::Planner;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
+use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;
@@ -696,6 +697,13 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        todo!()
+    }
+    fn add_merge_status(&self, _merge_status: MergeStatus) {
+        todo!()
+    }
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
         todo!()
     }
 }

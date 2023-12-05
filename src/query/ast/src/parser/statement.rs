@@ -68,13 +68,17 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::AST) => {
-                        let formatted_stmt = format_statement(statement.stmt.clone())
-                            .map_err(|_| ErrorKind::Other("invalid statement"))?;
+                        let formatted_stmt =
+                            format_statement(statement.stmt.clone()).map_err(|_| {
+                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
+                            })?;
                         ExplainKind::Ast(formatted_stmt)
                     }
                     Some(TokenKind::SYNTAX) => {
-                        let pretty_stmt = pretty_statement(statement.stmt.clone(), 10)
-                            .map_err(|_| ErrorKind::Other("invalid statement"))?;
+                        let pretty_stmt =
+                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
+                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
+                            })?;
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
@@ -2936,6 +2940,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
+        value(Engine::Iceberg, rule! { ICEBERG }),
     ));
 
     map(

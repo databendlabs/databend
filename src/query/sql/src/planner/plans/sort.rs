@@ -33,7 +33,8 @@ pub struct Sort {
     pub limit: Option<usize>,
 
     /// If the sort plan is after the exchange plan.
-    pub after_exchange: bool,
+    /// It's [None] if the sorting plan is in single node mode.
+    pub after_exchange: Option<bool>,
 
     /// The columns needed by the plan after the sort plan.
     /// It's used to build a projection operation before building the sort operator.

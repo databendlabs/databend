@@ -27,7 +27,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;

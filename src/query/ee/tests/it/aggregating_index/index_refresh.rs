@@ -34,7 +34,7 @@ use common_sql::plans::Plan;
 use common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use enterprise_query::test_kits::context::EESetup;
 use futures_util::TryStreamExt;
 

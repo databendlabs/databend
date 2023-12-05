@@ -34,25 +34,21 @@ pub fn build_full_sort_pipeline(
     partial_block_size: usize,
     final_block_size: usize,
     prof_info: Option<(u32, SharedProcessorProfiles)>,
-    after_exchange: bool,
+    remove_order_col_at_last: bool,
 ) -> Result<()> {
     // Partial sort
-    if limit.is_none() || !after_exchange {
-        // If the sort plan is after an exchange plan, the blocks are already partially sorted on other nodes.
-        pipeline.add_transform(|input, output| {
-            let transform =
-                TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
-            if let Some((plan_id, prof)) = &prof_info {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    *plan_id,
-                    prof.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
-    }
+    pipeline.add_transform(|input, output| {
+        let transform = TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
+        if let Some((plan_id, prof)) = &prof_info {
+            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
+                transform,
+                *plan_id,
+                prof.clone(),
+            )))
+        } else {
+            Ok(ProcessorPtr::create(transform))
+        }
+    })?;
 
     build_merge_sort_pipeline(
         pipeline,
@@ -62,9 +58,12 @@ pub fn build_full_sort_pipeline(
         partial_block_size,
         final_block_size,
         prof_info,
+        false,
+        remove_order_col_at_last,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_merge_sort_pipeline(
     pipeline: &mut Pipeline,
     input_schema: DataSchemaRef,
@@ -73,9 +72,17 @@ pub fn build_merge_sort_pipeline(
     partial_block_size: usize,
     final_block_size: usize,
     prof_info: Option<(u32, SharedProcessorProfiles)>,
+    order_col_generated: bool,
+    remove_order_col_at_last: bool,
 ) -> Result<()> {
     // Merge sort
     let need_multi_merge = pipeline.output_len() > 1;
+    debug_assert!(if order_col_generated {
+        // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
+        !need_multi_merge && remove_order_col_at_last
+    } else {
+        true
+    });
     pipeline.add_transform(|input, output| {
         let transform = match limit {
             Some(limit) => try_create_transform_sort_merge_limit(
@@ -85,7 +92,8 @@ pub fn build_merge_sort_pipeline(
                 sort_desc.clone(),
                 partial_block_size,
                 limit,
-                need_multi_merge,
+                order_col_generated,
+                need_multi_merge || !remove_order_col_at_last,
             )?,
             _ => try_create_transform_sort_merge(
                 input,
@@ -93,7 +101,8 @@ pub fn build_merge_sort_pipeline(
                 input_schema.clone(),
                 partial_block_size,
                 sort_desc.clone(),
-                need_multi_merge,
+                order_col_generated,
+                need_multi_merge || !remove_order_col_at_last,
             )?,
         };
 
@@ -110,7 +119,15 @@ pub fn build_merge_sort_pipeline(
 
     if need_multi_merge {
         // Multi-pipelines merge sort
-        try_add_multi_sort_merge(pipeline, input_schema, final_block_size, limit, sort_desc)?;
+        try_add_multi_sort_merge(
+            pipeline,
+            input_schema,
+            final_block_size,
+            limit,
+            sort_desc,
+            prof_info.clone(),
+            remove_order_col_at_last,
+        )?;
     }
 
     Ok(())

@@ -26,6 +26,7 @@ use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::optimizer::get_udf_names;
+use common_sql::plans::InsertInputSource;
 use common_sql::plans::PresignAction;
 use common_sql::plans::RewriteKind;
 use common_users::RoleCacheManager;
@@ -140,7 +141,7 @@ impl PrivilegeAccess {
         }
 
         // skip check the temp stage from uri like `COPY INTO tbl FROM 'http://xxx'`
-        if stage_info.is_from_uri {
+        if stage_info.is_temporary {
             return Ok(());
         }
 
@@ -400,13 +401,15 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::CreateTable(plan) => {
-                // TODO(TCeason): as_select need check privilege.
                 self.validate_access(
                     &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                     vec![UserPrivilegeType::Create],
                     true,
                 )
                     .await?;
+                if let Some(query) = &plan.as_select {
+                    self.check(ctx, query).await?;
+                }
             }
             Plan::DropTable(plan) => {
                 self.validate_access(
@@ -610,7 +613,6 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
-                //TODO(TCeason): source need to check privileges.
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -621,9 +623,20 @@ impl AccessChecker for PrivilegeAccess {
                     true,
                 )
                     .await?;
+                match &plan.source {
+                    InsertInputSource::SelectPlan(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::Stage(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::StreamingWithFormat(..)
+                    | InsertInputSource::StreamingWithFileFormat {..}
+                    | InsertInputSource::Values {..} => {}
+                }
             }
             Plan::Replace(plan) => {
-                //TODO(TCeason): source and delete_when need to check privileges.
+                //plan.delete_when is Expr no need to check privileges.
                 self.validate_access(
                     &GrantObject::Table(
                         plan.catalog.clone(),
@@ -634,6 +647,17 @@ impl AccessChecker for PrivilegeAccess {
                     true,
                 )
                     .await?;
+                match &plan.source {
+                    InsertInputSource::SelectPlan(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::Stage(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::StreamingWithFormat(..)
+                    | InsertInputSource::StreamingWithFileFormat {..}
+                    | InsertInputSource::Values {..} => {}
+                }
             }
             Plan::MergeInto(plan) => {
                 if enable_experimental_rbac_check {
@@ -864,7 +888,6 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                // TODO(TCeason): need to check plan.query privileges.
                 self.validate_access_stage(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                 self
                     .validate_access(
@@ -877,6 +900,9 @@ impl AccessChecker for PrivilegeAccess {
                         true,
                     )
                     .await?;
+                if let Some(query) = &plan.query {
+                    self.check(ctx, query).await?;
+                }
             }
             Plan::CopyIntoLocation(plan) => {
                 self.validate_access_stage(&plan.stage, UserPrivilegeType::Write).await?;

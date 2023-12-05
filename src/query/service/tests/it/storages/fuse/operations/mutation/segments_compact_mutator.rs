@@ -52,7 +52,7 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
