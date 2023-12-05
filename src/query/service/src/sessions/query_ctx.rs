@@ -499,6 +499,10 @@ impl TableContext for QueryContext {
         self.shared.get_error()
     }
 
+    fn push_warning(&self, warn: String) {
+        self.shared.push_warning(warn)
+    }
+
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
