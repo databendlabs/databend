@@ -31,6 +31,8 @@ use jsonb::convert_to_comparable;
 use super::RowConverter;
 use super::Rows;
 
+pub type CommonRows = StringColumn;
+
 impl Rows for StringColumn {
     type Item<'a> = &'a [u8];
 

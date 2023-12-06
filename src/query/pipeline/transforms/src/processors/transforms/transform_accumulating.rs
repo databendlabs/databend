@@ -34,6 +34,8 @@ pub trait AccumulatingTransform: Send {
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         Ok(vec![])
     }
+
+    fn interrupt(&self) {}
 }
 
 pub struct AccumulatingTransformer<T: AccumulatingTransform + 'static> {
@@ -132,6 +134,10 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         }
 
         Ok(())
+    }
+
+    fn interrupt(&self) {
+        self.inner.interrupt();
     }
 }
 
