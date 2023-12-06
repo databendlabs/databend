@@ -80,6 +80,9 @@ pub(crate) fn inlist_filter(
                 .convert_to_full_column(build_key.data_type(), block.num_rows());
             columns.push(column);
         }
+        if columns.is_empty() {
+            return Ok(None);
+        }
         // Generate inlist using build column
         let build_key_column = Column::concat_columns(columns.into_iter())?;
         let mut list = Vec::with_capacity(build_key_column.len());
