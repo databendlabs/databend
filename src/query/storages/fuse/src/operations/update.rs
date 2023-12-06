@@ -26,6 +26,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_expression::PREDICATE_COLUMN_NAME;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
