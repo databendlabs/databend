@@ -174,6 +174,7 @@ impl<'a> Selector<'a> {
             }
             count = true_count;
             if count == 0 {
+                *true_idx = temp_true_idx;
                 break;
             }
             if i != exprs_len - 1 {
@@ -219,6 +220,7 @@ impl<'a> Selector<'a> {
             }
             count -= true_count;
             if count == 0 {
+                *false_idx = temp_false_idx;
                 break;
             }
             if i != exprs_len - 1 {
@@ -227,8 +229,9 @@ impl<'a> Selector<'a> {
                 *false_idx = temp_false_idx;
             }
         }
+        let count = temp_true_idx - *true_idx;
         *true_idx = temp_true_idx;
-        Ok(temp_true_idx)
+        Ok(count)
     }
 
     #[allow(clippy::too_many_arguments)]
