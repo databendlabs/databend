@@ -237,9 +237,14 @@ impl Metadata {
         column_name: String,
         data_type: TableDataType,
         key_paths: Scalar,
+        old_index: Option<IndexType>
     ) -> IndexType {
-        let column_index = self.columns.len();
-        self.columns.push(ColumnEntry::VirtualColumn(VirtualColumn {
+        let column_index = if let Some(old_index) = old_index {
+            old_index
+        } else {
+            self.columns.len()
+        };
+        let column = ColumnEntry::VirtualColumn(VirtualColumn {
             table_index,
             source_column_name,
             source_column_index,
@@ -247,7 +252,12 @@ impl Metadata {
             column_name,
             data_type,
             key_paths,
-        }));
+        });
+        if old_index.is_some() {
+            self.columns[column_index] = column;
+        } else {
+            self.columns.push(column);
+        }
         column_index
     }
 

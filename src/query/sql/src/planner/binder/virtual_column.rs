@@ -84,6 +84,9 @@ impl VirtualColumnRewriter {
             }
             RelOperator::EvalScalar(mut eval_scalar) => {
                 for item in &mut eval_scalar.items {
+                    if let Some(()) = self.try_replace_virtual_column(&mut item.scalar, Some(item.index)) {
+                        continue;
+                    }
                     self.visit(&mut item.scalar)?;
                 }
                 s_expr.plan = Arc::new(eval_scalar.into());
@@ -96,6 +99,9 @@ impl VirtualColumnRewriter {
             }
             RelOperator::ProjectSet(mut project_set) => {
                 for item in &mut project_set.srfs {
+                    if let Some(()) = self.try_replace_virtual_column(&mut item.scalar, Some(item.index)) {
+                        continue;
+                    }
                     self.visit(&mut item.scalar)?;
                 }
                 s_expr.plan = Arc::new(project_set.into());
@@ -113,10 +119,8 @@ impl VirtualColumnRewriter {
 
         Ok(s_expr)
     }
-}
 
-impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+    fn try_replace_virtual_column(&mut self, expr: &mut ScalarExpr, item_index: Option<IndexType>) -> Option<()> {
         match expr {
             ScalarExpr::FunctionCall(FunctionCall {
                 func_name,
@@ -138,7 +142,7 @@ impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
                             .support_virtual_columns()
                             || base_column.data_type.remove_nullable() != TableDataType::Variant
                         {
-                            return Ok(());
+                            return Some(());
                         }
                         let name = match constant.value.clone() {
                             Scalar::String(v) => match parse_key_paths(&v) {
@@ -161,11 +165,11 @@ impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
                                     name
                                 }
                                 Err(_) => {
-                                    return Ok(());
+                                    return Some(());
                                 }
                             },
                             _ => {
-                                return Ok(());
+                                return Some(());
                             }
                         };
 
@@ -191,6 +195,7 @@ impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
                                 name.clone(),
                                 table_data_type,
                                 constant.value.clone(),
+                                item_index,
                             );
                         }
 
@@ -217,11 +222,21 @@ impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
                             column: column_binding,
                         });
                         *expr = replaced_column;
-                        return Ok(());
+                        return Some(());
                     }
                 }
             }
             _ => {}
+        }
+
+        None
+    }
+}
+
+impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if let Some(()) = self.try_replace_virtual_column(expr, None) {
+            return Ok(());
         }
         walk_expr_mut(self, expr)?;
 
