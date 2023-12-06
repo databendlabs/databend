@@ -1573,7 +1573,7 @@ impl<'a> TypeChecker<'a> {
         let cast_default = default.map(|d| {
             Box::new(ScalarExpr::CastExpr(CastExpr {
                 span: d.span(),
-                is_try: true,
+                is_try: false,
                 argument: Box::new(d),
                 target_type: Box::new(return_type.clone()),
             }))
