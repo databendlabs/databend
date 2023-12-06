@@ -20,7 +20,6 @@ mod select_value;
 mod selector;
 
 pub use filter_executor::FilterExecutor;
-pub use helpers::build_range_selection;
 pub use helpers::selection_op;
 pub use helpers::SelectOp;
 pub use helpers::SelectStrategy;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Range;
+
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
@@ -19,7 +21,6 @@ use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::optimizer::ColumnSet;
 
-use crate::pipelines::processors::transforms::filter::build_range_selection;
 use crate::pipelines::processors::transforms::filter::SelectExpr;
 use crate::pipelines::processors::transforms::filter::Selector;
 
@@ -28,7 +29,10 @@ pub struct FilterExecutor {
     func_ctx: FunctionContext,
     true_selection: Vec<u32>,
     false_selection: Vec<u32>,
+    has_or: bool,
     projections: Option<ColumnSet>,
+    max_block_size: usize,
+    selection_range: Vec<Range<u32>>,
 }
 
 impl FilterExecutor {
@@ -50,7 +54,10 @@ impl FilterExecutor {
             func_ctx,
             true_selection,
             false_selection,
+            has_or,
             projections,
+            max_block_size,
+            selection_range: vec![],
         }
     }
 
@@ -71,7 +78,7 @@ impl FilterExecutor {
     }
 
     pub fn take(
-        &self,
+        &mut self,
         data_block: DataBlock,
         origin_count: usize,
         result_count: usize,
@@ -87,10 +94,35 @@ impl FilterExecutor {
         } else if result_count as f64 > data_block.num_rows() as f64 * 0.8
             && data_block.num_columns() > 1
         {
-            let selection_ranges = build_range_selection(&self.true_selection, result_count);
-            data_block.take_ranges(&selection_ranges, result_count)
+            let range_count = self.build_selection_range(result_count);
+            data_block.take_ranges(&self.selection_range[0..range_count], result_count)
         } else {
             data_block.take(&self.true_selection[0..result_count], &mut None)
         }
+    }
+
+    // Build a range selection from a selection array, return the len of self.range_selection.
+    fn build_selection_range(&mut self, count: usize) -> usize {
+        if self.selection_range.is_empty() {
+            self.selection_range = vec![0..0; self.max_block_size];
+        }
+        if self.has_or {
+            self.true_selection[0..count].sort();
+        }
+        let selection = &self.true_selection[0..count];
+        let mut start = selection[0];
+        let mut idx = 1;
+        let mut range_count = 0;
+        while idx < count {
+            if selection[idx] != selection[idx - 1] + 1 {
+                self.selection_range[range_count] = start..selection[idx - 1] + 1;
+                range_count += 1;
+                start = selection[idx];
+            }
+            idx += 1;
+        }
+        self.selection_range[range_count] = start..selection[count - 1] + 1;
+        range_count += 1;
+        range_count
     }
 }

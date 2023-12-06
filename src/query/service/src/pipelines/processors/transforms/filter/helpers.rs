@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::ops::Range;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SelectStrategy {
     True,
@@ -106,20 +104,4 @@ where T: std::cmp::PartialOrd {
         SelectOp::Lt => less_than::<T>,
         SelectOp::Lte => less_than_equal::<T>,
     }
-}
-
-// Build a range selection from a selection array.
-pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<Range<u32>> {
-    let mut range_selection = Vec::with_capacity(count);
-    let mut start = selection[0];
-    let mut idx = 1;
-    while idx < count {
-        if selection[idx] != selection[idx - 1] + 1 {
-            range_selection.push(start..selection[idx - 1] + 1);
-            start = selection[idx];
-        }
-        idx += 1;
-    }
-    range_selection.push(start..selection[count - 1] + 1);
-    range_selection
 }
