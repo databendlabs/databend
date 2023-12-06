@@ -150,6 +150,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;
     fn get_error(&self) -> Option<ErrorCode>;
+    fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;

@@ -244,6 +244,10 @@ impl QueryContext {
         self.shared.get_affect()
     }
 
+    pub fn pop_warnings(&self) -> Vec<String> {
+        self.shared.pop_warnings()
+    }
+
     pub fn get_data_metrics(&self) -> StorageMetrics {
         self.shared.get_data_metrics()
     }
@@ -496,6 +500,10 @@ impl TableContext for QueryContext {
 
     fn get_error(&self) -> Option<ErrorCode> {
         self.shared.get_error()
+    }
+
+    fn push_warning(&self, warn: String) {
+        self.shared.push_warning(warn)
     }
 
     fn get_current_database(&self) -> String {
