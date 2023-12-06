@@ -532,9 +532,9 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                 }),
                 ("query_flight_compression", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("None")),
+                    value: UserSettingValue::String(String::from("Lz4")),
                     desc: "flight compression method",
-                    possible_values: Some(vec!["None", "Lz4"]),
+                    possible_values: Some(vec!["None", "Lz4", "Zstd"]),
                     mode: SettingMode::Both,
                 }),
             ]);
