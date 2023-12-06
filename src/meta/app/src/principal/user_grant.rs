@@ -39,8 +39,8 @@ pub enum GrantObjectByID {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
-    Database(String, String),
-    Table(String, String, String),
+    Database(String, u64),
+    Table(String, u64, u64),
     UDF(String),
     Stage(String),
 }
