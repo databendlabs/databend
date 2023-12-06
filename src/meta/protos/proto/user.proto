@@ -48,13 +48,13 @@ message GrantObject {
 
   message GrantDatabaseObject {
     string catalog = 1;
-    string db = 2;
+    uint64 db = 2;
   }
 
   message GrantTableObject {
     string catalog = 1;
-    string db = 2;
-    string table = 3;
+    uint64 db = 2;
+    uint64 table = 3;
   }
 
   message GrantUdfObject {

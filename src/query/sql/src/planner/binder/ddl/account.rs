@@ -56,7 +56,7 @@ impl Binder {
             AccountMgrSource::ALL { level } => {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
-                let grant_object = self.convert_to_grant_object(level);
+                let grant_object = self.convert_to_grant_object(level).await?;
                 let priv_types = grant_object.available_privileges();
                 let plan = GrantPrivilegePlan {
                     principal: principal.clone(),
@@ -66,7 +66,7 @@ impl Binder {
                 Ok(Plan::GrantPriv(Box::new(plan)))
             }
             AccountMgrSource::Privs { privileges, level } => {
-                let grant_object = self.convert_to_grant_object(level);
+                let grant_object = self.convert_to_grant_object(level).await?;
                 let mut priv_types = UserPrivilegeSet::empty();
                 for x in privileges {
                     priv_types.set_privilege(*x);
@@ -99,7 +99,7 @@ impl Binder {
             AccountMgrSource::ALL { level } => {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
-                let grant_object = self.convert_to_grant_object(level);
+                let grant_object = self.convert_to_grant_object(level).await?;
                 let priv_types = grant_object.available_privileges();
                 let plan = RevokePrivilegePlan {
                     principal: principal.clone(),
@@ -109,7 +109,7 @@ impl Binder {
                 Ok(Plan::RevokePriv(Box::new(plan)))
             }
             AccountMgrSource::Privs { privileges, level } => {
-                let grant_object = self.convert_to_grant_object(level);
+                let grant_object = self.convert_to_grant_object(level).await?;
                 let mut priv_types = UserPrivilegeSet::empty();
                 for x in privileges {
                     priv_types.set_privilege(*x);
@@ -124,28 +124,46 @@ impl Binder {
         }
     }
 
-    pub(in crate::planner::binder) fn convert_to_grant_object(
+    pub(in crate::planner::binder) async fn convert_to_grant_object(
         &self,
         source: &AccountMgrLevel,
-    ) -> GrantObject {
+    ) -> Result<GrantObject> {
         // TODO fetch real catalog
         let catalog_name = self.ctx.get_current_catalog();
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
         match source {
-            AccountMgrLevel::Global => GrantObject::Global,
+            AccountMgrLevel::Global => Ok(GrantObject::Global),
             AccountMgrLevel::Table(database_name, table_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                GrantObject::Table(catalog_name, database_name, table_name.clone())
+                let db_id = catalog
+                    .get_database(&tenant, &database_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                let table_id = catalog
+                    .get_table(&tenant, &database_name, table_name)
+                    .await?
+                    .get_id();
+                Ok(GrantObject::Table(catalog_name, db_id, table_id))
             }
             AccountMgrLevel::Database(database_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                GrantObject::Database(catalog_name, database_name)
+                let db_id = catalog
+                    .get_database(&tenant, &database_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                Ok(GrantObject::Database(catalog_name, db_id))
             }
-            AccountMgrLevel::UDF(udf) => GrantObject::UDF(udf.clone()),
-            AccountMgrLevel::Stage(stage) => GrantObject::Stage(stage.clone()),
+            AccountMgrLevel::UDF(udf) => Ok(GrantObject::UDF(udf.clone())),
+            AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
         }
     }
 
