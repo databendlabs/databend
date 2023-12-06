@@ -70,7 +70,7 @@ impl PipelineBuilder {
 
             sort_desc.extend(order_by.clone());
 
-            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, None)?;
         }
         // `TransformWindow` is a pipeline breaker.
         self.main_pipeline.try_resize(1)?;

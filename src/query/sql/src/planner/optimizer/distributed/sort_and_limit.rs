@@ -17,36 +17,36 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
+use crate::plans::Exchange;
 use crate::plans::Limit;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::Sort;
 
-pub(super) struct TopNPushDownOptimizer {
-    topn_pattern: SExpr,
+pub(super) struct SortAndLimitPushDownOptimizer {
+    sort_pattern: SExpr,
     limit_pattern: SExpr,
 }
 
-impl TopNPushDownOptimizer {
+impl SortAndLimitPushDownOptimizer {
     pub fn create() -> Self {
         Self {
-            topn_pattern: Self::topn_pattern(),
+            sort_pattern: Self::sort_pattern(),
             limit_pattern: Self::limit_pattern(),
         }
     }
 
-    fn topn_pattern() -> SExpr {
+    /// `limit` is already pushed down to `Sort`,
+    /// so the TopN scenario is already contained in this pattern.
+    fn sort_pattern() -> SExpr {
         // Input:
-        // Limit
-        //  \
         //   Sort
         //    \
         //     Exchange
         //      \
         //       *
         // Output:
-        // Limit
-        //  \
         //   Sort (after_exchange = true)
         //    \
         //     Exchange
@@ -57,31 +57,23 @@ impl TopNPushDownOptimizer {
         SExpr::create_unary(
             Arc::new(
                 PatternPlan {
-                    plan_type: RelOp::Limit,
+                    plan_type: RelOp::Sort,
                 }
                 .into(),
             ),
             Arc::new(SExpr::create_unary(
                 Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Sort,
+                        plan_type: RelOp::Exchange,
                     }
                     .into(),
                 ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Exchange,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
+                Arc::new(SExpr::create_leaf(Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Pattern,
+                    }
+                    .into(),
+                ))),
             )),
         )
     }
@@ -132,34 +124,31 @@ impl TopNPushDownOptimizer {
             replaced_children.push(Arc::new(new_child));
         }
         let new_sexpr = s_expr.replace_children(replaced_children);
-        let apply_topn_res = self.apply_topn(&new_sexpr)?;
+        let apply_topn_res = self.apply_sort(&new_sexpr)?;
         self.apply_limit(&apply_topn_res)
     }
 
-    fn apply_topn(&self, s_expr: &SExpr) -> Result<SExpr> {
-        if !s_expr.match_pattern(&self.topn_pattern) {
+    fn apply_sort(&self, s_expr: &SExpr) -> Result<SExpr> {
+        if !s_expr.match_pattern(&self.sort_pattern) {
             return Ok(s_expr.clone());
         }
 
-        let sort_sexpr = s_expr.child(0)?;
-        let exchange_sexpr = sort_sexpr.child(0)?;
-
-        let mut sort: Sort = sort_sexpr.plan().clone().try_into()?;
-
-        if sort.limit.is_none() {
-            // It could be a ORDER BY ... OFFSET ... clause. (No LIMIT)
-            return Ok(s_expr.clone());
-        }
-
+        let mut sort: Sort = s_expr.plan().clone().try_into()?;
+        sort.after_exchange = Some(false);
+        let exchange_sexpr = s_expr.child(0)?;
+        debug_assert!(matches!(
+            exchange_sexpr.plan.as_ref(),
+            RelOperator::Exchange(Exchange::Merge)
+        ));
         debug_assert!(exchange_sexpr.children.len() == 1);
+        let exchange_sexpr = exchange_sexpr.replace_plan(Arc::new(Exchange::MergeSort.into()));
 
         let child = exchange_sexpr.child(0)?.clone();
         let before_exchange_sort =
             SExpr::create_unary(Arc::new(sort.clone().into()), Arc::new(child));
         let new_exchange = exchange_sexpr.replace_children(vec![Arc::new(before_exchange_sort)]);
-        sort.after_exchange = true;
-        let new_sort = SExpr::create_unary(Arc::new(sort.into()), Arc::new(new_exchange));
-        let new_plan = s_expr.replace_children(vec![Arc::new(new_sort)]);
+        sort.after_exchange = Some(true);
+        let new_plan = SExpr::create_unary(Arc::new(sort.into()), Arc::new(new_exchange));
         Ok(new_plan)
     }
 
