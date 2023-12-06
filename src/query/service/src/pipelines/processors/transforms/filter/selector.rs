@@ -149,12 +149,12 @@ impl<'a> Selector<'a> {
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         true_idx: &mut usize,
-        _false_idx: &mut usize,
+        false_idx: &mut usize,
         mut select_strategy: SelectStrategy,
         mut count: usize,
     ) -> Result<usize> {
         let mut temp_true_idx = *true_idx;
-        let mut temp_false_idx = 0;
+        let mut temp_false_idx = *false_idx;
         let exprs_len = exprs.len();
         for (i, expr) in exprs.iter().enumerate() {
             let true_count = self.process_selection(
@@ -182,6 +182,7 @@ impl<'a> Selector<'a> {
                 *true_idx = temp_true_idx;
             }
         }
+        *false_idx = temp_false_idx;
         Ok(count)
     }
 
@@ -192,12 +193,12 @@ impl<'a> Selector<'a> {
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        _true_idx: &mut usize,
+        true_idx: &mut usize,
         false_idx: &mut usize,
         mut select_strategy: SelectStrategy,
         mut count: usize,
     ) -> Result<usize> {
-        let mut temp_true_idx = 0;
+        let mut temp_true_idx = *true_idx;
         let mut temp_false_idx = *false_idx;
         let exprs_len = exprs.len();
         for (i, expr) in exprs.iter().enumerate() {
@@ -226,6 +227,7 @@ impl<'a> Selector<'a> {
                 *false_idx = temp_false_idx;
             }
         }
+        *true_idx = temp_true_idx;
         Ok(temp_true_idx)
     }
 
