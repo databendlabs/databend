@@ -57,7 +57,7 @@ pub fn build_expression_transform(
             // but for pg or snowflake, if a field is non-null, it will return
             // a non-null error (it means they will give a null as the default value).
             if !f.is_nullable() && f.default_expr().is_none() {
-                // if we have a user-specified default expr, it must statisfy the non-null constraint
+                // if we have a user-specified default expr, it must satisfy the non-null constraint
                 // in table-create phase. So we just consider default_expr is none.
                 return Err(ErrorCode::BadArguments(format!(
                     "unable to cast type `null` value to a non-null type field `{}`",
