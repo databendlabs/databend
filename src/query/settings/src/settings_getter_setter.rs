@@ -24,6 +24,12 @@ use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 use crate::SettingMode;
 
+#[derive(Clone, Copy)]
+pub enum FlightCompression {
+    Lz4,
+    Zstd,
+}
+
 impl Settings {
     // Get u64 value, we don't get from the metasrv.
     fn try_get_u64(&self, key: &str) -> Result<u64> {
@@ -494,5 +500,14 @@ impl Settings {
 
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
         Ok(self.try_get_u64("create_query_flight_client_with_current_rt")? != 0)
+    }
+
+    pub fn get_query_flight_compression(&self) -> Result<Option<FlightCompression>> {
+        match self.try_get_string("query_flight_compression")?.as_str() {
+            "None" => Ok(None),
+            "Lz4" => Ok(Some(FlightCompression::Lz4)),
+            "Zstd" => Ok(Some(FlightCompression::Zstd)),
+            _ => unreachable!("check possible_values in set variable"),
+        }
     }
 }
