@@ -552,18 +552,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     UndropDbHasNoHistory::new(&name_key.db_name),
                 )));
             } else {
-                db_id_list_opt.ok_or(KVAppError::AppError(AppError::UndropDbHasNoHistory(
-                    UndropDbHasNoHistory::new(&name_key.db_name),
-                )))?
+                db_id_list_opt.ok_or_else(|| {
+                    KVAppError::AppError(AppError::UndropDbHasNoHistory(UndropDbHasNoHistory::new(
+                        &name_key.db_name,
+                    )))
+                })?
             };
 
             // Return error if there is no db id history.
-            let db_id =
-                *db_id_list
-                    .last()
-                    .ok_or(KVAppError::AppError(AppError::UndropDbHasNoHistory(
-                        UndropDbHasNoHistory::new(&name_key.db_name),
-                    )))?;
+            let db_id = *db_id_list.last().ok_or_else(|| {
+                KVAppError::AppError(AppError::UndropDbHasNoHistory(UndropDbHasNoHistory::new(
+                    &name_key.db_name,
+                )))
+            })?;
 
             // get db_meta of the last db id
             let dbid = DatabaseId { db_id };
@@ -1745,9 +1746,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
                 )));
             } else {
-                tb_id_list_opt.ok_or(KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                    UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                )))?
+                tb_id_list_opt.ok_or_else(|| {
+                    KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                    ))
+                })?
             };
 
             // Return error if there is no table id history.
@@ -2339,10 +2342,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (_, table_name_opt): (_, Option<DBIdTableName>) =
                 get_pb_value(self, &table_id_to_name).await?;
 
-            let dbid_tbname =
-                table_name_opt.ok_or(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "drop_table_by_id failed to find db_id"),
-                )))?;
+            let dbid_tbname = table_name_opt.ok_or_else(|| {
+                KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                    table_id,
+                    "drop_table_by_id failed to find db_id",
+                )))
+            })?;
 
             let db_id = dbid_tbname.db_id;
             let tbname = dbid_tbname.table_name.clone();

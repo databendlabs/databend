@@ -124,15 +124,13 @@ impl MergeIntoInterpreter {
         }
         let column_map = m_join.collect_column_map();
 
-        let fuse_table =
-            table
-                .as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support MERGE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                )))?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support MERGE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
 
         let group_expr = match fuse_table.cluster_key_str() {
             None => {

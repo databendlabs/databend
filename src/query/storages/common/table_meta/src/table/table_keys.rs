@@ -30,6 +30,9 @@ pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
 // Read only attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_READ_ONLY: &str = "read_only_attached";
 
+pub const OPT_KEY_LOCATION: &str = "location";
+pub const OPT_KEY_CONNECTION_NAME: &str = "connection_name";
+
 /// Legacy table snapshot location key
 ///
 /// # Deprecated

@@ -169,15 +169,13 @@ impl ReplaceInterpreter {
                 field_index,
             })
         }
-        let fuse_table =
-            table
-                .as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support REPLACE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                )))?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support REPLACE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
 
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {

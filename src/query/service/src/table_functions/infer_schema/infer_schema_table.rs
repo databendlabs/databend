@@ -210,14 +210,14 @@ impl AsyncSource for InferSchemaSource {
             )?;
             FileLocation::Uri(uri)
         };
-        let (stage_info, path) = resolve_file_location(&self.ctx, &file_location).await?;
+        let (stage_info, path) = resolve_file_location(self.ctx.as_ref(), &file_location).await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
             let visibility_checker = self.ctx.get_visibility_checker().await?;
-            if !stage_info.is_from_uri
+            if !stage_info.is_temporary
                 && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
             {
                 return Err(ErrorCode::PermissionDenied(format!(

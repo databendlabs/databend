@@ -32,9 +32,7 @@ impl IcebergPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&IcebergPartInfo> {
         info.as_any()
             .downcast_ref::<IcebergPartInfo>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to IcebergPartInfo.",
-            ))
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to IcebergPartInfo."))
     }
 }
 

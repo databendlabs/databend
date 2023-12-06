@@ -72,7 +72,7 @@ impl PhysicalPlanBuilder {
         let input_schema = input.output_schema()?;
         let mut projections = ColumnSet::new();
         for column in column_projections.iter() {
-            if let Ok(index) = input_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
         }

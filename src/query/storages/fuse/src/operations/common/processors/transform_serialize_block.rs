@@ -187,8 +187,8 @@ impl Processor for TransformSerializeBlock {
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
-            let meta =
-                SerializeDataMeta::downcast_from(meta).ok_or(ErrorCode::Internal("It's a bug"))?;
+            let meta = SerializeDataMeta::downcast_from(meta)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
             match meta {
                 SerializeDataMeta::DeletedSegment(deleted_segment) => {
                     // delete a whole segment, segment level

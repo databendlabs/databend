@@ -61,7 +61,7 @@ impl ListStageArgsParsed {
         }
 
         let location =
-            location.ok_or(ErrorCode::BadArguments("list_stage must specify location"))?;
+            location.ok_or_else(|| ErrorCode::BadArguments("list_stage must specify location"))?;
 
         Ok(Self {
             location,

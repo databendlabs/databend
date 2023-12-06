@@ -737,7 +737,7 @@ impl Binder {
             }),
             _ => location.clone(),
         };
-        let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
+        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &location).await?;
         if let Some(f) = &options.file_format {
             stage_info.file_format_params = match StageFileFormatType::from_str(f) {
                 Ok(t) => FileFormatParams::default_by_type(t)?,
@@ -1202,7 +1202,7 @@ impl Binder {
             let options = table.options();
             let table_version = options
                 .get("table_version")
-                .ok_or(ErrorCode::Internal("table version must be set in stream"))?
+                .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
                 .parse::<u64>()?;
             Some(table_version)
         } else {

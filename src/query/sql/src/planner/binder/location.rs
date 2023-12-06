@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::sync::Arc;
 
 use anyhow::anyhow;
 use common_ast::ast::Connection;
 use common_ast::ast::UriLocation;
 use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
+use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
@@ -386,7 +387,7 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub async fn parse_uri_location(
     l: &mut UriLocation,
-    ctx: Option<&Arc<dyn TableContext>>,
+    ctx: Option<&dyn TableContext>,
 ) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
@@ -497,4 +498,34 @@ pub async fn parse_uri_location(
     })?;
 
     Ok((sp, path))
+}
+
+pub async fn get_storage_params_from_options(
+    ctx: &dyn TableContext,
+    options: &BTreeMap<String, String>,
+) -> common_exception::Result<StorageParams> {
+    let location = options
+        .get("location")
+        .ok_or_else(|| ErrorCode::BadArguments("missing option 'location'".to_string()))?;
+    let connection = options.get("connection_name");
+
+    let mut location = if let Some(connection) = connection {
+        let connection = ctx.get_connection(connection).await?;
+        let location = UriLocation::from_uri(
+            location.to_string(),
+            "".to_string(),
+            connection.storage_params,
+        )?;
+        if location.protocol.to_lowercase() != connection.storage_type {
+            return Err(ErrorCode::BadArguments(format!(
+                "Incorrect CREATE query: protocol in location {:?} is not equal to connection {:?}",
+                location.protocol, connection.storage_type
+            )));
+        };
+        location
+    } else {
+        UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
+    };
+    let (sp, _) = parse_uri_location(&mut location, None).await?;
+    Ok(sp)
 }

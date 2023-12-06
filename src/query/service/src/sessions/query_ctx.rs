@@ -74,6 +74,7 @@ use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
+use common_storages_iceberg::IcebergTable;
 use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultScan;
@@ -97,6 +98,7 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
 const MYSQL_VERSION: &str = "8.0.26";
@@ -684,9 +686,7 @@ impl TableContext for QueryContext {
         }
     }
     async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
+        self.shared.get_connection(name).await
     }
 
     /// Fetch a Table by db and table name.
@@ -703,7 +703,18 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(catalog, database, table).await
+        let table = self.shared.get_table(catalog, database, table).await?;
+        // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
+        // but there is no way to access dyn TableContext.
+        let table: Arc<dyn Table> = if table.engine() == "ICEBERG" {
+            let sp = get_storage_params_from_options(self, table.options()).await?;
+            let mut info = table.get_table_info().to_owned();
+            info.meta.storage_params = Some(sp);
+            IcebergTable::try_create(info.to_owned())?.into()
+        } else {
+            table
+        };
+        Ok(table)
     }
 
     #[async_backtrace::framed]

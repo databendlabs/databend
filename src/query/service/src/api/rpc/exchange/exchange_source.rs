@@ -31,6 +31,7 @@ use crate::api::ExchangeInjector;
 use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
+/// Add Exchange Source to the pipeline.
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
     params: &MergeExchangeParams,

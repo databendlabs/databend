@@ -51,8 +51,8 @@ impl BlockMetaInfo for BlockMetaIndex {
 
 impl BlockMetaIndex {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&BlockMetaIndex> {
-        BlockMetaIndex::downcast_ref_from(info).ok_or(ErrorCode::Internal(
-            "Cannot downcast from BlockMetaInfo to BlockMetaIndex.",
-        ))
+        BlockMetaIndex::downcast_ref_from(info).ok_or_else(|| {
+            ErrorCode::Internal("Cannot downcast from BlockMetaInfo to BlockMetaIndex.")
+        })
     }
 }
