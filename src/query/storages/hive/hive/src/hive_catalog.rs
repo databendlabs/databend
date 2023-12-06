@@ -87,6 +87,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_app::storage::StorageParams;
 use common_meta_types::*;
+use faststr::FastStr;
 use hive_metastore::Partition;
 use hive_metastore::ThriftHiveMetastoreClient;
 use hive_metastore::ThriftHiveMetastoreClientBuilder;
@@ -192,9 +193,9 @@ impl HiveCatalog {
     ) -> Result<Vec<Partition>> {
         self.client
             .get_partitions_by_names(
-                db.into(),
-                table.into(),
-                partition_names.into_iter().map(|v| v.into()).collect(),
+                FastStr::new(db),
+                FastStr::new(table),
+                partition_names.into_iter().map(FastStr::new).collect(),
             )
             .await
             .map_err(from_thrift_error)
@@ -210,11 +211,14 @@ impl HiveCatalog {
     ) -> Result<Vec<String>> {
         let partition_names = self
             .client
-            .get_partition_names(db.into(), table.into(), max_parts)
+            .get_partition_names(FastStr::new(db), FastStr::new(table), max_parts)
             .await
             .map_err(from_thrift_error)?;
 
-        Ok(partition_names.into_iter().map(|v| v.to_string()).collect())
+        Ok(partition_names
+            .into_iter()
+            .map(|v| v.into_string())
+            .collect())
     }
 
     fn handle_table_meta(table_meta: &hive_metastore::Table) -> Result<()> {
@@ -266,7 +270,7 @@ impl Catalog for HiveCatalog {
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db = self
             .client
-            .get_database(db_name.to_string().into())
+            .get_database(FastStr::new(db_name))
             .await
             .map_err(from_thrift_error)?;
 
@@ -357,7 +361,7 @@ impl Catalog for HiveCatalog {
     ) -> Result<Arc<dyn Table>> {
         let table_meta = match self
             .client
-            .get_table(db_name.to_string().into(), table_name.to_string().into())
+            .get_table(FastStr::new(db_name), FastStr::new(table_name))
             .await
         {
             Ok(meta) => meta,
@@ -377,7 +381,7 @@ impl Catalog for HiveCatalog {
 
         let fields = self
             .client
-            .get_schema(db_name.to_string().into(), table_name.to_string().into())
+            .get_schema(FastStr::new(db_name), FastStr::new(table_name))
             .await
             .map_err(from_thrift_error)?;
         let table_info: TableInfo =
@@ -392,7 +396,7 @@ impl Catalog for HiveCatalog {
     async fn list_tables(&self, _tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self
             .client
-            .get_all_tables(db_name.to_string().into())
+            .get_all_tables(FastStr::new(db_name))
             .await
             .map_err(from_thrift_error)?;
 

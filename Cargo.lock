@@ -2894,6 +2894,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
+ "faststr",
  "futures",
  "hive_metastore",
  "log",
