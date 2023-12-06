@@ -42,16 +42,16 @@ fn traverse_column(
     for idx in path.iter().take(path.len() - 1) {
         let struct_array = columns
             .get(*idx)
-            .ok_or(error_cannot_traverse_path(path, schema))?
+            .ok_or_else(|| error_cannot_traverse_path(path, schema))?
             .as_any()
             .downcast_ref::<StructArray>()
-            .ok_or(error_cannot_traverse_path(path, schema))?;
+            .ok_or_else(|| error_cannot_traverse_path(path, schema))?;
         columns = struct_array.columns();
     }
     let idx = *path.last().unwrap();
     let array = columns
         .get(idx)
-        .ok_or(error_cannot_traverse_path(path, schema))?;
+        .ok_or_else(|| error_cannot_traverse_path(path, schema))?;
     Ok(Column::from_arrow_rs(array.clone(), field)?)
 }
 
@@ -139,7 +139,7 @@ pub fn compute_output_field_paths(
                     let idx = fields
                         .iter()
                         .position(|t| t.name().eq_ignore_ascii_case(name))
-                        .ok_or(error_cannot_find_field(field.name(), parquet_schema))?;
+                        .ok_or_else(|| error_cannot_find_field(field.name(), parquet_schema))?;
                     path.push(idx);
                     ty = &fields[idx];
                 }

@@ -60,7 +60,7 @@ impl Transform for TransformAddStreamColumns {
         if num_rows != 0 {
             if let Some(meta) = block.take_meta() {
                 let meta = StreamColumnMeta::downcast_from(meta)
-                    .ok_or(ErrorCode::Internal("It's a bug"))?;
+                    .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
                 for stream_column in self.stream_columns.iter() {
                     let entry = stream_column.generate_column_values(&meta, num_rows);

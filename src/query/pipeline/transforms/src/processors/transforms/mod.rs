@@ -23,6 +23,7 @@ mod transform_blocking;
 mod transform_compact;
 mod transform_dummy;
 mod transform_multi_sort_merge;
+mod transform_sort_merge_base;
 
 pub mod transform_sort;
 mod transform_sort_merge;

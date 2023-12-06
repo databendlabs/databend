@@ -122,7 +122,7 @@ impl LockManager {
             let reply = catalog
                 .list_lock_revisions(list_table_lock_req.clone())
                 .await?;
-            let position = reply.iter().position(|(x, _)| *x == revision).ok_or(
+            let position = reply.iter().position(|(x, _)| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
                 ErrorCode::TableLockExpired("the acquired table lock has been expired".to_string()),
             )?;
