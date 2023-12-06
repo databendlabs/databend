@@ -28,7 +28,7 @@ common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
-async-channel = "1.7.1"
+async-channel = "2"
 async-trait = "0.1.57"
 bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }

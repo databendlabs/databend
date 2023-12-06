@@ -123,6 +123,7 @@ pub struct QueryResponse {
     pub error: Option<QueryError>,
     pub stats: QueryStats,
     pub affect: Option<QueryAffect>,
+    pub warnings: Vec<String>,
     pub stats_uri: Option<String>,
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
@@ -186,6 +187,7 @@ impl QueryResponse {
             session: r.session,
             stats,
             affect: state.affect,
+            warnings: r.state.warnings,
             id: id.clone(),
             next_uri,
             stats_uri: Some(make_state_uri(&id)),
@@ -208,6 +210,7 @@ impl QueryResponse {
             data: vec![],
             schema: vec![],
             session_id: None,
+            warnings: vec![],
             node_id: "".to_string(),
             session: None,
             next_uri: None,

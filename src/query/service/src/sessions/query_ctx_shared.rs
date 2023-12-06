@@ -69,6 +69,7 @@ pub struct QueryContextShared {
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
+    pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -122,6 +123,7 @@ impl QueryContextShared {
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
             error: Arc::new(Mutex::new(None)),
+            warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
@@ -158,6 +160,18 @@ impl QueryContextShared {
         (*guard).clone()
     }
 
+    pub fn push_warning(&self, warn: String) {
+        let mut guard = self.warnings.lock();
+        (*guard).push(warn);
+    }
+
+    pub fn pop_warnings(&self) -> Vec<String> {
+        let mut guard = self.warnings.lock();
+        let warnings = (*guard).clone();
+        (*guard).clear();
+        warnings
+    }
+
     pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         let mut guard = self.on_error_map.write();
         *guard = Some(map);
@@ -170,6 +184,7 @@ impl QueryContextShared {
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
         self.on_error_mode.read().clone()
     }
+
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
         let mut guard = self.on_error_mode.write();
         *guard = Some(mode);
