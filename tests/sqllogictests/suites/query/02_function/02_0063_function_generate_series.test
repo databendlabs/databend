@@ -19,6 +19,17 @@ select * from generate_series('2021-03-26 00:00'::timestamp,'2021-03-27 12:00'::
 2021-03-27 00:00:00.000000
 
 query T
+select * from generate_series('1970-01-01 00:00'::timestamp,to_timestamp(2),2000000);
+----
+1970-01-01 00:00:00.000000
+1970-01-01 00:00:02.000000
+
+query T
+select * from generate_series(to_timestamp(1),to_timestamp(2),2);
+----
+1970-01-01 00:00:01.000000
+
+query T
 select * from generate_series('2021-03-26'::date,'2021-03-27'::date,1);
 ----
 2021-03-26
