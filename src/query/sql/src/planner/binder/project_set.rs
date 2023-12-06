@@ -155,7 +155,7 @@ impl Binder {
                 name.clone(),
                 column_index,
                 Box::new(srf_expr.data_type().clone()),
-                Visibility::InVisible,
+                Visibility::Visible,
             )
             .build();
 
