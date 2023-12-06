@@ -35,12 +35,12 @@ async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bytes = { workspace = true }
 chrono = { workspace = true }
 ethnum = { workspace = true }
-rand = "0.8.5"
 futures = "0.3.24"
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
+rand = "0.8.5"
 thrift = "0.17.0"
 typetag = "0.2.3"
 
