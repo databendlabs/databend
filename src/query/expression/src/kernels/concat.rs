@@ -98,19 +98,24 @@ impl Column {
     ) -> Result<Column> {
         let (_, size) = columns.size_hint();
         match size {
-            None => Err(ErrorCode::EmptyData("Can't concat empty columns")),
+            Some(0) => Err(ErrorCode::EmptyData("Can't concat empty columns")),
             Some(1) => Ok(columns.next().unwrap()),
-            _ => Ok(Self::concat_none_empty(columns)),
+            _ => Self::concat_none_empty(columns),
         }
     }
 
     pub fn concat_none_empty<I: Iterator<Item = Column> + TrustedLen + Clone>(
         columns: I,
-    ) -> Column {
+    ) -> Result<Column> {
         let mut columns_iter_clone = columns.clone();
-        let first_column = columns_iter_clone.next().unwrap();
+        let first_column = match columns_iter_clone.next() {
+            // Even if `columns.size_hint()`'s upper bound is `Some(a)` (a != 0),
+            // it's possible that `columns`'s len is 0.
+            None => return Err(ErrorCode::EmptyData("Can't concat empty columns")),
+            Some(col) => col,
+        };
         let capacity = columns_iter_clone.fold(first_column.len(), |acc, x| acc + x.len());
-        match first_column {
+        let column = match first_column {
             Column::Null { .. } => Column::Null { len: capacity },
             Column::EmptyArray { .. } => Column::EmptyArray { len: capacity },
             Column::EmptyMap { .. } => Column::EmptyMap { len: capacity },
@@ -303,7 +308,7 @@ impl Column {
                     .clone()
                     .map(|col| col.into_nullable().unwrap().column)
                     .collect();
-                let column = Self::concat_none_empty(column.into_iter());
+                let column = Self::concat_none_empty(column.into_iter())?;
                 let validity = Column::Boolean(Self::concat_boolean_types(
                     columns.map(|col| col.into_nullable().unwrap().validity),
                     capacity,
@@ -320,14 +325,15 @@ impl Column {
                             .collect();
                         Self::concat_none_empty(column.into_iter())
                     })
-                    .collect();
+                    .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
             Column::Variant(_) => VariantType::upcast_column(Self::concat_string_types(
                 columns.map(|col| col.into_variant().unwrap()),
                 capacity,
             )),
-        }
+        };
+        Ok(column)
     }
 
     pub fn concat_primitive_types<T>(
