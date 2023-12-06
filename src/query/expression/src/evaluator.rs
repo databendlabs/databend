@@ -1027,6 +1027,20 @@ impl<'a> Evaluator<'a> {
         Ok(children)
     }
 
+    pub fn remove_generics_data_type(
+        &self,
+        generics: &[DataType],
+        data_type: &DataType,
+    ) -> DataType {
+        match data_type {
+            DataType::Generic(index) => generics[*index].clone(),
+            DataType::Nullable(box DataType::Generic(index)) => {
+                DataType::Nullable(Box::new(generics[*index].clone()))
+            }
+            _ => data_type.clone(),
+        }
+    }
+
     pub fn get_select_child(
         &self,
         expr: &Expr,
@@ -1072,12 +1086,8 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } if function.signature.name == "if" => {
-                let return_type = if let DataType::Generic(index) = &function.signature.return_type
-                {
-                    generics[*index].clone()
-                } else {
-                    function.signature.return_type.clone()
-                };
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_if(args, generics, validity)?, return_type))
             }
 
@@ -1087,12 +1097,8 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } if function.signature.name == "and_filters" => {
-                let return_type = if let DataType::Generic(index) = &function.signature.return_type
-                {
-                    generics[*index].clone()
-                } else {
-                    function.signature.return_type.clone()
-                };
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_and_filters(args, validity)?, return_type))
             }
 
@@ -1129,12 +1135,8 @@ impl<'a> Evaluator<'a> {
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                let return_type = if let DataType::Generic(index) = &function.signature.return_type
-                {
-                    generics[*index].clone()
-                } else {
-                    function.signature.return_type.clone()
-                };
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((result, return_type))
             }
             Expr::LambdaFunctionCall {

@@ -94,9 +94,10 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             )?,
-            SelectExpr::Compare((select_op, exprs)) => self.process_compare(
+            SelectExpr::Compare((select_op, exprs, generics)) => self.process_compare(
                 select_op,
                 exprs,
+                generics,
                 validity,
                 true_selection,
                 false_selection,
@@ -233,6 +234,7 @@ impl<'a> Selector<'a> {
         &self,
         select_op: &SelectOp,
         exprs: &[Expr],
+        generics: &[DataType],
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
@@ -244,6 +246,12 @@ impl<'a> Selector<'a> {
         let children = self.evaluator.get_children(exprs, validity)?;
         let (left_value, left_data_type) = children[0].clone();
         let (right_value, right_data_type) = children[1].clone();
+        let left_data_type = self
+            .evaluator
+            .remove_generics_data_type(generics, &left_data_type);
+        let right_data_type = self
+            .evaluator
+            .remove_generics_data_type(generics, &right_data_type);
         let count = select_values(
             *select_op,
             left_value,

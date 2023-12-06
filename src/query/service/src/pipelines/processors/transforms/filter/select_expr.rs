@@ -22,7 +22,7 @@ use crate::pipelines::processors::transforms::filter::SelectOp;
 pub enum SelectExpr {
     And(Vec<SelectExpr>),
     Or(Vec<SelectExpr>),
-    Compare((SelectOp, Vec<Expr>)),
+    Compare((SelectOp, Vec<Expr>, Vec<DataType>)),
     Others(Expr),
     BooleanColumn((usize, DataType)),
     BooleanScalar((Scalar, DataType)),
@@ -30,7 +30,12 @@ pub enum SelectExpr {
 
 pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
     match expr {
-        Expr::FunctionCall { function, args, .. } => {
+        Expr::FunctionCall {
+            function,
+            args,
+            generics,
+            ..
+        } => {
             let func_name = function.signature.name.as_str();
             match func_name {
                 "and" | "and_filters" => {
@@ -63,7 +68,10 @@ pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
                 }
                 "eq" | "noteq" | "gt" | "lt" | "gte" | "lte" => {
                     let select_op = SelectOp::try_from_func_name(&function.signature.name).unwrap();
-                    (SelectExpr::Compare((select_op, args.clone())), false)
+                    (
+                        SelectExpr::Compare((select_op, args.clone(), generics.clone())),
+                        false,
+                    )
                 }
                 "is_true" => build_select_expr(&args[0]),
                 _ => (SelectExpr::Others(expr.clone()), false),
