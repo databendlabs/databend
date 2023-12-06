@@ -305,11 +305,7 @@ impl Connection {
     pub fn mask(&self) -> Self {
         let mut conns = BTreeMap::new();
         for (k, v) in &self.conns {
-            let mut value = v.clone();
-            if k.to_lowercase() == "access_key_id" || k.to_lowercase() == "secret_access_key" {
-                value = mask_string(v, 3);
-            }
-            conns.insert(k.to_string(), value);
+            conns.insert(k.to_string(), mask_string(v, 3));
         }
         Self {
             visited_keys: self.visited_keys.clone(),
