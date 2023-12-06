@@ -112,8 +112,9 @@ function install_ziglang {
 	apt-get | yum | dnf | pacman)
 		curl -sSfLo /tmp/zig.tar.xz "https://ziglang.org/download/0.11.0/zig-linux-${arch}-0.11.0.tar.xz"
 		tar -xf /tmp/zig.tar.xz -C /tmp
-		"${PRE_COMMAND[@]}" cp "/tmp/zig-linux-${arch}-0.11.0/zig" /usr/local/bin/
+		"${PRE_COMMAND[@]}" mv "/tmp/zig-linux-${arch}-0.11.0/zig" /usr/local/bin/
 		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/zig
+		"${PRE_COMMAND[@]}" mv "/tmp/zig-linux-${arch}-0.11.0/lib" /usr/local/lib/zig
 		rm -rf /tmp/zig*
 		;;
 	brew)
