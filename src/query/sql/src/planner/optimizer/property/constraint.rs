@@ -288,7 +288,7 @@ pub fn from_mir(mir: &MirExpr, name_mapping: impl Fn(&str) -> BoundColumnRef + C
                 DataType::Number(NumberDataType::UInt64),
                 DataType::Timestamp,
             ));
-            dbg!(left.data_type(), right.data_type());
+            dbg!(left.data_type().unwrap(), right.data_type().unwrap());
             if let Some(common_ty) = common_super_type(
                 left.data_type().unwrap(),
                 right.data_type().unwrap(),
