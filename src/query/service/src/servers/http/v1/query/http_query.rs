@@ -162,6 +162,7 @@ pub struct ResponseState {
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
     pub error: Option<ErrorCode>,
+    pub warnings: Vec<String>,
 }
 
 pub struct HttpQueryResponseInternal {
@@ -363,6 +364,7 @@ impl HttpQuery {
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
+                        warnings: ctx_clone.pop_warnings(),
                     };
                     info!(
                         "{}: http query change state to Stopped, fail to start {:?}",
@@ -438,6 +440,7 @@ impl HttpQuery {
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
+            warnings: state.get_warnings(),
             affect: state.get_affect(),
         }
     }

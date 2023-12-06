@@ -508,6 +508,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn push_warning(&self, _warn: String) {
+        todo!()
+    }
+
     fn get_current_database(&self) -> String {
         self.ctx.get_current_database()
     }
