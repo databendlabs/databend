@@ -39,8 +39,8 @@ futures = "0.3.24"
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
-serde = { workspace = true }
 rand = "0.8.5"
+serde = { workspace = true }
 thrift = "0.17.0"
 typetag = "0.2.3"
 
