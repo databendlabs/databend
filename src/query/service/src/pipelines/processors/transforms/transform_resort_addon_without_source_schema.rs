@@ -48,19 +48,22 @@ pub fn build_expression_transform(
 ) -> Result<CompoundBlockOperator> {
     let mut exprs = Vec::with_capacity(output_schema.fields().len());
     for f in output_schema.fields().iter() {
-        // if there is a non-null constraint, we should return an error
-        // although we will give a valid default value. for example:
-        // 1. (a int not null), we give zero
-        // 2. (a int), we give null
-        // but for pg or snowflake, if a field is non-null, it will return
-        // a non-null error (it means they will give a null as the default value).
-        if !f.is_nullable() && f.default_expr().is_none() {
-            return Err(ErrorCode::BadArguments(format!(
-                "unable to cast type `null` value to a non-null type field"
-            )));
-        }
-
         let expr = if !input_schema.has_field(f.name()) {
+            // #issue13932
+            // if there is a non-null constraint, we should return an error
+            // although we will give a valid default value. for example:
+            // 1. (a int not null), we give zero
+            // 2. (a int), we give null
+            // but for pg or snowflake, if a field is non-null, it will return
+            // a non-null error (it means they will give a null as the default value).
+            if !f.is_nullable() && f.default_expr().is_none() {
+                // if we have a user-specified default expr, it must statisfy the non-null constraint
+                // in table-create phase. So we just consider default_expr is none.
+                return Err(ErrorCode::BadArguments(format!(
+                    "unable to cast type `null` value to a non-null type field `{}`",
+                    f.name()
+                )));
+            }
             if let Some(default_expr) = f.default_expr() {
                 let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
                 let mut expr = expr.remove(0);

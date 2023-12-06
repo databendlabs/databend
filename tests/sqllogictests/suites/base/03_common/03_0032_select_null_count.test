@@ -26,5 +26,21 @@ select count(c0) from t
 ----
 3
 
+## test #issue13932
+statement ok
+create table t3(a int not null,b text);
+
+statement error 1006
+insert into t3(b) values('a');
+
+statement error 1006
+insert into t3(a) values(null);
+
+statement ok
+insert into t3(a) values(1);
+
+statement ok
+insert into t3(a,b) values(1,'a');
+
 statement ok
 drop table if exists t
