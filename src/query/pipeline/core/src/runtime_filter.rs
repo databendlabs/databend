@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
 
@@ -34,7 +33,7 @@ pub trait RuntimeFilter {
 
     // Add runtime filter to the processor, only source related processors may implement this function.
     fn add_runtime_filters(&mut self, _filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        Err(ErrorCode::Unimplemented("Can't add runtime filters"))
+        Ok(())
     }
 }
 

@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Expr;
@@ -42,10 +41,7 @@ pub trait SyncSource: Send {
     }
 
     fn add_runtime_filters(&mut self, _filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        Err(ErrorCode::Unimplemented(format!(
-            "{} can't add runtime filters",
-            Self::NAME
-        )))
+        Ok(())
     }
 }
 
