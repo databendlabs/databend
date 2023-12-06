@@ -198,7 +198,7 @@ impl ModifyTableColumnInterpreter {
         for (field, _comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
-            if let Ok(i) = schema.index_of(column) {
+            if let Some((i, _)) = schema.column_with_name(column) {
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].data_type = data_type.clone();
@@ -235,7 +235,7 @@ impl ModifyTableColumnInterpreter {
         for (field, comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
-            if let Ok(i) = schema.index_of(column) {
+            if let Some((i, _)) = schema.column_with_name(column) {
                 if data_type != &new_schema.fields[i].data_type {
                     // Check if this column is referenced by computed columns.
                     let mut data_schema: DataSchema = table_info.schema().into();

@@ -239,9 +239,9 @@ impl FuseTable {
                 modified <= retention_point
             })
             .await?;
-        let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
-            "No historical data found at given point",
-        ))?;
+        let location = location.ok_or_else(|| {
+            ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
+        })?;
         Ok((location, files))
     }
 
