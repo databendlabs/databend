@@ -14,48 +14,71 @@
 
 use std::sync::Arc;
 
+use arrow_array::ArrayRef;
+use arrow_array::Int64Array;
+use arrow_array::RecordBatch;
+use arrow_schema::DataType;
+use arrow_schema::Field;
+use arrow_schema::Schema;
 use bytes::Bytes;
 use common_base::base::tokio;
 use common_storages_parquet::InMemoryRowGroup;
 use opendal::services::Memory;
 use opendal::Operator;
-use parquet::basic::ConvertedType;
+use parquet::arrow::ArrowWriter;
 use parquet::basic::Repetition;
-use parquet::basic::Type as PhysicalType;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::schema::types::*;
+use rand::Rng;
 
 #[tokio::test]
 async fn test_merge() {
-    let data = Bytes::from(
-        "
-    Obama, Biden, Hillary, and Trump, four former presidents, 
-    decided to team up for a soccer match. They hired a coach to guide them
-    The coach asked Obama, What position are you good at?
-    Obama replied, I'm good at organizing the midfield, skilled in passing and
-    controlling the pace of the game
-    ",
-    );
+    // Set up random number generator
+    let mut rng = rand::thread_rng();
+
+    // Define the number of rows and columns in the Parquet file
+    let num_rows = 100;
+    let num_cols = rng.gen_range(2..10);
+
+    // Generate random column names
+    let mut column_names = Vec::new();
+    for i in 0..num_cols {
+        column_names.push(format!("column_{}", i));
+    }
+
+    // Define the schema for the Parquet file
+    let mut fields: Vec<Field> = Vec::new();
+    for name in &column_names {
+        fields.push(Field::new(name, DataType::Int64, false));
+    }
+    let schema = Schema::new(fields);
+
+    // Generate random data for each column
+    let mut data = Vec::new();
+    for _ in 0..num_cols {
+        let values: Vec<i64> = (0..num_rows).map(|_| rng.gen_range(0..100)).collect();
+        let array: ArrayRef = Arc::new(Int64Array::from(values));
+        data.push(array);
+    }
+
+    // Create a RecordBatch from the data and schema
+    let batch = RecordBatch::try_new(Arc::new(schema.clone()), data).unwrap();
+
+    let mut buf = Vec::with_capacity(1024);
+    let mut writer = ArrowWriter::try_new(&mut buf, batch.schema(), None).unwrap();
+    writer.write(&batch).unwrap();
+    writer.close().unwrap();
 
     // prepare data
+    let data = Bytes::from(buf);
     let builder = Memory::default();
     let path = "/tmp/test/merged";
     let op = Operator::new(builder).unwrap().finish();
     let blocking_op = op.blocking();
     blocking_op.write(path, data).unwrap();
-    let mut fields = vec![];
-
-    // prepare group_meta
-    let inta = Type::primitive_type_builder("a", PhysicalType::INT32)
-        .with_repetition(Repetition::REQUIRED)
-        .with_converted_type(ConvertedType::INT_32)
-        .build()
-        .unwrap();
-    fields.push(Arc::new(inta));
 
     let schema = Type::group_type_builder("schema")
         .with_repetition(Repetition::REPEATED)
-        .with_fields(fields)
         .build()
         .unwrap();
     let descr = SchemaDescriptor::new(Arc::new(schema));
