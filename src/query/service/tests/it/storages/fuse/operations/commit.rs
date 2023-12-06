@@ -494,7 +494,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn push_warning(&self, warn: String) {
+    fn push_warning(&self, _warn: String) {
         todo!()
     }
 
