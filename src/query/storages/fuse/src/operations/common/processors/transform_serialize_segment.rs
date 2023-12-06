@@ -165,9 +165,9 @@ impl Processor for TransformSerializeSegment {
                 .unwrap()?
                 .get_meta()
                 .cloned()
-                .ok_or(ErrorCode::Internal("No block meta. It's a bug"))?;
+                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
             let block_meta = BlockMeta::downcast_ref_from(&input_meta)
-                .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?
+                .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?
                 .clone();
 
             self.accumulator.add_with_block_meta(block_meta);

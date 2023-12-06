@@ -227,7 +227,7 @@ impl SnapshotGenerator for MutationGenerator {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
-            .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
+            .ok_or_else(|| ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
             ConflictResolveContext::AppendOnly(_) => {
                 return Err(ErrorCode::Internal(
@@ -325,7 +325,7 @@ impl AppendGenerator {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
-            .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
+            .ok_or_else(|| ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
             ConflictResolveContext::AppendOnly((ctx, schema)) => Ok((ctx, schema.as_ref())),
             _ => Err(ErrorCode::Internal(

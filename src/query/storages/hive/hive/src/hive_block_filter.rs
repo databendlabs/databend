@@ -87,8 +87,9 @@ impl HiveBlockFilter {
                                 in_memory_size as u64,
                                 None,
                             );
-                            if let Ok(idx) = self.data_schema.index_of(col.name()) {
-                                statistics.insert(idx as u32, col_stats);
+                            if let Some((index, _)) = self.data_schema.column_with_name(col.name())
+                            {
+                                statistics.insert(index as u32, col_stats);
                             }
                         }
                     }
@@ -96,7 +97,7 @@ impl HiveBlockFilter {
             }
 
             for (p_key, p_value) in part_columns {
-                if let Ok(idx) = self.data_schema.index_of(&p_key) {
+                if let Some((idx, _)) = self.data_schema.column_with_name(&p_key) {
                     let mut null_count = 0;
                     let v = if p_value == HIVE_DEFAULT_PARTITION {
                         null_count = row_group.num_rows();

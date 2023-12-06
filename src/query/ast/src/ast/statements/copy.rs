@@ -291,7 +291,7 @@ impl Display for CopyIntoLocationSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
     visited_keys: HashSet<String>,
-    conns: BTreeMap<String, String>,
+    pub conns: BTreeMap<String, String>,
 }
 
 impl Connection {
@@ -413,7 +413,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or(common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| common_exception::ErrorCode::BadArguments("invalid uri"))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()

@@ -1202,7 +1202,7 @@ impl Binder {
             let options = table.options();
             let table_version = options
                 .get("table_version")
-                .ok_or(ErrorCode::Internal("table version must be set in stream"))?
+                .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
                 .parse::<u64>()?;
             Some(table_version)
         } else {

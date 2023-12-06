@@ -108,7 +108,7 @@ impl AuthMgr {
                         let ensure_user = jwt
                             .custom
                             .ensure_user
-                            .ok_or(ErrorCode::AuthenticateFailure(e.message()))?;
+                            .ok_or_else(|| ErrorCode::AuthenticateFailure(e.message()))?;
                         // create a new user if not exists
                         let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                         if let Some(ref roles) = ensure_user.roles {

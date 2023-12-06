@@ -36,7 +36,7 @@ pub async fn list_suggestions(
     ctx: &HttpQueryContext,
     _req: &Request,
 ) -> PoemResult<Json<SuggestionsResponse>> {
-    let session = ctx.get_session(SessionType::HTTPAPI("ListSuggestions".to_string()));
+    let session = ctx.upgrade_session(SessionType::HTTPAPI("ListSuggestions".to_string()))?;
     let context = session
         .create_query_context()
         .await

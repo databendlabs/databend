@@ -116,7 +116,7 @@ impl FromToProto for ex::ComputedExpr {
     fn from_pb(p: pb::ComputedExpr) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let computed_expr = p.computed_expr.ok_or(Incompatible {
+        let computed_expr = p.computed_expr.ok_or_else(|| Incompatible {
             reason: "Invalid ComputedExpr: .computed_expr can not be None".to_string(),
         })?;
 
@@ -335,7 +335,7 @@ impl FromToProto for ex::types::NumberDataType {
     fn from_pb(p: pb::Number) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let num = p.num.ok_or(Incompatible {
+        let num = p.num.ok_or_else(|| Incompatible {
             reason: "Invalid Number: .num can not be None".to_string(),
         })?;
 
@@ -386,7 +386,7 @@ impl FromToProto for ex::types::DecimalDataType {
     fn from_pb(p: pb::Decimal) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let num = p.decimal.ok_or(Incompatible {
+        let num = p.decimal.ok_or_else(|| Incompatible {
             reason: "Invalid Decimal: .decimal can not be None".to_string(),
         })?;
 

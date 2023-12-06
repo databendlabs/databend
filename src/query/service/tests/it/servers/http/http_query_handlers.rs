@@ -43,6 +43,7 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
 use http::HeaderMap;
@@ -445,6 +446,33 @@ async fn test_client_query_id() -> Result<()> {
 //
 //     Ok(())
 // }
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_active_sessions() -> Result<()> {
+    let max_active_sessions = 2;
+    let conf = ConfigBuilder::create()
+        .max_active_sessions(max_active_sessions)
+        .build();
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+    let ep = create_endpoint().await?;
+    let sql = "select sleep(1)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
+
+    let mut handlers = vec![];
+    for _ in 0..3 {
+        handlers.push(post_json_to_endpoint(&ep, &json, HeaderMap::default()));
+    }
+    let mut results = try_join_all(handlers)
+        .await?
+        .into_iter()
+        .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
+        .collect::<Vec<_>>();
+    results.sort();
+    let msg = "Current active sessions (2) has exceeded the max_active_sessions limit (2)";
+    let expect = vec!["", "", msg];
+    assert_eq!(results, expect);
+    Ok(())
+}
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_wait_time_secs() -> Result<()> {

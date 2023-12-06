@@ -90,9 +90,7 @@ impl FusePartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
         info.as_any()
             .downcast_ref::<FusePartInfo>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to FusePartInfo.",
-            ))
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to FusePartInfo."))
     }
 
     pub fn range(&self) -> Option<&Range<usize>> {

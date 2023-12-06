@@ -18,6 +18,9 @@ use std::marker::PhantomData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::ArgType;
+use common_expression::types::DateType;
+use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -28,6 +31,10 @@ use common_expression::Value;
 
 use super::RowConverter;
 use super::Rows;
+
+pub type DateRows = SimpleRows<DateType>;
+pub type TimestampRows = SimpleRows<TimestampType>;
+pub type StringRows = SimpleRows<StringType>;
 
 /// Row structure for single simple types. (numbers, date, timestamp)
 #[derive(Clone, Copy)]
@@ -115,6 +122,10 @@ where
         })
     }
 }
+
+pub type DateConverter = SimpleRowConverter<DateType>;
+pub type TimestampConverter = SimpleRowConverter<TimestampType>;
+pub type StringConverter = SimpleRowConverter<StringType>;
 
 /// If there is only one sort field and its type is a primitive type,
 /// use this converter.
