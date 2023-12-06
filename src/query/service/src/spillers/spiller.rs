@@ -34,9 +34,9 @@ use crate::sessions::QueryContext;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpillerType {
     HashJoinBuild,
-    HashJoinProbe, /* Todo: Add more spillers type
-                    * OrderBy
-                    * Aggregation */
+    HashJoinProbe,
+    OrderBy, /* Todo: Add more spillers type
+              * Aggregation */
 }
 
 impl Display for SpillerType {
@@ -44,6 +44,7 @@ impl Display for SpillerType {
         match self {
             SpillerType::HashJoinBuild => write!(f, "HashJoinBuild"),
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
+            SpillerType::OrderBy => write!(f, "OrderBy"),
         }
     }
 }
@@ -269,12 +270,19 @@ impl Spiller {
     }
 
     /// Check if all partitions have been spilled
+    #[inline(always)]
     pub fn is_all_spilled(&self) -> bool {
         self.partition_set.len() == self.spilled_partition_set.len()
     }
 
     /// Check if any partition has been spilled
+    #[inline(always)]
     pub fn is_any_spilled(&self) -> bool {
         !self.spilled_partition_set.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn spilled_files_num(&self, pid: u8) -> usize {
+        self.partition_location[&pid].len()
     }
 }

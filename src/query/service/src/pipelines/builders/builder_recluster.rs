@@ -23,7 +23,6 @@ use common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sources::EmptySource;
-use common_pipeline_transforms::processors::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::MutationKind;
@@ -38,6 +37,7 @@ use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 
+use super::builder_sort::build_merge_sort_pipeline;
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
