@@ -32,6 +32,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
+use common_pipeline_core::RuntimeFilter;
 use common_sql::evaluator::BlockOperator;
 use common_storage::MergeStatus;
 use itertools::Itertools;
@@ -109,6 +110,8 @@ impl MergeIntoNotMatchedProcessor {
         PipeItem::create(processor_ptr, vec![input], vec![output_port])
     }
 }
+
+impl RuntimeFilter for MergeIntoNotMatchedProcessor {}
 
 impl Processor for MergeIntoNotMatchedProcessor {
     fn name(&self) -> String {

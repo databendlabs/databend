@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::RuntimeFilter;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -142,6 +143,8 @@ impl TransformHashJoinBuild {
         Ok(())
     }
 }
+
+impl RuntimeFilter for TransformHashJoinBuild {}
 
 #[async_trait::async_trait]
 impl Processor for TransformHashJoinBuild {

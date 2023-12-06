@@ -30,6 +30,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 
 use crate::pipelines::processors::transforms::aggregator::create_state_serializer;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
@@ -69,6 +70,8 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
         )))
     }
 }
+
+impl<Method: HashMethodBounds> RuntimeFilter for TransformAggregateSerializer<Method> {}
 
 impl<Method: HashMethodBounds> Processor for TransformAggregateSerializer<Method> {
     fn name(&self) -> String {

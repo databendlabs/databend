@@ -20,6 +20,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 
 pub struct EmptySource {
     output: Arc<OutputPort>,
@@ -30,6 +31,8 @@ impl EmptySource {
         Ok(ProcessorPtr::create(Box::new(EmptySource { output })))
     }
 }
+
+impl RuntimeFilter for EmptySource {}
 
 impl Processor for EmptySource {
     fn name(&self) -> String {

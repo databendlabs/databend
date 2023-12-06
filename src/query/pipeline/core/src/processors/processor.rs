@@ -14,13 +14,11 @@
 
 use std::any::Any;
 use std::cell::UnsafeCell;
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Expr;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use minitrace::prelude::*;
@@ -28,6 +26,7 @@ use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
 use crate::processors::profile::Profile;
+use crate::runtime_filter::RuntimeFilter;
 
 #[derive(Debug)]
 pub enum Event {
@@ -49,7 +48,7 @@ pub enum EventCause {
 
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
-pub trait Processor: Send {
+pub trait Processor: Send + RuntimeFilter {
     fn name(&self) -> String;
 
     /// Reference used for downcast.
@@ -89,31 +88,13 @@ pub trait Processor: Send {
     fn details_status(&self) -> Option<String> {
         None
     }
-
-    // Get runtime filter from hash join, only hash join probe processor may return non-empty filters.
-    fn get_runtime_filters(&mut self) -> Result<HashMap<String, Expr<String>>> {
-        Ok(HashMap::new())
-    }
-
-    // If the processor can add runtime filter, only source related processors may return true.
-    fn can_add_runtime_filter(&self) -> bool {
-        false
-    }
-
-    // Add runtime filter to the processor, only source related processors may implement this function.
-    fn add_runtime_filters(&mut self, _filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        Err(ErrorCode::Unimplemented(format!(
-            "{} can't add runtime filters",
-            self.name()
-        )))
-    }
 }
 
 // To keep ProcessPtr::async_process taking &self, instead of self,
 // we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
 // so that later an Arc of it could be moved into the async closure,
 // which async_process returns.
-struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
+pub struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
 unsafe impl Sync for UnsafeSyncCelledProcessor {}
 
 impl Deref for UnsafeSyncCelledProcessor {
@@ -146,6 +127,10 @@ impl ProcessorPtr {
             id: Arc::new(UnsafeCell::new(node_index(0))),
             inner: Arc::new(UnsafeCell::new(inner).into()),
         }
+    }
+
+    pub fn inner(&self) -> Arc<UnsafeSyncCelledProcessor> {
+        self.inner.clone()
     }
 
     /// # Safety
@@ -186,24 +171,6 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn interrupt(&self) {
         (*self.inner.get()).interrupt()
-    }
-
-    /// # Safety
-    pub unsafe fn get_runtime_filters(&self) -> Result<HashMap<String, Expr<String>>> {
-        (*self.inner.get()).get_runtime_filters()
-    }
-
-    /// # Safety
-    pub unsafe fn can_add_runtime_filter(&self) -> bool {
-        (*self.inner.get()).can_add_runtime_filter()
-    }
-
-    /// # Safety
-    pub unsafe fn add_runtime_filters(
-        &self,
-        filters: &HashMap<String, Expr<String>>,
-    ) -> Result<()> {
-        (*self.inner.get()).add_runtime_filters(filters)
     }
 
     /// # Safety
@@ -283,17 +250,5 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     fn details_status(&self) -> Option<String> {
         (**self).details_status()
-    }
-
-    fn get_runtime_filters(&mut self) -> Result<HashMap<String, Expr<String>>> {
-        (**self).get_runtime_filters()
-    }
-
-    fn can_add_runtime_filter(&self) -> bool {
-        (**self).can_add_runtime_filter()
-    }
-
-    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        (**self).add_runtime_filters(filters)
     }
 }

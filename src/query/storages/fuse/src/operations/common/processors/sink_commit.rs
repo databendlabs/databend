@@ -35,6 +35,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::LockGuard;
+use common_pipeline_core::RuntimeFilter;
 use log::debug;
 use log::error;
 use log::info;
@@ -182,6 +183,8 @@ where F: SnapshotGenerator + Send + 'static
         Ok(Event::Async)
     }
 }
+
+impl<F> RuntimeFilter for CommitSink<F> where F: 'static + Send + SnapshotGenerator {}
 
 #[async_trait::async_trait]
 impl<F> Processor for CommitSink<F>

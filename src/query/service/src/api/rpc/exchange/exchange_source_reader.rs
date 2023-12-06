@@ -26,6 +26,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
+use common_pipeline_core::RuntimeFilter;
 use log::info;
 
 use crate::api::rpc::flight_client::FlightReceiver;
@@ -61,6 +62,8 @@ impl ExchangeSourceReader {
         }))
     }
 }
+
+impl RuntimeFilter for ExchangeSourceReader {}
 
 #[async_trait::async_trait]
 impl Processor for ExchangeSourceReader {

@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 #[async_trait]
 pub trait AsyncSink: Send {
@@ -97,6 +98,8 @@ impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
         }
     }
 }
+
+impl<T: AsyncSink + 'static> RuntimeFilter for AsyncSinker<T> {}
 
 #[async_trait::async_trait]
 impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {

@@ -20,6 +20,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 pub trait Sink: Send {
     const NAME: &'static str;
@@ -65,6 +66,8 @@ impl<T: Sink + 'static> Sinker<T> {
         })
     }
 }
+
+impl<T: Sink + 'static> RuntimeFilter for Sinker<T> {}
 
 #[async_trait::async_trait]
 impl<T: Sink + 'static> Processor for Sinker<T> {

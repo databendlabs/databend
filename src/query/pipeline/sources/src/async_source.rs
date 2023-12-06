@@ -25,6 +25,7 @@ use common_pipeline_core::processors::EventCause;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
@@ -67,6 +68,8 @@ impl<T: 'static + AsyncSource> AsyncSourcer<T> {
         })))
     }
 }
+
+impl<T: 'static + AsyncSource> RuntimeFilter for AsyncSourcer<T> {}
 
 #[async_trait::async_trait]
 impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {

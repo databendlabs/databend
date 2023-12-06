@@ -27,6 +27,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use opendal::Operator;
 
 use crate::row_based_file::buffers::FileOutputBuffers;
@@ -75,6 +76,8 @@ impl RowBasedFileSink {
         })))
     }
 }
+
+impl RuntimeFilter for RowBasedFileSink {}
 
 #[async_trait]
 impl Processor for RowBasedFileSink {

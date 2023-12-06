@@ -27,6 +27,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSFullReader;
 use opendal::Reader;
@@ -69,6 +70,8 @@ impl IcebergTableSource {
         })))
     }
 }
+
+impl RuntimeFilter for IcebergTableSource {}
 
 #[async_trait::async_trait]
 impl Processor for IcebergTableSource {

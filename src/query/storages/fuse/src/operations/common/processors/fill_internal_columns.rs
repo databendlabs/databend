@@ -27,6 +27,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 pub struct FillInternalColumnProcessor {
     internal_columns: BTreeMap<FieldIndex, InternalColumn>,
@@ -51,6 +52,8 @@ impl FillInternalColumnProcessor {
         }
     }
 }
+
+impl RuntimeFilter for FillInternalColumnProcessor {}
 
 #[async_trait::async_trait]
 impl Processor for FillInternalColumnProcessor {

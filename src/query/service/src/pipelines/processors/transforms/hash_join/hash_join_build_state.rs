@@ -220,16 +220,14 @@ impl HashJoinBuildState {
                 }
             }
 
-            if self.ctx.get_settings().get_runtime_filter()? {
-                let build_chunks =
-                    &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
-                *build_chunks = unsafe {
-                    (*self.hash_join_state.build_state.get())
-                        .generation_state
-                        .chunks
-                        .clone()
-                };
-            }
+            let build_chunks =
+                &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
+            *build_chunks = unsafe {
+                (*self.hash_join_state.build_state.get())
+                    .generation_state
+                    .chunks
+                    .clone()
+            };
 
             // Get the number of rows of the build side.
             let build_num_rows = unsafe {

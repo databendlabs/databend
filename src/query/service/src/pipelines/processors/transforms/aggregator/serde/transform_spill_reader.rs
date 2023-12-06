@@ -29,6 +29,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -48,6 +49,11 @@ pub struct TransformSpillReader<Method: HashMethodBounds, V: Send + Sync + 'stat
     deserialized_meta: Option<BlockMetaInfoPtr>,
     reading_meta: Option<AggregateMeta<Method, V>>,
     deserializing_meta: Option<DeserializingMeta<Method, V>>,
+}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> RuntimeFilter
+    for TransformSpillReader<Method, V>
+{
 }
 
 #[async_trait::async_trait]

@@ -22,6 +22,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
+use common_pipeline_core::RuntimeFilter;
 
 use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
@@ -77,6 +78,8 @@ impl TransformCreateSets {
         })))
     }
 }
+
+impl RuntimeFilter for TransformCreateSets {}
 
 #[async_trait::async_trait]
 impl Processor for TransformCreateSets {

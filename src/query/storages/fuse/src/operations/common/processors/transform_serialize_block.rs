@@ -32,6 +32,7 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
+use common_pipeline_core::RuntimeFilter;
 use common_sql::executor::physical_plans::MutationKind;
 use opendal::Operator;
 use storages_common_index::BloomIndex;
@@ -141,6 +142,8 @@ impl TransformSerializeBlock {
         DataBlock::empty_with_meta(Box::new(meta))
     }
 }
+
+impl RuntimeFilter for TransformSerializeBlock {}
 
 #[async_trait::async_trait]
 impl Processor for TransformSerializeBlock {

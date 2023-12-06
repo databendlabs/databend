@@ -21,6 +21,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 pub trait BlockingTransform: Send {
     const NAME: &'static str;
@@ -54,6 +55,8 @@ impl<T: BlockingTransform + 'static> BlockingTransformer<T> {
         })
     }
 }
+
+impl<T: BlockingTransform + 'static> RuntimeFilter for BlockingTransformer<T> {}
 
 #[async_trait::async_trait]
 impl<T: BlockingTransform + 'static> Processor for BlockingTransformer<T> {

@@ -22,6 +22,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 
 use super::block_batch::BlockBatch;
 
@@ -56,6 +57,8 @@ impl LimitFileSizeProcessor {
         Ok(ProcessorPtr::create(Box::new(p)))
     }
 }
+
+impl RuntimeFilter for LimitFileSizeProcessor {}
 
 impl Processor for LimitFileSizeProcessor {
     fn name(&self) -> String {

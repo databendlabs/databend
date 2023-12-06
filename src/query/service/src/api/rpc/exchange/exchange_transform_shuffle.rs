@@ -33,6 +33,7 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
+use common_pipeline_core::RuntimeFilter;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
@@ -147,6 +148,8 @@ struct ExchangeShuffleTransform {
     inputs: Vec<PortWithStatus<InputPort>>,
     outputs: Vec<PortWithStatus<OutputPort>>,
 }
+
+impl RuntimeFilter for ExchangeShuffleTransform {}
 
 impl Processor for ExchangeShuffleTransform {
     fn name(&self) -> String {

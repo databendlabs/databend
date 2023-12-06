@@ -23,6 +23,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
@@ -102,6 +103,8 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
         Err(ErrorCode::Internal("It's a bug"))
     }
 }
+
+impl<T: Compactor + Send + 'static> RuntimeFilter for TransformCompact<T> {}
 
 #[async_trait::async_trait]
 impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
