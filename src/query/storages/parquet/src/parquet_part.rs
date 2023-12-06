@@ -97,9 +97,7 @@ impl ParquetPart {
     pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetPart> {
         info.as_any()
             .downcast_ref::<ParquetPart>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to ParquetPart.",
-            ))
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to ParquetPart."))
     }
 }
 

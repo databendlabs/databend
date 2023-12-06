@@ -108,6 +108,7 @@ use common_sql::Planner;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
+use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
@@ -700,6 +701,13 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        todo!()
+    }
+    fn add_merge_status(&self, _merge_status: MergeStatus) {
+        todo!()
+    }
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
         todo!()
     }
 }

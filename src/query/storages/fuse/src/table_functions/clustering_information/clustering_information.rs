@@ -213,7 +213,7 @@ impl<'a> ClusteringInformation<'a> {
         let cluster_key = self
             .table
             .cluster_key_str()
-            .ok_or(ErrorCode::Internal("It's a bug"))?;
+            .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
         Ok(DataBlock::new(
             vec![
                 BlockEntry::new(

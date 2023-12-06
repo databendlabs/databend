@@ -39,6 +39,7 @@ use common_settings::Settings;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
+use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_users::GrantObjectVisibilityChecker;
@@ -220,6 +221,10 @@ pub trait TableContext: Send + Sync {
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
+
+    fn add_merge_status(&self, merge_status: MergeStatus);
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;

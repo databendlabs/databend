@@ -17,12 +17,10 @@ use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::TransformProfileWrapper;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
+use common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use common_sql::executor::physical_plans::Filter;
 
+use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -43,29 +41,23 @@ impl PipelineBuilder {
                 ))
             })?;
 
-        let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![BlockOperator::Filter {
-                    projections: filter.projections.clone(),
-                    expr: predicate.clone(),
-                }],
+            let transform = TransformFilter::create(
+                input,
+                output,
+                predicate.clone(),
+                filter.projections.clone(),
                 self.func_ctx.clone(),
-                num_input_columns,
             );
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
-                    input,
-                    output,
                     filter.plan_id,
                     self.proc_profs.clone(),
                 )))
             } else {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input, output, transform,
-                )))
+                Ok(ProcessorPtr::create(transform))
             }
         })?;
 

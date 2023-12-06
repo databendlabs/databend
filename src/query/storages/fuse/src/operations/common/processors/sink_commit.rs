@@ -160,12 +160,12 @@ where F: SnapshotGenerator + Send + 'static
             .unwrap()?
             .get_meta()
             .cloned()
-            .ok_or(ErrorCode::Internal("No block meta. It's a bug"))?;
+            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
 
         self.input.finish();
 
         let meta = CommitMeta::downcast_from(input_meta)
-            .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
+            .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
         self.abort_operation = meta.abort_operation;
 

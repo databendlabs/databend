@@ -63,7 +63,7 @@ impl AsyncSystemTable for StagesTable {
             stages
                 .into_iter()
                 .filter(|stage| {
-                    !stage.is_from_uri
+                    !stage.is_temporary
                         && visibility_checker.check_stage_visibility(&stage.stage_name)
                 })
                 .collect::<Vec<_>>()

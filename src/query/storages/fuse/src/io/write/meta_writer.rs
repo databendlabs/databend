@@ -105,8 +105,8 @@ impl Marshal for TableSnapshotStatistics {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::panic::catch_unwind;
 
+    use common_base::runtime::catch_unwind;
     use common_expression::TableSchema;
     use storages_common_table_meta::meta::SnapshotId;
     use storages_common_table_meta::meta::Statistics;

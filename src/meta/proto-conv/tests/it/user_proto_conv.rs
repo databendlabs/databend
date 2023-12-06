@@ -79,7 +79,7 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -121,7 +121,7 @@ pub(crate) fn test_s3_stage_info() -> mt::principal::StageInfo {
                 ..Default::default()
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -160,7 +160,7 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::principal::StageInfo {
                 ..Default::default()
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -199,7 +199,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::principal::StageInfo {
                 ..Default::default()
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -234,7 +234,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::principal::StageInfo {
                 credential: "my_credential".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -273,7 +273,7 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
                 server_side_encryption_key_id: "".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -307,7 +307,7 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
                 delegation: "<delegation_token>".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -342,7 +342,7 @@ pub(crate) fn test_obs_stage_info() -> mt::principal::StageInfo {
                 bucket: "bucket".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -377,7 +377,7 @@ pub(crate) fn test_cos_stage_info() -> mt::principal::StageInfo {
                 bucket: "bucket".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -820,7 +820,7 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::principal::StageInfo {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -851,7 +851,7 @@ pub(crate) fn test_stage_info_v18() -> mt::principal::StageInfo {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        is_from_uri: false,
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,

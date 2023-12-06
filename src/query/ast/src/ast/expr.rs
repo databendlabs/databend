@@ -493,6 +493,10 @@ pub enum JsonOperator {
     AtArrow,
     /// <@ Checks whether right json contains the left json
     ArrowAt,
+    /// @? Checks whether JSON path return any item for the specified JSON value
+    AtQuestion,
+    /// @@ Returns the result of a JSON path predicate check for the specified JSON value.
+    AtAt,
 }
 
 impl JsonOperator {
@@ -507,6 +511,8 @@ impl JsonOperator {
             JsonOperator::QuestionAnd => "json_exists_all_keys".to_string(),
             JsonOperator::AtArrow => "json_contains_in_left".to_string(),
             JsonOperator::ArrowAt => "json_contains_in_right".to_string(),
+            JsonOperator::AtQuestion => "json_path_exists".to_string(),
+            JsonOperator::AtAt => "json_path_match".to_string(),
         }
     }
 }
@@ -776,6 +782,12 @@ impl Display for JsonOperator {
             }
             JsonOperator::ArrowAt => {
                 write!(f, "<@")
+            }
+            JsonOperator::AtQuestion => {
+                write!(f, "@?")
+            }
+            JsonOperator::AtAt => {
+                write!(f, "@@")
             }
         }
     }

@@ -186,14 +186,13 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
-        let fuse_table =
-            tbl.as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support DELETE FROM",
-                    tbl.name(),
-                    tbl.get_table_info().engine(),
-                )))?;
+        let fuse_table = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support DELETE FROM",
+                tbl.name(),
+                tbl.get_table_info().engine(),
+            ))
+        })?;
 
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
@@ -272,6 +271,7 @@ impl DeleteInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             });
         }

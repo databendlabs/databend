@@ -275,10 +275,8 @@ fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDa
     if std::intrinsics::unlikely(month == 2 && day == 29) {
         new_day = last_day_of_year_month(new_year, month);
     }
-    NaiveDate::from_ymd_opt(new_year, month, new_day).ok_or(format!(
-        "Overflow on date YMD {}-{}-{}.",
-        new_year, month, new_day
-    ))
+    NaiveDate::from_ymd_opt(new_year, month, new_day)
+        .ok_or_else(|| format!("Overflow on date YMD {}-{}-{}.", new_year, month, new_day))
 }
 
 fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
@@ -296,12 +294,14 @@ fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveD
         last_day_of_year_month(new_year, (new_month0 + 1) as u32),
     );
 
-    NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or(format!(
-        "Overflow on date YMD {}-{}-{}.",
-        new_year,
-        new_month0 + 1,
-        new_day
-    ))
+    NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or_else(|| {
+        format!(
+            "Overflow on date YMD {}-{}-{}.",
+            new_year,
+            new_month0 + 1,
+            new_day
+        )
+    })
 }
 
 // Get the last day of the year month, could be 28(non leap Feb), 29(leap year Feb), 30 or 31
