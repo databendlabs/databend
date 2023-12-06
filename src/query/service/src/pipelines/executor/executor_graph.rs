@@ -339,10 +339,12 @@ impl ExecutingGraph {
         neighbors: Neighbors<EdgeInfo>,
     ) -> Result<()> {
         if neighbors.clone().next().is_none() {
+            let processor = &locker.graph[current_node].processor;
+            if processor.name() == "ExchangeSourceReader" {
+                return Ok(());
+            }
             // Source node
-            locker.graph[current_node]
-                .processor
-                .add_runtime_filters(rt_filters)?;
+            processor.add_runtime_filters(rt_filters)?;
             return Ok(());
         }
         for neighbor in neighbors {
