@@ -21,6 +21,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 #[async_trait::async_trait]
 pub trait AsyncTransform: Send {
@@ -65,6 +66,8 @@ impl<T: AsyncTransform + 'static> AsyncTransformer<T> {
         })
     }
 }
+
+impl<T: AsyncTransform + 'static> RuntimeFilter for AsyncTransformer<T> {}
 
 #[async_trait::async_trait]
 impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {

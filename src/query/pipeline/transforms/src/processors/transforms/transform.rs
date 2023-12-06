@@ -25,6 +25,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
@@ -70,6 +71,8 @@ impl<T: Transform + 'static> Transformer<T> {
         })
     }
 }
+
+impl<T: Transform + 'static> RuntimeFilter for Transformer<T> {}
 
 #[async_trait::async_trait]
 impl<T: Transform + 'static> Processor for Transformer<T> {
@@ -209,6 +212,8 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> BlockMetaTransformer<B, T> {
         })
     }
 }
+
+impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> RuntimeFilter for BlockMetaTransformer<B, T> {}
 
 #[async_trait::async_trait]
 impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransformer<B, T> {

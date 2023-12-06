@@ -24,6 +24,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use log::trace;
 
 use crate::input_formats::input_pipeline::BlockBuilderTrait;
@@ -78,6 +79,8 @@ impl<I: InputFormatPipe> DeserializeTransformer<I> {
         })))
     }
 }
+
+impl<I: InputFormatPipe> RuntimeFilter for DeserializeTransformer<I> {}
 
 #[async_trait::async_trait]
 impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {

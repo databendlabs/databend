@@ -26,6 +26,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
+use common_pipeline_core::RuntimeFilter;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
@@ -78,6 +79,8 @@ impl MergeIntoSplitProcessor {
         ])
     }
 }
+
+impl RuntimeFilter for MergeIntoSplitProcessor {}
 
 impl Processor for MergeIntoSplitProcessor {
     fn name(&self) -> String {

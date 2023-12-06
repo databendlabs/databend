@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_pipeline_core::RuntimeFilter;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
 use log::info;
@@ -260,6 +261,13 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 }
+impl RuntimeFilter for TransformHashJoinProbe {
+    fn get_runtime_filters(&mut self) -> Result<HashMap<String, Expr<String>>> {
+        let mut runtime_filters = HashMap::new();
+        runtime_filters.extend(self.runtime_filters.drain());
+        Ok(runtime_filters)
+    }
+}
 
 #[async_trait::async_trait]
 impl Processor for TransformHashJoinProbe {
@@ -269,12 +277,6 @@ impl Processor for TransformHashJoinProbe {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
-    }
-
-    fn get_runtime_filters(&mut self) -> Result<HashMap<String, Expr<String>>> {
-        let mut runtime_filters = HashMap::new();
-        runtime_filters.extend(self.runtime_filters.drain());
-        Ok(runtime_filters)
     }
 
     fn event(&mut self) -> Result<Event> {

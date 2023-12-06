@@ -29,6 +29,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
@@ -193,16 +194,7 @@ impl SyncSource for ReadParquetDataSource<true> {
     }
 }
 
-#[async_trait::async_trait]
-impl Processor for ReadParquetDataSource<false> {
-    fn name(&self) -> String {
-        String::from("AsyncReadParquetDataSource")
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
+impl RuntimeFilter for ReadParquetDataSource<false> {
     fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
         for (column_id, filter) in filters.iter() {
             if self.runtime_filters.get(column_id).is_none()
@@ -217,6 +209,17 @@ impl Processor for ReadParquetDataSource<false> {
 
     fn can_add_runtime_filter(&self) -> bool {
         true
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for ReadParquetDataSource<false> {
+    fn name(&self) -> String {
+        String::from("AsyncReadParquetDataSource")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn event(&mut self) -> Result<Event> {

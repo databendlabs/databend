@@ -21,6 +21,7 @@ mod lock_guard;
 mod pipe;
 mod pipeline;
 mod pipeline_display;
+mod runtime_filter;
 mod unsafe_cell_wrap;
 
 pub use input_error::InputError;
@@ -35,3 +36,4 @@ pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
 pub use processors::PlanScope;
 pub use processors::PlanScopeGuard;
+pub use runtime_filter::RuntimeFilter;

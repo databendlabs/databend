@@ -21,6 +21,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 
 pub struct OneBlockSource {
     output: Arc<OutputPort>,
@@ -35,6 +36,8 @@ impl OneBlockSource {
         })))
     }
 }
+
+impl RuntimeFilter for OneBlockSource {}
 
 #[async_trait::async_trait]
 impl Processor for OneBlockSource {

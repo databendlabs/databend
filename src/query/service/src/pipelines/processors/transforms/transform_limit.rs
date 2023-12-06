@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::RuntimeFilter;
 
 use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
@@ -114,6 +115,8 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
         }
     }
 }
+
+impl<const MODE: usize> RuntimeFilter for TransformLimitImpl<MODE> {}
 
 #[async_trait::async_trait]
 impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {

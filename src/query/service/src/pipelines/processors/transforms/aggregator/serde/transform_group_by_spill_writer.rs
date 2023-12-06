@@ -30,6 +30,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
@@ -77,6 +78,8 @@ impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
         })
     }
 }
+
+impl<Method: HashMethodBounds> RuntimeFilter for TransformGroupBySpillWriter<Method> {}
 
 #[async_trait::async_trait]
 impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method> {

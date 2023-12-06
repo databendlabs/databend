@@ -37,6 +37,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use log::debug;
 use opendal::Operator;
 
@@ -261,6 +262,8 @@ impl HiveTableSource {
         Ok(())
     }
 }
+
+impl RuntimeFilter for HiveTableSource {}
 
 #[async_trait::async_trait]
 impl Processor for HiveTableSource {

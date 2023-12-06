@@ -42,6 +42,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
 use opendal::services::Memory;
@@ -348,6 +349,8 @@ impl Parquet2DeserializeTransform {
         Ok(Some(data_block))
     }
 }
+
+impl RuntimeFilter for Parquet2DeserializeTransform {}
 
 impl Processor for Parquet2DeserializeTransform {
     fn name(&self) -> String {

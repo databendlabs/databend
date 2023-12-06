@@ -21,6 +21,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_core::RuntimeFilter;
 use common_profile::ProcessorProfile;
 use common_profile::SharedProcessorProfiles;
 
@@ -55,6 +56,8 @@ where T: Processor + 'static
         })
     }
 }
+
+impl<T> RuntimeFilter for ProcessorProfileWrapper<T> where T: 'static + Processor {}
 
 #[async_trait::async_trait]
 impl<T> Processor for ProcessorProfileWrapper<T>

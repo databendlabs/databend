@@ -21,6 +21,7 @@ use crate::processors::Event;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
 use crate::processors::Processor;
+use crate::RuntimeFilter;
 
 pub struct ShuffleProcessor {
     channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>,
@@ -48,6 +49,8 @@ impl ShuffleProcessor {
         ShuffleProcessor { channel }
     }
 }
+
+impl RuntimeFilter for ShuffleProcessor {}
 
 #[async_trait::async_trait]
 impl Processor for ShuffleProcessor {

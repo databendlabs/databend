@@ -35,6 +35,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::DataSource;
@@ -113,6 +114,8 @@ impl DeserializeDataTransform {
         })))
     }
 }
+
+impl RuntimeFilter for DeserializeDataTransform {}
 
 #[async_trait::async_trait]
 impl Processor for DeserializeDataTransform {

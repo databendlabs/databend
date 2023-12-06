@@ -39,6 +39,7 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
+use common_pipeline_core::RuntimeFilter;
 use common_sql::evaluator::BlockOperator;
 
 use super::mutation_meta::SerializeBlock;
@@ -122,6 +123,8 @@ impl MutationSource {
         })))
     }
 }
+
+impl RuntimeFilter for MutationSource {}
 
 #[async_trait::async_trait]
 impl Processor for MutationSource {

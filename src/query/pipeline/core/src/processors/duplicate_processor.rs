@@ -21,6 +21,7 @@ use crate::processors::Event;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
 use crate::processors::Processor;
+use crate::RuntimeFilter;
 
 pub struct DuplicateProcessor {
     input: Arc<InputPort>,
@@ -47,6 +48,8 @@ impl DuplicateProcessor {
         }
     }
 }
+
+impl RuntimeFilter for DuplicateProcessor {}
 
 #[async_trait::async_trait]
 impl Processor for DuplicateProcessor {
