@@ -691,7 +691,9 @@ impl HashJoinBuildState {
 
             let data_blocks = &mut build_state.generation_state.chunks;
 
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::Inner {
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Inner
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
+            {
                 // Collect all build keys values and make runtime filter
                 self.hash_join_state.generate_runtime_filters()?;
             }
