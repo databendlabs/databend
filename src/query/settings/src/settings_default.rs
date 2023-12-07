@@ -300,15 +300,27 @@ impl DefaultSettings {
                     possible_values: None,
                     mode: SettingMode::Both,
                 }),
-                ("spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                ("aggregate_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                     mode: SettingMode::Both,
                 }),
-                ("spilling_memory_ratio", DefaultSettingValue {
+                ("aggregate_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
+                    possible_values: None,
+                    mode: SettingMode::Both,
+                }),
+                ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
+                    possible_values: None,
+                    mode: SettingMode::Both,
+                }),
+                ("sort_spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     possible_values: None,
                     mode: SettingMode::Both,
                 }),
