@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
+use std::sync::LazyLock;
 
 use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
@@ -57,7 +58,6 @@ use common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
-use once_cell::sync::Lazy;
 
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
@@ -472,7 +472,8 @@ pub trait FastValuesDecodeFallback {
 // Pre-generate the positions of `(`, `'` and `\`
 static PATTERNS: &[&str] = &["(", "'", "\\"];
 
-static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
+static INSERT_TOKEN_FINDER: LazyLock<AhoCorasick> =
+    LazyLock::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 impl<'a> FastValuesDecoder<'a> {
     pub fn new(data: &'a str, field_decoder: &'a FastFieldDecoderValues) -> Self {

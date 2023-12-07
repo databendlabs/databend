@@ -25,7 +25,6 @@ storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-once_cell = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }

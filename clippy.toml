@@ -6,6 +6,10 @@ disallowed-methods = [
     { path = "num_traits::sign::Signed::signum", reason = "This returns 1.0 for 0.0 but 0 for 0." }
 ]
 
+disallowed-types = [
+    { path = "once_cell::sync::Lazy", reason = "Please use `std::sync::LazyLock` instead." },
+]
+
 disallowed-macros = [
     { path = "lazy_static::lazy_static", reason = "Please use `std::sync::LazyLock` instead." },
 ]

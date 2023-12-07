@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -46,7 +47,6 @@ use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_users::UserApiProvider;
 use log::error;
-use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -417,7 +417,7 @@ impl CreateTableInterpreter {
 }
 
 /// Table option keys that can occur in 'create table statement'.
-pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
     r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
