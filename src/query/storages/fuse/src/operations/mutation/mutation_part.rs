@@ -59,9 +59,7 @@ impl Mutation {
     pub fn from_part(info: &PartInfoPtr) -> Result<&Mutation> {
         info.as_any()
             .downcast_ref::<Mutation>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to Mutation.",
-            ))
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to Mutation."))
     }
 }
 

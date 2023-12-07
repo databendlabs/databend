@@ -62,9 +62,8 @@ impl InferSchemaArgsParsed {
             }
         }
 
-        let location = location.ok_or(ErrorCode::BadArguments(
-            "infer_schema must specify location",
-        ))?;
+        let location = location
+            .ok_or_else(|| ErrorCode::BadArguments("infer_schema must specify location"))?;
 
         Ok(Self {
             location,

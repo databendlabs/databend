@@ -109,9 +109,9 @@ impl BlockMetaInfo for InternalColumnMeta {
 
 impl InternalColumnMeta {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&InternalColumnMeta> {
-        InternalColumnMeta::downcast_ref_from(info).ok_or(ErrorCode::Internal(
-            "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
-        ))
+        InternalColumnMeta::downcast_ref_from(info).ok_or_else(|| {
+            ErrorCode::Internal("Cannot downcast from BlockMetaInfo to InternalColumnMeta.")
+        })
     }
 }
 

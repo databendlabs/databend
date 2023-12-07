@@ -449,14 +449,9 @@ impl HiveTable {
         ctx: Arc<dyn TableContext>,
         push_downs: &Option<PushDownInfo>,
     ) -> Result<Vec<(String, Option<String>)>> {
-        let path = self
-            .table_options
-            .location
-            .as_ref()
-            .ok_or(ErrorCode::TableInfoError(format!(
-                "{}, table location is empty",
-                self.table_info.name
-            )))?;
+        let path = self.table_options.location.as_ref().ok_or_else(|| {
+            ErrorCode::TableInfoError(format!("{}, table location is empty", self.table_info.name))
+        })?;
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {

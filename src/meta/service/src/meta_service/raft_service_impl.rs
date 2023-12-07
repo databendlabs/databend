@@ -96,9 +96,9 @@ impl RaftServiceImpl {
 
         let _g = snapshot_recv_inflight(&addr).counter_guard();
 
-        let chunk = snapshot_req.chunk.ok_or(GrpcHelper::invalid_arg(
-            "SnapshotChunkRequest.chunk is None",
-        ))?;
+        let chunk = snapshot_req
+            .chunk
+            .ok_or_else(|| GrpcHelper::invalid_arg("SnapshotChunkRequest.chunk is None"))?;
 
         let (vote, snapshot_meta): (Vote, SnapshotMeta) =
             GrpcHelper::parse(&snapshot_req.rpc_meta)?;

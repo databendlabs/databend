@@ -175,7 +175,7 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = p.schema.ok_or(Incompatible {
+        let schema = p.schema.ok_or_else(|| Incompatible {
             reason: "TableMeta.schema can not be None".to_string(),
         })?;
 

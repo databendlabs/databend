@@ -17,6 +17,7 @@ mod simple;
 
 use std::sync::Arc;
 
+pub use common::*;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::Column;

@@ -190,14 +190,13 @@ impl Interpreter for UpdateInterpreter {
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
-        let fuse_table =
-            tbl.as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support UPDATE",
-                    tbl.name(),
-                    tbl.get_table_info().engine(),
-                )))?;
+        let fuse_table = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support UPDATE",
+                tbl.name(),
+                tbl.get_table_info().engine(),
+            ))
+        })?;
 
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();

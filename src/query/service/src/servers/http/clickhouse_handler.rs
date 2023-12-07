@@ -233,7 +233,7 @@ pub async fn clickhouse_handler_get(
     let root = Span::root(full_name!(), SpanContext::random());
 
     async {
-        let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+        let session = ctx.upgrade_session(SessionType::ClickHouseHttpHandler)?;
         if let Some(db) = &params.database {
             session.set_current_database(db.clone());
         }
@@ -287,7 +287,7 @@ pub async fn clickhouse_handler_post(
             sanitize_request_headers(headers),
             params,
         );
-        let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+        let session = ctx.upgrade_session(SessionType::ClickHouseHttpHandler)?;
         if let Some(db) = &params.database {
             session.set_current_database(db.clone());
         }
