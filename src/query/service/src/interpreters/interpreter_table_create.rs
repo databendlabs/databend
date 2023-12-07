@@ -19,9 +19,9 @@ use std::sync::Arc;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::is_internal_column;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::INTERNAL_COLUMN_KEYS;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
@@ -448,7 +448,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
 }
 
 pub fn is_valid_column(name: &str) -> Result<()> {
-    if INTERNAL_COLUMN_KEYS.contains(name) {
+    if is_internal_column(name) {
         return Err(ErrorCode::TableWithInternalColumnName(format!(
             "Cannot create table has column with the same name as internal column: {}",
             name

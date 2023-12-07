@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::is_internal_column;
+use common_expression::is_stream_column;
 use common_expression::types::decimal::Decimal128Type;
 use common_expression::types::decimal::Decimal256Type;
 use common_expression::types::decimal::DecimalDataType;
@@ -35,7 +37,6 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
-use common_expression::INTERNAL_COLUMN_KEYS;
 use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -83,7 +84,7 @@ impl RangeIndex {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
-                if INTERNAL_COLUMN_KEYS.contains(name.as_str()) {
+                if is_internal_column(&name) || is_stream_column(&name) {
                     return Ok((name, Domain::full(&ty)));
                 }
 
