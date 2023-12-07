@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parquet_reader;
-mod parquet_table;
-mod partition;
-mod pruning;
-mod source;
-mod statistics;
+use std::sync::Arc;
 
-pub use parquet_reader::InMemoryRowGroup;
-pub use parquet_reader::ParquetRSFullReader;
-pub use parquet_reader::ParquetRSReaderBuilder;
-pub use parquet_reader::ParquetRSRowGroupReader;
-pub use parquet_table::ParquetRSTable;
-pub use partition::ParquetRSRowGroupPart;
-pub use pruning::ParquetRSPruner;
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
+
+#[derive(Clone, Copy)]
+pub struct ReadSettings {
+    pub max_gap_size: u64,
+    pub max_range_size: u64,
+}
+
+impl ReadSettings {
+    pub fn from_ctx(ctx: &Arc<dyn TableContext>) -> Result<ReadSettings> {
+        Ok(ReadSettings {
+            max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+            max_range_size: ctx
+                .get_settings()
+                .get_storage_io_max_page_bytes_for_read()?,
+        })
+    }
+}

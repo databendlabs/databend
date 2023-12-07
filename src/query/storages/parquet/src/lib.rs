@@ -23,14 +23,17 @@
 mod parquet2;
 mod parquet_part;
 mod parquet_rs;
+mod read_settings;
 mod utils;
 
 pub use parquet2::Parquet2Table;
 pub use parquet_part::ParquetFilesPart;
 pub use parquet_part::ParquetPart;
+pub use parquet_rs::InMemoryRowGroup;
 pub use parquet_rs::ParquetRSFullReader;
 pub use parquet_rs::ParquetRSPruner;
 pub use parquet_rs::ParquetRSReaderBuilder;
 pub use parquet_rs::ParquetRSRowGroupPart;
 pub use parquet_rs::ParquetRSRowGroupReader;
 pub use parquet_rs::ParquetRSTable;
+pub use read_settings::ReadSettings;
