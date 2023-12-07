@@ -51,30 +51,28 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
 
-#[derive(Default, Clone, PartialEq, Eq, Debug)]
-pub struct UdfInfo {
+pub(crate) struct UdfRewriter {
+    metadata: MetadataRef,
     /// Arguments of udf functions
-    pub udf_arguments: Vec<ScalarItem>,
+    udf_arguments: Vec<ScalarItem>,
     /// Udf functions
-    pub udf_functions: Vec<ScalarItem>,
+    udf_functions: Vec<ScalarItem>,
     /// Mapping: (udf function display name) -> (derived column ref)
     /// This is used to replace udf with a derived column.
-    pub udf_functions_map: HashMap<String, BoundColumnRef>,
+    udf_functions_map: HashMap<String, BoundColumnRef>,
     /// Mapping: (udf function display name) -> (derived index)
     /// This is used to reuse already generated derived columns
-    pub udf_functions_index_map: HashMap<String, IndexType>,
-}
-
-pub(crate) struct UdfRewriter {
-    udf_info: UdfInfo,
-    metadata: MetadataRef,
+    udf_functions_index_map: HashMap<String, IndexType>,
 }
 
 impl UdfRewriter {
     pub(crate) fn new(metadata: MetadataRef) -> Self {
         Self {
-            udf_info: Default::default(),
             metadata,
+            udf_arguments: Default::default(),
+            udf_functions: Default::default(),
+            udf_functions_map: Default::default(),
+            udf_functions_index_map: Default::default(),
         }
     }
 
@@ -94,8 +92,7 @@ impl UdfRewriter {
                 for item in &plan.items {
                     // The index of Udf item can be reused.
                     if let ScalarExpr::UDFServerCall(udf) = &item.scalar {
-                        self.udf_info
-                            .udf_functions_index_map
+                        self.udf_functions_index_map
                             .insert(udf.display_name.clone(), item.index);
                     }
                 }
@@ -119,11 +116,10 @@ impl UdfRewriter {
     }
 
     fn create_udf_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
-        let udf_info = &mut self.udf_info;
-        if !udf_info.udf_functions.is_empty() {
-            if !udf_info.udf_arguments.is_empty() {
+        if !self.udf_functions.is_empty() {
+            if !self.udf_arguments.is_empty() {
                 // Add an EvalScalar for the arguments of Udf.
-                let mut scalar_items = mem::take(&mut udf_info.udf_arguments);
+                let mut scalar_items = mem::take(&mut self.udf_arguments);
                 scalar_items.sort_by_key(|item| item.index);
                 let eval_scalar = EvalScalar {
                     items: scalar_items,
@@ -135,7 +131,7 @@ impl UdfRewriter {
             }
 
             let udf_plan = Udf {
-                items: mem::take(&mut udf_info.udf_functions),
+                items: mem::take(&mut self.udf_functions),
             };
             Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr))
         } else {
@@ -149,7 +145,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         walk_expr_mut(self, expr)?;
         // replace udf with derived column
         if let ScalarExpr::UDFServerCall(udf) = expr {
-            if let Some(column_ref) = self.udf_info.udf_functions_map.get(&udf.display_name) {
+            if let Some(column_ref) = self.udf_functions_map.get(&udf.display_name) {
                 *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
             } else {
                 return Err(ErrorCode::Internal("Rewrite udf function failed"));
@@ -191,14 +187,14 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
                 }
             };
 
-            self.udf_info.udf_arguments.push(ScalarItem {
+            self.udf_arguments.push(ScalarItem {
                 index: new_column_ref.column.index,
                 scalar: arg.clone(),
             });
             *arg = new_column_ref.into();
         }
 
-        let index = match self.udf_info.udf_functions_index_map.get(&udf.display_name) {
+        let index = match self.udf_functions_index_map.get(&udf.display_name) {
             Some(index) => *index,
             None => self
                 .metadata
@@ -220,10 +216,9 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
             column,
         };
 
-        self.udf_info
-            .udf_functions_map
+        self.udf_functions_map
             .insert(udf.display_name.clone(), replaced_column);
-        self.udf_info.udf_functions.push(ScalarItem {
+        self.udf_functions.push(ScalarItem {
             index,
             scalar: udf.clone().into(),
         });

@@ -84,7 +84,7 @@ impl VirtualColumnRewriter {
             }
             RelOperator::EvalScalar(mut eval_scalar) => {
                 for item in &mut eval_scalar.items {
-                    if let Some(()) = self.try_replace_virtual_column(&mut item.scalar, Some(item.index)) {
+                    if self.try_replace_virtual_column(&mut item.scalar, Some(item.index)).is_some() {
                         continue;
                     }
                     self.visit(&mut item.scalar)?;
@@ -99,7 +99,7 @@ impl VirtualColumnRewriter {
             }
             RelOperator::ProjectSet(mut project_set) => {
                 for item in &mut project_set.srfs {
-                    if let Some(()) = self.try_replace_virtual_column(&mut item.scalar, Some(item.index)) {
+                    if self.try_replace_virtual_column(&mut item.scalar, Some(item.index)).is_some() {
                         continue;
                     }
                     self.visit(&mut item.scalar)?;
@@ -150,17 +150,18 @@ impl VirtualColumnRewriter {
                                     let mut name = String::new();
                                     name.push_str(&base_column.column_name);
                                     for path in key_paths.paths {
+                                        name.push('[');
                                         match path {
                                             KeyPath::Index(idx) => {
-                                                name.push('[');
                                                 name.push_str(&idx.to_string());
-                                                name.push(']');
                                             }
                                             KeyPath::QuotedName(field) | KeyPath::Name(field) => {
-                                                name.push(':');
+                                                name.push('"');
                                                 name.push_str(field.as_ref());
+                                                name.push('"');
                                             }
                                         }
+                                        name.push(']');
                                     }
                                     name
                                 }
