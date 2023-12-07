@@ -18,6 +18,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
@@ -39,6 +40,7 @@ use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
+use crate::sessions::QueryContext;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,
@@ -394,7 +396,11 @@ impl ExchangeShuffleTransform {
 }
 
 // Scatter the data block and push it to the corresponding output port
-pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
+pub fn exchange_shuffle(
+    ctx: &Arc<QueryContext>,
+    params: &ShuffleExchangeParams,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
     // append scatter transform
     pipeline.add_transform(|input, output| {
         Ok(ScatterTransform::create(
@@ -405,7 +411,10 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
     })?;
 
     let exchange_injector = &params.exchange_injector;
-    exchange_injector.apply_shuffle_serializer(params, pipeline)?;
+
+    let settings = ctx.get_settings();
+    let compression = settings.get_query_flight_compression()?;
+    exchange_injector.apply_shuffle_serializer(params, compression, pipeline)?;
 
     let output_len = pipeline.output_len();
     if let Some(exchange_sorting) = &exchange_injector.exchange_sorting() {

@@ -97,7 +97,7 @@ pub async fn streaming_load(
         "new streaming load request:, headers={:?}",
         sanitize_request_headers(req.headers()),
     );
-    let session = ctx.get_session(SessionType::HTTPStreamingLoad);
+    let session = ctx.upgrade_session(SessionType::HTTPStreamingLoad)?;
     let context = session
         .create_query_context()
         .await

@@ -12,26 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(coroutines)]
-#![feature(lazy_cell)]
-#![allow(clippy::uninlined_format_args)]
+use std::sync::Arc;
 
-pub mod api;
-pub mod configs;
-pub mod export;
-pub(crate) mod grpc_helper;
-pub mod message;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
-pub mod watcher;
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
 
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
+#[derive(Clone, Copy)]
+pub struct ReadSettings {
+    pub max_gap_size: u64,
+    pub max_range_size: u64,
+}
+
+impl ReadSettings {
+    pub fn from_ctx(ctx: &Arc<dyn TableContext>) -> Result<ReadSettings> {
+        Ok(ReadSettings {
+            max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+            max_range_size: ctx
+                .get_settings()
+                .get_storage_io_max_page_bytes_for_read()?,
+        })
+    }
 }

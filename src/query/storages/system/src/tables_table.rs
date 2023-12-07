@@ -35,7 +35,6 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -137,7 +136,7 @@ where TablesTable<T>: HistoryAware
                         if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
                             dbs.push(database);
                         }
-                        // TODO(liyz): return the warnings if get_database() failed.
+                        ctx.push_warning(format!("get database failed: {}", db))
                     }
                 }
             }
@@ -164,7 +163,11 @@ where TablesTable<T>: HistoryAware
                         // - iceberg database
                         // - others
                         // TODO(liyz): return the warnings in the HTTP query protocol.
-                        warn!("list tables failed on db: {}: {}", db.name(), err);
+                        ctx.push_warning(format!(
+                            "list tables failed on db {}: {}",
+                            db.name(),
+                            err
+                        ));
                         continue;
                     }
                 };
