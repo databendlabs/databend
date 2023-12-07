@@ -25,7 +25,7 @@ def update_results(dataset, title, url):
         with open(result_file, "r") as f:
             result = json.load(f)
             if dataset == "tpch":
-                result["result"].append([0.0, 0.0, 0.0])
+                result["result"].insert(0, [0.0, 0.0, 0.0])
             results.append(result)
 
     logger.info("loading report template %s ...", TEMPLATE_FILE)
