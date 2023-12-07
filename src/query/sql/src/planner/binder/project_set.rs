@@ -20,6 +20,7 @@ use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
 use common_ast::ast::Window;
 use common_ast::Visitor;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::FunctionKind;
@@ -145,6 +146,7 @@ impl Binder {
             };
 
             let srf_expr = srf_scalar.as_expr()?;
+            let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             // Add result column to metadata
             let column_index = self
@@ -155,7 +157,7 @@ impl Binder {
                 name.clone(),
                 column_index,
                 Box::new(srf_expr.data_type().clone()),
-                Visibility::Visible,
+                Visibility::InVisible,
             )
             .build();
 
@@ -165,10 +167,22 @@ impl Binder {
             };
             items.push(item);
 
-            let result_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: srf.span(),
-                column,
-            });
+            let result_column = if name == "flatten" || name == "json_each" {
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: srf.span(),
+                    column,
+                })
+            } else {
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: srf.span(),
+                    func_name: "get".to_string(),
+                    params: vec![1],
+                    arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: srf.span(),
+                        column,
+                    })],
+                })
+            };
 
             // Add the srf to bind context, so we can replace the srfs later.
             bind_context.srfs.insert(srf.to_string(), result_column);

@@ -156,8 +156,9 @@ impl BlockingTransform for TransformSRF {
                         for (i, (row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
                         {
-                            if let Value::Column(column) = row_result {
-                                match column {
+                            if let Value::Column(Column::Tuple(fields)) = row_result {
+                                debug_assert!(fields.len() == 1);
+                                match &fields[0] {
                                     Column::Nullable(box nullable_column) => {
                                         match &nullable_column.column {
                                             Column::Variant(string_column) => {
@@ -171,20 +172,20 @@ impl BlockingTransform for TransformSRF {
                                                 }
                                             }
                                             _ => unreachable!(
-                                                "json_path_query's return type is: `DataType::Nullable(Box::new(DataType::Variant))`"
+                                                "json_path_query's return type is: `DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])`"
                                             ),
                                         }
                                     }
                                     _ => unreachable!(
-                                        "json_path_query's return type is: `DataType::Nullable(Box::new(DataType::Variant))`"
+                                        "json_path_query's return type is: `DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])`"
                                     ),
                                 };
                             }
                         }
                         let column = builder.build().upcast();
                         let block_entry = BlockEntry::new(
-                            DataType::Nullable(Box::new(DataType::Variant)),
-                            Value::Column(Column::Nullable(Box::new(column))),
+                            DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
+                            Value::Column(Column::Tuple(vec![Column::Nullable(Box::new(column))])),
                         );
                         if block_is_empty {
                             result = DataBlock::new(vec![block_entry], result_size);
@@ -198,38 +199,43 @@ impl BlockingTransform for TransformSRF {
                         for (i, (mut row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
                         {
-                            if let Value::Column(column) = &mut row_result {
+                            if let Value::Column(Column::Tuple(fields)) = &mut row_result {
                                 // If the current result set has less rows than the max number of rows,
                                 // we need to pad the result set with null values.
                                 // TODO(leiysky): this can be optimized by using a `zip` array function
                                 if repeat_times < self.num_rows[i] {
-                                    match column {
-                                        Column::Null { .. } => {
-                                            *column = ColumnBuilder::repeat(
-                                                &ScalarRef::Null,
-                                                self.num_rows[i],
-                                                &DataType::Null,
-                                            )
-                                            .build();
-                                        }
-                                        Column::Nullable(box nullable_column) => {
-                                            let mut column_builder =
-                                                NullableColumnBuilder::from_column(
-                                                    (*nullable_column).clone(),
+                                    for field in fields {
+                                        match field {
+                                            Column::Null { .. } => {
+                                                *field = ColumnBuilder::repeat(
+                                                    &ScalarRef::Null,
+                                                    self.num_rows[i],
+                                                    &DataType::Null,
+                                                )
+                                                .build();
+                                            }
+                                            Column::Nullable(box nullable_column) => {
+                                                let mut column_builder =
+                                                    NullableColumnBuilder::from_column(
+                                                        (*nullable_column).clone(),
+                                                    );
+                                                (0..(self.num_rows[i] - repeat_times)).for_each(
+                                                    |_| {
+                                                        column_builder.push_null();
+                                                    },
                                                 );
-                                            (0..(self.num_rows[i] - repeat_times)).for_each(|_| {
-                                                column_builder.push_null();
-                                            });
-                                            *column =
-                                                Column::Nullable(Box::new(column_builder.build()));
+                                                *field = Column::Nullable(Box::new(
+                                                    column_builder.build(),
+                                                ));
+                                            }
+                                            _ => unreachable!(),
                                         }
-                                        _ => unreachable!(),
                                     }
                                 }
                             } else {
                                 row_result = Value::Column(
                                     ColumnBuilder::repeat(
-                                        &ScalarRef::Null,
+                                        &ScalarRef::Tuple(vec![ScalarRef::Null]),
                                         self.num_rows[i],
                                         srf_expr.data_type(),
                                     )

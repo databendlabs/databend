@@ -70,7 +70,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "json_path_query".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Variant)),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
             },
 
             eval: FunctionEval::SRF {
@@ -98,7 +98,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         Column::Variant(builder.build()).wrap_nullable(None);
                                     let array_len = array.len();
                                     *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
-                                    results.push((Value::Column(array), array_len));
+                                    results.push((
+                                        Value::Column(Column::Tuple(vec![array])),
+                                        array_len,
+                                    ));
                                 }
                             }
                             Err(_) => {
@@ -146,7 +149,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 let array = Column::Variant(builder.build()).wrap_nullable(None);
                                 let array_len = array.len();
                                 *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
-                                results.push((Value::Column(array), array_len));
+                                results
+                                    .push((Value::Column(Column::Tuple(vec![array])), array_len));
                             }
                         }
                     }
@@ -171,14 +175,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "json_array_elements".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Variant)),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| match arg.index(row).unwrap() {
-                            ScalarRef::Null => (Value::Scalar(Scalar::Null), 0),
+                            ScalarRef::Null => {
+                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
+                            }
                             ScalarRef::Variant(val) => {
                                 unnest_variant_array(val, row, max_nums_per_row)
                             }
@@ -205,17 +211,20 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "json_each".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Tuple(vec![
-                    DataType::String,
-                    DataType::Variant,
-                ]))),
+                return_type: DataType::Tuple(vec![
+                    DataType::Nullable(Box::new(DataType::String)),
+                    DataType::Nullable(Box::new(DataType::Variant)),
+                ]),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| match arg.index(row).unwrap() {
-                            ScalarRef::Null => (Value::Scalar(Scalar::Null), 0),
+                            ScalarRef::Null => (
+                                Value::Scalar(Scalar::Tuple(vec![Scalar::Null, Scalar::Null])),
+                                0,
+                            ),
                             ScalarRef::Variant(val) => {
                                 unnest_variant_obj(val, row, max_nums_per_row)
                             }
@@ -268,14 +277,14 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "flatten".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Tuple(vec![
-                    DataType::Number(NumberDataType::UInt64),
+                return_type: DataType::Tuple(vec![
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
                     DataType::Nullable(Box::new(DataType::String)),
                     DataType::Nullable(Box::new(DataType::String)),
                     DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
                     DataType::Nullable(Box::new(DataType::Variant)),
                     DataType::Nullable(Box::new(DataType::Variant)),
-                ]))),
+                ]),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(move |args, ctx, max_nums_per_row| {
@@ -398,7 +407,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                     {
                         match arg.index(row).unwrap() {
                             ScalarRef::Null => {
-                                results.push((Value::Scalar(Scalar::Null), 0));
+                                results.push((
+                                    Value::Scalar(Scalar::Tuple(vec![
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                    ])),
+                                    0,
+                                ));
                             }
                             ScalarRef::Variant(val) => {
                                 let columns = match json_path {
@@ -424,7 +443,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 *max_nums_per_row = std::cmp::max(*max_nums_per_row, len);
 
                                 let inner_col = Column::Tuple(columns).wrap_nullable(None);
-                                results.push((Value::Column(inner_col), len));
+                                results.push((Value::Column(Column::Tuple(vec![inner_col])), len));
                             }
                             _ => unreachable!(),
                         }
@@ -454,9 +473,9 @@ pub(crate) fn unnest_variant_array(
             }
 
             let col = Column::Variant(builder.build()).wrap_nullable(None);
-            (Value::Column(col), len)
+            (Value::Column(Column::Tuple(vec![col])), len)
         }
-        _ => (Value::Scalar(Scalar::Null), 0),
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
     }
 }
 
@@ -480,13 +499,15 @@ fn unnest_variant_obj(
                 val_builder.commit_row();
             }
 
-            let key_col = Column::String(key_builder.build());
-            let val_col = Column::Variant(val_builder.build());
-            let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
+            let key_col = Column::String(key_builder.build()).wrap_nullable(None);
+            let val_col = Column::Variant(val_builder.build()).wrap_nullable(None);
 
-            (Value::Column(tuple_col), len)
+            (Value::Column(Column::Tuple(vec![key_col, val_col])), len)
         }
-        _ => (Value::Scalar(Scalar::Null), 0),
+        _ => (
+            Value::Scalar(Scalar::Tuple(vec![Scalar::Null, Scalar::Null])),
+            0,
+        ),
     }
 }
 
@@ -734,7 +755,7 @@ impl FlattenGenerator {
         if self.outer && rows == 0 {
             // add an empty row.
             let columns = vec![
-                UInt64Type::from_data(vec![seq]),
+                UInt64Type::from_opt_data(vec![Some(seq)]),
                 StringType::from_opt_data(vec![None::<&str>]),
                 StringType::from_opt_data(vec![None::<&str>]),
                 UInt64Type::from_opt_data(vec![None]),
@@ -745,8 +766,7 @@ impl FlattenGenerator {
         }
 
         // Generate an empty dummy column for columns that are not needed.
-        let seq_column =
-            Column::Number(NumberColumnBuilder::repeat(NumberScalar::UInt64(seq), rows).build());
+        let seq_column = UInt64Type::upcast_column(vec![seq; rows].into()).wrap_nullable(None);
         let key_column = if let Some(key_builder) = key_builder {
             NullableType::<StringType>::upcast_column(key_builder.build())
         } else {

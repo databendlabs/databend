@@ -875,11 +875,13 @@ impl<'a> Evaluator<'a> {
             id,
             function,
             args,
+            return_type,
             generics,
             ..
         } = expr
         {
             if let FunctionEval::SRF { eval } = &function.eval {
+                assert!(return_type.as_tuple().is_some());
                 let args = args
                     .iter()
                     .map(|expr| self.run(expr))
