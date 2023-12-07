@@ -40,6 +40,8 @@ pub struct HashJoinDesc {
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
     pub(crate) probe_keys_rt: Vec<Expr<String>>,
+    // Under cluster, mark if the join is broadcast join.
+    pub broadcast: bool,
 }
 
 impl HashJoinDesc {
@@ -74,6 +76,7 @@ impl HashJoinDesc {
             },
             from_correlated_subquery: join.from_correlated_subquery,
             probe_keys_rt,
+            broadcast: join.broadcast,
         })
     }
 

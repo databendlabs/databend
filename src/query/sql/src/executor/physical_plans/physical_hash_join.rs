@@ -70,6 +70,8 @@ pub struct HashJoin {
 
     // probe keys for runtime filter
     pub probe_keys_rt: Vec<RemoteExpr<String>>,
+    // Under cluster, mark if the join is broadcast join.
+    pub broadcast: bool,
 }
 
 impl HashJoin {
@@ -444,6 +446,7 @@ impl PhysicalPlanBuilder {
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
+            broadcast: join.broadcast,
         }))
     }
 }
