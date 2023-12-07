@@ -320,8 +320,32 @@ impl PhysicalPlanBuilder {
                 probe_fields.extend(build_fields);
                 probe_fields
             }
-            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
-            JoinType::RightSemi | JoinType::RightAnti => build_fields,
+            JoinType::LeftSemi | JoinType::LeftAnti => {
+                for field in build_fields {
+                    match field.name().parse::<usize>() {
+                        Ok(index) if column_projections.contains(&index) => {
+                            return Err(ErrorCode::SemanticError(
+                                "Wrong usage of ANTI or SEMI join, please check your query.",
+                            ));
+                        }
+                        _ => (),
+                    }
+                }
+                probe_fields
+            }
+            JoinType::RightSemi | JoinType::RightAnti => {
+                for field in probe_fields {
+                    match field.name().parse::<usize>() {
+                        Ok(index) if column_projections.contains(&index) => {
+                            return Err(ErrorCode::SemanticError(
+                                "Wrong usage of ANTI or SEMI join, please check your query.",
+                            ));
+                        }
+                        _ => (),
+                    }
+                }
+                build_fields
+            }
             JoinType::LeftMark => {
                 let name = if let Some(idx) = join.marker_index {
                     idx.to_string()
@@ -352,23 +376,6 @@ impl PhysicalPlanBuilder {
         for column in column_projections.iter() {
             if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
-            } else {
-                match join.join_type {
-                    JoinType::LeftSemi
-                    | JoinType::LeftAnti
-                    | JoinType::RightSemi
-                    | JoinType::RightAnti => {
-                        return Err(ErrorCode::SemanticError(
-                            "Wrong usage of ANTI or SEMI join, please check your query.",
-                        ));
-                    }
-                    _ => {
-                        return Err(ErrorCode::UnknownColumn(format!(
-                            "Cannot find column {} in hash join schema {:?}",
-                            column, projected_schema
-                        )));
-                    }
-                }
             }
         }
 
