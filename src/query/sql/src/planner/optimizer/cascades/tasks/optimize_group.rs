@@ -126,8 +126,8 @@ impl OptimizeGroupTask {
     ) -> Result<OptimizeGroupEvent> {
         let group = optimizer.memo.group(self.group_index)?;
         if !group.state.explored() {
-            let task =
-                ExploreGroupTask::with_parent(self.ctx.clone(), group.group_index, &self.ref_count);
+            let task = ExploreGroupTask::new(self.ctx.clone(), group.group_index)
+                .with_parent(&self.ref_count);
             scheduler.add_task(Task::ExploreGroup(task));
             Ok(OptimizeGroupEvent::Exploring)
         } else {
