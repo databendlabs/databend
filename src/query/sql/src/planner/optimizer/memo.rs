@@ -149,4 +149,17 @@ impl Memo {
         self.groups.push(group);
         group_index
     }
+
+    /// Get an estimate of the memory size of the memo.
+    pub fn mem_size(&self) -> usize {
+        // Since all the `RelOperator` are interned,
+        // we only need to count the size of `m_expr_lookup_table`.
+        // We assume the `RelOperator`s are the major part of the memo.
+        self.m_expr_lookup_table.len() * std::mem::size_of::<RelOperator>()
+    }
+
+    /// Get the number of groups in the memo.
+    pub fn num_groups(&self) -> usize {
+        self.groups.len()
+    }
 }
