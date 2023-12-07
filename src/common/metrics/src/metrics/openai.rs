@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter;
 use crate::Counter;
 
-lazy_static! {
-    static ref OPENAI_COMPLETION_COUNT: Counter = register_counter("openai_completion_count");
-    static ref OPENAI_COMPLETION_TOKEN: Counter = register_counter("openai_completion_token");
-    static ref OPENAI_EMBEDDING_COUNT: Counter = register_counter("openai_embedding_count");
-    static ref OPENAI_EMBEDDING_TOKEN: Counter = register_counter("openai_embedding_token");
-}
+pub static OPENAI_COMPLETION_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("openai_completion_count"));
+pub static OPENAI_COMPLETION_TOKEN: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("openai_completion_token"));
+pub static OPENAI_EMBEDDING_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("openai_embedding_count"));
+pub static OPENAI_EMBEDDING_TOKEN: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("openai_embedding_token"));
 
 pub fn metrics_completion_count(c: u32) {
     OPENAI_COMPLETION_COUNT.inc_by(c as u64);
