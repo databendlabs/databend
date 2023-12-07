@@ -168,8 +168,8 @@ impl Binder {
             };
             items.push(item);
 
-            // If tuple has more than one fields, return the tuple column,
-            // Otherwise, extract the tuple field to top level column.
+            // If tuple has more than one field, return the tuple column,
+            // otherwise, extract the tuple field to top level column.
             let result_column = if return_types.len() > 1 {
                 ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: srf.span(),
