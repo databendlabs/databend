@@ -102,7 +102,7 @@ EvalScalar
     ├── estimated rows: 0.00
     ├── set returning functions: flatten(1, 5)(t.b (#1))
     └── TableScan
-        ├── table: default.default.t
+        ├── table: default.project_set.t
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
@@ -123,7 +123,7 @@ EvalScalar
     ├── estimated rows: 0.00
     ├── set returning functions: json_each(t.b (#1)), unnest(t.b (#1))
     └── TableScan
-        ├── table: default.default.t
+        ├── table: default.project_set.t
         ├── output columns: [b (#1)]
         ├── read rows: 0
         ├── read bytes: 0

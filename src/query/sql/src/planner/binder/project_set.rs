@@ -145,9 +145,7 @@ impl Binder {
             };
 
             let srf_expr = srf_scalar.as_expr()?;
-            let return_types = srf_expr.data_type().as_tuple();
-            debug_assert!(return_types.is_some());
-            let return_types = return_types.unwrap();
+            let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             // Add result column to metadata
             let column_index = self
