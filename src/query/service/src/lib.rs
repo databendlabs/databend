@@ -34,6 +34,7 @@
 #![feature(iterator_try_collect)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
+#![feature(lazy_cell)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 
