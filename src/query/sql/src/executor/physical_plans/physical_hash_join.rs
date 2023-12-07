@@ -321,7 +321,7 @@ impl PhysicalPlanBuilder {
                 probe_fields
             }
             JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti => {
-                let (result_fields, dropped_fields) = if join.join_type == JoinType::LeftSemi
+                let result_fields = if join.join_type == JoinType::LeftSemi
                     || join.join_type == JoinType::LeftAnti
                 {
                     probe_fields
