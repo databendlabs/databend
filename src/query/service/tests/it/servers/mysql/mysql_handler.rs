@@ -91,6 +91,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     {
         // Accepted connection
         let conn = create_connection(listening.port(), false).await?;
+        let conn2 = create_connection(listening.port(), false).await?;
 
         // Rejected connection
         match create_connection(listening.port(), false).await {
@@ -105,6 +106,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
         };
 
         drop(conn);
+        drop(conn2);
     }
 
     // Wait for the connection to be destroyed
@@ -184,8 +186,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         }
     }
 
-    assert_eq!(accept, 1);
-    assert_eq!(rejected, 2);
+    assert_eq!(accept, 2);
+    assert_eq!(rejected, 1);
 
     Ok(())
 }

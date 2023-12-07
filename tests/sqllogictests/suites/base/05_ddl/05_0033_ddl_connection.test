@@ -28,12 +28,12 @@ CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazon
 query TTT
 DESC CONNECTION test_conn
 ----
-test_conn azblob endpoint_url=http://s3.amazonaws.com
+test_conn azblob endpoint_url=******com
 
 query TTT
 SHOW CONNECTIONS
 ----
-test_conn azblob endpoint_url=http://s3.amazonaws.com
+test_conn azblob endpoint_url=******com
 
 statement ok
 DROP CONNECTION test_conn
