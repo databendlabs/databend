@@ -58,7 +58,7 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
     MatechedOnly,
     FullOperation,
@@ -297,8 +297,11 @@ impl Binder {
         self.metadata
             .write()
             .set_table_row_id_index(table_index, column_binding.index);
+
         // add row_id_idx
-        columns_set.insert(column_binding.index);
+        if merge_type != MergeIntoType::InsertOnly {
+            columns_set.insert(column_binding.index);
+        }
 
         // add join, we use _row_id to check_duplicate join row.
         let join = Join {

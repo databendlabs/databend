@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter_family;
 use crate::register_histogram_family_in_milliseconds;
@@ -40,39 +40,39 @@ const METRIC_QUERY_TOTAL_PARTITIONS: &str = "query_total_partitions";
 const METRIC_QUERY_RESULT_ROWS: &str = "query_result_rows";
 const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
 
-lazy_static! {
-    pub static ref QUERY_START: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_START);
-    pub static ref QUERY_ERROR: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_ERROR);
-    pub static ref QUERY_SUCCESS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SUCCESS);
-    pub static ref QUERY_FAILED: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_FAILED);
-    pub static ref QUERY_DURATION_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(METRIC_QUERY_DURATION_MS);
-    pub static ref QUERY_WRITE_ROWS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_WRITE_ROWS);
-    pub static ref QUERY_WRITE_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_WRITE_BYTES);
-    pub static ref QUERY_WRITE_IO_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_WRITE_IO_BYTES);
-    pub static ref QUERY_WRITE_IO_BYTES_COST_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(METRIC_QUERY_WRITE_IO_BYTES_COST_MS);
-    pub static ref QUERY_SCAN_ROWS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_ROWS);
-    pub static ref QUERY_SCAN_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_BYTES);
-    pub static ref QUERY_SCAN_IO_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_IO_BYTES);
-    pub static ref QUERY_SCAN_IO_BYTES_COST_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(METRIC_QUERY_SCAN_IO_BYTES_COST_MS);
-    pub static ref QUERY_SCAN_PARTITIONS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_PARTITIONS);
-    pub static ref QUERY_TOTAL_PARTITIONS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_TOTAL_PARTITIONS);
-    pub static ref QUERY_RESULT_ROWS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_RESULT_ROWS);
-    pub static ref QUERY_RESULT_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_RESULT_BYTES);
-}
+pub static QUERY_START: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_START));
+pub static QUERY_ERROR: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_ERROR));
+pub static QUERY_SUCCESS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_SUCCESS));
+pub static QUERY_FAILED: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_FAILED));
+pub static QUERY_DURATION_MS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| register_histogram_family_in_milliseconds(METRIC_QUERY_DURATION_MS));
+pub static QUERY_WRITE_ROWS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_WRITE_ROWS));
+pub static QUERY_WRITE_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_WRITE_BYTES));
+pub static QUERY_WRITE_IO_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_WRITE_IO_BYTES));
+pub static QUERY_WRITE_IO_BYTES_COST_MS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| {
+        register_histogram_family_in_milliseconds(METRIC_QUERY_WRITE_IO_BYTES_COST_MS)
+    });
+pub static QUERY_SCAN_ROWS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_SCAN_ROWS));
+pub static QUERY_SCAN_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_SCAN_BYTES));
+pub static QUERY_SCAN_IO_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_SCAN_IO_BYTES));
+pub static QUERY_SCAN_IO_BYTES_COST_MS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| register_histogram_family_in_milliseconds(METRIC_QUERY_SCAN_IO_BYTES_COST_MS));
+pub static QUERY_SCAN_PARTITIONS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_SCAN_PARTITIONS));
+pub static QUERY_TOTAL_PARTITIONS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_TOTAL_PARTITIONS));
+pub static QUERY_RESULT_ROWS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_RESULT_ROWS));
+pub static QUERY_RESULT_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_RESULT_BYTES));
