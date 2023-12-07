@@ -37,7 +37,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-profile = { path = "../profile" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
-common-storages-delta= { path = "../storages/delta" }
+common-storages-delta = { path = "../storages/delta" }
 common-storages-iceberg = { path = "../storages/iceberg" }
 common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }

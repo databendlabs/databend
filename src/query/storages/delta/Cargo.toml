@@ -14,28 +14,21 @@ common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
-common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
-common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
 common-storages-parquet = { path = "../parquet" }
-storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-bytes = {workspace = true}
-chrono = { workspace = true }
-#deltalake = "0.16.5"
-deltalake = { path = "../../../../../delta-rs/crates/deltalake" }
-# deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "93053a1" }
+bytes = { workspace = true }
+deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "44a3760" }
 futures = "0.3"
 match-template = "0.0.1"
 minitrace = { workspace = true }
-opendal = { workspace = true }
 object_store = "0.7"
+opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
