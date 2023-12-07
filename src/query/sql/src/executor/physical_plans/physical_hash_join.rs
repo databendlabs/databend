@@ -352,6 +352,23 @@ impl PhysicalPlanBuilder {
         for column in column_projections.iter() {
             if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
+            } else {
+                match join.join_type {
+                    JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti => {
+                        return Err(ErrorCode::SemanticError(
+                            "Wrong usage of ANTI or SEMI join, please check your query.",
+                        ));
+                    }
+                    _ => {
+                        return Err(ErrorCode::UnknownColumn(format!(
+                            "Cannot find column {} in hash join schema {:?}",
+                            column, projected_schema
+                        )));
+                    }
+                }
             }
         }
 
