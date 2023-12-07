@@ -24,7 +24,6 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 
