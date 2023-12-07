@@ -329,14 +329,15 @@ impl PhysicalPlanBuilder {
                     (build_fields, probe_fields)
                 };
                 for field in dropped_fields.iter() {
-                    if result_fields.iter().all(|x| x.name() != field.name()) {
-                        if field.name().parse::<usize>().and_then(|index| column_projections.contains(&index)).unwrap_or(false) {
-                                return Err(ErrorCode::SemanticError(
-                                    "cannot access the columns on the ANTI or SEMI side",
-                                ));
-                            }
-                            _ => (),
-                        }
+                    if result_fields.iter().all(|x| x.name() != field.name())
+                        && field
+                            .name()
+                            .parse::<usize>()
+                            .map_or(false, |index| column_projections.contains(&index))
+                    {
+                        return Err(ErrorCode::SemanticError(
+                            "cannot access the columns on the ANTI or SEMI side",
+                        ));
                     }
                 }
                 result_fields
