@@ -329,7 +329,7 @@ impl PhysicalPlanBuilder {
                     (build_fields, probe_fields)
                 };
                 for field in dropped_fields.iter() {
-                    if !result_fields.iter().any(|x| x.name() == field.name()) {
+                    if result_fields.iter().all(|x| x.name() != field.name()) {
                         match field.name().parse::<usize>() {
                             Ok(index) if column_projections.contains(&index) => {
                                 return Err(ErrorCode::SemanticError(
