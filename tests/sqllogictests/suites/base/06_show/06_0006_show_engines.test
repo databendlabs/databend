@@ -2,6 +2,7 @@ query TT
 SHOW ENGINES
 ----
 FUSE FUSE Storage Engine
+DELTA DELTA Storage Engine
 ICEBERG ICEBERG STORAGE Engine
 MEMORY MEMORY Storage Engine
 NULL NULL Storage Engine
