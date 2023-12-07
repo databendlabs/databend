@@ -324,13 +324,13 @@ impl PhysicalPlanBuilder {
                 let (result_fields, dropped_fields) = if join.join_type == JoinType::LeftSemi
                     || join.join_type == JoinType::LeftAnti
                 {
-                    (probe_fields, build_fields)
+                    probe_fields
                 } else {
-                    (build_fields, probe_fields)
+                    build_fields
                 };
-                for field in dropped_fields {
+                for field in result_fields.iter() {
                     match field.name().parse::<usize>() {
-                        Ok(index) if column_projections.contains(&index) => {
+                        Ok(index) if !column_projections.contains(&index) => {
                             return Err(ErrorCode::SemanticError(
                                 "Wrong usage of ANTI or SEMI join, please check your query.",
                             ));
