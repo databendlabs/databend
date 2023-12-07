@@ -21,7 +21,6 @@ futures = "0.3.24"
 minitrace = { workspace = true }
 petgraph = "0.6.2"
 serde = { workspace = true }
-serde_json = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

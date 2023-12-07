@@ -67,7 +67,7 @@ impl PlanProfile {
         PlanProfile {
             id: profile.plan_id,
             name: profile.plan_name.clone(),
-            parent_id: profile.plan_parent_id.clone(),
+            parent_id: profile.plan_parent_id,
             cpu_time: profile.cpu_time.load(Ordering::SeqCst) as usize,
             wait_time: profile.wait_time.load(Ordering::SeqCst) as usize,
         }

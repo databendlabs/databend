@@ -79,7 +79,7 @@ pub trait Interpreter: Sync + Send {
                     &profiles
                         .iter()
                         .filter(|x| x.plan_id.is_some())
-                        .map(|x| PlanProfile::create(&x))
+                        .map(|x| PlanProfile::create(x))
                         .collect::<Vec<_>>(),
                 );
 

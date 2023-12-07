@@ -100,6 +100,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
@@ -670,6 +671,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        todo!()
+    }
+
+    fn add_query_profiles(&self, _: &[PlanProfile]) {
+        todo!()
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
 }
