@@ -237,7 +237,7 @@ impl Metadata {
         column_name: String,
         data_type: TableDataType,
         key_paths: Scalar,
-        old_index: Option<IndexType>
+        old_index: Option<IndexType>,
     ) -> IndexType {
         let column_index = if let Some(old_index) = old_index {
             old_index

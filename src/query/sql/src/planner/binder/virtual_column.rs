@@ -84,7 +84,10 @@ impl VirtualColumnRewriter {
             }
             RelOperator::EvalScalar(mut eval_scalar) => {
                 for item in &mut eval_scalar.items {
-                    if self.try_replace_virtual_column(&mut item.scalar, Some(item.index)).is_some() {
+                    if self
+                        .try_replace_virtual_column(&mut item.scalar, Some(item.index))
+                        .is_some()
+                    {
                         continue;
                     }
                     self.visit(&mut item.scalar)?;
@@ -99,7 +102,10 @@ impl VirtualColumnRewriter {
             }
             RelOperator::ProjectSet(mut project_set) => {
                 for item in &mut project_set.srfs {
-                    if self.try_replace_virtual_column(&mut item.scalar, Some(item.index)).is_some() {
+                    if self
+                        .try_replace_virtual_column(&mut item.scalar, Some(item.index))
+                        .is_some()
+                    {
                         continue;
                     }
                     self.visit(&mut item.scalar)?;
@@ -120,7 +126,11 @@ impl VirtualColumnRewriter {
         Ok(s_expr)
     }
 
-    fn try_replace_virtual_column(&mut self, expr: &mut ScalarExpr, item_index: Option<IndexType>) -> Option<()> {
+    fn try_replace_virtual_column(
+        &mut self,
+        expr: &mut ScalarExpr,
+        item_index: Option<IndexType>,
+    ) -> Option<()> {
         match expr {
             ScalarExpr::FunctionCall(FunctionCall {
                 func_name,
