@@ -51,17 +51,13 @@ pub fn build_expression_transform(
     for f in output_schema.fields().iter() {
         let expr = if !input_schema.has_field(f.name()) {
             // #issue13932
-            // if there is a non-null constraint, we should return an error(except
-            // the bitmap type, because it won't insert default value)
+            // if there is a non-null constraint, we should return an error
             // although we will give a valid default value. for example:
             // 1. (a int not null), we give zero
             // 2. (a int), we give null
             // but for pg or snowflake, if a field is non-null, it will return
             // a non-null error (it means they will give a null as the default value).
-            if !f.is_nullable()
-                && f.default_expr().is_none()
-                && !matches!(f.data_type(), DataType::Bitmap)
-            {
+            if !f.is_nullable() && f.default_expr().is_none() {
                 // if we have a user-specified default expr, it must satisfy the non-null constraint
                 // in table-create phase. So we just consider default_expr is none.
                 return Err(ErrorCode::BadArguments(format!(
