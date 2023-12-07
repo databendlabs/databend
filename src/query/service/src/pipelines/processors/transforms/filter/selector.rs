@@ -288,6 +288,27 @@ impl<'a> Selector<'a> {
         let count = match expr {
             Expr::FunctionCall {
                 function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "if" => {
+                let result = self.evaluator.eval_if(args, generics, validity)?;
+                let data_type = self
+                    .evaluator
+                    .remove_generics_data_type(generics, &function.signature.return_type);
+                select_value(
+                    result,
+                    &data_type,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                )
+            }
+            Expr::FunctionCall {
+                function,
                 generics,
                 args,
                 return_type,

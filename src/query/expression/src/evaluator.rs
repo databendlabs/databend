@@ -745,7 +745,7 @@ impl<'a> Evaluator<'a> {
     // depending on the truthiness of the condition. `if` should register it's signature
     // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
     // the eval function because it will be evaluated here.
-    fn eval_if(
+    pub fn eval_if(
         &self,
         args: &[Expr],
         generics: &[DataType],
