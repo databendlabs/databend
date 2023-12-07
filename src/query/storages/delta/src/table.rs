@@ -77,7 +77,7 @@ impl DeltaTable {
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: DELTA_ENGINE.to_string(),
-            comment: "DELTA STORAGE Engine".to_string(),
+            comment: "DELTA Storage Engine".to_string(),
             support_cluster_key: false,
         }
     }
