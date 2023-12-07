@@ -24,10 +24,10 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 
-// use crate::spillers::Spiller;
+use crate::spillers::Spiller;
 
 /// The partition id used for the [`Spiller`] is always 0 for spill sorted data.
-// const SPILL_PID: u8 = 0;
+const SPILL_PID: u8 = 0;
 
 enum State {
     /// The initial state of the processor.
@@ -50,7 +50,7 @@ pub struct TransformSortSpill {
     output_data: Option<DataBlock>,
 
     state: State,
-    // spiller: Spiller,
+    spiller: Spiller,
 }
 
 #[inline(always)]
@@ -109,7 +109,7 @@ impl Processor for TransformSortSpill {
                         Ok(Event::Async)
                     } else {
                         // If we get a memory block at initial state, it means we will never spill data.
-                        // debug_assert_eq!(self.spiller.spilled_files_num(SPILL_PID), 0);
+                        debug_assert_eq!(self.spiller.spilled_files_num(SPILL_PID), 0);
                         self.output.push_data(Ok(block));
                         self.state = State::NoSpill;
                         Ok(Event::NeedConsume)
@@ -174,23 +174,21 @@ impl TransformSortSpill {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        // spiller: Spiller
+        spiller: Spiller,
     ) -> Box<dyn Processor> {
         Box::new(Self {
             input,
             output,
             input_data: None,
             output_data: None,
-            // spiller,
+            spiller,
             state: State::Init,
         })
     }
 
-    async fn spill(&mut self, _block: DataBlock) -> Result<()> {
-        // TODO(spill)
+    async fn spill(&mut self, block: DataBlock) -> Result<()> {
         // pid and worker id is not used in current processor.
-        // self.spiller.spill_with_partition(0, block, 0).await
-        Ok(())
+        self.spiller.spill_with_partition(0, block, 0).await
     }
 
     /// Do an external merge sort. If `block` is not [None], we need to merge it with spilled files.

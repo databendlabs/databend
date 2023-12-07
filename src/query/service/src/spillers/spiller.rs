@@ -50,6 +50,7 @@ impl Display for SpillerType {
 }
 
 /// Spiller configuration
+#[derive(Clone)]
 pub struct SpillerConfig {
     pub location_prefix: String,
 }
