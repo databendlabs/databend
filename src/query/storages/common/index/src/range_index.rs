@@ -89,14 +89,13 @@ impl RangeIndex {
                 }
 
                 let column_ids = self.schema.leaf_columns_of(&name);
-                if column_ids.is_empty() {
-                    dbg!(self.expr.sql_display());
-                    dbg!(stats);
-                    dbg!(&name);
-                    dbg!(&ty);
-                    dbg!(&self.schema);
-                    panic!();
-                }
+                assert!(
+                    !column_ids.is_empty(),
+                    "column {} not found in schema {:?}",
+                    name,
+                    &self.schema
+                );
+
                 let stats = column_ids
                     .iter()
                     .filter_map(|column_id| match stats.get(column_id) {
