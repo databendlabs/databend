@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::ops::Deref;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
-use std::sync::LazyLock;
 
 use prometheus_client::encoding::text::encode as prometheus_encode;
 use prometheus_client::encoding::EncodeLabelSet;
@@ -30,7 +30,8 @@ use crate::histogram::Histogram;
 use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
 
-pub static REGISTRY: LazyLock<Mutex<WrappedRegistry>> = LazyLock::new(|| Mutex::new(WrappedRegistry::with_prefix("databend")));
+pub static REGISTRY: LazyLock<Mutex<WrappedRegistry>> =
+    LazyLock::new(|| Mutex::new(WrappedRegistry::with_prefix("databend")));
 
 pub fn load_global_prometheus_registry() -> MutexGuard<'static, WrappedRegistry> {
     REGISTRY.lock().unwrap()

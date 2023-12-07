@@ -19,9 +19,12 @@ use crate::register_gauge;
 use crate::Counter;
 use crate::Gauge;
 
-pub static SESSION_CONNECT_NUMBERS: LazyLock<Counter> = LazyLock::new(|| register_counter("session_connect_numbers"));
-pub static SESSION_CLOSE_NUMBERS: LazyLock<Counter> = LazyLock::new(|| register_counter("session_close_numbers"));
-pub static SESSION_ACTIVE_CONNECTIONS: LazyLock<Gauge> = LazyLock::new(|| register_gauge("session_connections"));
+pub static SESSION_CONNECT_NUMBERS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_connect_numbers"));
+pub static SESSION_CLOSE_NUMBERS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_close_numbers"));
+pub static SESSION_ACTIVE_CONNECTIONS: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("session_connections"));
 
 pub fn incr_session_connect_numbers() {
     SESSION_CONNECT_NUMBERS.inc();
