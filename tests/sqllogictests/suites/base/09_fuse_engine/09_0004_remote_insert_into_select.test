@@ -84,14 +84,23 @@ select sum(cast(a as uint64)), sum(cast(b as uint64)) from s1
 statement ok
 create table d1(n String not null, a UInt8 not null, b Int16 not null default 4, c String not null default 'c')
 
-statement ok
+statement error 1006
 insert into d1(a) values (1)
 
 statement ok
+insert into d1(n,a) values ('',1)
+
+statement error 1006
 insert into d1(b) values (2)
 
 statement ok
+insert into d1(n,a,b) values ('',0,2)
+
+statement error 1006
 insert into d1(b) select b from d1
+
+statement ok
+insert into d1(n,a,b) select '',0,b from d1
 
 query TIIT
 select * from d1 order by a, b

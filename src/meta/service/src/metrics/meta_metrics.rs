@@ -30,8 +30,9 @@ use common_metrics::count;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 
 pub mod server_metrics {
+    use std::sync::LazyLock;
+
     use common_meta_types::NodeId;
-    use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
 
@@ -135,9 +136,7 @@ pub mod server_metrics {
         }
     }
 
-    lazy_static! {
-        static ref SERVER_METRICS: ServerMetrics = ServerMetrics::init();
-    }
+    static SERVER_METRICS: LazyLock<ServerMetrics> = LazyLock::new(ServerMetrics::init);
 
     pub fn set_current_leader(current_leader: NodeId) {
         SERVER_METRICS.current_leader_id.set(current_leader as i64);
@@ -197,8 +196,9 @@ pub mod server_metrics {
 
 pub mod raft_metrics {
     pub mod network {
+        use std::sync::LazyLock;
+
         use common_meta_types::NodeId;
-        use lazy_static::lazy_static;
         use prometheus_client;
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
@@ -329,9 +329,7 @@ pub mod raft_metrics {
             }
         }
 
-        lazy_static! {
-            static ref RAFT_METRICS: RaftMetrics = RaftMetrics::init();
-        }
+        static RAFT_METRICS: LazyLock<RaftMetrics> = LazyLock::new(RaftMetrics::init);
 
         pub fn incr_active_peers(id: &NodeId, addr: &str, cnt: i64) {
             let id = id.to_string();
@@ -439,7 +437,8 @@ pub mod raft_metrics {
     }
 
     pub mod storage {
-        use lazy_static::lazy_static;
+        use std::sync::LazyLock;
+
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
         use prometheus_client::metrics::family::Family;
@@ -484,9 +483,7 @@ pub mod raft_metrics {
             }
         }
 
-        lazy_static! {
-            static ref STORAGE_METRICS: StorageMetrics = StorageMetrics::init();
-        }
+        static STORAGE_METRICS: LazyLock<StorageMetrics> = LazyLock::new(StorageMetrics::init);
 
         pub fn incr_raft_storage_fail(func: &str, write: bool) {
             let labels = FuncLabels {
@@ -508,9 +505,9 @@ pub mod raft_metrics {
 }
 
 pub mod network_metrics {
+    use std::sync::LazyLock;
     use std::time::Duration;
 
-    use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::Histogram;
@@ -573,9 +570,7 @@ pub mod network_metrics {
         }
     }
 
-    lazy_static! {
-        static ref NETWORK_METRICS: NetworkMetrics = NetworkMetrics::init();
-    }
+    static NETWORK_METRICS: LazyLock<NetworkMetrics> = LazyLock::new(NetworkMetrics::init);
 
     pub fn sample_rpc_delay_seconds(d: Duration) {
         NETWORK_METRICS.rpc_delay_seconds.observe(d.as_secs_f64());

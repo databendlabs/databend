@@ -96,19 +96,21 @@ pub struct TestFixture {
 }
 
 pub struct TestGuard {
-    thread_name: String,
+    _thread_name: String,
 }
 
 impl TestGuard {
     pub fn new(thread_name: String) -> Self {
-        Self { thread_name }
+        Self {
+            _thread_name: thread_name,
+        }
     }
 }
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+        common_base::base::GlobalInstance::drop_testing(&self._thread_name);
     }
 }
 
@@ -200,9 +202,11 @@ impl TestFixture {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        let thread_name = std::thread::current().name().unwrap().to_string();
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::init_testing(&thread_name);
+        {
+            let thread_name = std::thread::current().name().unwrap().to_string();
+            common_base::base::GlobalInstance::init_testing(&thread_name);
+        }
 
         GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
@@ -278,13 +282,15 @@ impl TestFixture {
 
     pub fn default_schema() -> DataSchemaRef {
         let tuple_inner_data_types = vec![
-            DataType::Number(NumberDataType::Int32),
-            DataType::Number(NumberDataType::Int32),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
         ];
         let tuple_data_type = DataType::Tuple(tuple_inner_data_types);
+        let field_id = DataField::new("id", DataType::Number(NumberDataType::Int32));
+        let field_t = DataField::new("t", tuple_data_type);
         DataSchemaRefExt::create(vec![
-            DataField::new("id", DataType::Number(NumberDataType::Int32)),
-            DataField::new("t", tuple_data_type),
+            field_id.with_default_expr(Some("0".to_string())),
+            field_t.with_default_expr(Some("(0,0)".to_string())),
         ])
     }
 

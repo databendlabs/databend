@@ -28,10 +28,11 @@ impl TestFixture {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        let thread_name = std::thread::current().name().unwrap().to_string();
-
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::init_testing(&thread_name);
+        {
+            let thread_name = std::thread::current().name().unwrap().to_string();
+            common_base::base::GlobalInstance::init_testing(&thread_name);
+        }
 
         GlobalServices::init_with(config).await?;
         MockServices::init(config, public_key).await?;
