@@ -79,7 +79,7 @@ impl IcebergTable {
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: ICEBERG_ENGINE.to_string(),
-            comment: "ICEBERG STORAGE Engine".to_string(),
+            comment: "ICEBERG Storage Engine".to_string(),
             support_cluster_key: false,
         }
     }
