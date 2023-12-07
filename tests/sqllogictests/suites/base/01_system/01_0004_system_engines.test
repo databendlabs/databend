@@ -2,5 +2,5 @@ onlyif mysql
 query TT
 SELECT * FROM system.engines ORDER BY "Engine" LIMIT 1,2
 ----
+DELTA DELTA STORAGE Engine
 ICEBERG ICEBERG STORAGE Engine
-MEMORY MEMORY Storage Engine
