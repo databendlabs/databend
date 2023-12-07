@@ -412,7 +412,7 @@ impl Binder {
                 return Err(ErrorCode::Internal("Invalid table function subquery"));
             }
         }
-        // Set name for srf result column and make it as a visible column
+        // Set name for srf result column
         bind_context.columns[0].column_name = "value".to_string();
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
