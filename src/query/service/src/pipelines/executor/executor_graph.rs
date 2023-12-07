@@ -340,9 +340,6 @@ impl ExecutingGraph {
     ) -> Result<()> {
         if neighbors.clone().next().is_none() {
             let processor = &locker.graph[current_node].processor;
-            if processor.name() == "ExchangeSourceReader" {
-                return Ok(());
-            }
             // Source node
             processor.add_runtime_filters(rt_filters)?;
             return Ok(());
