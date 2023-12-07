@@ -330,8 +330,7 @@ impl PhysicalPlanBuilder {
                 };
                 for field in dropped_fields.iter() {
                     if result_fields.iter().all(|x| x.name() != field.name()) {
-                        match field.name().parse::<usize>() {
-                            Ok(index) if column_projections.contains(&index) => {
+                        if field.name().parse::<usize>().and_then(|index| column_projections.contains(&index)).unwrap_or(false) {
                                 return Err(ErrorCode::SemanticError(
                                     "Wrong usage of ANTI or SEMI join, please check your query.",
                                 ));
