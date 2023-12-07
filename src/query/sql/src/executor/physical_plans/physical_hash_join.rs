@@ -332,7 +332,7 @@ impl PhysicalPlanBuilder {
                     if result_fields.iter().all(|x| x.name() != field.name()) {
                         if field.name().parse::<usize>().and_then(|index| column_projections.contains(&index)).unwrap_or(false) {
                                 return Err(ErrorCode::SemanticError(
-                                    "Wrong usage of ANTI or SEMI join, please check your query.",
+                                    "cannot access the columns on the ANTI or SEMI side",
                                 ));
                             }
                             _ => (),
