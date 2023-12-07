@@ -320,8 +320,15 @@ impl PhysicalPlanBuilder {
                 probe_fields.extend(build_fields);
                 probe_fields
             }
-            JoinType::LeftSemi | JoinType::LeftAnti => {
-                for field in build_fields {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti => {
+                let (result_fields, dropped_fields) = if join.join_type == JoinType::LeftSemi
+                    || join.join_type == JoinType::LeftAnti
+                {
+                    (probe_fields, build_fields)
+                } else {
+                    (build_fields, probe_fields)
+                };
+                for field in dropped_fields {
                     match field.name().parse::<usize>() {
                         Ok(index) if column_projections.contains(&index) => {
                             return Err(ErrorCode::SemanticError(
@@ -331,20 +338,7 @@ impl PhysicalPlanBuilder {
                         _ => (),
                     }
                 }
-                probe_fields
-            }
-            JoinType::RightSemi | JoinType::RightAnti => {
-                for field in probe_fields {
-                    match field.name().parse::<usize>() {
-                        Ok(index) if column_projections.contains(&index) => {
-                            return Err(ErrorCode::SemanticError(
-                                "Wrong usage of ANTI or SEMI join, please check your query.",
-                            ));
-                        }
-                        _ => (),
-                    }
-                }
-                build_fields
+                result_fields
             }
             JoinType::LeftMark => {
                 let name = if let Some(idx) = join.marker_index {
