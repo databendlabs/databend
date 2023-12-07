@@ -127,6 +127,13 @@ pub fn optimize(
             Ok(Plan::CopyIntoTable(plan))
         }
         Plan::MergeInto(plan) => {
+            // before, we think source table is always the small table.
+            // 1. for matched only, we use inner join
+            // 2. for insert only, we use right anti join
+            // 3. for full merge into, we use right outer join
+            // for now, let's import the statistic info to determine
+            // left join or outer join
+
             // optimize source :fix issue #13733
             // reason: if there is subquery,windowfunc exprs etc. see
             // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
