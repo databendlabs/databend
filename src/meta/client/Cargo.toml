@@ -28,7 +28,6 @@ common-tracing = { path = "../../common/tracing" }
 
 derive_more = { workspace = true }
 futures = "0.3.24"
-lazy_static = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }
