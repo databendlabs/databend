@@ -519,7 +519,14 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
+        // For nested types, the inner type may not be nullable, for example:
+        // src_type: Tuple([Number(UInt8), Number(UInt8)])
+        // dest_type: Nullable(Tuple([Number(Int32), Number(Int32)]))
+        // in this case, we use `run_cast` instead
+        if !dest_type.is_nullable() {
+            return self.run_cast(span, src_type, dest_type, value, None);
+        }
+
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
