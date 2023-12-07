@@ -695,7 +695,7 @@ impl TableSchema {
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = data_type
+            } = data_type.remove_nullable()
             {
                 if col_name.starts_with(field_name) {
                     for ((i, inner_field_name), inner_field_type) in
