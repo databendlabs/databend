@@ -4,7 +4,7 @@ DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEn
 +-----------+-------------------------------+
 | Column 0  | Column 1                      |
 +-----------+-------------------------------+
-| 'DELTA'   | 'DELTA Storage Engine'        |
+| 'DELTA'   | 'DELTA STORAGE Engine'        |
 | 'FUSE'    | 'FUSE Storage Engine'         |
 | 'ICEBERG' | 'ICEBERG STORAGE Engine'      |
 | 'MEMORY'  | 'MEMORY Storage Engine'       |
