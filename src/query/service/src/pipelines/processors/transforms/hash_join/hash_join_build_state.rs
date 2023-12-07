@@ -694,8 +694,11 @@ impl HashJoinBuildState {
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Inner
                 && self.ctx.get_settings().get_join_spilling_threshold()? == 0
             {
-                // Collect all build keys values and make runtime filter
-                self.hash_join_state.generate_runtime_filters()?;
+                let is_cluster = !self.ctx.get_cluster().is_empty();
+                let is_broadcast_join = self.hash_join_state.hash_join_desc.broadcast;
+                if !is_cluster || is_broadcast_join {
+                    self.hash_join_state.generate_runtime_filters()?;
+                }
             }
 
             if !data_blocks.is_empty()
