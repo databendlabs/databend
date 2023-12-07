@@ -54,11 +54,10 @@ pub enum DataPacket {
     ErrorCode(ErrorCode),
     Dictionary(FlightData),
     FragmentData(FragmentData),
-    FetchProgress,
+    QueryProfiles(Vec<PlanProfile>),
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
     MergeStatus(MergeStatus),
-    QueryProfiles(Vec<PlanProfile>),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -69,7 +68,6 @@ impl DataPacket {
     pub fn bytes_size(&self) -> usize {
         match self {
             DataPacket::ErrorCode(_) => 0,
-            DataPacket::FetchProgress => 0,
             DataPacket::CopyStatus(_) => 0,
             DataPacket::MergeStatus(_) => 0,
             DataPacket::SerializeProgress(_) => 0,
@@ -90,12 +88,6 @@ impl TryFrom<DataPacket> for FlightData {
                 FlightData::from(error)
             }
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
-            DataPacket::FetchProgress => FlightData {
-                app_metadata: vec![0x03],
-                data_body: vec![],
-                data_header: vec![],
-                flight_descriptor: None,
-            },
             DataPacket::QueryProfiles(profiles) => FlightData {
                 app_metadata: vec![0x03],
                 data_body: serde_json::to_vec(&profiles)?,
@@ -163,7 +155,10 @@ impl TryFrom<FlightData> for DataPacket {
                 flight_data,
             )?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
-            0x03 => Ok(DataPacket::FetchProgress),
+            0x03 => {
+                let status = serde_json::from_slice::<Vec<PlanProfile>>(&flight_data.data_body)?;
+                Ok(DataPacket::QueryProfiles(status))
+            }
             0x04 => {
                 let mut bytes = flight_data.data_body.as_slice();
                 let progress_size = bytes.read_u64::<BigEndian>()?;

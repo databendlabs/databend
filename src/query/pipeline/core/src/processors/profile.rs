@@ -17,13 +17,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(Default)]
 pub struct Profile {
     /// The id of processor
-    #[serde(skip_serializing)]
     pub pid: usize,
     /// The name of processor
-    #[serde(skip_serializing)]
     pub p_name: String,
 
     pub plan_id: Option<u32>,

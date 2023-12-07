@@ -121,7 +121,6 @@ impl StatisticsReceiver {
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
             Ok(Some(DataPacket::Dictionary(_))) => unreachable!(),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
-            Ok(Some(DataPacket::FetchProgress)) => unreachable!(),
             Ok(Some(DataPacket::SerializeProgress(progress))) => {
                 for progress_info in progress {
                     progress_info.inc(ctx);
