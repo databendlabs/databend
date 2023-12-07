@@ -73,8 +73,9 @@ pub fn build_expression_transform(
                     // if we have a user-specified default expr, it must satisfy the non-null constraint
                     // in table-create phase. So we just consider default_expr is none.
                     return Err(ErrorCode::BadArguments(format!(
-                        "null value in column `{}` violates not-null constraint",
-                        f.name()
+                        "null value in column `{}` of table `{}` violates not-null constraint",
+                        f.name(),
+                        table.name()
                     )));
                 }
                 let default_value = Scalar::default_value(f.data_type());
