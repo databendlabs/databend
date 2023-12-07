@@ -291,7 +291,7 @@ impl Display for CopyIntoLocationSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
     visited_keys: HashSet<String>,
-    conns: BTreeMap<String, String>,
+    pub conns: BTreeMap<String, String>,
 }
 
 impl Connection {

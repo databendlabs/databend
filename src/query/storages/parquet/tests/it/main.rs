@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parquet_reader;
-mod parquet_table;
-mod partition;
-mod pruning;
-mod source;
-mod statistics;
-
-pub use parquet_reader::InMemoryRowGroup;
-pub use parquet_reader::ParquetRSFullReader;
-pub use parquet_reader::ParquetRSReaderBuilder;
-pub use parquet_reader::ParquetRSRowGroupReader;
-pub use parquet_table::ParquetRSTable;
-pub use partition::ParquetRSRowGroupPart;
-pub use pruning::ParquetRSPruner;
+mod merge_io;

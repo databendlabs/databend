@@ -1562,18 +1562,16 @@ impl<'a> TypeChecker<'a> {
             _ => unreachable!(),
         };
 
-        let default = if args.len() == 3 {
-            Some(args[2].clone())
+        let (default, return_type) = if args.len() == 3 {
+            (Some(args[2].clone()), arg_types[0].clone())
         } else {
-            None
+            (None, arg_types[0].wrap_nullable())
         };
-
-        let return_type = arg_types[0].wrap_nullable();
 
         let cast_default = default.map(|d| {
             Box::new(ScalarExpr::CastExpr(CastExpr {
                 span: d.span(),
-                is_try: true,
+                is_try: return_type.is_nullable(),
                 argument: Box::new(d),
                 target_type: Box::new(return_type.clone()),
             }))
