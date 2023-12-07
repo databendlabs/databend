@@ -2804,15 +2804,12 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "bytes",
- "chrono",
  "common-arrow",
  "common-base",
  "common-catalog",
  "common-exception",
  "common-expression",
- "common-functions",
  "common-meta-app",
- "common-meta-types",
  "common-pipeline-core",
  "common-storage",
  "common-storages-parquet",
@@ -2824,8 +2821,6 @@ dependencies = [
  "opendal",
  "parquet",
  "serde",
- "storages-common-pruner",
- "storages-common-table-meta",
  "tokio",
  "typetag",
  "url",
@@ -3054,6 +3049,7 @@ dependencies = [
  "log",
  "opendal",
  "parquet",
+ "rand 0.8.5",
  "serde",
  "storages-common-index",
  "storages-common-pruner",
@@ -4266,6 +4262,7 @@ checksum = "30dc5bb425a582de72bb57130320aac133893ea85f6151f79bd9aa9067114f60"
 [[package]]
 name = "deltalake"
 version = "0.17.0"
+source = "git+https://github.com/delta-io/delta-rs?rev=44a3760#44a3760aac9d68bfa6975d20ceba046d853514e9"
 dependencies = [
  "deltalake-core",
 ]
@@ -4273,6 +4270,7 @@ dependencies = [
 [[package]]
 name = "deltalake-core"
 version = "0.17.0"
+source = "git+https://github.com/delta-io/delta-rs?rev=44a3760#44a3760aac9d68bfa6975d20ceba046d853514e9"
 dependencies = [
  "arrow",
  "arrow-array",
