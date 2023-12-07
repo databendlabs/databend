@@ -28,6 +28,7 @@ use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::query_spill_prefix;
 use common_pipeline_core::Pipeline;
+use common_settings::FlightCompression;
 use common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
@@ -241,6 +242,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     fn apply_merge_serializer(
         &self,
         _: &MergeExchangeParams,
+        _compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -289,6 +291,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     fn apply_shuffle_serializer(
         &self,
         shuffle_params: &ShuffleExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -316,6 +319,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         location_prefix.clone(),
                         schema.clone(),
                         local_pos,
+                        compression,
                     ),
                     false => TransformExchangeAggregateSerializer::create(
                         self.ctx.clone(),
@@ -325,6 +329,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         operator.clone(),
                         location_prefix.clone(),
                         params.clone(),
+                        compression,
                         schema.clone(),
                         local_pos,
                     ),
