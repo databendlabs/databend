@@ -519,14 +519,7 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        // For nested types, the inner type may not be nullable, for example:
-        // src_type: Tuple([Number(UInt8), Number(UInt8)])
-        // dest_type: Nullable(Tuple([Number(Int32), Number(Int32)]))
-        // in this case, we use `run_cast` instead
-        if !dest_type.is_nullable() {
-            return self.run_cast(span, src_type, dest_type, value, None);
-        }
-
+        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
@@ -594,14 +587,26 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(array),
+                            None,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
                     let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                            None,
+                        )?
                         .into_column()
                         .unwrap();
                     let new_col = Column::Array(Box::new(ArrayColumn {
@@ -632,14 +637,26 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(array),
+                            None,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
                     let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                            None,
+                        )?
                         .into_column()
                         .unwrap();
                     let new_col = Column::Map(Box::new(ArrayColumn {
@@ -664,7 +681,7 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
                                 Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
+                                    .run_cast(span, src_ty, dest_ty, Value::Scalar(field), None)?
                                     .into_scalar()
                                     .unwrap())
                             })
@@ -678,7 +695,7 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
                                 Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
+                                    .run_cast(span, src_ty, dest_ty, Value::Column(field), None)?
                                     .into_column()
                                     .unwrap())
                             })
