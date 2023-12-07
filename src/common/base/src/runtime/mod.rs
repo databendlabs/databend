@@ -21,6 +21,8 @@ mod runtime_tracker;
 mod thread;
 mod thread_pool;
 
+use std::sync::atomic::AtomicUsize;
+
 pub use backtrace::dump_backtrace;
 pub use backtrace::get_all_tasks;
 pub use backtrace::AsyncTaskItem;
@@ -45,3 +47,5 @@ pub use thread::Thread;
 pub use thread::ThreadJoinHandle;
 pub use thread_pool::TaskJoinHandler;
 pub use thread_pool::ThreadPool;
+
+static ADHOC_RT_COUNTER: AtomicUsize = AtomicUsize::new(0);

@@ -37,7 +37,7 @@ impl GlobalIORuntime {
 
         GlobalInstance::set(Arc::new(Runtime::with_worker_threads(
             thread_num,
-            Some("IO-worker".to_owned()),
+            "IO-worker",
         )?));
         Ok(())
     }
@@ -52,7 +52,7 @@ impl GlobalQueryRuntime {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
 
-        let rt = Runtime::with_worker_threads(thread_num, Some("g-query-worker".to_owned()))?;
+        let rt = Runtime::with_worker_threads(thread_num, "g-query-worker")?;
         GlobalInstance::set(Arc::new(GlobalQueryRuntime(rt)));
         Ok(())
     }

@@ -137,18 +137,20 @@ impl FuseTable {
             pipeline.set_on_init(move || {
                 let ctx = query_ctx.clone();
                 let column_ids = column_ids.clone();
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let partitions = BlockCompactMutator::build_compact_tasks(
-                        ctx.clone(),
-                        column_ids,
-                        cluster_key_id,
-                        thresholds,
-                        lazy_parts,
-                    )
-                    .await?;
+                let partitions = Runtime::with_worker_threads(2, "build_compact_task")?.block_on(
+                    async move {
+                        let partitions = BlockCompactMutator::build_compact_tasks(
+                            ctx.clone(),
+                            column_ids,
+                            cluster_key_id,
+                            thresholds,
+                            lazy_parts,
+                        )
+                        .await?;
 
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
+                        Result::<_, ErrorCode>::Ok(partitions)
+                    },
+                )?;
 
                 let partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions);
                 query_ctx.set_partitions(partitions)?;

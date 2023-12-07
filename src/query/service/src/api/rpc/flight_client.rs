@@ -25,12 +25,14 @@ use common_arrow::arrow_format::flight::service::flight_service_client::FlightSe
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::Duration;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
 use futures_util::future::Either;
+use log::warn;
+use minitrace::full_name;
+use minitrace::future::FutureExt;
+use minitrace::Span;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -42,19 +44,41 @@ use crate::api::rpc::request_builder::RequestBuilder;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
+    create_thread_name: Option<String>,
+}
+
+impl Drop for FlightClient {
+    fn drop(&mut self) {
+        self.check_rt("drop")
+    }
 }
 
 // TODO: Integration testing required
 impl FlightClient {
+    fn check_rt(&self, operation: &str) {
+        let current_thread = std::thread::current();
+        let name = current_thread.name();
+        if name != self.create_thread_name.as_deref() {
+            warn!(
+                " FlightClient used in different rt, operation {},  current thread : {:?}, create thread: {:?}",
+                operation, name, self.create_thread_name
+            );
+        }
+    }
     pub fn new(mut inner: FlightServiceClient<Channel>) -> FlightClient {
         inner = inner.max_decoding_message_size(usize::MAX);
         inner = inner.max_encoding_message_size(usize::MAX);
 
-        FlightClient { inner }
+        let create_thread_name = std::thread::current().name().map(ToOwned::to_owned);
+        FlightClient {
+            inner,
+            create_thread_name,
+        }
     }
 
     #[async_backtrace::framed]
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
+        self.check_rt("execute_action");
         if let Err(cause) = self.do_action(action, timeout).await {
             return Err(cause.add_message_back("(while in query flight)"));
         }
@@ -68,6 +92,7 @@ impl FlightClient {
         query_id: &str,
         target: &str,
     ) -> Result<FlightExchange> {
+        self.check_rt("request_server_exchange");
         let streaming = self
             .get_streaming(
                 RequestBuilder::create(Ticket::default())
@@ -90,6 +115,7 @@ impl FlightClient {
         target: &str,
         fragment: usize,
     ) -> Result<FlightExchange> {
+        self.check_rt("do_get");
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
             .with_metadata("x-target", target)?
@@ -105,12 +131,12 @@ impl FlightClient {
     }
 
     fn streaming_receiver(
-        query_id: &str,
+        _query_id: &str,
         mut streaming: Streaming<FlightData>,
     ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
         let notify = Arc::new(tokio::sync::Notify::new());
-        GlobalIORuntime::instance().spawn(query_id, {
+        let fut = {
             let notify = notify.clone();
             async move {
                 let mut notified = Box::pin(notify.notified());
@@ -143,8 +169,12 @@ impl FlightClient {
                 drop(streaming);
                 tx.close();
             }
-        });
+        }
+        .in_span(Span::enter_with_local_parent(full_name!()));
 
+        // TODO: shall we make this configurable?
+        // GlobalIORuntime::instance().spawn(query_id, fut);
+        tokio::spawn(fut);
         (notify, rx)
     }
 

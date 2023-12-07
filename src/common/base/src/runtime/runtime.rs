@@ -14,6 +14,7 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -32,6 +33,7 @@ use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::MemStat;
+use crate::runtime::ADHOC_RT_COUNTER;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -163,8 +165,17 @@ impl Runtime {
         Self::create(None, mem_stat, &mut runtime_builder)
     }
 
+    pub fn with_worker_threads(workers: usize, thread_name: &str) -> Result<Self> {
+        let thread_name = {
+            let count = ADHOC_RT_COUNTER.fetch_add(1, Ordering::SeqCst);
+            format!("{}-{}", thread_name, count)
+        };
+
+        Self::create_with_worker_threads(workers, Some(thread_name))
+    }
+
     #[allow(unused_mut)]
-    pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
+    fn create_with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
         let mut mem_stat_name = String::from("UnnamedRuntime");
 
         if let Some(thread_name) = thread_name.as_ref() {
@@ -367,10 +378,7 @@ where
 {
     // 1. build the runtime.
     let semaphore = Semaphore::new(permit_nums);
-    let runtime = Arc::new(Runtime::with_worker_threads(
-        thread_nums,
-        Some(thread_name),
-    )?);
+    let runtime = Arc::new(Runtime::with_worker_threads(thread_nums, &thread_name)?);
 
     // 2. spawn all the tasks to the runtime with semaphore.
     let join_handlers = runtime.try_spawn_batch(semaphore, futures).await?;

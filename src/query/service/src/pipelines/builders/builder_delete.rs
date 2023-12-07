@@ -76,7 +76,7 @@ impl PipelineBuilder {
             self.main_pipeline.set_on_init(move || {
                 let ctx_clone = ctx.clone();
                 let (partitions, info) =
-                    Runtime::with_worker_threads(2, None)?.block_on(async move {
+                    Runtime::with_worker_threads(2, "mutation_block_pruning")?.block_on(async move {
                         table_clone
                             .do_mutation_block_pruning(
                                 ctx_clone,

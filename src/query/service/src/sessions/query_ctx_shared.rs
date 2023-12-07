@@ -333,10 +333,7 @@ impl QueryContextShared {
             Some(query_runtime) => Ok(query_runtime.clone()),
             None => {
                 // To avoid possible deadlock, we should keep at least two threads.
-                let runtime = Arc::new(Runtime::with_worker_threads(
-                    2,
-                    Some("query-ctx".to_string()),
-                )?);
+                let runtime = Arc::new(Runtime::with_worker_threads(2, "query-ctx")?);
                 *query_runtime = Some(runtime.clone());
                 Ok(runtime)
             }
