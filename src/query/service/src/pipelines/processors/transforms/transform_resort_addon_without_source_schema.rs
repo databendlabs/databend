@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -61,6 +62,22 @@ pub fn build_expression_transform(
                 }
                 expr
             } else {
+                // #issue13932
+                // if there is a non-null constraint, we should return an error
+                // although we will give a valid default value. for example:
+                // 1. (a int not null), we give zero
+                // 2. (a int), we give null
+                // but for pg or snowflake, if a field is non-null, it will return
+                // a non-null error (it means they will give a null as the default value).
+                if !f.is_nullable() {
+                    // if we have a user-specified default expr, it must satisfy the non-null constraint
+                    // in table-create phase. So we just consider default_expr is none.
+                    return Err(ErrorCode::BadArguments(format!(
+                        "null value in column `{}` of table `{}` violates not-null constraint",
+                        f.name(),
+                        table.name()
+                    )));
+                }
                 let default_value = Scalar::default_value(f.data_type());
                 Expr::Constant {
                     span: None,

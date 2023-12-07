@@ -278,13 +278,15 @@ impl TestFixture {
 
     pub fn default_schema() -> DataSchemaRef {
         let tuple_inner_data_types = vec![
-            DataType::Number(NumberDataType::Int32),
-            DataType::Number(NumberDataType::Int32),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
         ];
         let tuple_data_type = DataType::Tuple(tuple_inner_data_types);
+        let field_id = DataField::new("id", DataType::Number(NumberDataType::Int32));
+        let field_t = DataField::new("t", tuple_data_type);
         DataSchemaRefExt::create(vec![
-            DataField::new("id", DataType::Number(NumberDataType::Int32)),
-            DataField::new("t", tuple_data_type),
+            field_id.with_default_expr(Some("0".to_string())),
+            field_t.with_default_expr(Some("(0,0)".to_string())),
         ])
     }
 
