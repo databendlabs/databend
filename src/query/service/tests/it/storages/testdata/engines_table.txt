@@ -4,14 +4,14 @@ DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEn
 +-----------+-------------------------------+
 | Column 0  | Column 1                      |
 +-----------+-------------------------------+
-| 'DELTA'   | 'DELTA STORAGE Engine'        |
+| 'DELTA'   | 'DELTA Storage Engine'        |
 | 'FUSE'    | 'FUSE Storage Engine'         |
-| 'ICEBERG' | 'ICEBERG STORAGE Engine'      |
+| 'ICEBERG' | 'ICEBERG Storage Engine'      |
 | 'MEMORY'  | 'MEMORY Storage Engine'       |
 | 'NULL'    | 'NULL Storage Engine'         |
 | 'RANDOM'  | 'RANDOM Storage Engine'       |
-| 'STREAM'  | 'STREAM STORAGE Engine'       |
-| 'VIEW'    | 'VIEW STORAGE (LOGICAL VIEW)' |
+| 'STREAM'  | 'STREAM Storage Engine'       |
+| 'VIEW'    | 'VIEW Storage (LOGICAL VIEW)' |
 +-----------+-------------------------------+
 
 

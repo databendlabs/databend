@@ -52,7 +52,7 @@ impl ViewTable {
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: "VIEW".to_string(),
-            comment: "VIEW STORAGE (LOGICAL VIEW)".to_string(),
+            comment: "VIEW Storage (LOGICAL VIEW)".to_string(),
             ..Default::default()
         }
     }
