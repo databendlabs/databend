@@ -249,7 +249,7 @@ impl PhysicalPlanBuilder {
 
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
-        for column in pre_column_projections {
+        for column in pre_column_projections.iter() {
             if let Some((index, _)) = probe_schema.column_with_name(&column.to_string()) {
                 probe_projections.insert(index);
             }
@@ -321,21 +321,23 @@ impl PhysicalPlanBuilder {
                 probe_fields
             }
             JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti => {
-                let result_fields = if join.join_type == JoinType::LeftSemi
+                let (result_fields, dropped_fields) = if join.join_type == JoinType::LeftSemi
                     || join.join_type == JoinType::LeftAnti
                 {
-                    probe_fields
+                    (probe_fields, build_fields)
                 } else {
-                    build_fields
+                    (build_fields, probe_fields)
                 };
-                for field in result_fields.iter() {
-                    match field.name().parse::<usize>() {
-                        Ok(index) if !column_projections.contains(&index) => {
-                            return Err(ErrorCode::SemanticError(
-                                "Wrong usage of ANTI or SEMI join, please check your query.",
-                            ));
+                for field in dropped_fields.iter() {
+                    if !result_fields.iter().any(|x| x.name() == field.name()) {
+                        match field.name().parse::<usize>() {
+                            Ok(index) if column_projections.contains(&index) => {
+                                return Err(ErrorCode::SemanticError(
+                                    "Wrong usage of ANTI or SEMI join, please check your query.",
+                                ));
+                            }
+                            _ => (),
                         }
-                        _ => (),
                     }
                 }
                 result_fields
