@@ -40,7 +40,7 @@ impl PipelineBuilder {
         // set on_finished callback.
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
-                None => {
+                Ok(_) => {
                     GlobalIORuntime::instance().block_on(async move {
                         // 1. log on_error mode errors.
                         // todo(ariesdevil): persist errors with query_id
@@ -73,7 +73,7 @@ impl PipelineBuilder {
                         Ok(())
                     })?;
                 }
-                Some(error) => {
+                Err(error) => {
                     error!("copy failed, reason: {}", error);
                 }
             }

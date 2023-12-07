@@ -24,6 +24,7 @@ use common_exception::Result;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::profile::PlanScope;
+use crate::processors::profile::Profile;
 use crate::processors::DuplicateProcessor;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
@@ -74,7 +75,7 @@ impl Debug for Pipeline {
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
@@ -416,7 +417,9 @@ impl Pipeline {
         self.on_init = Some(Box::new(f));
     }
 
-    pub fn set_on_finished<F: FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
+    pub fn set_on_finished<
+        F: FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static,
+    >(
         &mut self,
         f: F,
     ) {
@@ -465,7 +468,7 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         // An error may have occurred before the executor was created.
         if let Some(on_finished) = self.on_finished.take() {
-            let cause = Some(ErrorCode::Internal(
+            let cause = Err(ErrorCode::Internal(
                 "Pipeline illegal state: not successfully shutdown.",
             ));
 

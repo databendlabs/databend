@@ -129,6 +129,10 @@ impl StatisticsReceiver {
 
                 Ok(false)
             }
+            Ok(Some(DataPacket::QueryProfiles(profiles))) => {
+                ctx.add_query_profiles(&profiles);
+                Ok(false)
+            }
             Ok(Some(DataPacket::CopyStatus(status))) => {
                 log::info!("merge CopyStatus for {} files", status.files.len());
                 ctx.get_copy_status().merge(status);

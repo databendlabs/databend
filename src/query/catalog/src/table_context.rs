@@ -33,6 +33,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
@@ -228,4 +229,8 @@ pub trait TableContext: Send + Sync {
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
+
+    fn add_query_profiles(&self, profiles: &[PlanProfile]);
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile>;
 }

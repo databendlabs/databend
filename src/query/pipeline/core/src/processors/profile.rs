@@ -17,11 +17,13 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Profile {
     /// The id of processor
+    #[serde(skip_serializing)]
     pub pid: usize,
     /// The name of processor
+    #[serde(skip_serializing)]
     pub p_name: String,
 
     pub plan_id: Option<u32>,
@@ -46,6 +48,60 @@ impl Profile {
             plan_name: scope.as_ref().map(|x| x.name.clone()),
             plan_parent_id: scope.as_ref().map(|x| x.parent_id),
         }
+    }
+
+    pub fn prepare_merge(profile: &Profile) -> Profile {
+        Profile {
+            pid: 0,
+            p_name: String::new(),
+            plan_id: profile.plan_id,
+            plan_name: profile.plan_name.clone(),
+            plan_parent_id: profile.plan_parent_id,
+            cpu_time: AtomicU64::new(profile.cpu_time.load(Ordering::SeqCst)),
+            wait_time: AtomicU64::new(profile.wait_time.load(Ordering::SeqCst)),
+        }
+    }
+
+    pub fn merge(&mut self, profile: &Profile) {
+        self.cpu_time
+            .fetch_add(profile.cpu_time.load(Ordering::SeqCst), Ordering::SeqCst);
+        self.wait_time
+            .fetch_add(profile.wait_time.load(Ordering::SeqCst), Ordering::SeqCst);
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlanProfile {
+    pub id: Option<u32>,
+    pub name: Option<String>,
+    pub parent_id: Option<u32>,
+
+    /// The time spent to process in nanoseconds
+    pub cpu_time: usize,
+    /// The time spent to wait in nanoseconds, usually used to
+    /// measure the time spent on waiting for I/O
+    pub wait_time: usize,
+}
+
+impl PlanProfile {
+    pub fn create(profile: &Profile) -> PlanProfile {
+        PlanProfile {
+            id: profile.plan_id,
+            name: profile.plan_name.clone(),
+            parent_id: profile.plan_parent_id.clone(),
+            cpu_time: profile.cpu_time.load(Ordering::SeqCst) as usize,
+            wait_time: profile.wait_time.load(Ordering::SeqCst) as usize,
+        }
+    }
+
+    pub fn accumulate(&mut self, profile: &Profile) {
+        self.cpu_time += profile.cpu_time.load(Ordering::SeqCst) as usize;
+        self.wait_time += profile.wait_time.load(Ordering::SeqCst) as usize;
+    }
+
+    pub fn merge(&mut self, profile: &PlanProfile) {
+        self.cpu_time += profile.cpu_time;
+        self.wait_time += profile.wait_time;
     }
 }
 

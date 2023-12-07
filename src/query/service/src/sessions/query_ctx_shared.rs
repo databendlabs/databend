@@ -32,6 +32,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
 use common_storage::CopyStatus;
@@ -105,6 +106,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
     /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
+
+    pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 }
 
 impl QueryContextShared {
@@ -147,6 +150,7 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            query_profiles: Arc::new(RwLock::new(HashMap::new())),
         }))
     }
 

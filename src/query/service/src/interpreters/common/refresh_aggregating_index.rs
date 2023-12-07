@@ -57,7 +57,7 @@ pub async fn hook_refresh_agg_index(
         .get_enable_refresh_aggregating_index_after_write()?
     {
         pipeline.set_on_finished(move |err| {
-            if err.is_none() {
+            if err.is_ok() {
                 info!("execute pipeline finished successfully, starting run generate aggregating index job.");
                 match GlobalIORuntime::instance().block_on({
                     refresh_agg_index(ctx, desc)

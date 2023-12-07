@@ -22,6 +22,7 @@ use byteorder::WriteBytesExt;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_storage::CopyStatus;
 use common_storage::MergeStatus;
 use log::error;
@@ -57,6 +58,7 @@ pub enum DataPacket {
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
     MergeStatus(MergeStatus),
+    QueryProfiles(Vec<PlanProfile>),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -73,6 +75,7 @@ impl DataPacket {
             DataPacket::SerializeProgress(_) => 0,
             DataPacket::Dictionary(v) => calc_size(v),
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
+            DataPacket::QueryProfiles(_) => 0,
         }
     }
 }
@@ -90,6 +93,12 @@ impl TryFrom<DataPacket> for FlightData {
             DataPacket::FetchProgress => FlightData {
                 app_metadata: vec![0x03],
                 data_body: vec![],
+                data_header: vec![],
+                flight_descriptor: None,
+            },
+            DataPacket::QueryProfiles(profiles) => FlightData {
+                app_metadata: vec![0x03],
+                data_body: serde_json::to_vec(&profiles)?,
                 data_header: vec![],
                 flight_descriptor: None,
             },
