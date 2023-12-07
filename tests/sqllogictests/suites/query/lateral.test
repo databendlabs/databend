@@ -156,5 +156,19 @@ GROUP BY p.id ORDER BY p.id
 12712555 2
 98127771 2
 
+query IT
+SELECT u.user_id, f.value from
+    user_activities u,
+    LATERAL unnest(u.activities) f
+----
+1 "reading"
+1 "swimming"
+1 "cycling"
+2 "painting"
+2 "running"
+3 "cooking"
+3 "climbing"
+3 "writing"
+
 statement ok
 drop database test_lateral
