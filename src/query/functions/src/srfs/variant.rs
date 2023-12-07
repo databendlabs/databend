@@ -15,12 +15,10 @@
 use std::sync::Arc;
 
 use common_expression::types::nullable::NullableColumnBuilder;
-use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
-use common_expression::types::NumberColumnBuilder;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
@@ -442,8 +440,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 let len = columns[0].len();
                                 *max_nums_per_row = std::cmp::max(*max_nums_per_row, len);
 
-                                let inner_col = Column::Tuple(columns).wrap_nullable(None);
-                                results.push((Value::Column(Column::Tuple(vec![inner_col])), len));
+                                results.push((Value::Column(Column::Tuple(columns)), len));
                             }
                             _ => unreachable!(),
                         }

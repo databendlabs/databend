@@ -20,7 +20,6 @@ use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
 use common_ast::ast::Window;
 use common_ast::Visitor;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::FunctionKind;
@@ -146,7 +145,9 @@ impl Binder {
             };
 
             let srf_expr = srf_scalar.as_expr()?;
-            let return_types = srf_expr.data_type().as_tuple().unwrap();
+            let return_types = srf_expr.data_type().as_tuple();
+            debug_assert!(return_types.is_some());
+            let return_types = return_types.unwrap();
 
             // Add result column to metadata
             let column_index = self
@@ -167,7 +168,9 @@ impl Binder {
             };
             items.push(item);
 
-            let result_column = if name == "flatten" || name == "json_each" {
+            // If tuple has more than one fields, return the tuple column,
+            // Otherwise, extract the tuple field to top level column.
+            let result_column = if return_types.len() > 1 {
                 ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: srf.span(),
                     column,
