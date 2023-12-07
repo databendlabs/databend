@@ -49,25 +49,6 @@ impl Profile {
             plan_parent_id: scope.as_ref().map(|x| x.parent_id),
         }
     }
-
-    pub fn prepare_merge(profile: &Profile) -> Profile {
-        Profile {
-            pid: 0,
-            p_name: String::new(),
-            plan_id: profile.plan_id,
-            plan_name: profile.plan_name.clone(),
-            plan_parent_id: profile.plan_parent_id,
-            cpu_time: AtomicU64::new(profile.cpu_time.load(Ordering::SeqCst)),
-            wait_time: AtomicU64::new(profile.wait_time.load(Ordering::SeqCst)),
-        }
-    }
-
-    pub fn merge(&mut self, profile: &Profile) {
-        self.cpu_time
-            .fetch_add(profile.cpu_time.load(Ordering::SeqCst), Ordering::SeqCst);
-        self.wait_time
-            .fetch_add(profile.wait_time.load(Ordering::SeqCst), Ordering::SeqCst);
-    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
