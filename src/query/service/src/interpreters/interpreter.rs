@@ -87,8 +87,16 @@ pub trait Interpreter: Sync + Send {
 
                 if !query_profiles.is_empty() {
                     has_profiles = true;
-                    let profile_str = serde_json::to_string(&query_profiles)?;
-                    info!(target: "query_profiles", "{}", profile_str);
+                    #[derive(serde::Serialize)]
+                    struct QueryProfiles {
+                        query_id: String,
+                        profiles: Vec<PlanProfile>,
+                    }
+
+                    info!(target: "query_profiles", "{}", serde_json::to_string(&QueryProfiles {
+                        query_id: query_ctx.get_id(),
+                        profiles: query_profiles,
+                    })?);
                 }
             }
 
