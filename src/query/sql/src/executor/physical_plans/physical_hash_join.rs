@@ -330,7 +330,7 @@ impl PhysicalPlanBuilder {
                 };
                 for field in dropped_fields.iter() {
                     if result_fields.iter().all(|x| x.name() != field.name()) {
-                        if let Ok(index) = field.name().parse::<usize>() {
+                        if let Ok(index) = field.name().parse::<usize>() && column_projections.contains(&index) {
                             let metadata = self.metadata.read();
                             return Err(ErrorCode::SemanticError(format!(
                                 "cannot access the {:?}.{:?} in ANTI or SEMI join",
