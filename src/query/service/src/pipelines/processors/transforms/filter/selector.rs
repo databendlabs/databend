@@ -339,9 +339,12 @@ impl<'a> Selector<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                let data_type = self
+                    .evaluator
+                    .remove_generics_data_type(generics, &function.signature.return_type);
                 select_value(
                     result,
-                    return_type,
+                    &data_type,
                     true_selection,
                     false_selection,
                     true_idx,
