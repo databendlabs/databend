@@ -96,19 +96,21 @@ pub struct TestFixture {
 }
 
 pub struct TestGuard {
-    thread_name: String,
+    _thread_name: String,
 }
 
 impl TestGuard {
     pub fn new(thread_name: String) -> Self {
-        Self { thread_name }
+        Self {
+            _thread_name: thread_name,
+        }
     }
 }
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+        common_base::base::GlobalInstance::drop_testing(&self._thread_name);
     }
 }
 
@@ -200,9 +202,11 @@ impl TestFixture {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        let thread_name = std::thread::current().name().unwrap().to_string();
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::init_testing(&thread_name);
+        {
+            let thread_name = std::thread::current().name().unwrap().to_string();
+            common_base::base::GlobalInstance::init_testing(&thread_name);
+        }
 
         GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
