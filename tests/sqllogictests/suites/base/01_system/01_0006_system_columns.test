@@ -23,10 +23,9 @@ statement ok
 SELECT lower(database), name FROM system.columns  WHERE table LIKE 'views'
 
 query TT
-SELECT lower(database), name FROM system.columns  WHERE table = 't' or database='columntest' order by name
+SELECT lower(database), name FROM system.columns  WHERE table = 't' or database='columntest' order by lower(database), name
 ----
 columntest id
-default id
 columntest id2
 columntest id3
 columntest id4
@@ -34,6 +33,7 @@ columntest tid
 columntest tid2
 columntest tid3
 columntest tid4
+default id
 
 query TT
 SELECT lower(database), name FROM system.columns  WHERE table = 't' and database='columntest' order by name

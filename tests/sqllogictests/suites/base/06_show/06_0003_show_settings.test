@@ -11,7 +11,7 @@ select value=default from system.settings where name in ('max_threads', 'max_mem
 1
 
 query TTT
-select name, level, description from system.settings where name in ('max_threads', 'max_memory_usage')
+select name, level, description from system.settings where name in ('max_threads', 'max_memory_usage') order by name
 ----
 max_memory_usage  SESSION  Sets the maximum memory usage in bytes for processing a single query.
 max_threads       SESSION  Sets the maximum number of threads to execute a request.
