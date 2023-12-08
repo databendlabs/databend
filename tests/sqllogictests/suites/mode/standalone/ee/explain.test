@@ -430,7 +430,7 @@ Filter
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.test_virtual_db.t2
-    ├── output columns: [a (#0), v['a'][0] (#3), v['b'] (#2)]
+    ├── output columns: [a (#0), v['b'] (#2), v['a'][0] (#3)]
     ├── read rows: 1
     ├── read bytes: 130
     ├── partitions total: 1
