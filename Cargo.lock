@@ -4549,7 +4549,6 @@ dependencies = [
  "background-service",
  "chrono",
  "chrono-tz",
- "common-arrow",
  "common-base",
  "common-building",
  "common-catalog",

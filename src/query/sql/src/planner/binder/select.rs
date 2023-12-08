@@ -50,8 +50,6 @@ use super::Finder;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
-use crate::binder::udf::UdfRewriter;
-use crate::binder::virtual_column::VirtualColumnRewriter;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
@@ -73,6 +71,8 @@ use crate::plans::Visitor as _;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::UdfRewriter;
+use crate::VirtualColumnRewriter;
 use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
@@ -300,7 +300,7 @@ impl Binder {
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
-        // rewrite virtual column
+        // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr)?;

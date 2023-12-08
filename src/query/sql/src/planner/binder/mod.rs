@@ -51,7 +51,6 @@ mod table_args;
 mod udf;
 mod update;
 mod values;
-mod virtual_column;
 mod window;
 
 pub use aggregate::AggregateInfo;

@@ -16,7 +16,6 @@ test = false
 aggregating-index = { path = "../ee_features/aggregating_index" }
 async-backtrace = { workspace = true }
 background-service = { path = "../ee_features/background_service" }
-common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }

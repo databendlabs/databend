@@ -65,13 +65,25 @@ impl VirtualColumnRewriter {
         {
             return Ok(s_expr.clone());
         }
+
+        let has_variant_column = self
+            .metadata
+            .read()
+            .columns()
+            .iter()
+            .any(|column| column.data_type().remove_nullable() == DataType::Variant);
+        // If there are no columns of variant type,
+        // no need to check rewrite as virtual columns
+        if !has_variant_column {
+            return Ok(s_expr.clone());
+        }
+
         self.rewrite_virtual_column(s_expr)
     }
 
     fn rewrite_virtual_column(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
 
-        // Rewrite variant inner column as derived Virtual Column.
         match (*s_expr.plan).clone() {
             RelOperator::Scan(mut scan) => {
                 let virtual_indices = self.table_virtual_columns.get(&scan.table_index);
@@ -126,6 +138,7 @@ impl VirtualColumnRewriter {
         Ok(s_expr)
     }
 
+    // Replace variant inner fields as derived Virtual Column.
     fn try_replace_virtual_column(
         &mut self,
         expr: &mut ScalarExpr,
@@ -228,11 +241,11 @@ impl VirtualColumnRewriter {
                         .table_index(Some(base_column.table_index))
                         .build();
 
-                        let replaced_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        let virtual_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                             span: None,
                             column: column_binding,
                         });
-                        *expr = replaced_column;
+                        *expr = virtual_column;
                         return Some(());
                     }
                 }
@@ -246,7 +259,7 @@ impl VirtualColumnRewriter {
 
 impl<'a> VisitorMut<'a> for VirtualColumnRewriter {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if let Some(()) = self.try_replace_virtual_column(expr, None) {
+        if self.try_replace_virtual_column(expr, None).is_some() {
             return Ok(());
         }
         walk_expr_mut(self, expr)?;
