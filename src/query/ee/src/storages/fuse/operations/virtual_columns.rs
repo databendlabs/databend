@@ -14,25 +14,22 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
-use common_expression::types::VariantType;
 use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::ScalarRef;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_sql::parse_computed_expr;
 use common_storages_fuse::io::serialize_block;
 use common_storages_fuse::io::write_data;
 use common_storages_fuse::io::MetaReaders;
@@ -40,9 +37,6 @@ use common_storages_fuse::io::ReadSettings;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::FuseTable;
-use jsonb::jsonpath::parse_json_path;
-use jsonb::jsonpath::Mode as SelectorMode;
-use jsonb::jsonpath::Selector;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 
@@ -67,7 +61,6 @@ pub async fn do_refresh_virtual_column(
     let table_schema = &fuse_table.get_table_info().meta.schema;
 
     let mut field_indices = Vec::new();
-    let mut paths = Vec::with_capacity(virtual_columns.len());
     for (i, f) in table_schema.fields().iter().enumerate() {
         if f.data_type().remove_nullable() != TableDataType::Variant {
             continue;
@@ -76,10 +69,6 @@ pub async fn do_refresh_virtual_column(
         for virtual_column in &virtual_columns {
             if virtual_column.starts_with(&f.name().clone()) {
                 is_src_column = true;
-                let name = virtual_column.clone();
-                let mut src_name = virtual_column.clone();
-                let path = src_name.split_off(f.name().len());
-                paths.push((name, src_name, path));
             }
         }
         if is_src_column {
@@ -91,7 +80,8 @@ pub async fn do_refresh_virtual_column(
         // no source variant column
         return Ok(());
     }
-    let source_schema = table_schema.project(&field_indices);
+    let projected_schema = table_schema.project(&field_indices);
+    let source_schema = Arc::new(DataSchema::from(&projected_schema));
 
     let projection = Projection::Columns(field_indices);
     let block_reader =
@@ -125,11 +115,12 @@ pub async fn do_refresh_virtual_column(
                 TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
 
             materialize_virtual_columns(
+                ctx.clone(),
                 operator,
                 &write_settings,
                 &virtual_loc,
-                &source_schema,
-                &paths,
+                source_schema.clone(),
+                &virtual_columns,
                 block,
             )
             .await?;
@@ -141,57 +132,31 @@ pub async fn do_refresh_virtual_column(
 
 #[async_backtrace::framed]
 async fn materialize_virtual_columns(
+    ctx: Arc<dyn TableContext>,
     operator: &Operator,
     write_settings: &WriteSettings,
     location: &str,
-    source_schema: &TableSchema,
-    paths: &Vec<(String, String, String)>,
+    source_schema: DataSchemaRef,
+    paths: &Vec<String>,
     block: DataBlock,
 ) -> Result<()> {
     let len = block.num_rows();
+
+    let func_ctx = ctx.get_function_context()?;
+    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
     let mut virtual_fields = Vec::with_capacity(paths.len());
     let mut virtual_columns = Vec::with_capacity(paths.len());
-    for (virtual_name, src_name, path) in paths {
-        let index = source_schema.index_of(src_name).unwrap();
+    for path in paths {
+        let expr = parse_computed_expr(ctx.clone(), source_schema.clone(), path)?;
+        let value = evaluator.run(&expr)?;
         let virtual_field = TableField::new(
-            virtual_name.as_str(),
+            path,
             TableDataType::Nullable(Box::new(TableDataType::Variant)),
         );
         virtual_fields.push(virtual_field);
 
-        let block_entry = block.get_by_offset(index);
-        let column = block_entry
-            .value
-            .convert_to_full_column(&block_entry.data_type, len);
-
-        let json_path = parse_json_path(path.as_bytes()).unwrap();
-        let selector = Selector::new(json_path, SelectorMode::First);
-
-        let mut validity = MutableBitmap::with_capacity(len);
-        let mut builder = StringColumnBuilder::with_capacity(len, len * 10);
-        for row in 0..len {
-            let val = unsafe { column.index_unchecked(row) };
-            if let ScalarRef::Variant(v) = val {
-                selector.select(v, &mut builder.data, &mut builder.offsets);
-                if builder.offsets.len() == row + 2 {
-                    validity.push(true);
-                    continue;
-                }
-            }
-            validity.push(false);
-            builder.commit_row();
-        }
-        let column = Column::Nullable(Box::new(
-            NullableColumn::<VariantType> {
-                column: builder.build(),
-                validity: validity.into(),
-            }
-            .upcast(),
-        ));
-        let virtual_column = BlockEntry::new(
-            DataType::Nullable(Box::new(DataType::Variant)),
-            Value::Column(column),
-        );
+        let virtual_column =
+            BlockEntry::new(DataType::Nullable(Box::new(DataType::Variant)), value);
         virtual_columns.push(virtual_column);
     }
     let virtual_schema = TableSchemaRefExt::create(virtual_fields);

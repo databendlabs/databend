@@ -218,9 +218,9 @@ impl Binder {
                                 virtual_name.push_str(&idx.to_string());
                             }
                             Literal::String(field) => {
-                                virtual_name.push('"');
+                                virtual_name.push('\'');
                                 virtual_name.push_str(field.as_ref());
-                                virtual_name.push('"');
+                                virtual_name.push('\'');
                             }
                             _ => unreachable!(),
                         }

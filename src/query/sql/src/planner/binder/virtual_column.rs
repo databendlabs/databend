@@ -166,9 +166,9 @@ impl VirtualColumnRewriter {
                                                 name.push_str(&idx.to_string());
                                             }
                                             KeyPath::QuotedName(field) | KeyPath::Name(field) => {
-                                                name.push('"');
+                                                name.push('\'');
                                                 name.push_str(field.as_ref());
-                                                name.push('"');
+                                                name.push('\'');
                                             }
                                         }
                                         name.push(']');
