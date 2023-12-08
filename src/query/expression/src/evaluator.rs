@@ -955,7 +955,7 @@ impl<'a> Evaluator<'a> {
         unreachable!("expr is not a set returning function: {expr}")
     }
 
-    fn run_lambda(
+    pub fn run_lambda(
         &self,
         func_name: &str,
         args: Vec<Value<AnyType>>,

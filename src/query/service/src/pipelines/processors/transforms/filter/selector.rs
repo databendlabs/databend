@@ -378,6 +378,37 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_expr,
+                return_type,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.evaluator.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+                let result = self.evaluator.run_lambda(name, args, lambda_expr)?;
+                select_value(
+                    result,
+                    return_type,
+                    true_selection,
+                    false_selection,
+                    true_idx,
+                    false_idx,
+                    select_strategy,
+                    count,
+                )
+            }
             _ => unreachable!("expr: {expr}"),
         };
         Ok(count)
