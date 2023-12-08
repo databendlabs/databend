@@ -118,7 +118,7 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         match self.inner.generate()? {
             None => self.is_finish = true,
             Some(data_block) => {
-                if data_block.is_empty() && data_block.get_meta().is_none() {
+                if data_block.is_full_empty() {
                     // A part was pruned by runtime filter
                     return Ok(());
                 }
