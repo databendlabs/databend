@@ -243,6 +243,7 @@ impl FlightReceiver {
 
     pub fn close(&self) {
         self.rx.close();
+        // there is only one receiver, which will use the notification in a  single-shot manner
         self.notify.notify_one();
     }
 }
