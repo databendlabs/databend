@@ -39,7 +39,6 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::RuntimeFilter;
 use common_profile::SharedProcessorProfiles;
 
 use super::sort::Cursor;
@@ -414,8 +413,6 @@ where R: Rows
         Ok(output)
     }
 }
-
-impl<R> RuntimeFilter for MultiSortMergeProcessor<R> where R: 'static + Rows + Send {}
 
 #[async_trait::async_trait]
 impl<R> Processor for MultiSortMergeProcessor<R>

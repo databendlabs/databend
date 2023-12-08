@@ -26,7 +26,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
@@ -159,8 +158,6 @@ impl SyncSource for ReadNativeDataSource<true> {
         }
     }
 }
-
-impl RuntimeFilter for ReadNativeDataSource<false> {}
 
 #[async_trait::async_trait]
 impl Processor for ReadNativeDataSource<false> {

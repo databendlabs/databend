@@ -21,7 +21,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::RuntimeFilter;
 
 pub trait ExchangeSorting: Send + Sync + 'static {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize>;
@@ -64,8 +63,6 @@ impl TransformExchangeSorting {
         self.inputs.clone()
     }
 }
-
-impl RuntimeFilter for TransformExchangeSorting {}
 
 #[async_trait::async_trait]
 impl Processor for TransformExchangeSorting {

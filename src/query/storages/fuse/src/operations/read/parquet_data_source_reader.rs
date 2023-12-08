@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,7 +30,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
@@ -44,6 +44,7 @@ use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
+    ctx: Arc<dyn TableContext>,
     id: usize,
     finished: bool,
     batch_size: usize,
@@ -76,6 +77,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
 
         if BLOCKING_IO {
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
+                ctx: ctx.clone(),
                 id,
                 output,
                 batch_size,
@@ -92,6 +94,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
                 false,
             > {
+                ctx: ctx.clone(),
                 id,
                 output,
                 batch_size,
@@ -175,40 +178,6 @@ impl SyncSource for ReadParquetDataSource<true> {
                 ))))
             }
         }
-    }
-
-    fn can_add_runtime_filter(&self) -> bool {
-        true
-    }
-
-    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        for (column_id, filter) in filters.iter() {
-            if self.runtime_filters.get(column_id).is_none()
-                && self.table_schema.has_field(column_id)
-            {
-                self.runtime_filters
-                    .insert(column_id.to_string(), filter.clone());
-            }
-        }
-        Ok(())
-    }
-}
-
-impl RuntimeFilter for ReadParquetDataSource<false> {
-    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        for (column_id, filter) in filters.iter() {
-            if self.runtime_filters.get(column_id).is_none()
-                && self.table_schema.has_field(column_id)
-            {
-                self.runtime_filters
-                    .insert(column_id.to_string(), filter.clone());
-            }
-        }
-        Ok(())
-    }
-
-    fn can_add_runtime_filter(&self) -> bool {
-        true
     }
 }
 

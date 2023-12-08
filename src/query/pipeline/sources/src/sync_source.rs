@@ -26,7 +26,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 
 /// Synchronized source. such as:
 ///     - Memory storage engine.
@@ -68,16 +67,6 @@ impl<T: 'static + SyncSource> SyncSourcer<T> {
             is_finish: false,
             generated_data: None,
         })))
-    }
-}
-
-impl<T: 'static + SyncSource> RuntimeFilter for SyncSourcer<T> {
-    fn add_runtime_filters(&mut self, filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        self.inner.add_runtime_filters(filters)
-    }
-
-    fn can_add_runtime_filter(&self) -> bool {
-        self.inner.can_add_runtime_filter()
     }
 }
 

@@ -37,7 +37,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::RuntimeFilter;
 use common_sql::executor::physical_plans::LagLeadDefault;
 use common_sql::plans::WindowFuncFrameUnits;
 
@@ -1158,8 +1157,6 @@ enum ProcessorState {
     AddBlock(Option<DataBlock>),
     Output,
 }
-
-impl<T> RuntimeFilter for TransformWindow<T> where T: Number + ResultTypeOfUnary {}
 
 #[async_trait::async_trait]
 impl<T> Processor for TransformWindow<T>

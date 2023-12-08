@@ -22,7 +22,6 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::RuntimeFilter;
 
 /// Sink with multiple inputs.
 #[async_trait]
@@ -104,8 +103,6 @@ impl<T: AsyncMpscSink + 'static> AsyncMpscSinker<T> {
         }
     }
 }
-
-impl<T: AsyncMpscSink + 'static> RuntimeFilter for AsyncMpscSinker<T> {}
 
 #[async_trait::async_trait]
 impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {

@@ -58,7 +58,6 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
@@ -514,8 +513,6 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 }
-
-impl RuntimeFilter for NativeDeserializeDataTransform {}
 
 impl Processor for NativeDeserializeDataTransform {
     fn name(&self) -> String {

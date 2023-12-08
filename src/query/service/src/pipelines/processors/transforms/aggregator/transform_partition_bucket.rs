@@ -33,7 +33,6 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::RuntimeFilter;
 use common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::ProfileStub;
 use common_pipeline_transforms::processors::Transformer;
@@ -300,11 +299,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
         Ok(data_blocks)
     }
-}
-
-impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> RuntimeFilter
-    for TransformPartitionBucket<Method, V>
-{
 }
 
 #[async_trait::async_trait]

@@ -30,7 +30,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
@@ -88,8 +87,6 @@ impl CompactSource {
         })))
     }
 }
-
-impl RuntimeFilter for CompactSource {}
 
 #[async_trait::async_trait]
 impl Processor for CompactSource {

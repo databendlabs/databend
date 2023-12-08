@@ -25,7 +25,6 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
-use common_pipeline_core::RuntimeFilter;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
 
@@ -67,8 +66,6 @@ impl RowNumberAndLogSplitProcessor {
         ])
     }
 }
-
-impl RuntimeFilter for RowNumberAndLogSplitProcessor {}
 
 impl Processor for RowNumberAndLogSplitProcessor {
     fn name(&self) -> String {

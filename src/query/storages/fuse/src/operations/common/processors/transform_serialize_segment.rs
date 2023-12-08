@@ -28,7 +28,6 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
-use common_pipeline_core::RuntimeFilter;
 use log::info;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
@@ -113,8 +112,6 @@ impl TransformSerializeSegment {
         PipeItem::create(processor_ptr, vec![input], vec![output])
     }
 }
-
-impl RuntimeFilter for TransformSerializeSegment {}
 
 #[async_trait]
 impl Processor for TransformSerializeSegment {
