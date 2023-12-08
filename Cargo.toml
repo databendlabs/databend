@@ -159,7 +159,7 @@ tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-
 tonic-reflection = { version = "0.10.2" }
 
 # Crates from arrow-rs
-arrow = { version = "47.0.0", features = ["pyarrow"] }
+arrow = { version = "47.0.0" }
 arrow-select = { version = "47.0.0" }
 arrow-array = { version = "47.0.0" }
 arrow-buffer = { version = "47.0.0" }

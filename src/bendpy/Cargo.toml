@@ -18,7 +18,7 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
 uuid = { version = "1.1.2" }
 # Workspace dependencies
-arrow = { workspace = true }
+arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
 
 common-config = { path = "../query/config" }

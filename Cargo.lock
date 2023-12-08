@@ -2813,7 +2813,7 @@ dependencies = [
  "common-pipeline-core",
  "common-storage",
  "common-storages-parquet",
- "deltalake",
+ "deltalake-core",
  "futures",
  "match-template",
  "minitrace",
@@ -4258,14 +4258,6 @@ name = "deflate64"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30dc5bb425a582de72bb57130320aac133893ea85f6151f79bd9aa9067114f60"
-
-[[package]]
-name = "deltalake"
-version = "0.17.0"
-source = "git+https://github.com/delta-io/delta-rs?rev=44a3760#44a3760aac9d68bfa6975d20ceba046d853514e9"
-dependencies = [
- "deltalake-core",
-]
 
 [[package]]
 name = "deltalake-core"
