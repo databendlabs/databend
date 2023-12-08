@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::vec;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -49,7 +50,7 @@ use opendal::Operator;
 
 use super::source::Parquet2SourceMeta;
 use crate::parquet2::parquet_reader::BlockIterator;
-use crate::parquet2::parquet_reader::IndexedReaders;
+use crate::parquet2::parquet_reader::IndexedChunks;
 use crate::parquet2::parquet_reader::Parquet2PartData;
 use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
@@ -57,6 +58,7 @@ use crate::parquet2::pruning::PartitionPruner;
 use crate::parquet2::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
+use crate::ReadSettings;
 
 pub trait SmallFilePrunner: Send + Sync {
     fn prune_one_file(
@@ -94,6 +96,9 @@ pub struct Parquet2DeserializeTransform {
     // used for collect num_rows for small files
     is_copy: bool,
     copy_status: Arc<CopyStatus>,
+
+    merge_read_max_gap_size: u64,
+    merge_read_max_range_size: u64,
 }
 
 impl Parquet2DeserializeTransform {
@@ -131,6 +136,10 @@ impl Parquet2DeserializeTransform {
 
                 is_copy: matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable),
                 copy_status: ctx.get_copy_status(),
+                merge_read_max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+                merge_read_max_range_size: ctx
+                    .get_settings()
+                    .get_storage_io_max_page_bytes_for_read()?,
             },
         )))
     }
@@ -173,11 +182,18 @@ impl Parquet2DeserializeTransform {
             .partition_pruner
             .prune_one_file(path, &op, data_size as u64)?;
 
+        let settings = ReadSettings {
+            max_gap_size: self.merge_read_max_gap_size,
+            max_range_size: self.merge_read_max_range_size,
+        };
+
         for part in parts {
-            let mut readers = self
-                .source_reader
-                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
-            if let Some(block) = self.process_row_group(&part, &mut readers)? {
+            let readers = self.source_reader.sync_read_columns_data_by_merge_io(
+                &settings,
+                &part,
+                &blocking_op,
+            )?;
+            if let Some(block) = self.process_row_group(&part, &mut readers.column_buffers()?)? {
                 res.push(block)
             }
         }
@@ -194,14 +210,14 @@ impl Parquet2DeserializeTransform {
     fn process_row_group(
         &mut self,
         part: &Parquet2RowGroupPart,
-        readers: &mut IndexedReaders,
+        column_chunks: &mut IndexedChunks,
     ) -> Result<Option<DataBlock>> {
         let row_selection = part
             .row_selection
             .as_ref()
             .map(|sel| intervals_to_bitmap(sel, part.num_rows));
         // this means it's empty projection
-        if readers.is_empty() {
+        if column_chunks.is_empty() {
             let data_block = DataBlock::new(vec![], part.num_rows);
             return Ok(Some(data_block));
         }
@@ -213,7 +229,7 @@ impl Parquet2DeserializeTransform {
                 filter,
                 top_k,
             }) => {
-                let chunks = reader.read_from_readers(readers)?;
+                let chunks = reader.read_from_merge_io(column_chunks)?;
 
                 // only if there is not dictionary page, we can push down the row selection
                 let can_push_down = chunks
@@ -279,7 +295,8 @@ impl Parquet2DeserializeTransform {
                 }
 
                 // Step 6: Read remain columns.
-                let chunks = self.remain_reader.read_from_readers(readers)?;
+                let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
+
                 let can_push_down = chunks
                     .iter()
                     .all(|(id, _)| !part.column_metas[id].has_dictionary);
@@ -313,7 +330,8 @@ impl Parquet2DeserializeTransform {
             }
             None => {
                 // for now only use current_row_group when prewhere_info is None
-                let chunks = self.remain_reader.read_from_readers(readers)?;
+                // for now only use current_row_group when prewhere_info is None
+                let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
                 let mut current_row_group =
                     self.remain_reader
                         .get_deserializer(part, chunks, row_selection)?;

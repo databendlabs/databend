@@ -27,6 +27,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::PREDICATE_COLUMN_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast_scalar;
@@ -39,8 +40,6 @@ use crate::plans::SubqueryDesc;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::Visibility;
-
-pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
 #[derive(Clone, Debug)]
 pub struct UpdatePlan {

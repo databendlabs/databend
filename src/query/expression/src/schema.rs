@@ -57,8 +57,8 @@ pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
 pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
-
 pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
+pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
 // stream column id.
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
@@ -75,16 +75,30 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 }
 
 #[inline]
-pub fn is_stream_column(column_name: &str) -> bool {
+pub fn is_internal_column(column_name: &str) -> bool {
     matches!(
         column_name,
-        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+        ROW_ID_COL_NAME
+            | SNAPSHOT_NAME_COL_NAME
+            | SEGMENT_NAME_COL_NAME
+            | BLOCK_NAME_COL_NAME
+            | BASE_BLOCK_IDS_COL_NAME
+            | ROW_NUMBER_COL_NAME
+            | PREDICATE_COLUMN_NAME
     )
 }
 
 #[inline]
 pub fn is_stream_column_id(column_id: ColumnId) -> bool {
     (ORIGIN_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
+}
+
+#[inline]
+pub fn is_stream_column(column_name: &str) -> bool {
+    matches!(
+        column_name,
+        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -681,7 +695,7 @@ impl TableSchema {
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = data_type
+            } = data_type.remove_nullable()
             {
                 if col_name.starts_with(field_name) {
                     for ((i, inner_field_name), inner_field_type) in

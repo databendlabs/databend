@@ -12,213 +12,244 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter;
 use crate::register_histogram_in_milliseconds;
 use crate::Counter;
 use crate::Histogram;
 
-lazy_static! {
 // Common metrics.
-static ref OMIT_FILTER_ROWGROUPS: Counter = register_counter("omit_filter_rowgroups");
-static ref OMIT_FILTER_ROWS: Counter = register_counter("omit_filter_rows");
+static OMIT_FILTER_ROWGROUPS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("omit_filter_rowgroups"));
+static OMIT_FILTER_ROWS: LazyLock<Counter> = LazyLock::new(|| register_counter("omit_filter_rows"));
 
 // COPY metrics.
- static ref COPY_PURGE_FILE_COUNTER: Counter = register_counter("copy_purge_file_counter");
-static ref COPY_PURGE_FILE_COST_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("copy_purge_file_cost_milliseconds");
-static ref COPY_READ_PART_COUNTER: Counter = register_counter("copy_read_part_counter");
-static ref COPY_READ_SIZE_BYTES: Counter = register_counter("copy_read_size_bytes");
-static ref COPY_READ_PART_COST_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("copy_read_part_cost_milliseconds");
-static ref COPY_FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("copy_filter_out_copied_files_request_milliseconds");
-static ref COPY_FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("copy_filter_out_copied_files_entire_milliseconds");
-static ref COPY_COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("copy_collect_files_get_all_source_files_milliseconds");
-
+static COPY_PURGE_FILE_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("copy_purge_file_counter"));
+static COPY_PURGE_FILE_COST_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("copy_purge_file_cost_milliseconds"));
+static COPY_READ_PART_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("copy_read_part_counter"));
+static COPY_READ_SIZE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("copy_read_size_bytes"));
+static COPY_READ_PART_COST_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("copy_read_part_cost_milliseconds"));
+static COPY_FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| {
+        register_histogram_in_milliseconds("copy_filter_out_copied_files_request_milliseconds")
+    });
+static COPY_FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| {
+        register_histogram_in_milliseconds("copy_filter_out_copied_files_entire_milliseconds")
+    });
+static COPY_COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| {
+        register_histogram_in_milliseconds("copy_collect_files_get_all_source_files_milliseconds")
+    });
 
 // Merge into metrics.
-static ref MERGE_INTO_REPLACE_BLOCKS_COUNTER: Counter =
-    register_counter("merge_into_replace_blocks_counter");
-static ref MERGE_INTO_REPLACE_BLOCKS_ROWS_COUNTER: Counter =
-    register_counter("merge_into_replace_blocks_rows_counter");
-static ref MERGE_INTO_DELETED_BLOCKS_COUNTER: Counter =
-    register_counter("merge_into_deleted_blocks_counter");
-static ref MERGE_INTO_DELETED_BLOCKS_ROWS_COUNTER: Counter =
-    register_counter("merge_into_deleted_blocks_rows_counter");
-static ref MERGE_INTO_APPEND_BLOCKS_COUNTER: Counter =
-    register_counter("merge_into_append_blocks_counter");
-static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER: Counter =
-    register_counter("merge_into_distributed_hashtable_fetch_row_number");
-static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_EMPTY_BLOCK: Counter =
-    register_counter("merge_into_distributed_hashtable_empty_block");
-static ref MERGE_INTO_DISTRIBUTED_GENERATE_ROW_NUMBERS: Counter =
-    register_counter("merge_into_distributed_generate_row_numbers");
-static ref MERGE_INTO_DISTRIBUTED_INIT_UNIQUE_NUMBER: Counter =
-    register_counter("merge_into_distributed_init_unique_number");
-static ref MERGE_INTO_DISTRIBUTED_NEW_SET_LEN: Counter =
-    register_counter("merge_into_distributed_new_set_len");
-static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK: Counter =
-    register_counter("merge_into_distributed_hashtable_push_empty_null_block");
-static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK: Counter =
-    register_counter("merge_into_distributed_hashtable_push_null_block");
-static ref MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK_ROWS: Counter =
-    register_counter("merge_into_distributed_hashtable_push_null_block_rows");
-static ref MERGE_INTO_APPEND_BLOCKS_ROWS_COUNTER: Counter =
-    register_counter("merge_into_append_blocks_rows_counter");
-static ref MERGE_INTO_MATCHED_ROWS: Counter = register_counter("merge_into_matched_rows");
-static ref MERGE_INTO_UNMATCHED_ROWS: Counter = register_counter("merge_into_unmatched_rows");
-static ref MERGE_INTO_DISTRIBUTED_DEDUPLICATE_ROWNUMBER: Counter =
-    register_counter("merge_into_distributed_deduplicate_row_number");
-static ref MERGE_INTO_DISTRIBUTED_EMPTY_ROWNUMBER: Counter =
-    register_counter("merge_into_distributed_empty_row_number");
-static ref MERGE_INTO_DISTRIBUTED_APPLY_ROWNUMBER: Counter =
-    register_counter("merge_into_distributed_apply_row_number");
-static ref MERGE_INTO_ACCUMULATE_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("merge_into_accumulate_milliseconds");
-static ref MERGE_INTO_APPLY_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("merge_into_apply_milliseconds");
-static ref MERGE_INTO_SPLIT_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("merge_into_split_milliseconds");
-static ref MERGE_INTO_NOT_MATCHED_OPERATION_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("merge_into_not_matched_operation_milliseconds");
-static ref MERGE_INTO_MATCHED_OPERATION_MILLISECONDS: Histogram =
-    register_histogram_in_milliseconds("merge_into_matched_operation_milliseconds");
+static MERGE_INTO_REPLACE_BLOCKS_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_replace_blocks_counter"));
+static MERGE_INTO_REPLACE_BLOCKS_ROWS_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_replace_blocks_rows_counter"));
+static MERGE_INTO_DELETED_BLOCKS_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_deleted_blocks_counter"));
+static MERGE_INTO_DELETED_BLOCKS_ROWS_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_deleted_blocks_rows_counter"));
+static MERGE_INTO_APPEND_BLOCKS_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_append_blocks_counter"));
+static MERGE_INTO_DISTRIBUTED_HASHTABLE_FETCH_ROWNUMBER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_hashtable_fetch_row_number"));
+static MERGE_INTO_DISTRIBUTED_HASHTABLE_EMPTY_BLOCK: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_hashtable_empty_block"));
+static MERGE_INTO_DISTRIBUTED_GENERATE_ROW_NUMBERS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_generate_row_numbers"));
+static MERGE_INTO_DISTRIBUTED_INIT_UNIQUE_NUMBER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_init_unique_number"));
+static MERGE_INTO_DISTRIBUTED_NEW_SET_LEN: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_new_set_len"));
+static MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_EMPTY_NULL_BLOCK: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_hashtable_push_empty_null_block"));
+static MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_hashtable_push_null_block"));
+static MERGE_INTO_DISTRIBUTED_HASHTABLE_PUSH_NULL_BLOCK_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_hashtable_push_null_block_rows"));
+static MERGE_INTO_APPEND_BLOCKS_ROWS_COUNTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_append_blocks_rows_counter"));
+static MERGE_INTO_MATCHED_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_matched_rows"));
+static MERGE_INTO_UNMATCHED_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_unmatched_rows"));
+static MERGE_INTO_DISTRIBUTED_DEDUPLICATE_ROWNUMBER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_deduplicate_row_number"));
+static MERGE_INTO_DISTRIBUTED_EMPTY_ROWNUMBER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_empty_row_number"));
+static MERGE_INTO_DISTRIBUTED_APPLY_ROWNUMBER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("merge_into_distributed_apply_row_number"));
+static MERGE_INTO_ACCUMULATE_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("merge_into_accumulate_milliseconds"));
+static MERGE_INTO_APPLY_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("merge_into_apply_milliseconds"));
+static MERGE_INTO_SPLIT_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("merge_into_split_milliseconds"));
+static MERGE_INTO_NOT_MATCHED_OPERATION_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("merge_into_not_matched_operation_milliseconds")
+});
+static MERGE_INTO_MATCHED_OPERATION_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("merge_into_matched_operation_milliseconds")
+});
 
-    // Fuse engine metrics.
-    static ref COMMIT_MUTATION_UNRESOLVABLE_CONFLICT: Counter =
-        register_counter("fuse_commit_mutation_unresolvable_conflict");
-    static ref COMMIT_MUTATION_LATEST_SNAPSHOT_APPEND_ONLY: Counter =
-        register_counter("fuse_commit_mutation_latest_snapshot_append_only");
-    static ref COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST: Counter =
-        register_counter("fuse_commit_mutation_modified_segment_exists_in_latest");
-    static ref COMMIT_MUTATION_RETRY: Counter = register_counter("fuse_commit_mutation_retry");
-    static ref COMMIT_MUTATION_SUCCESS: Counter = register_counter("fuse_commit_mutation_success");
-    static ref COMMIT_COPIED_FILES: Counter = register_counter("fuse_commit_copied_files");
-    static ref COMMIT_MILLISECONDS: Counter = register_counter("fuse_commit_milliseconds");
-    static ref COMMIT_ABORTS: Counter = register_counter("fuse_commit_aborts");
-    static ref REMOTE_IO_SEEKS: Counter = register_counter("fuse_remote_io_seeks");
-    static ref REMOTE_IO_SEEKS_AFTER_MERGED: Counter =
-        register_counter("fuse_remote_io_seeks_after_merged");
-    static ref REMOTE_IO_READ_BYTES: Counter = register_counter("fuse_remote_io_read_bytes");
-    static ref REMOTE_IO_READ_BYTES_AFTER_MERGED: Counter =
-        register_counter("fuse_remote_io_read_bytes_after_merged");
-    static ref REMOTE_IO_READ_PARTS: Counter = register_counter("fuse_remote_io_read_parts");
-    static ref REMOTE_IO_READ_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_remote_io_read_milliseconds");
-    static ref REMOTE_IO_DESERIALIZE_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_remote_io_deserialize_milliseconds");
-    static ref BLOCK_WRITE_NUMS: Counter = register_counter("fuse_block_write_nums");
-    static ref BLOCK_WRITE_BYTES: Counter = register_counter("fuse_block_write_bytes");
-    static ref BLOCK_WRITE_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_block_write_millioseconds");
-    static ref BLOCK_INDEX_WRITE_NUMS: Counter = register_counter("fuse_block_index_write_nums");
-    static ref BLOCK_INDEX_WRITE_BYTES: Counter = register_counter("fuse_block_index_write_bytes");
-    static ref BLOCK_INDEX_WRITE_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_block_index_write_milliseconds");
-    static ref BLOCK_INDEX_READ_BYTES: Counter = register_counter("fuse_block_index_read_bytes");
-    static ref COMPACT_BLOCK_READ_NUMS: Counter = register_counter("fuse_compact_block_read_nums");
-    static ref COMPACT_BLOCK_READ_BYTES: Counter =
-        register_counter("fuse_compact_block_read_bytes");
-    static ref COMPACT_BLOCK_READ_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_compact_block_read_milliseconds");
-    static ref COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_compact_block_build_task_milliseconds");
-    static ref RECLUSTER_BLOCK_NUMS_TO_READ: Counter =
-        register_counter("fuse_recluster_block_nums_to_read");
-    static ref RECLUSTER_BLOCK_BYTES_TO_READ: Counter =
-        register_counter("fuse_recluster_block_bytes_to_read");
-    static ref RECLUSTER_ROW_NUMS_TO_READ: Counter =
-        register_counter("fuse_recluster_row_nums_to_read");
-    static ref RECLUSTER_WRITE_BLOCK_NUMS: Counter =
-        register_counter("fuse_recluster_write_block_nums");
-    static ref SEGMENTS_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("fuse_segments_range_pruning_before");
-    static ref SEGMENTS_RANGE_PRUNING_AFTER: Counter =
-        register_counter("fuse_segments_range_pruning_after");
-    static ref BYTES_SEGMENT_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("fuse_bytes_segment_range_pruning_before");
-    static ref BYTES_SEGMENT_RANGE_PRUNING_AFTER: Counter =
-        register_counter("fuse_bytes_segment_range_pruning_after");
-    static ref BLOCKS_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("fuse_blocks_range_pruning_before");
-    static ref BLOCKS_RANGE_PRUNING_AFTER: Counter =
-        register_counter("fuse_blocks_range_pruning_after");
-    static ref BYTES_BLOCK_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("fuse_bytes_block_range_pruning_before");
-    static ref BYTES_BLOCK_RANGE_PRUNING_AFTER: Counter =
-        register_counter("fuse_bytes_block_range_pruning_after");
-    static ref BLOCKS_BLOOM_PRUNING_BEFORE: Counter =
-        register_counter("fuse_blocks_bloom_pruning_before");
-    static ref BLOCKS_BLOOM_PRUNING_AFTER: Counter =
-        register_counter("fuse_blocks_bloom_pruning_after");
-    static ref BYTES_BLOCK_BLOOM_PRUNING_BEFORE: Counter =
-        register_counter("fuse_bytes_block_bloom_pruning_before");
-    static ref BYTES_BLOCK_BLOOM_PRUNING_AFTER: Counter =
-        register_counter("fuse_bytes_block_bloom_pruning_after");
-    static ref PRUNING_PREWHERE_NUMS: Counter = register_counter("fuse_pruning_prewhere_nums");
-    static ref PRUNING_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_pruning_milliseconds");
-    static ref DELETION_BLOCK_RANGE_PRUNED_NUMS: Counter =
-        register_counter("fuse_deletion_block_range_pruned_nums");
-    static ref DELETION_SEGMENT_RANGE_PRUNED_WHOLE_SEGMENT_NUMS: Counter =
-        register_counter("fuse_deletion_segment_range_pruned_whole_segment_nums");
-    static ref DELETION_BLOCK_RANGE_PRUNED_WHOLE_BLOCK_NUMS: Counter =
-        register_counter("fuse_deletion_block_range_pruned_whole_block_nums");
-    static ref REPLACE_INTO_BLOCK_NUMBER_AFTER_PRUNING: Counter =
-        register_counter("fuse_replace_into_block_number_after_pruning");
-    static ref REPLACE_INTO_SEGMENT_NUMBER_AFTER_PRUNING: Counter =
-        register_counter("fuse_replace_into_segment_number_after_pruning");
-    static ref REPLACE_INTO_ROW_NUMBER_AFTER_PRUNING: Counter =
-        register_counter("fuse_replace_into_row_number_after_pruning");
-    static ref REPLACE_INTO_BLOCK_NUMBER_TOTALLY_LOADED: Counter =
-        register_counter("fuse_replace_into_block_number_totally_loaded");
-    static ref REPLACE_INTO_ROW_NUMBER_WRITE: Counter =
-        register_counter("fuse_replace_into_row_number_write");
-    static ref REPLACE_INTO_BLOCK_NUMBER_WRITE: Counter =
-        register_counter("fuse_replace_into_block_number_write");
-    static ref REPLACE_INTO_ROW_NUMBER_TOTALLY_LOADED: Counter =
-        register_counter("fuse_replace_into_row_number_totally_loaded");
-    static ref REPLACE_INTO_BLOCK_NUMBER_WHOLE_BLOCK_DELETION: Counter =
-        register_counter("fuse_replace_into_block_number_whole_block_deletion");
-    static ref REPLACE_INTO_BLOCK_NUMBER_ZERO_ROW_DELETED: Counter =
-        register_counter("fuse_replace_into_block_number_zero_row_deleted");
-    static ref REPLACE_INTO_ROW_NUMBER_SOURCE_BLOCK: Counter =
-        register_counter("fuse_replace_into_row_number_source_block");
-    static ref REPLACE_INTO_ROW_NUMBER_AFTER_TABLE_LEVEL_PRUNING: Counter =
-        register_counter("fuse_replace_into_row_number_after_table_level_pruning");
-    static ref REPLACE_INTO_PARTITION_NUMBER: Counter =
-        register_counter("fuse_replace_into_partition_number");
-    static ref REPLACE_INTO_TIME_PROCESS_INPUT_BLOCK_MS: Histogram =
-        register_histogram_in_milliseconds("fuse_replace_into_time_process_input_block_ms");
-    static ref REPLACE_INTO_NUMBER_ACCUMULATED_MERGE_ACTION: Counter =
-        register_counter("fuse_replace_into_number_accumulated_merge_action");
-    static ref REPLACE_INTO_NUMBER_APPLY_DELETION: Counter =
-        register_counter("fuse_replace_into_number_apply_deletion");
-    static ref REPLACE_INTO_TIME_ACCUMULATED_MERGE_ACTION_MS: Histogram =
-        register_histogram_in_milliseconds("fuse_replace_into_time_accumulated_merge_action_ms");
-    static ref REPLACE_INTO_TIME_APPLY_DELETION_MS: Histogram =
-        register_histogram_in_milliseconds("fuse_replace_into_time_apply_deletion_ms");
-    static ref REPLACE_INTO_BLOCK_NUMBER_BLOOM_PRUNED: Counter =
-        register_counter("fuse_replace_into_block_number_bloom_pruned");
-    static ref REPLACE_INTO_BLOCK_NUMBER_SOURCE: Counter =
-        register_counter("fuse_replace_into_block_number_source");
-    static ref REPLACE_INTO_REPLACED_BLOCKS_ROWS: Counter =
-        register_counter("fuse_replace_into_replaced_blocks_rows");
-    static ref REPLACE_INTO_DELETED_BLOCKS_ROWS: Counter =
-        register_counter("fuse_replace_into_deleted_blocks_rows");
-    static ref REPLACE_INTO_APPEND_BLOCKS_ROWS: Counter =
-        register_counter("fuse_replace_into_append_blocks_rows");
+// Fuse engine metrics.
+static COMMIT_MUTATION_UNRESOLVABLE_CONFLICT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_mutation_unresolvable_conflict"));
+static COMMIT_MUTATION_LATEST_SNAPSHOT_APPEND_ONLY: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_mutation_latest_snapshot_append_only"));
+static COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_mutation_modified_segment_exists_in_latest"));
+static COMMIT_MUTATION_RETRY: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_mutation_retry"));
+static COMMIT_MUTATION_SUCCESS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_mutation_success"));
+static COMMIT_COPIED_FILES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_copied_files"));
+static COMMIT_MILLISECONDS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_commit_milliseconds"));
+static COMMIT_ABORTS: LazyLock<Counter> = LazyLock::new(|| register_counter("fuse_commit_aborts"));
+static REMOTE_IO_SEEKS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_remote_io_seeks"));
+static REMOTE_IO_SEEKS_AFTER_MERGED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_remote_io_seeks_after_merged"));
+static REMOTE_IO_READ_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_remote_io_read_bytes"));
+static REMOTE_IO_READ_BYTES_AFTER_MERGED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_remote_io_read_bytes_after_merged"));
+static REMOTE_IO_READ_PARTS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_remote_io_read_parts"));
+static REMOTE_IO_READ_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_remote_io_read_milliseconds"));
+static REMOTE_IO_DESERIALIZE_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_remote_io_deserialize_milliseconds"));
+static BLOCK_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_write_nums"));
+static BLOCK_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_write_bytes"));
+static BLOCK_WRITE_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_block_write_millioseconds"));
+static BLOCK_INDEX_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_index_write_nums"));
+static BLOCK_INDEX_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_index_write_bytes"));
+static BLOCK_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_block_index_write_milliseconds"));
+static BLOCK_INDEX_READ_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_index_read_bytes"));
+static COMPACT_BLOCK_READ_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_compact_block_read_nums"));
+static COMPACT_BLOCK_READ_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_compact_block_read_bytes"));
+static COMPACT_BLOCK_READ_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_compact_block_read_milliseconds"));
+static COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_compact_block_build_task_milliseconds")
+});
+static RECLUSTER_BLOCK_NUMS_TO_READ: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_recluster_block_nums_to_read"));
+static RECLUSTER_BLOCK_BYTES_TO_READ: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_recluster_block_bytes_to_read"));
+static RECLUSTER_ROW_NUMS_TO_READ: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_recluster_row_nums_to_read"));
+static RECLUSTER_WRITE_BLOCK_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_recluster_write_block_nums"));
+static SEGMENTS_RANGE_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_segments_range_pruning_before"));
+static SEGMENTS_RANGE_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_segments_range_pruning_after"));
+static BYTES_SEGMENT_RANGE_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_segment_range_pruning_before"));
+static BYTES_SEGMENT_RANGE_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_segment_range_pruning_after"));
+static BLOCKS_RANGE_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_range_pruning_before"));
+static BLOCKS_RANGE_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_range_pruning_after"));
+static BYTES_BLOCK_RANGE_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_range_pruning_before"));
+static BYTES_BLOCK_RANGE_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_range_pruning_after"));
+static BLOCKS_BLOOM_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_bloom_pruning_before"));
+static BLOCKS_BLOOM_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_bloom_pruning_after"));
+static BYTES_BLOCK_BLOOM_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_bloom_pruning_before"));
+static BYTES_BLOCK_BLOOM_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_bloom_pruning_after"));
+static PRUNING_PREWHERE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_pruning_prewhere_nums"));
+static PRUNING_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_pruning_milliseconds"));
+static DELETION_BLOCK_RANGE_PRUNED_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_deletion_block_range_pruned_nums"));
+static DELETION_SEGMENT_RANGE_PRUNED_WHOLE_SEGMENT_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_deletion_segment_range_pruned_whole_segment_nums"));
+static DELETION_BLOCK_RANGE_PRUNED_WHOLE_BLOCK_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_deletion_block_range_pruned_whole_block_nums"));
+static REPLACE_INTO_BLOCK_NUMBER_AFTER_PRUNING: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_after_pruning"));
+static REPLACE_INTO_SEGMENT_NUMBER_AFTER_PRUNING: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_segment_number_after_pruning"));
+static REPLACE_INTO_ROW_NUMBER_AFTER_PRUNING: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_row_number_after_pruning"));
+static REPLACE_INTO_BLOCK_NUMBER_TOTALLY_LOADED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_totally_loaded"));
+static REPLACE_INTO_ROW_NUMBER_WRITE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_row_number_write"));
+static REPLACE_INTO_BLOCK_NUMBER_WRITE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_write"));
+static REPLACE_INTO_ROW_NUMBER_TOTALLY_LOADED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_row_number_totally_loaded"));
+static REPLACE_INTO_BLOCK_NUMBER_WHOLE_BLOCK_DELETION: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_whole_block_deletion"));
+static REPLACE_INTO_BLOCK_NUMBER_ZERO_ROW_DELETED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_zero_row_deleted"));
+static REPLACE_INTO_ROW_NUMBER_SOURCE_BLOCK: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_row_number_source_block"));
+static REPLACE_INTO_ROW_NUMBER_AFTER_TABLE_LEVEL_PRUNING: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_row_number_after_table_level_pruning"));
+static REPLACE_INTO_PARTITION_NUMBER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_partition_number"));
+static REPLACE_INTO_TIME_PROCESS_INPUT_BLOCK_MS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_replace_into_time_process_input_block_ms")
+});
+static REPLACE_INTO_NUMBER_ACCUMULATED_MERGE_ACTION: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_number_accumulated_merge_action"));
+static REPLACE_INTO_NUMBER_APPLY_DELETION: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_number_apply_deletion"));
+static REPLACE_INTO_TIME_ACCUMULATED_MERGE_ACTION_MS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_replace_into_time_accumulated_merge_action_ms")
+});
+static REPLACE_INTO_TIME_APPLY_DELETION_MS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_replace_into_time_apply_deletion_ms")
+});
+static REPLACE_INTO_BLOCK_NUMBER_BLOOM_PRUNED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_bloom_pruned"));
+static REPLACE_INTO_BLOCK_NUMBER_SOURCE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_block_number_source"));
+static REPLACE_INTO_REPLACED_BLOCKS_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_replaced_blocks_rows"));
+static REPLACE_INTO_DELETED_BLOCKS_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_deleted_blocks_rows"));
+static REPLACE_INTO_APPEND_BLOCKS_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_replace_into_append_blocks_rows"));
 
-    // Aggregate index metrics.
-    static ref AGG_INDEX_WRITE_NUMS: Counter = register_counter("fuse_aggregate_index_write_nums");
-    static ref AGG_INDEX_WRITE_BYTES: Counter = register_counter("fuse_aggregate_index_write_bytes");
-    static ref AGG_INDEX_WRITE_MILLISECONDS: Histogram =
-        register_histogram_in_milliseconds("fuse_aggregate_index_write_milliseconds");
-}
+// Aggregate index metrics.
+static AGG_INDEX_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_aggregate_index_write_nums"));
+static AGG_INDEX_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_aggregate_index_write_bytes"));
+static AGG_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_aggregate_index_write_milliseconds"));
 
 /// Common metrics.
 pub fn metrics_inc_omit_filter_rowgroups(c: u64) {

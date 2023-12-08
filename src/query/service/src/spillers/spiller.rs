@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::arrow::deserialize_column;
 use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
+use common_hashtable::hash2bucket;
 use log::info;
 use opendal::Operator;
 
@@ -227,7 +228,7 @@ impl Spiller {
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0111;
+            let partition_id = hash2bucket::<3, false>(*hash as usize) as u8;
             if spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows

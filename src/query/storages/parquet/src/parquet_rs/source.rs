@@ -36,6 +36,7 @@ use super::parquet_reader::policy::ReadPolicyImpl;
 use crate::ParquetPart;
 use crate::ParquetRSFullReader;
 use crate::ParquetRSRowGroupReader;
+use crate::ReadSettings;
 
 enum State {
     Init,
@@ -200,7 +201,11 @@ impl Processor for ParquetSource {
                         ParquetPart::ParquetRSRowGroup(part) => {
                             if let Some(reader) = self
                                 .row_group_reader
-                                .create_read_policy(part, &mut self.topk_sorter)
+                                .create_read_policy(
+                                    &ReadSettings::from_ctx(&self.ctx)?,
+                                    part,
+                                    &mut self.topk_sorter,
+                                )
                                 .await?
                             {
                                 self.state = State::ReadRowGroup(reader);

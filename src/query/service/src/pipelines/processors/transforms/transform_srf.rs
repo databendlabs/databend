@@ -233,11 +233,14 @@ impl BlockingTransform for TransformSRF {
                                     }
                                 }
                             } else {
+                                let data_type = srf_expr.data_type();
+                                let inner_tys = data_type.as_tuple().unwrap();
+                                let inner_vals = vec![ScalarRef::Null; inner_tys.len()];
                                 row_result = Value::Column(
                                     ColumnBuilder::repeat(
-                                        &ScalarRef::Tuple(vec![ScalarRef::Null]),
+                                        &ScalarRef::Tuple(inner_vals),
                                         self.num_rows[i],
-                                        srf_expr.data_type(),
+                                        data_type,
                                     )
                                     .build(),
                                 );

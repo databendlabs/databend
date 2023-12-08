@@ -18,7 +18,6 @@ enable-histogram = ["metrics/enable-histogram"]
 common-exception = { path = "../exception" }
 
 # Crates.io dependencies
-lazy_static = { workspace = true }
 metrics = "0.20.1"
 metrics-exporter-prometheus = { version = "0.11.0", default-features = false }
 parking_lot = "0.12.1"

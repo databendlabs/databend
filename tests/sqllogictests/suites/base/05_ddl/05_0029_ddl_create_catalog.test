@@ -21,4 +21,4 @@ statement ok
 DROP CATALOG IF EXISTS ctl;
 
 statement error 1001
-CREATE CATALOG ctl_wrong_hive TYPE=HIVE CONNECTION=( URL='s3://bucket' METASTORE_ADDRESS='http://127.0.0.1:1000' );
+CREATE CATALOG ctl_wrong_hive TYPE=HIVE CONNECTION=( URL='s3://bucket' METASTORE_ADDRESS='127.0.0.1:1000' );

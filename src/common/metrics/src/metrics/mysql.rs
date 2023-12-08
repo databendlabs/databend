@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::LazyLock;
 use std::time::Duration;
-
-use lazy_static::lazy_static;
 
 use crate::register_histogram_in_milliseconds;
 use crate::Histogram;
 
-lazy_static! {
-    static ref MYSQL_PROCESSOR_REQUEST_DURATION: Histogram =
-        register_histogram_in_milliseconds("mysql_process_request_duration_ms");
-    static ref MYSQL_INTERPRETER_USEDTIME: Histogram =
-        register_histogram_in_milliseconds("mysql_interpreter_usedtime_ms");
-}
+pub static MYSQL_PROCESSOR_REQUEST_DURATION: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("mysql_process_request_duration_ms"));
+pub static MYSQL_INTERPRETER_USEDTIME: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("mysql_interpreter_usedtime_ms"));
 
 pub fn observe_mysql_process_request_duration(duration: Duration) {
     MYSQL_PROCESSOR_REQUEST_DURATION.observe(duration.as_millis() as f64);

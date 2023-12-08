@@ -59,6 +59,26 @@ select a from t3 inner join numbers(100000) on t3.a = number order by a;
 0
 
 statement ok
+set disable_join_reorder = 0;
+
+query I
+select a from t3 inner join numbers(100000) on t3.a = number order by a;
+----
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
 drop table t3;
 
 statement ok
