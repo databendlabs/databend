@@ -206,7 +206,7 @@ statement ok
 create table t1(a int, b int);
 
 statement ok
-insert into t1 values(1, 1),(2, 2);
+insert into t1 values(1, 1),(2, 2),(3, 3);
 
 statement ok
 create table t2(a int, b int);
@@ -216,6 +216,18 @@ insert into t2 values(1, 1),(2, 2);
 
 statement error 1065
 SELECT t1.a FROM t1 RIGHT ANTI JOIN t2 ON t1.a = t2.a;
+---
+
+statement error 1065
+SELECT t1.a FROM t1 RIGHT SEMI JOIN t2 ON t1.a = t2.a;
+---
+
+statement error 1065
+SELECT t2.a FROM t1 LEFT ANTI JOIN t2 ON t1.a = t2.a;
+---
+
+statement error 1065
+SELECT t2.a FROM t1 LEFT SEMI JOIN t2 ON t1.a = t2.a;
 ---
 
 statement ok
