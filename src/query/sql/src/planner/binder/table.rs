@@ -367,7 +367,7 @@ impl Binder {
                         plan.items.len()
                     )));
                 }
-                // Delete result tuple column
+                // Delete srf result tuple column, extract tuple inner columns instead
                 let _ = bind_context.columns.pop();
                 let scalar = &plan.items[0].scalar;
 
@@ -462,28 +462,34 @@ impl Binder {
                         .bind_project_set(&mut bind_context, &srfs, child)
                         .await?;
 
-                    if let Some((_, flatten_scalar)) = bind_context.srfs.remove(&srf.to_string()) {
-                        // Add result column to metadata
-                        let data_type = flatten_scalar.data_type()?;
-                        let index = self
-                            .metadata
-                            .write()
-                            .add_derived_column(srf.to_string(), data_type.clone());
-                        let column_binding = ColumnBindingBuilder::new(
-                            srf.to_string(),
-                            index,
-                            Box::new(data_type),
-                            Visibility::Visible,
-                        )
-                        .build();
-                        bind_context.add_column_binding(column_binding);
+                    if let Some((_, srf_result)) = bind_context.srfs.remove(&srf.to_string()) {
+                        let column_binding =
+                            if let ScalarExpr::BoundColumnRef(column_ref) = &srf_result {
+                                column_ref.column.clone()
+                            } else {
+                                // Add result column to metadata
+                                let data_type = srf_result.data_type()?;
+                                let index = self
+                                    .metadata
+                                    .write()
+                                    .add_derived_column(srf.to_string(), data_type.clone());
+                                ColumnBindingBuilder::new(
+                                    srf.to_string(),
+                                    index,
+                                    Box::new(data_type),
+                                    Visibility::Visible,
+                                )
+                                .build()
+                            };
 
                         let eval_scalar = EvalScalar {
                             items: vec![ScalarItem {
-                                scalar: flatten_scalar,
-                                index,
+                                scalar: srf_result,
+                                index: column_binding.index,
                             }],
                         };
+                        // Add srf result column
+                        bind_context.add_column_binding(column_binding);
 
                         let flatten_expr =
                             SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
@@ -505,9 +511,8 @@ impl Binder {
 
                         return Ok((new_expr, bind_context));
                     } else {
-                        return Err(
-                            ErrorCode::Internal("srf flatten result is missing").set_span(*span)
-                        );
+                        return Err(ErrorCode::Internal("lateral join bind project_set failed")
+                            .set_span(*span));
                     }
                 } else {
                     return Err(ErrorCode::InvalidArgument(format!(
