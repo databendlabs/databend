@@ -251,6 +251,7 @@ pub fn build_recluster_physical_plan(
             input: Box::new(root),
             kind: FragmentKind::Merge,
             keys: vec![],
+            allow_adjust_parallelism: true,
             ignore_exchange: false,
         });
     }

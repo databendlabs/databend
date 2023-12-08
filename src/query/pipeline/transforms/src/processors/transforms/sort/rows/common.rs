@@ -31,6 +31,8 @@ use jsonb::convert_to_comparable;
 use super::RowConverter;
 use super::Rows;
 
+pub type CommonRows = StringColumn;
+
 impl Rows for StringColumn {
     type Item<'a> = &'a [u8];
 
@@ -53,7 +55,7 @@ impl Rows for StringColumn {
 
 impl RowConverter<StringColumn> for CommonRowConverter {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self> {
         let sort_fields = sort_columns_descriptions

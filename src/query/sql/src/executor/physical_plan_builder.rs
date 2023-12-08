@@ -99,10 +99,6 @@ impl PhysicalPlanBuilder {
                 self.build_union_all(s_expr, union_all, required, stat_info)
                     .await
             }
-            RelOperator::RuntimeFilterSource(runtime_filter) => {
-                self.build_runtime_filter(s_expr, runtime_filter, required)
-                    .await
-            }
             RelOperator::ProjectSet(project_set) => {
                 self.build_project_set(s_expr, project_set, required, stat_info)
                     .await
@@ -111,13 +107,11 @@ impl PhysicalPlanBuilder {
             RelOperator::MaterializedCte(cte) => {
                 self.build_materialized_cte(s_expr, cte, required).await
             }
-            RelOperator::Lambda(lambda) => {
-                self.build_lambda(s_expr, lambda, required, stat_info).await
-            }
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
             RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
+            RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
             _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()

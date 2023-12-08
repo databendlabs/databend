@@ -1,0 +1,111 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists u;
+
+# TINYINT limits
+statement ok
+CREATE TABLE t(t_k0 TINYINT);
+
+statement ok
+INSERT INTO t VALUES (-128), (127);
+
+statement ok
+CREATE TABLE u(u_k0 TINYINT);
+
+statement ok
+INSERT INTO u VALUES (-128), (127);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
+----
+-128	 -128
+127	127
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# SMALLINT limits
+statement ok
+CREATE TABLE t(t_k0 SMALLINT);
+
+statement ok
+INSERT INTO t VALUES (-32768), (32767);
+
+statement ok
+CREATE TABLE u(u_k0 SMALLINT);
+
+statement ok
+INSERT INTO u VALUES (-32768), (32767);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
+----
+-32768	 -32768
+32767	32767
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# INTEGER limits
+statement ok
+CREATE TABLE t(t_k0 INTEGER);
+
+statement ok
+INSERT INTO t VALUES (-2147483648), (2147483647);
+
+statement ok
+CREATE TABLE u(u_k0 INTEGER);
+
+statement ok
+INSERT INTO u VALUES (-2147483648), (2147483647);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
+----
+-2147483648	 -2147483648
+2147483647	2147483647
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+# BIGINT limits
+statement ok
+CREATE TABLE t(t_k0 BIGINT);
+
+statement ok
+INSERT INTO t VALUES (-9223372036854775808), (9223372036854775807);
+
+statement ok
+CREATE TABLE u(u_k0 BIGINT);
+
+statement ok
+INSERT INTO u VALUES (-9223372036854775808), (9223372036854775807);
+
+query II
+SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0 order by t_k0, u_k0;
+----
+-9223372036854775808	 -9223372036854775808
+9223372036854775807	9223372036854775807
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;
+
+statement ok
+set max_block_size = 65536;

@@ -23,7 +23,7 @@ use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[test]
@@ -39,7 +39,9 @@ pub fn test_format_field_name() {
 
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_consistency() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let ctx = fixture.new_query_ctx().await?;
     let tbl = fixture.default_table_name();
     let db = fixture.default_db_name();
@@ -103,22 +105,26 @@ pub async fn test_snapshot_consistency() -> Result<()> {
             let fuse_table0 = table0
                 .as_any()
                 .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support",
-                    table0.name(),
-                    table0.get_table_info().engine(),
-                )))
+                .ok_or_else(|| {
+                    ErrorCode::Unimplemented(format!(
+                        "table {}, engine type {}, does not support",
+                        table0.name(),
+                        table0.get_table_info().engine(),
+                    ))
+                })
                 .unwrap();
             let snapshot0 = fuse_table0.read_table_snapshot().await?;
 
             let fuse_table1 = table1
                 .as_any()
                 .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support",
-                    table1.name(),
-                    table1.get_table_info().engine(),
-                )))
+                .ok_or_else(|| {
+                    ErrorCode::Unimplemented(format!(
+                        "table {}, engine type {}, does not support",
+                        table1.name(),
+                        table1.get_table_info().engine(),
+                    ))
+                })
                 .unwrap();
             let snapshot1 = fuse_table1.read_table_snapshot().await?;
 
@@ -134,6 +140,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         } else {
             return Err(ErrorCode::BadArguments("query bad plan"));
         }
+
         Ok::<(), ErrorCode>(())
     };
 

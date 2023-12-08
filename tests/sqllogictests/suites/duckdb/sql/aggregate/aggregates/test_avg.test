@@ -15,11 +15,15 @@ SELECT AVG(3), AVG(NULL)
 ----
 3.0 NULL
 
-statement error 1006
+query FT
 SELECT AVG(3::SMALLINT), AVG(NULL::SMALLINT)
+----
+3.0 NULL
 
-statement error 1006
+query FT
 SELECT AVG(3::DOUBLE), AVG(NULL::DOUBLE)
+----
+3.0 NULL
 
 statement error 1005
 CREATE SEQUENCE seq

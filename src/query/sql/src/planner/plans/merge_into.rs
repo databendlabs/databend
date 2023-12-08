@@ -16,10 +16,17 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_ast::ast::TableAlias;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
 use common_meta_types::MetaId;
 
+use crate::binder::MergeIntoType;
 use crate::optimizer::SExpr;
 use crate::BindContext;
 use crate::IndexType;
@@ -27,14 +34,14 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 
 // for unmatched clause, we need to calculate the
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnmatchedEvaluator {
     pub source_schema: DataSchemaRef,
     pub condition: Option<ScalarExpr>,
     pub values: Vec<ScalarExpr>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MatchedEvaluator {
     pub condition: Option<ScalarExpr>,
     // table_schema.idx -> update_expression
@@ -58,10 +65,79 @@ pub struct MergeInto {
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_idx: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
+    pub merge_type: MergeIntoType,
+    pub distributed: bool,
 }
 
 impl std::fmt::Debug for MergeInto {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Merge Into")
+            .field("catalog", &self.catalog)
+            .field("database", &self.database)
+            .field("table", &self.table)
+            .field("table_id", &self.table_id)
+            .field("join", &self.input)
+            .field("matched", &self.matched_evaluators)
+            .field("unmateched", &self.unmatched_evaluators)
+            .field("distributed", &self.distributed)
+            .finish()
+    }
+}
+
+pub const INSERT_NAME: &str = "number of rows insertd";
+pub const UPDTAE_NAME: &str = "number of rows updated";
+pub const DELETE_NAME: &str = "number of rows deleted";
+
+impl MergeInto {
+    // the order of output should be (insert, update, delete),this is
+    // consistent with snowflake.
+    fn merge_into_mutations(&self) -> (bool, bool, bool) {
+        let insert = matches!(self.merge_type, MergeIntoType::FullOperation)
+            || matches!(self.merge_type, MergeIntoType::InsertOnly);
+        let mut update = false;
+        let mut delete = false;
+        for evaluator in &self.matched_evaluators {
+            if evaluator.update.is_none() {
+                delete = true
+            } else {
+                update = true
+            }
+        }
+        (insert, update, delete)
+    }
+
+    fn merge_into_table_schema(&self) -> Result<DataSchemaRef> {
+        let field_insertd = DataField::new(INSERT_NAME, DataType::Number(NumberDataType::Int32));
+        let field_updated = DataField::new(UPDTAE_NAME, DataType::Number(NumberDataType::Int32));
+        let field_deleted = DataField::new(DELETE_NAME, DataType::Number(NumberDataType::Int32));
+        match self.merge_into_mutations() {
+            (true, true, true) => Ok(DataSchemaRefExt::create(vec![
+                field_insertd.clone(),
+                field_updated.clone(),
+                field_deleted.clone(),
+            ])),
+            (true, true, false) => Ok(DataSchemaRefExt::create(vec![
+                field_insertd.clone(),
+                field_updated.clone(),
+            ])),
+            (true, false, true) => Ok(DataSchemaRefExt::create(vec![
+                field_insertd.clone(),
+                field_deleted.clone(),
+            ])),
+            (true, false, false) => Ok(DataSchemaRefExt::create(vec![field_insertd.clone()])),
+            (false, true, true) => Ok(DataSchemaRefExt::create(vec![
+                field_updated.clone(),
+                field_deleted.clone(),
+            ])),
+            (false, true, false) => Ok(DataSchemaRefExt::create(vec![field_updated.clone()])),
+            (false, false, true) => Ok(DataSchemaRefExt::create(vec![field_deleted.clone()])),
+            _ => Err(ErrorCode::BadArguments(
+                "at least one matched or unmatched clause for merge into",
+            )),
+        }
+    }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        self.merge_into_table_schema().unwrap()
     }
 }

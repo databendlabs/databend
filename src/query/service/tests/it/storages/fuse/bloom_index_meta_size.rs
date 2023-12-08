@@ -35,7 +35,7 @@ use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use common_storages_fuse::FuseStorageFormat;
-use databend_query::test_kits::block_writer::BlockWriter;
+use databend_query::test_kits::*;
 use opendal::Operator;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;

@@ -78,6 +78,7 @@ common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
+common-storages-stream = { path = "../storages/stream" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
@@ -90,6 +91,7 @@ storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 storages-common-index = { path = "../storages/common/index" }
 storages-common-locks = { path = "../storages/common/locks" }
 storages-common-table-meta = { path = "../storages/common/table_meta" }
+stream-handler = { path = "../ee_features/stream_handler" }
 vacuum-handler = { path = "../ee_features/vacuum_handler" }
 virtual-column = { path = "../ee_features/virtual_column" }
 
@@ -111,6 +113,7 @@ byte-unit = "4.0.19"
 byteorder = "1.4.3"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+config = { version = "0.13.4", features = [] }
 ctor = "0.1.26"
 dashmap = "5.4"
 ethnum = { workspace = true }
@@ -124,7 +127,6 @@ humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = "0.10.5"
 jwt-simple = "0.11.0"
-lazy_static = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = "0.0.1"
@@ -133,7 +135,7 @@ minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
-opensrv-mysql = { version = "0.4.1", features = ["tls"] }
+opensrv-mysql = { version = "0.5.0", features = ["tls"] }
 parking_lot = "0.12.1"
 parquet = { workspace = true }
 paste = "1.0.9"

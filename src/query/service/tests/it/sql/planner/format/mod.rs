@@ -85,6 +85,7 @@ fn test_format() {
         None,
         false,
         false,
+        false,
     );
     let col1 = metadata.add_base_table_column(
         "col1".to_string(),
@@ -151,7 +152,6 @@ fn test_format() {
                 join_type: JoinType::Inner,
                 marker_index: None,
                 from_correlated_subquery: false,
-                contain_runtime_filter: false,
                 need_hold_hash_table: false,
             }
             .into(),

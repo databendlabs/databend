@@ -19,9 +19,11 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storages_iceberg::IcebergTable;
 use common_storages_memory::MemoryTable;
 use common_storages_null::NullTable;
 use common_storages_random::RandomTable;
+use common_storages_stream::stream_table::StreamTable;
 use common_storages_view::view_table::ViewTable;
 use dashmap::DashMap;
 
@@ -90,7 +92,7 @@ impl StorageFactory {
             descriptor: Arc::new(FuseTable::description),
         });
 
-        // Register View table engine
+        // Register VIEW table engine
         creators.insert("VIEW".to_string(), Storage {
             creator: Arc::new(ViewTable::try_create),
             descriptor: Arc::new(ViewTable::description),
@@ -100,6 +102,18 @@ impl StorageFactory {
         creators.insert("RANDOM".to_string(), Storage {
             creator: Arc::new(RandomTable::try_create),
             descriptor: Arc::new(RandomTable::description),
+        });
+
+        // Register STREAM table engine
+        creators.insert("STREAM".to_string(), Storage {
+            creator: Arc::new(StreamTable::try_create),
+            descriptor: Arc::new(StreamTable::description),
+        });
+
+        // Register STREAM table engine
+        creators.insert("ICEBERG".to_string(), Storage {
+            creator: Arc::new(IcebergTable::try_create),
+            descriptor: Arc::new(IcebergTable::description),
         });
 
         StorageFactory { storages: creators }

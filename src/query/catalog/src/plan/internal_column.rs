@@ -16,6 +16,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::DecimalSize;
 use common_expression::types::NumberDataType;
 use common_expression::types::UInt64Type;
 use common_expression::BlockEntry;
@@ -27,6 +29,7 @@ use common_expression::FromData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::Value;
+use common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use common_expression::BLOCK_NAME_COLUMN_ID;
 use common_expression::ROW_ID_COLUMN_ID;
 use common_expression::SEGMENT_NAME_COLUMN_ID;
@@ -90,6 +93,7 @@ pub struct InternalColumnMeta {
     pub snapshot_location: Option<String>,
     /// The row offsets in the block.
     pub offsets: Option<Vec<usize>>,
+    pub base_block_ids: Option<Scalar>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
@@ -105,9 +109,9 @@ impl BlockMetaInfo for InternalColumnMeta {
 
 impl InternalColumnMeta {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&InternalColumnMeta> {
-        InternalColumnMeta::downcast_ref_from(info).ok_or(ErrorCode::Internal(
-            "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
-        ))
+        InternalColumnMeta::downcast_ref_from(info).ok_or_else(|| {
+            ErrorCode::Internal("Cannot downcast from BlockMetaInfo to InternalColumnMeta.")
+        })
     }
 }
 
@@ -117,6 +121,7 @@ pub enum InternalColumnType {
     BlockName,
     SegmentName,
     SnapshotName,
+    BaseBlockIds,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -143,6 +148,12 @@ impl InternalColumn {
             InternalColumnType::BlockName => TableDataType::String,
             InternalColumnType::SegmentName => TableDataType::String,
             InternalColumnType::SnapshotName => TableDataType::String,
+            InternalColumnType::BaseBlockIds => TableDataType::Array(Box::new(
+                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                    precision: 38,
+                    scale: 0,
+                })),
+            )),
         }
     }
 
@@ -161,6 +172,7 @@ impl InternalColumn {
             InternalColumnType::BlockName => BLOCK_NAME_COLUMN_ID,
             InternalColumnType::SegmentName => SEGMENT_NAME_COLUMN_ID,
             InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
+            InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
         }
     }
 
@@ -220,6 +232,18 @@ impl InternalColumn {
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
+                )
+            }
+            InternalColumnType::BaseBlockIds => {
+                assert!(meta.base_block_ids.is_some());
+                BlockEntry::new(
+                    DataType::Array(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
+                        DecimalSize {
+                            precision: 38,
+                            scale: 0,
+                        },
+                    )))),
+                    Value::Scalar(meta.base_block_ids.clone().unwrap()),
                 )
             }
         }

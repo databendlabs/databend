@@ -19,14 +19,23 @@ create table db.t1 (id int not null, c1 tuple(int, int) not null)
 statement ok
 create table db.t2 (id2 int not null, c1 tuple(int, int) not null)
 
-statement ok
+statement error 1006
 insert into db.t(id) values(1)
 
 statement ok
+insert into db.t(id,c1) values(1,(0,0))
+
+statement error 1006
 insert into db.t1(id) values(2)
 
 statement ok
+insert into db.t1(id,c1) values(2,(0,0))
+
+statement error 1006
 insert into db.t2(id2) values(3)
+
+statement ok
+insert into db.t2(id2,c1) values(3,(0,0))
 
 query TTTT
 select t.*, t.id, t.c1 from db.t
@@ -38,7 +47,7 @@ select db.t.*, db.t.id, db.t.c1 from db.t
 ----
 1 (0,0) 1 (0,0)
 
-statement error 1025
+statement error 1003
 select default.t.* from db.t
 
 statement error 1025

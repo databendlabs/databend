@@ -130,9 +130,11 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
-        self.fragments_actions.last().ok_or(ErrorCode::Internal(
-            "Logical error, call get_root_actions in empty QueryFragmentsActions",
-        ))
+        self.fragments_actions.last().ok_or_else(|| {
+            ErrorCode::Internal(
+                "Logical error, call get_root_actions in empty QueryFragmentsActions",
+            )
+        })
     }
 
     pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {
@@ -172,14 +174,14 @@ impl QueryFragmentsActions {
         let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
 
         let cluster = self.ctx.get_cluster();
-        let changed_settings = self.ctx.get_changed_settings();
+        let settings = self.ctx.get_settings();
         let local_query_fragments_plan_packet = QueryFragmentsPlanPacket::create(
             self.ctx.get_id(),
             self.ctx.get_query_kind(),
             cluster.local_id.clone(),
             fragments_packets.remove(&cluster.local_id).unwrap(),
             nodes_info.clone(),
-            changed_settings.clone(),
+            settings.clone(),
             cluster.local_id(),
             self.enable_profiling,
         );
@@ -195,7 +197,7 @@ impl QueryFragmentsActions {
                 executor,
                 fragments,
                 executors_info,
-                changed_settings.clone(),
+                settings.clone(),
                 cluster.local_id(),
                 self.enable_profiling,
             ));
@@ -250,6 +252,9 @@ impl QueryFragmentsActions {
                     true => statistics_connections.clone(),
                     false => vec![],
                 },
+                self.ctx
+                    .get_settings()
+                    .get_create_query_flight_client_with_current_rt()?,
             ));
         }
 

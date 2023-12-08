@@ -19,14 +19,14 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sinks::EmptySink;
-use common_pipeline_transforms::processors::TransformProfileWrapper;
-use common_pipeline_transforms::processors::Transformer;
+use common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::Project;
 use common_sql::executor::physical_plans::ProjectSet;
 use common_sql::ColumnBinding;
 
+use crate::pipelines::processors::transforms::TransformSRF;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -82,36 +82,31 @@ impl PipelineBuilder {
     pub(crate) fn build_project_set(&mut self, project_set: &ProjectSet) -> Result<()> {
         self.build_pipeline(&project_set.input)?;
 
-        let op = BlockOperator::FlatMap {
-            projections: project_set.projections.clone(),
-            srf_exprs: project_set
-                .srf_exprs
-                .iter()
-                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
-                .collect(),
-        };
-
-        let num_input_columns = project_set.input.output_schema()?.num_fields();
+        let srf_exprs = project_set
+            .srf_exprs
+            .iter()
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
+        let max_block_size = self.settings.get_max_block_size()? as usize;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![op.clone()],
+            let transform = TransformSRF::try_create(
+                input,
+                output,
                 self.func_ctx.clone(),
-                num_input_columns,
+                project_set.projections.clone(),
+                srf_exprs.clone(),
+                max_block_size,
             );
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
-                    input,
-                    output,
                     project_set.plan_id,
                     self.proc_profs.clone(),
                 )))
             } else {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input, output, transform,
-                )))
+                Ok(ProcessorPtr::create(transform))
             }
         })
     }

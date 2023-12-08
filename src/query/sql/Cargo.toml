@@ -37,6 +37,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-profile = { path = "../profile" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-storages-iceberg = { path = "../storages/iceberg" }
 common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-stage = { path = "../storages/stage" }
@@ -78,4 +79,3 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-url = { version = "2.3" }

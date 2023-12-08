@@ -528,19 +528,15 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let mut expr = self.gen_expr(ty);
                 let len = self.rng.gen_range(1..=3);
                 for _ in 0..len {
-                    let accessor = match self.rng.gen_range(0..=3) {
+                    let accessor = match self.rng.gen_range(0..=2) {
                         0 => MapAccessor::Bracket {
                             key: Box::new(self.gen_expr(&DataType::Number(NumberDataType::UInt8))),
                         },
                         1 => {
-                            let key = self.gen_identifier();
-                            MapAccessor::Dot { key }
-                        }
-                        2 => {
                             let key = self.rng.gen_range(0..=10);
                             MapAccessor::DotNumber { key }
                         }
-                        3 => {
+                        2 => {
                             let key = self.gen_identifier();
                             MapAccessor::Colon { key }
                         }

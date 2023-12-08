@@ -341,7 +341,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     transform_expr(*expr, columns),
                     transform_expr(*key, columns),
                 ]),
-                MapAccessor::Dot { key } | MapAccessor::Colon { key } => (vec![], vec![
+                MapAccessor::Colon { key } => (vec![], vec![
                     transform_expr(*expr, columns),
                     RawExpr::Constant {
                         span,
@@ -556,7 +556,6 @@ pub fn transform_literal(lit: ASTLiteral) -> Scalar {
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
         ASTLiteral::Float64(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),
-        _ => unimplemented!("{lit}"),
     };
 
     shrink_scalar(scalar)

@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use super::RemoveReason;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -136,6 +137,8 @@ pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
@@ -159,6 +162,7 @@ pub struct ResponseState {
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
     pub error: Option<ErrorCode>,
+    pub warnings: Vec<String>,
 }
 
 pub struct HttpQueryResponseInternal {
@@ -217,7 +221,9 @@ impl HttpQuery {
                             "last query on the session not finished",
                         ));
                     } else {
-                        http_query_manager.remove_query(&query_id).await;
+                        let _ = http_query_manager
+                            .remove_query(&query_id, RemoveReason::Canceled)
+                            .await;
                     }
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
@@ -230,7 +236,8 @@ impl HttpQuery {
             }
             session
         } else {
-            ctx.get_session(SessionType::HTTPQuery)
+            ctx.upgrade_session(SessionType::HTTPQuery)
+                .map_err(|err| ErrorCode::Internal(format!("{err}")))?
         };
 
         // Read the session variables in the request, and set them to the current session.
@@ -243,8 +250,13 @@ impl HttpQuery {
                 session.set_current_database(db.clone());
             }
             if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role, true).await?;
+                session.set_current_role_checked(role).await?;
             }
+            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+            session
+                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
+                .await?;
+            // TODO(liyz): pass secondary roles here
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {
@@ -282,7 +294,9 @@ impl HttpQuery {
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
-            ctx.get_settings().set_deduplicate_label(label.clone())?;
+            unsafe {
+                ctx.get_settings().set_deduplicate_label(label.clone())?;
+            }
         }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
@@ -351,6 +365,7 @@ impl HttpQuery {
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
+                        warnings: ctx_clone.pop_warnings(),
                     };
                     info!(
                         "{}: http query change state to Stopped, fail to start {:?}",
@@ -426,19 +441,13 @@ impl HttpQuery {
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
+            warnings: state.get_warnings(),
             affect: state.get_affect(),
         }
     }
 
     #[async_backtrace::framed]
     async fn get_response_session(&self) -> HttpSessionConf {
-        let executor = self.state.read().await;
-        let session_state = executor.get_session_state();
-        let settings = session_state
-            .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
-            .collect::<BTreeMap<_, _>>();
         let keep_server_session_secs = self
             .request
             .session
@@ -446,18 +455,29 @@ impl HttpQuery {
             .map(|v| v.keep_server_session_secs)
             .unwrap_or(None);
 
-        // TODO(liyz): known issue here, this will make SET ROLE statement not work in bendsql, refactor using the secondary role in the short time.
-        // https://github.com/datafuselabs/databend/issues/13544
-        let role = self
-            .request
-            .session
+        // reply the updated session state, includes:
+        // - current_database: updated by USE XXX;
+        // - role: updated by SET ROLE;
+        // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
+        // - settings: updated by SET XXX = YYY;
+        let executor = self.state.read().await;
+        let session_state = executor.get_session_state();
+
+        let settings = session_state
+            .settings
             .as_ref()
-            .map(|s| s.role.clone())
-            .unwrap_or_default();
+            .into_iter()
+            .filter(|item| item.default_value != item.user_value)
+            .map(|item| (item.name.to_string(), item.user_value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let database = session_state.current_database.clone();
+        let role = session_state.current_role.clone();
+        let secondary_roles = session_state.secondary_roles.clone();
 
         HttpSessionConf {
-            database: Some(session_state.current_database),
+            database: Some(database),
             role,
+            secondary_roles,
             keep_server_session_secs,
             settings: Some(settings),
         }
@@ -477,16 +497,11 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn kill(&self) {
+    pub async fn kill(&self, reason: &str) {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(
-            &self.state,
-            Err(ErrorCode::AbortedQuery("killed by http")),
-            true,
-        )
-        .await;
+        Executor::stop(&self.state, Err(ErrorCode::AbortedQuery(reason)), true).await;
     }
 
     #[async_backtrace::framed]

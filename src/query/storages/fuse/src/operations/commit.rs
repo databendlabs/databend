@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::UpdateStreamMetaReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
@@ -70,6 +71,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
@@ -97,6 +99,7 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 copied_files.clone(),
+                update_stream_meta.clone(),
                 snapshot_gen.clone(),
                 input,
                 None,
@@ -108,6 +111,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn commit_to_meta_server(
         ctx: &dyn TableContext,
@@ -145,11 +149,12 @@ impl FuseTable {
             snapshot,
             snapshot_location,
             copied_files,
+            &[],
             operator,
         )
         .await;
         if need_to_save_statistics {
-            let table_statistics_location = table_statistics_location.unwrap();
+            let table_statistics_location: String = table_statistics_location.unwrap();
             match &res {
                 Ok(_) => TableSnapshotStatistics::cache().put(
                     table_statistics_location,
@@ -165,6 +170,7 @@ impl FuseTable {
         res
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
         ctx: &dyn TableContext,
@@ -173,6 +179,7 @@ impl FuseTable {
         snapshot: TableSnapshot,
         snapshot_location: String,
         copied_files: &Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
     ) -> Result<()> {
         // 1. prepare table meta
@@ -208,7 +215,8 @@ impl FuseTable {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             copied_files: copied_files.clone(),
-            deduplicated_label: ctx.get_settings().get_deduplicate_label()?,
+            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
+            update_stream_meta: update_stream_meta.to_vec(),
         };
 
         // 3. let's roll

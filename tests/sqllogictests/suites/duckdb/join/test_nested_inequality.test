@@ -1,7 +1,3 @@
-# name: test/sql/join/test_nested_inequality.test
-# description: Test join with nested types for the keys
-# group: [join]
-
 statement ok
 drop view if exists list_int;
 

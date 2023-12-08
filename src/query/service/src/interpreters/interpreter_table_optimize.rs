@@ -124,6 +124,7 @@ impl OptimizeTableInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             });
         }
@@ -134,6 +135,7 @@ impl OptimizeTableInterpreter {
             catalog_info,
             snapshot,
             mutation_kind: MutationKind::Compact,
+            update_stream_meta: vec![],
             merge_meta,
             need_lock,
         })))

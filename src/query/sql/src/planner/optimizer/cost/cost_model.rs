@@ -53,7 +53,7 @@ fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
         | RelOperator::Window(_)
         | RelOperator::Sort(_)
         | RelOperator::ProjectSet(_)
-        | RelOperator::Lambda(_)
+        | RelOperator::Udf(_)
         | RelOperator::Limit(_) => compute_cost_unary_common_operator(memo, m_expr),
 
         _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),

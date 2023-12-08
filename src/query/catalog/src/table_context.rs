@@ -31,14 +31,15 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
+use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_users::GrantObjectVisibilityChecker;
@@ -151,6 +152,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;
     fn get_error(&self) -> Option<ErrorCode>;
+    fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
@@ -182,13 +184,12 @@ pub trait TableContext: Send + Sync {
     fn set_on_error_mode(&self, mode: OnErrorMode);
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
-
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
 
     async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
@@ -222,6 +223,10 @@ pub trait TableContext: Send + Sync {
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
+
+    fn add_merge_status(&self, merge_status: MergeStatus);
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;

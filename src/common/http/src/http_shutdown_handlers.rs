@@ -84,6 +84,7 @@ impl HttpShutdownHandler {
             async_backtrace::location!().frame(
                 poem::Server::new_with_acceptor(acceptor)
                     .name(self.service_name.clone())
+                    .idle_timeout(Duration::from_secs(5))
                     .run_with_graceful_shutdown(ep, rx.map(|_| ()), graceful_shutdown_timeout),
             ),
         );

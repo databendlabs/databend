@@ -1,0 +1,175 @@
+statement ok
+drop table if exists t_distributed_sort;
+
+statement ok
+create table t_distributed_sort (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
+
+# Test full sort
+
+query T
+explain select * from t_distributed_sort order by a desc;
+----
+Sort
+├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+├── sort keys: [a DESC NULLS LAST]
+├── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+    ├── exchange type: Merge
+    └── Sort
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t_distributed_sort
+            ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
+# Test TopN
+
+statement ok
+set lazy_read_threshold = 0;
+
+query T
+explain select * from t_distributed_sort order by a desc limit 2
+----
+Limit
+├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── Exchange
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+        ├── exchange type: Merge
+        └── Sort
+            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+            ├── sort keys: [a DESC NULLS LAST]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t_distributed_sort
+                ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: 2]
+                └── estimated rows: 0.00
+
+statement ok
+set lazy_read_threshold = 100;
+
+query T
+explain select * from t_distributed_sort order by a desc limit 2
+----
+RowFetch
+├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+├── columns to fetch: [b, c, d, e]
+├── estimated rows: 0.00
+└── Limit
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7)]
+    ├── limit: 2
+    ├── offset: 0
+    ├── estimated rows: 0.00
+    └── Sort
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7)]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── Exchange
+            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), #_order_col]
+            ├── exchange type: Merge
+            └── Sort
+                ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), #_order_col]
+                ├── sort keys: [a DESC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t_distributed_sort
+                    ├── output columns: [a (#0), _row_id (#7)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: 2]
+                    └── estimated rows: 0.00
+
+
+query T
+EXPLAIN SELECT number from numbers(1000) offset 100;
+----
+Limit
+├── output columns: [numbers.number (#0)]
+├── limit: NONE
+├── offset: 100
+├── estimated rows: 1000.00
+└── Exchange
+    ├── output columns: [numbers.number (#0)]
+    ├── exchange type: Merge
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── output columns: [number (#0)]
+        ├── read rows: 1000
+        ├── read bytes: 8000
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1000.00
+
+query T
+EXPLAIN SELECT number from numbers(1000) limit 100, 10;
+----
+Limit
+├── output columns: [numbers.number (#0)]
+├── limit: 10
+├── offset: 100
+├── estimated rows: 10.00
+└── Exchange
+    ├── output columns: [numbers.number (#0)]
+    ├── exchange type: Merge
+    └── Limit
+        ├── output columns: [numbers.number (#0)]
+        ├── limit: 110
+        ├── offset: 0
+        ├── estimated rows: 110.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── output columns: [number (#0)]
+            ├── read rows: 110
+            ├── read bytes: 880
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: 110]
+            └── estimated rows: 1000.00
+
+query T
+EXPLAIN SELECT number from numbers(1000) limit 100, 10;
+----
+Limit
+├── output columns: [numbers.number (#0)]
+├── limit: 10
+├── offset: 100
+├── estimated rows: 10.00
+└── Exchange
+    ├── output columns: [numbers.number (#0)]
+    ├── exchange type: Merge
+    └── Limit
+        ├── output columns: [numbers.number (#0)]
+        ├── limit: 110
+        ├── offset: 0
+        ├── estimated rows: 110.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── output columns: [number (#0)]
+            ├── read rows: 110
+            ├── read bytes: 880
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: 110]
+            └── estimated rows: 1000.00

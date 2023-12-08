@@ -18,7 +18,6 @@ use std::ops::Not;
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -39,21 +38,17 @@ use crate::types::nullable::NullableDomain;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
-use crate::udf_client::UDFFlightClient;
-use crate::utils::variant_transform::contains_variant;
-use crate::utils::variant_transform::transform_variant;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::BlockEntry;
 use crate::ColumnIndex;
-use crate::DataField;
-use crate::DataSchema;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
+use crate::RemoteExpr;
 
 pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
@@ -169,13 +164,27 @@ impl<'a> Evaluator<'a> {
                 ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 Ok(result)
             }
-            Expr::UDFServerCall {
-                func_name,
-                server_addr,
-                return_type,
+            Expr::LambdaFunctionCall {
+                name,
                 args,
+                lambda_expr,
                 ..
-            } => self.run_udf_server_call(func_name, server_addr, return_type, args, validity),
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                self.run_lambda(name, args, lambda_expr)
+            }
         };
 
         #[cfg(debug_assertions)]
@@ -209,103 +218,6 @@ impl<'a> Evaluator<'a> {
             }
         }
         result
-    }
-
-    fn run_udf_server_call(
-        &self,
-        func_name: &str,
-        server_addr: &str,
-        return_type: &DataType,
-        args: &[Expr],
-        validity: Option<Bitmap>,
-    ) -> Result<Value<AnyType>> {
-        let inputs = args
-            .iter()
-            .map(|expr| self.partial_run(expr, validity.clone()))
-            .collect::<Result<Vec<_>>>()?;
-        assert!(
-            inputs
-                .iter()
-                .filter_map(|val| match val {
-                    Value::Column(col) => Some(col.len()),
-                    Value::Scalar(_) => None,
-                })
-                .all_equal()
-        );
-
-        // construct input record_batch
-        let num_rows = self.input_columns.num_rows();
-        let fields = args
-            .iter()
-            .enumerate()
-            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type().clone()))
-            .collect_vec();
-        let data_schema = DataSchema::new(fields);
-
-        let block_entries = inputs
-            .into_iter()
-            .zip(args.iter())
-            .map(|(col, arg)| {
-                let arg_type = arg.data_type().clone();
-                let block = if contains_variant(&arg_type) {
-                    BlockEntry::new(arg_type, transform_variant(&col, true)?)
-                } else {
-                    BlockEntry::new(arg_type, col)
-                };
-                Ok(block)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let input_batch = DataBlock::new(block_entries, num_rows)
-            .to_record_batch(&data_schema)
-            .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
-
-        let func_name = func_name.to_string();
-        let server_addr = server_addr.to_string();
-
-        let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
-        let request_timeout = self.func_ctx.external_server_request_timeout_secs;
-
-        let result_batch = GlobalIORuntime::instance().block_on(async move {
-            let mut client =
-                UDFFlightClient::connect(&server_addr, connect_timeout, request_timeout).await?;
-            client.do_exchange(&func_name, input_batch).await
-        })?;
-
-        let (result_block, result_schema) =
-            DataBlock::from_record_batch(&result_batch).map_err(|err| {
-                ErrorCode::UDFDataError(format!(
-                    "Cannot convert arrow record batch to data block: {err}"
-                ))
-            })?;
-
-        let result_fields = result_schema.fields();
-        if result_fields.is_empty() || result_block.is_empty() {
-            return Err(ErrorCode::EmptyDataFromServer(
-                "Get empty data from UDF Server",
-            ));
-        }
-
-        if result_fields[0].data_type() != return_type {
-            return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF server return incorrect type, expected: {}, but got: {}",
-                return_type,
-                result_fields[0].data_type()
-            )));
-        }
-        if result_block.num_rows() != num_rows {
-            return Err(ErrorCode::UDFDataError(format!(
-                "UDF server should return {} rows, but it returned {} rows",
-                num_rows,
-                result_block.num_rows()
-            )));
-        }
-
-        if contains_variant(return_type) {
-            transform_variant(&result_block.get_by_offset(0).value, false)
-        } else {
-            Ok(result_block.get_by_offset(0).value.clone())
-        }
     }
 
     fn run_cast(
@@ -674,17 +586,40 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
-                    let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
-                        .into_column()
-                        .unwrap();
+                    let new_array = if inner_dest_ty.is_nullable() {
+                        self.run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                    } else {
+                        self.run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(array),
+                            None,
+                        )?
+                    }
+                    .into_column()
+                    .unwrap();
                     Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
-                    let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
-                        .into_column()
-                        .unwrap();
+                    let new_values = if inner_dest_ty.is_nullable() {
+                        self.run_try_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                        )?
+                    } else {
+                        self.run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                            None,
+                        )?
+                    }
+                    .into_column()
+                    .unwrap();
                     let new_col = Column::Array(Box::new(ArrayColumn {
                         values: new_values,
                         offsets: col.offsets,
@@ -744,10 +679,20 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
-                                    .into_scalar()
-                                    .unwrap())
+                                let new_value = if dest_ty.is_nullable() {
+                                    self.run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
+                                } else {
+                                    self.run_cast(
+                                        span,
+                                        src_ty,
+                                        dest_ty,
+                                        Value::Scalar(field),
+                                        None,
+                                    )?
+                                }
+                                .into_scalar()
+                                .unwrap();
+                                Ok(new_value)
                             })
                             .collect::<Result<_>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
@@ -758,10 +703,20 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
-                                    .into_column()
-                                    .unwrap())
+                                let new_column = if dest_ty.is_nullable() {
+                                    self.run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
+                                } else {
+                                    self.run_cast(
+                                        span,
+                                        src_ty,
+                                        dest_ty,
+                                        Value::Column(field),
+                                        None,
+                                    )?
+                                }
+                                .into_column()
+                                .unwrap();
+                                Ok(new_column)
                             })
                             .collect::<Result<_>>()?;
                         let new_col = Column::Tuple(new_fields);
@@ -990,6 +945,100 @@ impl<'a> Evaluator<'a> {
         }
 
         unreachable!("expr is not a set returning function: {expr}")
+    }
+
+    fn run_lambda(
+        &self,
+        func_name: &str,
+        args: Vec<Value<AnyType>>,
+        lambda_expr: &RemoteExpr,
+    ) -> Result<Value<AnyType>> {
+        let expr = lambda_expr.as_expr(self.fn_registry);
+        // TODO: Support multi args
+        match &args[0] {
+            Value::Scalar(s) => match s {
+                Scalar::Array(c) => {
+                    let entry = BlockEntry::new(c.data_type(), Value::Column(c.clone()));
+                    let block = DataBlock::new(vec![entry], c.len());
+
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    let result = evaluator.run(&expr)?;
+                    let result_col = result.convert_to_full_column(expr.data_type(), c.len());
+
+                    let val = if func_name == "array_filter" {
+                        let result_col = result_col.remove_nullable();
+                        let bitmap = result_col.as_boolean().unwrap();
+                        let filtered_inner_col = c.filter(bitmap);
+                        Value::Scalar(Scalar::Array(filtered_inner_col))
+                    } else {
+                        Value::Scalar(Scalar::Array(result_col))
+                    };
+                    Ok(val)
+                }
+                _ => unreachable!(),
+            },
+            Value::Column(c) => {
+                let (inner_col, inner_ty, offsets, validity) = match c {
+                    Column::Array(box array_col) => (
+                        array_col.values.clone(),
+                        array_col.values.data_type(),
+                        array_col.offsets.clone(),
+                        None,
+                    ),
+                    Column::Nullable(box nullable_col) => match &nullable_col.column {
+                        Column::Array(box array_col) => (
+                            array_col.values.clone(),
+                            array_col.values.data_type(),
+                            array_col.offsets.clone(),
+                            Some(nullable_col.validity.clone()),
+                        ),
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+                let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
+                let block = DataBlock::new(vec![entry], inner_col.len());
+
+                let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                let result = evaluator.run(&expr)?;
+                let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
+
+                let array_col = if func_name == "array_filter" {
+                    let result_col = result_col.remove_nullable();
+                    let bitmap = result_col.as_boolean().unwrap();
+                    let filtered_inner_col = inner_col.filter(bitmap);
+                    // generate new offsets after filter.
+                    let mut new_offset = 0;
+                    let mut filtered_offsets = Vec::with_capacity(offsets.len());
+                    filtered_offsets.push(0);
+                    for offset in offsets.windows(2) {
+                        let off = offset[0] as usize;
+                        let len = (offset[1] - offset[0]) as usize;
+                        let unset_count = bitmap.null_count_range(off, len);
+                        new_offset += (len - unset_count) as u64;
+                        filtered_offsets.push(new_offset);
+                    }
+
+                    Column::Array(Box::new(ArrayColumn {
+                        values: filtered_inner_col,
+                        offsets: filtered_offsets.into(),
+                    }))
+                } else {
+                    Column::Array(Box::new(ArrayColumn {
+                        values: result_col,
+                        offsets,
+                    }))
+                };
+                let col = match validity {
+                    Some(validity) => Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        column: array_col,
+                        validity,
+                    }))),
+                    None => Value::Column(array_col),
+                };
+                Ok(col)
+            }
+        }
     }
 }
 
@@ -1269,7 +1318,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 args,
                 return_type,
             } => {
-                let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
+                let (mut args_expr, mut args_domain) = (
+                    Vec::with_capacity(args.len()),
+                    Some(Vec::with_capacity(args.len())),
+                );
                 for arg in args {
                     let (expr, domain) = self.fold_once(arg);
                     args_expr.push(expr);
@@ -1333,7 +1385,48 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 (func_expr, func_domain)
             }
-            Expr::UDFServerCall { .. } => (expr.clone(), None),
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => {
+                let mut args_expr = Vec::with_capacity(args.len());
+                for arg in args {
+                    let (expr, _) = self.fold_once(arg);
+                    args_expr.push(expr);
+                }
+                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::LambdaFunctionCall {
+                    span: *span,
+                    name: name.clone(),
+                    args: args_expr,
+                    lambda_expr: lambda_expr.clone(),
+                    lambda_display: lambda_display.clone(),
+                    return_type: return_type.clone(),
+                };
+
+                if all_args_is_scalar {
+                    let block = DataBlock::empty();
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    // Since we know the expression is constant, it'll be safe to change its column index type.
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar,
+                                data_type: return_type.clone(),
+                            },
+                            None,
+                        );
+                    }
+                }
+                (func_expr, None)
+            }
         };
 
         debug_assert_eq!(expr.data_type(), new_expr.data_type());

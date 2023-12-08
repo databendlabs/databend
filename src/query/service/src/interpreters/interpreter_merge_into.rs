@@ -17,18 +17,22 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::UInt32Type;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_expression::FromData;
 use common_expression::RemoteExpr;
+use common_expression::SendableDataBlockStream;
 use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::binder::MergeIntoType;
 use common_sql::executor::physical_plans::CommitSink;
 use common_sql::executor::physical_plans::Exchange;
 use common_sql::executor::physical_plans::FragmentKind;
@@ -38,6 +42,7 @@ use common_sql::executor::physical_plans::MergeIntoSource;
 use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::plans;
 use common_sql::plans::MergeInto as MergePlan;
 use common_sql::plans::RelOperator;
 use common_sql::plans::UpdatePlan;
@@ -48,21 +53,22 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use super::Interpreter;
-use super::InterpreterPtr;
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::stream::DataBlockStream;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
-const DUMMY_COL_INDEX: usize = 1;
+const DUMMY_COL_INDEX: usize = MAX as usize;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
     plan: MergePlan,
@@ -83,15 +89,16 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let start = Instant::now();
-        let (physical_plan, table_info) = self.build_physical_plan().await?;
+        let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
         // Add table lock before execution.
-        let table_lock = LockManager::create_table_lock(table_info)?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
+        // let table_lock = LockManager::create_table_lock(table_info)?;
+        // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        // build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -111,12 +118,17 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
-                false,
+                true,
             )
             .await;
         }
 
         Ok(build_res)
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let blocks = self.get_merge_into_table_result()?;
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 
@@ -135,19 +147,31 @@ impl MergeIntoInterpreter {
             unmatched_evaluators,
             target_table_idx,
             field_index_map,
+            merge_type,
+            distributed,
             ..
         } = &self.plan;
 
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
+        // check change tracking
+        if check_table.change_tracking_enabled() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "change tracking is enabled for table '{}', does not support MERGE INTO",
+                check_table.name(),
+            )));
+        }
+
+        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), meta_data).await?;
 
         let table_name = table_name.clone();
         let input = input.clone();
-        let (exchange, input) = if let RelOperator::Exchange(exchange) = input.plan() {
-            (Some(exchange), Box::new(input.child(0)?.clone()))
+
+        let input = if let RelOperator::Exchange(_) = input.plan() {
+            Box::new(input.child(0)?.clone())
         } else {
-            (None, input)
+            input
         };
 
         let optimized_input =
@@ -162,16 +186,22 @@ impl MergeIntoInterpreter {
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
-        let mut row_id_idx = match meta_data
-            .read()
-            .row_id_index_by_table_index(*target_table_idx)
-        {
-            None => {
-                return Err(ErrorCode::InvalidRowIdIndex(
-                    "can't get internal row_id_idx when running merge into",
-                ));
+        let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
+
+        let mut row_id_idx = if !insert_only {
+            match meta_data
+                .read()
+                .row_id_index_by_table_index(*target_table_idx)
+            {
+                None => {
+                    return Err(ErrorCode::InvalidRowIdIndex(
+                        "can't get internal row_id_idx when running merge into",
+                    ));
+                }
+                Some(row_id_idx) => row_id_idx,
             }
-            Some(row_id_idx) => row_id_idx,
+        } else {
+            DUMMY_COL_INDEX
         };
 
         let mut found_row_id = false;
@@ -184,33 +214,31 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if exchange.is_some() {
+        if *distributed {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
-        // we can't get row_id_idx, throw an exception
-        if !found_row_id {
+        if !insert_only && !found_row_id {
+            // we can't get row_id_idx, throw an exception
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
             ));
         }
 
-        if exchange.is_some() && row_number_idx.is_none() {
+        if *distributed && row_number_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
         }
 
         let table = self.ctx.get_table(catalog, database, &table_name).await?;
-        let fuse_table =
-            table
-                .as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support MERGE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                )))?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support MERGE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
 
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
@@ -220,6 +248,7 @@ impl MergeIntoInterpreter {
         let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
             input: Box::new(join_input),
             row_id_idx: row_id_idx as u32,
+            merge_type: merge_type.clone(),
         });
 
         // transform unmatched for insert
@@ -276,7 +305,7 @@ impl MergeIntoInterpreter {
                     database: database.clone(),
                     table: match target_alias {
                         None => table_name.clone(),
-                        Some(alias) => alias.name.to_string(),
+                        Some(alias) => alias.name.to_string().to_lowercase(),
                     },
                     update_list: update_list.clone(),
                     bind_context: bind_context.clone(),
@@ -342,7 +371,7 @@ impl MergeIntoInterpreter {
             .enumerate()
             .collect();
 
-        let commit_input = if exchange.is_none() {
+        let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat
             PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -356,6 +385,7 @@ impl MergeIntoInterpreter {
                 segments,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
+                merge_type: merge_type.clone(),
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -371,6 +401,7 @@ impl MergeIntoInterpreter {
                 output_schema: DataSchemaRef::new(DataSchema::new(vec![
                     join_output_schema.fields[row_number_idx.unwrap()].clone(),
                 ])),
+                merge_type: merge_type.clone(),
             }));
 
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
@@ -379,12 +410,14 @@ impl MergeIntoInterpreter {
                     input: Box::new(merge_append),
                     kind: FragmentKind::Merge,
                     keys: vec![],
+                    allow_adjust_parallelism: true,
                     ignore_exchange: false,
                 })),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
                 input_schema: merge_into_source.output_schema()?,
+                merge_type: merge_type.clone(),
             }))
         };
 
@@ -396,6 +429,7 @@ impl MergeIntoInterpreter {
             catalog_info: catalog_.info(),
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
+            update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
             need_lock: false,
         }));
@@ -417,5 +451,27 @@ impl MergeIntoInterpreter {
             &BUILTIN_FUNCTIONS,
         );
         Ok(filer.as_remote_expr())
+    }
+
+    fn get_merge_into_table_result(&self) -> Result<Vec<DataBlock>> {
+        let binding = self.ctx.get_merge_status();
+        let status = binding.read();
+        let schema = self.plan.schema();
+        let mut columns = Vec::new();
+        for field in schema.as_ref().fields() {
+            match field.name().as_str() {
+                plans::INSERT_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
+                }
+                plans::UPDTAE_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
+                }
+                plans::DELETE_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.deleted_rows as u32]))
+                }
+                _ => unreachable!(),
+            }
+        }
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }

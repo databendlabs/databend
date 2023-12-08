@@ -22,6 +22,7 @@ use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::MergeStatus;
 use futures_util::future::Either;
 use log::warn;
 
@@ -86,6 +87,10 @@ impl StatisticsSender {
                     warn!("CopyStatus send has error, cause: {:?}.", error);
                 }
 
+                if let Err(error) = Self::send_merge_status(&ctx, &tx).await {
+                    warn!("MergeStatus send has error, cause: {:?}.", error);
+                }
+
                 if let Err(error) = Self::send_statistics(&ctx, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
                 }
@@ -134,6 +139,25 @@ impl StatisticsSender {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
             flight_sender.send(data_packet).await?;
         }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn send_merge_status(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        let merge_status = {
+            let binding = ctx.get_merge_status();
+            let status = binding.read();
+            MergeStatus {
+                insert_rows: status.insert_rows,
+                deleted_rows: status.deleted_rows,
+                update_rows: status.update_rows,
+            }
+        };
+        let data_packet = DataPacket::MergeStatus(merge_status);
+        flight_sender.send(data_packet).await?;
         Ok(())
     }
 

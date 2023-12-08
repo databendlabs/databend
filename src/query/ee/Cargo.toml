@@ -27,7 +27,10 @@ common-license = { path = "../../common/license" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-store = { path = "../../meta/store" }
+common-meta-types = { path = "../../meta/types" }
+common-sql = { path = "../sql" }
 common-storages-fuse = { path = "../storages/fuse" }
+common-storages-stream = { path = "../storages/stream" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee_features/data_mask" }
@@ -37,6 +40,7 @@ opendal = { workspace = true }
 storage-encryption = { path = "../ee_features/storage_encryption" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table_meta" }
+stream-handler = { path = "../ee_features/stream_handler" }
 vacuum-handler = { path = "../ee_features/vacuum_handler" }
 virtual-column = { path = "../ee_features/virtual_column" }
 
@@ -53,10 +57,6 @@ log = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]
-common-sql = { path = "../sql" }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]

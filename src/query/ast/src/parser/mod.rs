@@ -22,6 +22,7 @@ pub mod quote;
 mod share;
 mod stage;
 pub mod statement;
+pub mod stream;
 pub mod token;
 pub mod unescape;
 

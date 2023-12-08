@@ -87,9 +87,22 @@ impl RangeTable {
 
         let start = table_args.positioned[0].clone();
         let end = table_args.positioned[1].clone();
-        let mut step = Scalar::Number(NumberScalar::Int64(1));
-        if table_args.positioned.len() == 3 {
-            step = table_args.positioned[2].clone();
+
+        let mut step = if table_args.positioned.len() == 3 {
+            table_args.positioned[2].clone()
+        } else {
+            Scalar::Number(NumberScalar::Int64(1))
+        };
+        if let Scalar::Timestamp(_) = start {
+            // since `to_timestamp` return value in micro seconds, we need to to change step as the same unit
+            let step_i64 = get_i64_number(&step)?;
+            if step_i64 < 1000 {
+                // treat step as seconds
+                step = Scalar::Number(NumberScalar::Int64(step_i64 * 1000000));
+            } else if step_i64 < 1000000 {
+                // treat step as mills seconds
+                step = Scalar::Number(NumberScalar::Int64(step_i64 * 1000));
+            }
         }
 
         let table_info = TableInfo {

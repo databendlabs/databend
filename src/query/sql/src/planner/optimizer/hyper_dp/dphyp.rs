@@ -159,11 +159,11 @@ impl DPhpy {
                     left_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
-                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
                         | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
                 ) {
                     left_is_subquery = true;
                 }
@@ -171,11 +171,11 @@ impl DPhpy {
                     right_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
-                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
                         | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
                 ) {
                     right_is_subquery = true;
                 }
@@ -215,11 +215,11 @@ impl DPhpy {
             }
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
-            | RelOperator::Lambda(_)
             | RelOperator::Sort(_)
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
+            | RelOperator::Udf(_)
             | RelOperator::Filter(_) => {
                 if join_child {
                     // If plan is filter, save it
@@ -252,10 +252,9 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((new_s_expr, optimized))
             }
-            RelOperator::Exchange(_)
-            | RelOperator::AddRowNumber(_)
-            | RelOperator::Pattern(_)
-            | RelOperator::RuntimeFilterSource(_) => unreachable!(),
+            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) | RelOperator::Pattern(_) => {
+                unreachable!()
+            }
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)

@@ -155,6 +155,9 @@ impl Metadata {
                 ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
                     index == *table_index
                 }
+                ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => {
+                    index == *table_index
+                }
                 _ => false,
             })
             .cloned()
@@ -259,6 +262,7 @@ impl Metadata {
         self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_table(
         &mut self,
         catalog: String,
@@ -267,6 +271,7 @@ impl Metadata {
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_index: bool,
+        source_of_stage: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
 
@@ -281,11 +286,13 @@ impl Metadata {
             alias_name: table_alias_name,
             source_of_view,
             source_of_index,
+            source_of_stage,
         };
         self.tables.push(table_entry);
+        let table_schema = table_meta.schema_with_stream();
         let mut index = 0;
-        let mut fields = VecDeque::with_capacity(table_meta.schema().fields().len());
-        for field in table_meta.schema().fields().iter() {
+        let mut fields = VecDeque::with_capacity(table_schema.fields().len());
+        for field in table_schema.fields().iter() {
             if let Some(ComputedExpr::Virtual(_)) = field.computed_expr() {
                 fields.push_back((vec![], field.clone()));
             } else {
@@ -390,6 +397,7 @@ pub struct TableEntry {
     /// If this table is bound to an index.
     source_of_index: bool,
 
+    source_of_stage: bool,
     table: Arc<dyn Table>,
 }
 
@@ -422,6 +430,7 @@ impl TableEntry {
             alias_name,
             source_of_view: false,
             source_of_index: false,
+            source_of_stage: false,
         }
     }
 
@@ -458,6 +467,11 @@ impl TableEntry {
     /// Return true if it is source from view.
     pub fn is_source_of_view(&self) -> bool {
         self.source_of_view
+    }
+
+    /// Return true if it is source from stage.
+    pub fn is_source_of_stage(&self) -> bool {
+        self.source_of_stage
     }
 
     /// Return true if it is bound for an index.

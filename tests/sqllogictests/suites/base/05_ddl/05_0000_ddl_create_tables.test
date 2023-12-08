@@ -140,9 +140,19 @@ CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b F
 statement error 1006
 CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT a, b, a FROM db1.test1
 
+statement ok
+create table db2.test55(id Int8, created timestamp  not null DEFAULT CURRENT_TIMESTAMP)
 
-statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
+statement ok
+insert into db2.test55(id) select number % 3 from numbers(1000)
+
+statement ok
+insert into db2.test55(id) select number % 3 from numbers(1000)
+
+query I
+select count(distinct created) > 1 from db2.test55;
+----
+1
 
 statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
@@ -226,6 +236,25 @@ use db2
 
 statement ok
 create table test9 like test8
+
+statement ok
+create table test10(a int, b tuple(int, int) default (1, 2), c array(int) default [10,20])
+
+query TTTTT
+desc test10
+----
+a INT YES NULL (empty)
+b TUPLE(1 INT32, 2 INT32) YES (1, 2) (empty)
+c ARRAY(INT32) YES [10, 20] (empty)
+
+statement ok
+insert into test10 (a) values (100),(200)
+
+query ITT
+select * from test10
+----
+100 (1,2) [10,20]
+200 (1,2) [10,20]
 
 statement ok
 use default

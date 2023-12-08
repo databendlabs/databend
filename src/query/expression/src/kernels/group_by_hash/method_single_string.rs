@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
-use common_hashtable::FastHash;
+use common_hashtable::hash_join_fast_string_hash;
 
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
+use crate::KeyAccessor;
 use crate::KeysState;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -50,19 +52,42 @@ impl HashMethod for HashMethodSingleString {
         }
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Column(Column::String(col))
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => {
-                let mut hashes = Vec::with_capacity(col.len());
-                hashes.extend(col.iter().map(|key| key.fast_hash()));
-                Ok((col.iter(), hashes))
+                hashes.extend(col.iter().map(hash_join_fast_string_hash));
+                let (data, offsets) = col.into_buffer();
+                Ok(Box::new(StringKeyAccessor::new(data, offsets)))
             }
             _ => unreachable!(),
         }
+    }
+}
+
+pub struct StringKeyAccessor {
+    data: Buffer<u8>,
+    offsets: Buffer<u64>,
+}
+
+impl StringKeyAccessor {
+    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
+        Self { data, offsets }
+    }
+}
+
+impl KeyAccessor for StringKeyAccessor {
+    type Key = [u8];
+
+    /// # Safety
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
+        &self.data[*self.offsets.get_unchecked(index) as usize
+            ..*self.offsets.get_unchecked(index + 1) as usize]
     }
 }

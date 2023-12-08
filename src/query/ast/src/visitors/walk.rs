@@ -202,9 +202,9 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                 visitor.visit_identifier(alias);
             }
         }
-        SelectTarget::QualifiedName {
+        SelectTarget::StarColumns {
             qualified: names,
-            exclude,
+            column_filter,
         } => {
             for indirection in names {
                 match indirection {
@@ -214,9 +214,16 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                     Indirection::Star(_) => {}
                 }
             }
-            if let Some(cols) = exclude {
-                for ident in cols.iter() {
-                    visitor.visit_column_id(ident);
+            if let Some(col_filter) = column_filter {
+                match col_filter {
+                    ColumnFilter::Excludes(excludes) => {
+                        for ident in excludes.iter() {
+                            visitor.visit_identifier(ident);
+                        }
+                    }
+                    ColumnFilter::Lambda(lambda) => {
+                        visitor.visit_expr(&lambda.expr);
+                    }
                 }
             }
         }
@@ -284,6 +291,18 @@ pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
+    }
+}
+
+pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
+    match point {
+        StreamPoint::AtStream { database, name } => {
+            if let Some(database) = database {
+                visitor.visit_identifier(database);
+            }
+
+            visitor.visit_identifier(name);
+        }
     }
 }
 
@@ -373,6 +392,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             is_default,
             role_name,
         } => visitor.visit_set_role(*is_default, role_name),
+        Statement::SetSecondaryRoles { option } => visitor.visit_set_secondary_roles(option),
         Statement::ShowCatalogs(stmt) => visitor.visit_show_catalogs(stmt),
         Statement::ShowCreateCatalog(stmt) => visitor.visit_show_create_catalog(stmt),
         Statement::CreateCatalog(stmt) => visitor.visit_create_catalog(stmt),
@@ -404,6 +424,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
+        Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
+        Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),
+        Statement::DescribeStream(stmt) => visitor.visit_describe_stream(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
@@ -488,5 +512,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DropConnection(stmt) => visitor.visit_drop_connection(stmt),
         Statement::DescribeConnection(stmt) => visitor.visit_describe_connection(stmt),
         Statement::ShowConnections(stmt) => visitor.visit_show_connections(stmt),
+        Statement::CreatePipe(_) => todo!(),
+        Statement::AlterPipe(_) => todo!(),
+        Statement::DropPipe(_) => todo!(),
+        Statement::DescribePipe(_) => todo!(),
     }
 }

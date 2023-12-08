@@ -284,11 +284,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short>;
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar;
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
+    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
@@ -309,26 +309,25 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///     builder.push(...);
     /// }
     /// ```
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder>;
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder>;
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder>;
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
     fn upcast_domain(domain: Self::Domain) -> Domain;
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize;
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>>;
+    fn column_len(col: &Self::Column) -> usize;
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
 
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a>;
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
@@ -338,7 +337,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 
-    fn scalar_memory_size<'a>(_: &Self::ScalarRef<'a>) -> usize {
+    fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
         std::mem::size_of::<Self::Scalar>()
     }
 

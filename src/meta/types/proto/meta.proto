@@ -176,6 +176,23 @@ message StreamItem {
   optional SeqV value = 2;
 }
 
+message SnapshotChunkRequest {
+  uint64 ver = 100;
+
+  // json serialized meta data, including vote and snapshot_meta.
+  // ```text
+  // { vote: Vote, meta: SnapshotMeta }
+  // ```
+  string rpc_meta = 10;
+
+  SnapshotChunkV1 chunk = 20;
+}
+
+message SnapshotChunkV1 {
+  uint64 offset = 10;
+  bool done = 11;
+  bytes data = 12;
+}
 
 service RaftService {
 
@@ -190,6 +207,7 @@ service RaftService {
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
+  rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
   rpc Vote(RaftRequest) returns (RaftReply);
 }
 

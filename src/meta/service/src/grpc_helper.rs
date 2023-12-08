@@ -23,11 +23,16 @@ use common_meta_types::RaftError;
 pub struct GrpcHelper;
 
 impl GrpcHelper {
-    #[allow(dead_code)]
     /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
-    fn traced_req<T>(t: T) -> tonic::Request<T> {
+    pub fn traced_req<T>(t: T) -> tonic::Request<T> {
         let req = tonic::Request::new(t);
         common_tracing::inject_span_to_tonic_request(req)
+    }
+
+    pub fn encode_raft_request<T>(v: &T) -> Result<RaftRequest, serde_json::Error>
+    where T: serde::Serialize + 'static {
+        let data = serde_json::to_string(&v)?;
+        Ok(RaftRequest { data })
     }
 
     pub fn parse_raft_reply<T, E>(
@@ -52,8 +57,7 @@ impl GrpcHelper {
     pub fn parse_req<T>(request: tonic::Request<RaftRequest>) -> Result<T, tonic::Status>
     where T: serde::de::DeserializeOwned {
         let raft_req = request.into_inner();
-        let req: T = serde_json::from_str(&raft_req.data).map_err(Self::invalid_arg)?;
-        Ok(req)
+        Self::parse(&raft_req.data)
     }
 
     /// Create an Ok response for raft API.
@@ -67,8 +71,15 @@ impl GrpcHelper {
         Ok(tonic::Response::new(reply))
     }
 
+    /// Parse string and decode it into required type.
+    pub fn parse<T>(s: &str) -> Result<T, tonic::Status>
+    where T: serde::de::DeserializeOwned {
+        let req: T = serde_json::from_str(s).map_err(Self::invalid_arg)?;
+        Ok(req)
+    }
+
     /// Create a tonic::Status with invalid argument error.
-    pub fn invalid_arg(e: impl Error) -> tonic::Status {
+    pub fn invalid_arg(e: impl ToString) -> tonic::Status {
         tonic::Status::invalid_argument(e.to_string())
     }
 

@@ -19,12 +19,9 @@ use std::sync::Arc;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::is_internal_column;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::BLOCK_NAME_COL_NAME;
-use common_expression::ROW_ID_COL_NAME;
-use common_expression::SEGMENT_NAME_COL_NAME;
-use common_expression::SNAPSHOT_NAME_COL_NAME;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
@@ -38,7 +35,6 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
-use common_sql::plans::PREDICATE_COLUMN_NAME;
 use common_sql::BloomIndexColumns;
 use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
@@ -56,9 +52,12 @@ use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
+use storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -321,6 +320,7 @@ impl CreateTableInterpreter {
         is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema)?;
+        is_valid_change_tracking(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -430,8 +430,14 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
+    r.insert(OPT_KEY_CHANGE_TRACKING);
 
     r.insert(OPT_KEY_ENGINE);
+
+    r.insert(OPT_KEY_ENGINE);
+
+    r.insert(OPT_KEY_LOCATION);
+    r.insert(OPT_KEY_CONNECTION_NAME);
 
     r.insert("transient");
     r
@@ -441,23 +447,8 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
     CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-/// The internal occupied coulmn that cannot be create.
-pub static INTERNAL_COLUMN_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let mut r = HashSet::new();
-
-    // The key in INTERNAL_COLUMN_FACTORY.
-    r.insert(ROW_ID_COL_NAME);
-    r.insert(SNAPSHOT_NAME_COL_NAME);
-    r.insert(SEGMENT_NAME_COL_NAME);
-    r.insert(BLOCK_NAME_COL_NAME);
-
-    r.insert(PREDICATE_COLUMN_NAME);
-
-    r
-});
-
 pub fn is_valid_column(name: &str) -> Result<()> {
-    if INTERNAL_COLUMN_KEYS.contains(name) {
+    if is_internal_column(name) {
         return Err(ErrorCode::TableWithInternalColumnName(format!(
             "Cannot create table has column with the same name as internal column: {}",
             name
@@ -500,6 +491,13 @@ pub fn is_valid_bloom_index_columns(
 ) -> Result<()> {
     if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
         BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_change_tracking(options: &BTreeMap<String, String>) -> Result<()> {
+    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
+        value.to_lowercase().parse::<bool>()?;
     }
     Ok(())
 }

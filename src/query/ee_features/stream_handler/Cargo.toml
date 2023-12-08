@@ -1,0 +1,25 @@
+[package]
+name = "stream-handler"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+# Workspace dependencies
+common-base = { path = "../../../common/base" }
+common-catalog = { path = "../../catalog" }
+common-exception = { path = "../../../common/exception" }
+common-meta-app = { path = "../../../meta/app" }
+common-sql = { path = "../../sql" }
+
+# Github dependencies
+async-backtrace = { workspace = true }
+async-trait = "0.1.57"
+
+[build-dependencies]

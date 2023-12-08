@@ -34,6 +34,7 @@ use common_pipeline_transforms::processors::TransformCompact;
 use common_pipeline_transforms::processors::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::physical_plans::MutationKind;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
@@ -80,6 +81,7 @@ impl FuseTable {
                 output,
                 self,
                 cluster_stats_gen.clone(),
+                MutationKind::Insert,
             )?;
             proc.into_processor()
         })?;
@@ -219,7 +221,8 @@ impl FuseTable {
             return Ok(ClusterStatsGenerator::default());
         }
 
-        let input_schema = modified_schema.unwrap_or(DataSchema::from(self.schema()).into());
+        let input_schema =
+            modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
         let mut merged: Vec<DataField> = input_schema.fields().clone();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());

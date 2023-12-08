@@ -18,6 +18,8 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserPrivilegeType;
+use enumflags2::BitFlags;
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
 /// database or table.
@@ -28,7 +30,8 @@ pub struct GrantObjectVisibilityChecker {
     granted_tables: HashSet<(String, String, String)>,
     extra_databases: HashSet<(String, String)>,
     granted_udfs: HashSet<String>,
-    granted_stages: HashSet<String>,
+    granted_write_stages: HashSet<String>,
+    granted_read_stages: HashSet<String>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -37,7 +40,8 @@ impl GrantObjectVisibilityChecker {
         let mut granted_databases = HashSet::new();
         let mut granted_tables = HashSet::new();
         let mut granted_udfs = HashSet::new();
-        let mut granted_stages = HashSet::new();
+        let mut granted_write_stages = HashSet::new();
+        let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
 
         let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
@@ -67,7 +71,18 @@ impl GrantObjectVisibilityChecker {
                         granted_udfs.insert(udf.to_string());
                     }
                     GrantObject::Stage(stage) => {
-                        granted_stages.insert(stage.to_string());
+                        if ent
+                            .privileges()
+                            .contains(BitFlags::from(UserPrivilegeType::Write))
+                        {
+                            granted_write_stages.insert(stage.to_string());
+                        }
+                        if ent
+                            .privileges()
+                            .contains(BitFlags::from(UserPrivilegeType::Read))
+                        {
+                            granted_read_stages.insert(stage.to_string());
+                        }
                     }
                 }
             }
@@ -79,7 +94,8 @@ impl GrantObjectVisibilityChecker {
             granted_tables,
             extra_databases,
             granted_udfs,
-            granted_stages,
+            granted_write_stages,
+            granted_read_stages,
         }
     }
 
@@ -88,7 +104,18 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
-        if self.granted_stages.contains(stage) {
+        if self.granted_read_stages.contains(stage) || self.granted_write_stages.contains(stage) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_stage_read_visibility(&self, stage: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        if self.granted_read_stages.contains(stage) {
             return true;
         }
         false

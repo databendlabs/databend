@@ -27,7 +27,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -72,7 +72,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_status() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
 
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
     let status = get_status(&ep).await;

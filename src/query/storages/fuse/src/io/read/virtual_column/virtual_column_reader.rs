@@ -115,6 +115,7 @@ impl VirtualColumnReader {
             TableSchemaRefExt::create(vec![]),
             Projection::Columns(vec![]),
             false,
+            false,
             put_cache,
         )?;
 

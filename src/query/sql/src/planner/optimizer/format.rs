@@ -46,14 +46,13 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Exchange(_) => "Exchange".to_string(),
         RelOperator::Pattern(_) => "Pattern".to_string(),
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
-        RelOperator::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
         RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
         RelOperator::Window(_) => "WindowFunc".to_string(),
         RelOperator::CteScan(_) => "CteScan".to_string(),
         RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
-        RelOperator::Lambda(_) => "LambdaFunc".to_string(),
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
         RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
+        RelOperator::Udf(_) => "Udf".to_string(),
     }
 }
 

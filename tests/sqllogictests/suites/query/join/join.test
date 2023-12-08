@@ -184,6 +184,12 @@ SELECT * FROM t JOIN t1, t as t2 JOIN t1 as t3;
 2 3 d 2 1 c
 2 3 d 2 3 d
 
+statement error 1065
+SELECT * FROM t JOIN t1 on t.id = max(t1.id)
+
+statement error 1065
+SELECT * FROM t JOIN t1 on last(t1.id) over(partition by 10)
+
 statement ok
 drop table t;
 

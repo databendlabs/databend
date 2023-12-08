@@ -31,7 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Scalar;
-use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -72,7 +72,7 @@ impl AsyncCrashMeTable {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: String::from("async_crash_me"),
             meta: TableMeta {
-                schema: Arc::new(TableSchema::empty()),
+                schema: TableSchemaRefExt::create_dummy(),
                 engine: String::from(table_func_name),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.

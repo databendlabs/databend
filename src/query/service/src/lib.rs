@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(int_roundings)]
 #![allow(clippy::uninlined_format_args)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
@@ -33,6 +34,7 @@
 #![feature(iterator_try_collect)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
+#![feature(lazy_cell)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 

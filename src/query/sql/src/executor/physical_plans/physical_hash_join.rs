@@ -61,8 +61,6 @@ pub struct HashJoin {
     // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
     pub output_schema: DataSchemaRef,
-    // It means that join has a corresponding runtime filter
-    pub contain_runtime_filter: bool,
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
@@ -89,7 +87,6 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
-
         // Unify the data types of the left and right exchange keys.
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -178,12 +175,13 @@ impl PhysicalPlanBuilder {
             .iter()
             .zip(join.right_conditions.iter())
         {
-            let left_expr = left_condition
-                .type_check(probe_schema.as_ref())?
-                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
             let right_expr = right_condition
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
+            let left_expr = left_condition
+                .type_check(probe_schema.as_ref())?
+                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
                     (left_condition, right_condition)
@@ -252,17 +250,17 @@ impl PhysicalPlanBuilder {
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
         for column in pre_column_projections {
-            if let Ok(index) = probe_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = probe_schema.column_with_name(&column.to_string()) {
                 probe_projections.insert(index);
             }
-            if let Ok(index) = build_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = build_schema.column_with_name(&column.to_string()) {
                 build_projections.insert(index);
             }
         }
 
         // for distributed merge into, there is a field called "_row_number", but
         // it's not an internal row_number, we need to add it here
-        if let Ok(index) = build_schema.index_of(ROW_NUMBER_COL_NAME) {
+        if let Some((index, _)) = build_schema.column_with_name(ROW_NUMBER_COL_NAME) {
             build_projections.insert(index);
         }
 
@@ -352,14 +350,14 @@ impl PhysicalPlanBuilder {
         let mut projections = ColumnSet::new();
         let projected_schema = DataSchemaRefExt::create(merged_fields.clone());
         for column in column_projections.iter() {
-            if let Ok(index) = projected_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
         }
 
         // for distributed merge into, there is a field called "_row_number", but
         // it's not an internal row_number, we need to add it here
-        if let Ok(index) = projected_schema.index_of(ROW_NUMBER_COL_NAME) {
+        if let Some((index, _)) = projected_schema.column_with_name(ROW_NUMBER_COL_NAME) {
             projections.insert(index);
         }
 
@@ -398,7 +396,6 @@ impl PhysicalPlanBuilder {
             from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
-            contain_runtime_filter: join.contain_runtime_filter,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
         }))

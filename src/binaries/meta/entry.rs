@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -37,6 +38,8 @@ use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::version::raft_client_requires;
+use databend_meta::version::raft_server_provides;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
@@ -76,7 +79,12 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         "databend-meta-{}@{}",
         conf.raft_config.id, conf.raft_config.cluster_name
     );
-    let _guards = init_logging(&app_name_shuffle, &conf.log);
+    let mut log_labels = BTreeMap::new();
+    log_labels.insert(
+        "cluster_name".to_string(),
+        conf.raft_config.cluster_name.clone(),
+    );
+    let _guards = init_logging(&app_name_shuffle, &conf.log, log_labels);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -118,6 +126,11 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Working DataVersion: {:?}", DATA_VERSION);
     println!();
 
+    println!("Raft Feature set:");
+    println!("    Server Provide: {{ {} }}", raft_server_provides());
+    println!("    Client Require: {{ {} }}", raft_client_requires());
+    println!();
+
     info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
 
     let db = get_sled_db();
@@ -132,6 +145,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
+    println!("    OTLP: {}", conf.log.otlp);
     println!("    Tracing: {}", conf.log.tracing);
     println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
@@ -188,7 +202,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     register_node(&meta_node, &conf).await?;
 
-    println!("Databend Metasrv starting...");
+    println!("Databend Metasrv started");
 
     stop_handler.wait_to_terminate(stop_tx).await;
     info!("Databend-meta is done shutting down");

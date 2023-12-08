@@ -22,6 +22,7 @@ use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -76,7 +77,8 @@ impl ParquetPredicate {
     }
 
     pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
-        let block = transform_record_batch(batch, &self.field_paths)?;
+        let data_schema = DataSchema::from(&self.schema);
+        let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
     }

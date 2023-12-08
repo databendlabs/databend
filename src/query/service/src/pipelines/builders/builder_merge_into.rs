@@ -28,13 +28,16 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
+use common_pipeline_core::TransformPipeBuilder;
 use common_pipeline_transforms::processors::create_dummy_item;
+use common_sql::binder::MergeIntoType;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::MergeInto;
 use common_sql::executor::physical_plans::MergeIntoAddRowNumber;
 use common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
 use common_sql::executor::physical_plans::MergeIntoSource;
+use common_sql::executor::physical_plans::MutationKind;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::MatchedSplitProcessor;
 use common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
@@ -93,10 +96,17 @@ impl PipelineBuilder {
             catalog_info,
             unmatched,
             input_schema,
+            merge_type,
         } = merge_into_append_not_macted;
-        // receive row numbers and MutationLogs
+
+        // in common case: receive row numbers and MutationLogs
         self.build_pipeline(input)?;
         self.main_pipeline.try_resize(1)?;
+
+        // we will receive MutationLogs only without row_number.
+        if let MergeIntoType::MatechedOnly = merge_type {
+            return Ok(());
+        }
 
         assert!(self.join_state.is_some());
         assert!(self.probe_data_fields.is_some());
@@ -119,6 +129,7 @@ impl PipelineBuilder {
             ExtractHashTableByRowNumber::create(
                 join_state,
                 self.probe_data_fields.clone().unwrap(),
+                merge_type.clone(),
             )?
             .into_pipe_item(),
             create_dummy_item(),
@@ -130,6 +141,7 @@ impl PipelineBuilder {
             unmatched.clone(),
             input_schema.clone(),
             self.func_ctx.clone(),
+            self.ctx.clone(),
         )?;
         let pipe_items = vec![
             merge_into_not_matched_processor.into_pipe_item(),
@@ -202,6 +214,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen,
+            MutationKind::MergeInto,
         )?;
 
         let pipe_items = vec![
@@ -234,21 +247,56 @@ impl PipelineBuilder {
         &mut self,
         merge_into_source: &MergeIntoSource,
     ) -> Result<()> {
-        let MergeIntoSource { input, row_id_idx } = merge_into_source;
+        let MergeIntoSource {
+            input,
+            row_id_idx,
+            merge_type,
+        } = merge_into_source;
 
         self.build_pipeline(input)?;
+        // 1. if matchedOnly, we will use inner join
+        // 2. if insert Only, we will use right anti join
+        // 3. other cases, we use right outer join
+        // an optimization later: for unmatched only, we can reverse
+        // `on conditions` and use inner join.
         // merge into's parallism depends on the join probe number.
-        let mut items = Vec::with_capacity(self.main_pipeline.output_len());
-        let output_len = self.main_pipeline.output_len();
-        for _ in 0..output_len {
-            let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
-            items.push(merge_into_split_processor.into_pipe_item());
+        if let MergeIntoType::FullOperation = merge_type {
+            let mut items = Vec::with_capacity(self.main_pipeline.output_len());
+            let output_len = self.main_pipeline.output_len();
+            for _ in 0..output_len {
+                let merge_into_split_processor =
+                    MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+                items.push(merge_into_split_processor.into_pipe_item());
+            }
+
+            self.main_pipeline
+                .add_pipe(Pipe::create(output_len, output_len * 2, items));
         }
 
-        self.main_pipeline
-            .add_pipe(Pipe::create(output_len, output_len * 2, items));
-
         Ok(())
+    }
+
+    fn resize_row_id(&mut self, step: usize) -> Result<()> {
+        // resize row_id
+        let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 3);
+        for idx in 0..(self.main_pipeline.output_len() / step) {
+            vec.push(idx);
+        }
+        ranges.push(vec.clone());
+        for idx in 0..(self.main_pipeline.output_len() / step) {
+            ranges.push(vec![idx + self.main_pipeline.output_len() / step]);
+        }
+        //  need to process row_number.
+        if step == 3 {
+            vec.clear();
+            for idx in 0..(self.main_pipeline.output_len() / step) {
+                vec.push(idx + self.main_pipeline.output_len() / step * 2);
+            }
+            ranges.push(vec);
+        }
+
+        self.main_pipeline.resize_partial_one(ranges.clone())
     }
 
     // build merge into pipeline.
@@ -263,6 +311,7 @@ impl PipelineBuilder {
             row_id_idx,
             segments,
             distributed,
+            merge_type,
             ..
         } = merge_into;
 
@@ -285,6 +334,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen.clone(),
+            MutationKind::MergeInto,
         )?
         .get_block_builder();
 
@@ -304,7 +354,8 @@ impl PipelineBuilder {
             output_len
         };
         // Handle matched and unmatched data separately.
-
+        // This is a complete pipeline with matched and not matched clauses, for matched only or unmatched only
+        // we will delicate useless pipeline and processor
         //                                                                                 +-----------------------------+-+
         //                                    +-----------------------+     Matched        |                             +-+
         //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
@@ -324,51 +375,60 @@ impl PipelineBuilder {
 
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
-        for _ in (0..self.main_pipeline.output_len()).step_by(2) {
-            // Todo(JackTan25): We should optimize pipeline. when only not matched, we should ignore this
-            let matched_split_processor = MatchedSplitProcessor::create(
-                self.ctx.clone(),
-                *row_id_idx,
-                matched.clone(),
-                field_index_of_input_schema.clone(),
-                input.output_schema()?,
-                Arc::new(DataSchema::from(tbl.schema())),
-            )?;
 
-            pipe_items.push(matched_split_processor.into_pipe_item());
-            if !*distributed {
-                // Todo(JackTan25): We should optimize pipeline. when only matched,we should ignore this
-                let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
-                    unmatched.clone(),
+        let (step, need_match, need_unmatch) = match merge_type {
+            MergeIntoType::FullOperation => (2, true, true),
+            MergeIntoType::InsertOnly => (1, false, true),
+            MergeIntoType::MatechedOnly => (1, true, false),
+        };
+
+        for _ in (0..self.main_pipeline.output_len()).step_by(step) {
+            if need_match {
+                let matched_split_processor = MatchedSplitProcessor::create(
+                    self.ctx.clone(),
+                    *row_id_idx,
+                    matched.clone(),
+                    field_index_of_input_schema.clone(),
                     input.output_schema()?,
-                    self.func_ctx.clone(),
+                    Arc::new(DataSchema::from(tbl.schema())),
                 )?;
+                pipe_items.push(matched_split_processor.into_pipe_item());
+            }
 
-                pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
-            } else {
-                let input_num_columns = input.output_schema()?.num_fields();
-                assert_eq!(
-                    input.output_schema()?.field(input_num_columns - 1).name(),
-                    ROW_NUMBER_COL_NAME
-                );
-                let input_port = InputPort::create();
-                let output_port = OutputPort::create();
-                // project row number column
-                let proc = ProcessorPtr::create(CompoundBlockOperator::create(
-                    input_port.clone(),
-                    output_port.clone(),
-                    input_num_columns,
-                    self.func_ctx.clone(),
-                    vec![BlockOperator::Project {
-                        projection: vec![input_num_columns - 1],
-                    }],
-                ));
-                pipe_items.push(PipeItem {
-                    processor: proc,
-                    inputs_port: vec![input_port],
-                    outputs_port: vec![output_port],
-                })
-            };
+            if need_unmatch {
+                if !*distributed {
+                    let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+                        unmatched.clone(),
+                        input.output_schema()?,
+                        self.func_ctx.clone(),
+                        self.ctx.clone(),
+                    )?;
+                    pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+                } else {
+                    let input_num_columns = input.output_schema()?.num_fields();
+                    assert_eq!(
+                        input.output_schema()?.field(input_num_columns - 1).name(),
+                        ROW_NUMBER_COL_NAME
+                    );
+                    let input_port = InputPort::create();
+                    let output_port = OutputPort::create();
+                    // project row number column
+                    let proc = ProcessorPtr::create(CompoundBlockOperator::create(
+                        input_port.clone(),
+                        output_port.clone(),
+                        input_num_columns,
+                        self.func_ctx.clone(),
+                        vec![BlockOperator::Project {
+                            projection: vec![input_num_columns - 1],
+                        }],
+                    ));
+                    pipe_items.push(PipeItem {
+                        processor: proc,
+                        inputs_port: vec![input_port],
+                        outputs_port: vec![output_port],
+                    })
+                };
+            }
         }
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
@@ -376,6 +436,7 @@ impl PipelineBuilder {
             pipe_items.clone(),
         ));
 
+        // the complete pipeline(with matched and unmatched) below:
         // row_id port0_1
         // matched update data port0_2
         // not macthed insert data port0_3
@@ -383,16 +444,21 @@ impl PipelineBuilder {
         // matched update data port1_2
         // not macthed insert data port1_3
         // ......
-        assert_eq!(self.main_pipeline.output_len() % 3, 0);
-        let mut ranges = Vec::with_capacity(self.main_pipeline.output_len() / 3 * 2);
+        // 1.for matched only, there are no not matched ports
+        // 2.for unmatched only/insert only, there are no macthed update ports and row_id ports
+        let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         if !*distributed {
-            // merge rowid and serialize_blocks
-            for idx in (0..self.main_pipeline.output_len()).step_by(3) {
-                ranges.push(vec![idx]);
-                ranges.push(vec![idx + 1, idx + 2]);
+            // complete pipeline
+            if need_match && need_unmatch {
+                assert_eq!(self.main_pipeline.output_len() % 3, 0);
+                // merge rowid and serialize_blocks
+                for idx in (0..self.main_pipeline.output_len()).step_by(3) {
+                    ranges.push(vec![idx]);
+                    ranges.push(vec![idx + 1, idx + 2]);
+                }
+                self.main_pipeline.resize_partial_one(ranges.clone())?;
+                assert_eq!(self.main_pipeline.output_len() % 2, 0);
             }
-            self.main_pipeline.resize_partial_one(ranges.clone())?;
-            assert_eq!(self.main_pipeline.output_len() % 2, 0);
 
             // shuffle outputs and resize row_id
             // ----------------------------------------------------------------------
@@ -403,24 +469,21 @@ impl PipelineBuilder {
             // ......                       data port1_2                data port1
             // ......                       .....                       .....
             // ----------------------------------------------------------------------
-            let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
-            for idx in 0..(self.main_pipeline.output_len() / 2) {
-                rules.push(idx);
-                rules.push(idx + self.main_pipeline.output_len() / 2);
+            // the complete pipeline(with matched and unmatched) below:
+            // 1. matched only or compelete pipeline are same with above
+            // 2. for unmatched only or insert only, there are no row_id ports
+            if need_match {
+                let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
+                for idx in 0..(self.main_pipeline.output_len() / 2) {
+                    rules.push(idx);
+                    rules.push(idx + self.main_pipeline.output_len() / 2);
+                }
+                self.main_pipeline.reorder_inputs(rules);
+                // resize row_id
+                self.resize_row_id(2)?;
             }
-            self.main_pipeline.reorder_inputs(rules);
-            // resize row_id
-            ranges.clear();
-            let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 2);
-            for idx in 0..(self.main_pipeline.output_len() / 2) {
-                vec.push(idx);
-            }
-            ranges.push(vec.clone());
-            for idx in 0..(self.main_pipeline.output_len() / 2) {
-                ranges.push(vec![idx + self.main_pipeline.output_len() / 2]);
-            }
-            self.main_pipeline.resize_partial_one(ranges.clone())?;
         } else {
+            // the complete pipeline(with matched and unmatched) below:
             // shuffle outputs and resize row_id
             // ----------------------------------------------------------------------
             // row_id port0_1              row_id port0_1              row_id port
@@ -428,45 +491,56 @@ impl PipelineBuilder {
             // row_number port0_3          matched data port0_2      matched data port1_2
             // row_id port1_1              matched data port1_2          ......
             // matched data port1_2  ===>       .....           ====>    ......
-            // row_number port1_2               .....                    ......
-            // row_number port0_3        row_number port0_3          row_number port
+            // row_number port1_3               .....                    ......
+            //                           row_number port0_3          row_number port
             // ......                    row_number port1_3
             // ......                           .....
             // ----------------------------------------------------------------------
+            // 1.for matched only, there is no row_number
+            // 2.for unmatched only/insert only, there is no row_id and matched data.
             // do shuffle
             let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
-            for idx in 0..(self.main_pipeline.output_len() / 3) {
-                rules.push(idx);
-                rules.push(idx + self.main_pipeline.output_len() / 3);
-                rules.push(idx + self.main_pipeline.output_len() / 3 * 2);
+            if need_match && need_unmatch {
+                // matched and unmatched
+                for idx in 0..(self.main_pipeline.output_len() / 3) {
+                    rules.push(idx);
+                    rules.push(idx + self.main_pipeline.output_len() / 3);
+                    rules.push(idx + self.main_pipeline.output_len() / 3 * 2);
+                }
+                self.main_pipeline.reorder_inputs(rules);
+                self.resize_row_id(3)?;
+            } else if need_match && !need_unmatch {
+                // matched only
+                for idx in 0..(self.main_pipeline.output_len() / 2) {
+                    rules.push(idx);
+                    rules.push(idx + self.main_pipeline.output_len() / 2);
+                }
+                self.main_pipeline.reorder_inputs(rules);
+                self.resize_row_id(2)?;
+            } else if !need_match && need_unmatch {
+                // insert-only, there are only row_numbers
+                self.main_pipeline.try_resize(1)?;
             }
-            self.main_pipeline.reorder_inputs(rules);
-
-            // resize row_id
-            ranges.clear();
-            let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 3);
-            for idx in 0..(self.main_pipeline.output_len() / 3) {
-                vec.push(idx);
-            }
-            ranges.push(vec.clone());
-            for idx in 0..(self.main_pipeline.output_len() / 3) {
-                ranges.push(vec![idx + self.main_pipeline.output_len() / 3]);
-            }
-            vec.clear();
-            for idx in 0..(self.main_pipeline.output_len() / 3) {
-                vec.push(idx + self.main_pipeline.output_len() / 3 * 2);
-            }
-            ranges.push(vec);
-            self.main_pipeline.resize_partial_one(ranges.clone())?;
         }
 
         let fill_default_len = if !*distributed {
+            if need_match {
+                // remove first row_id port
+                self.main_pipeline.output_len() - 1
+            } else {
+                self.main_pipeline.output_len()
+            }
+        } else if need_match && need_unmatch {
+            // remove first row_id port and last row_number_port
+            self.main_pipeline.output_len() - 2
+        } else if need_match && !need_unmatch {
             // remove first row_id port
             self.main_pipeline.output_len() - 1
         } else {
-            // remove first row_id port and last row_number_port
-            self.main_pipeline.output_len() - 2
+            // there are only row_number ports
+            0
         };
+
         // fill default columns
         let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
@@ -482,24 +556,26 @@ impl PipelineBuilder {
             fill_default_len,
         )?;
 
-        if !*distributed {
-            builder.add_items_prepend(vec![create_dummy_item()]);
-            self.main_pipeline.add_pipe(builder.finalize());
-        } else {
-            builder.add_items_prepend(vec![create_dummy_item()]);
-            // receive row_number
-            builder.add_items(vec![create_dummy_item()]);
-            self.main_pipeline.add_pipe(builder.finalize());
-        }
-
-        let fill_computed_len = if !*distributed {
-            // remove first row_id port
-            self.main_pipeline.output_len() - 1
-        } else {
-            // remove first row_id port and last row_number_port
-            self.main_pipeline.output_len() - 2
+        let add_builder_pipe = |mut builder: TransformPipeBuilder, distributed: &bool| -> Pipe {
+            if !*distributed {
+                if need_match {
+                    builder.add_items_prepend(vec![create_dummy_item()]);
+                }
+            } else {
+                if need_match {
+                    // receive row_id
+                    builder.add_items_prepend(vec![create_dummy_item()]);
+                }
+                if need_unmatch {
+                    // receive row_number
+                    builder.add_items(vec![create_dummy_item()]);
+                }
+            }
+            builder.finalize()
         };
 
+        self.main_pipeline
+            .add_pipe(add_builder_pipe(builder, distributed));
         // fill computed columns
         let table_computed_schema = &table.schema().remove_virtual_computed_fields();
         let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
@@ -515,17 +591,10 @@ impl PipelineBuilder {
                         computed_schema.clone(),
                     )
                 },
-                fill_computed_len,
+                fill_default_len,
             )?;
-            if !*distributed {
-                builder.add_items_prepend(vec![create_dummy_item()]);
-                self.main_pipeline.add_pipe(builder.finalize());
-            } else {
-                builder.add_items_prepend(vec![create_dummy_item()]);
-                // receive row_number
-                builder.add_items(vec![create_dummy_item()]);
-                self.main_pipeline.add_pipe(builder.finalize());
-            }
+            self.main_pipeline
+                .add_pipe(add_builder_pipe(builder, distributed));
         }
 
         let max_threads = self.settings.get_max_threads()?;
@@ -533,38 +602,50 @@ impl PipelineBuilder {
 
         // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
         let output_lens = self.main_pipeline.output_len();
-        if !*distributed {
+        let serialize_len = if !*distributed {
+            let mid_len = if need_match {
+                // with row_id
+                output_lens - 1
+            } else {
+                // without row_id
+                output_lens
+            };
+
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
                 block_thresholds,
-                output_lens - 1,
+                mid_len,
                 0,
             )?;
+            mid_len
         } else {
+            let (mid_len, last_len) = if need_match && need_unmatch {
+                // with row_id and row_number
+                (output_lens - 2, 1)
+            } else {
+                // (with row_id and without row_number) or (without row_id and with row_number)
+                (output_lens - 1, 0)
+            };
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
                 block_thresholds,
-                output_lens - 2,
-                1,
+                mid_len,
+                last_len,
             )?;
-        }
-
+            mid_len
+        };
         pipe_items.clear();
 
-        pipe_items.push(table.rowid_aggregate_mutator(
-            self.ctx.clone(),
-            block_builder,
-            io_request_semaphore,
-            segments.clone(),
-        )?);
-
-        let serialize_len = if !*distributed {
-            self.main_pipeline.output_len() - 1
-        } else {
-            self.main_pipeline.output_len() - 2
-        };
+        if need_match {
+            pipe_items.push(table.rowid_aggregate_mutator(
+                self.ctx.clone(),
+                block_builder,
+                io_request_semaphore,
+                segments.clone(),
+            )?);
+        }
 
         for _ in 0..serialize_len {
             let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -573,12 +654,13 @@ impl PipelineBuilder {
                 OutputPort::create(),
                 table,
                 cluster_stats_gen.clone(),
+                MutationKind::MergeInto,
             )?;
             pipe_items.push(serialize_block_transform.into_pipe_item());
         }
 
         // receive row_number
-        if *distributed {
+        if *distributed && need_unmatch {
             pipe_items.push(create_dummy_item());
         }
 
@@ -595,36 +677,55 @@ impl PipelineBuilder {
         // .......
         // row_number_port (distributed)                        row_number_port(distributed)
         ranges.clear();
-        ranges.push(vec![0]);
-        let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
-        let output_lens = if !*distributed {
-            self.main_pipeline.output_len() - 1
+        let offset = if need_match {
+            ranges.push(vec![0]);
+            1
         } else {
-            self.main_pipeline.output_len() - 2
+            0
         };
-        for idx in 0..output_lens {
-            vec.push(idx + 1);
+
+        // for distributed insert-only, the serialize_len is zero.
+        if serialize_len > 0 {
+            let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
+            for idx in 0..serialize_len {
+                vec.push(idx + offset);
+            }
+
+            ranges.push(vec);
         }
-        ranges.push(vec);
-        if *distributed {
+
+        // with row_number
+        if *distributed && need_unmatch {
             ranges.push(vec![self.main_pipeline.output_len() - 1]);
         }
 
         self.main_pipeline.resize_partial_one(ranges)?;
 
         let pipe_items = if !distributed {
-            vec![
-                create_dummy_item(),
-                serialize_segment_transform.into_pipe_item(),
-            ]
+            let mut vec = Vec::with_capacity(2);
+            if need_match {
+                vec.push(create_dummy_item());
+            }
+            vec.push(serialize_segment_transform.into_pipe_item());
+            vec
         } else {
-            vec![
-                create_dummy_item(),
-                serialize_segment_transform.into_pipe_item(),
-                create_dummy_item(),
-            ]
+            let mut vec = Vec::with_capacity(3);
+            if need_match {
+                vec.push(create_dummy_item())
+            }
+            // for distributed insert-only, the serialize_len is zero.
+            // and there is no serialize data here.
+            if serialize_len > 0 {
+                vec.push(serialize_segment_transform.into_pipe_item());
+            }
+
+            if need_unmatch {
+                vec.push(create_dummy_item())
+            }
+            vec
         };
 
+        // the complete pipeline(with matched and unmatched) below:
         // distributed: false
         //      output_port0: MutationLogs
         //      output_port1: MutationLogs
@@ -633,6 +734,8 @@ impl PipelineBuilder {
         //      output_port0: MutationLogs
         //      output_port1: MutationLogs
         //      output_port2: row_numbers
+        // 1.for matched only, there are no row_numbers
+        // 2.for unmatched only/insert only, there is no output_port0.
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
@@ -640,12 +743,17 @@ impl PipelineBuilder {
         ));
 
         // accumulate row_number
-        if *distributed {
-            let pipe_items = vec![
-                create_dummy_item(),
-                create_dummy_item(),
-                AccumulateRowNumber::create()?.into_pipe_item(),
-            ];
+        if *distributed && need_unmatch {
+            let pipe_items = if need_match {
+                vec![
+                    create_dummy_item(),
+                    create_dummy_item(),
+                    AccumulateRowNumber::create()?.into_pipe_item(),
+                ]
+            } else {
+                vec![AccumulateRowNumber::create()?.into_pipe_item()]
+            };
+
             self.main_pipeline.add_pipe(Pipe::create(
                 self.main_pipeline.output_len(),
                 get_output_len(&pipe_items),

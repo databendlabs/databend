@@ -228,8 +228,8 @@ impl Column {
         builder
     }
 
-    pub fn take_compact_string_types<'a>(
-        col: &'a StringColumn,
+    pub fn take_compact_string_types(
+        col: &StringColumn,
         indices: &[(u32, u32)],
         num_rows: usize,
     ) -> StringColumn {

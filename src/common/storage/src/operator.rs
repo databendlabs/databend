@@ -36,13 +36,15 @@ use common_meta_app::storage::StorageMokaConfig;
 use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
+use common_metrics::load_global_prometheus_registry;
 use log::warn;
+use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
+use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
@@ -53,6 +55,8 @@ use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
+
+static PROMETHEUS_CLIENT_LAYER_INSTANCE: OnceCell<PrometheusClientLayer> = OnceCell::new();
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -72,7 +76,6 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?)?,
         StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?)?,
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
-        StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
         StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
         v => {
@@ -112,12 +115,19 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        //.layer(PrometheusClientLayer::new(
-        //    load_global_prometheus_registry().inner_mut(),
-        //))
+        .layer(load_prometheus_client_layer())
         .finish();
 
     Ok(op)
+}
+
+/// build_operator() can be called multiple times, it would be dangerous to register the opendal metrics
+/// multiple times. PrometheusClientLayer is not a singleton itself, but the metrics in it are singletons
+/// behind Arc, so we can safely clone it.
+fn load_prometheus_client_layer() -> PrometheusClientLayer {
+    PROMETHEUS_CLIENT_LAYER_INSTANCE
+        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
+        .clone()
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
@@ -334,26 +344,6 @@ fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
     builder.max_capacity(v.max_capacity);
     builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
     builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
-
-    Ok(builder)
-}
-
-/// init_redis_operator will init a reids operator.
-fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Builder> {
-    let mut builder = services::Redis::default();
-
-    builder.endpoint(&v.endpoint_url);
-    builder.root(&v.root);
-    builder.db(v.db);
-    if let Some(v) = v.default_ttl {
-        builder.default_ttl(Duration::from_secs(v as u64));
-    }
-    if let Some(v) = &v.username {
-        builder.username(v);
-    }
-    if let Some(v) = &v.password {
-        builder.password(v);
-    }
 
     Ok(builder)
 }

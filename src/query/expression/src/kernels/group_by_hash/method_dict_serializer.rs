@@ -22,6 +22,7 @@ use super::utils::serialize_group_columns;
 use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
+use crate::KeyAccessor;
 use crate::KeysState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,17 +98,37 @@ impl HashMethod for HashMethodDictionarySerializer {
         }
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Dictionary { dictionaries, .. } => {
-                let mut hashes = Vec::with_capacity(dictionaries.len());
                 hashes.extend(dictionaries.iter().map(|key| key.fast_hash()));
-                Ok((dictionaries.iter(), hashes))
+                Ok(Box::new(DicKeyAccessor::new(dictionaries)))
             }
             _ => unreachable!(),
         }
+    }
+}
+
+pub struct DicKeyAccessor {
+    data: Vec<DictionaryKeys>,
+}
+
+impl DicKeyAccessor {
+    pub fn new(data: Vec<DictionaryKeys>) -> Self {
+        Self { data }
+    }
+}
+
+impl KeyAccessor for DicKeyAccessor {
+    type Key = DictionaryKeys;
+
+    /// # Safety
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
+        self.data.get_unchecked(index)
     }
 }

@@ -50,6 +50,7 @@ use super::Finder;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::udf::UdfRewriter;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
@@ -168,9 +169,6 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
-        // analyze lambda
-        self.analyze_lambda(&mut from_context, &mut select_list)?;
-
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -202,12 +200,24 @@ impl Binder {
         };
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
-        let (mut scalar_items, projections) =
-            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+        let (mut scalar_items, projections) = self.analyze_projection(
+            &from_context.aggregate_info,
+            &from_context.windows,
+            &select_list,
+        )?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
                 self.analyze_aggregate_having(&mut from_context, &aliases, having)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        let qualify = if let Some(qualify) = &stmt.qualify {
+            Some(
+                self.analyze_window_qualify(&mut from_context, &aliases, qualify)
                     .await?,
             )
         } else {
@@ -239,26 +249,26 @@ impl Binder {
             )?;
         }
 
-        if !from_context.lambda_info.lambda_functions.is_empty() {
-            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
-        }
-
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
         }
 
-        if let Some((having, span)) = having {
-            s_expr = self
-                .bind_having(&mut from_context, having, span, s_expr)
-                .await?;
+        if let Some(having) = having {
+            s_expr = self.bind_having(&mut from_context, having, s_expr).await?;
         }
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
         for window_info in &from_context.windows.window_functions {
             s_expr = self.bind_window_function(window_info, s_expr).await?;
+        }
+
+        if let Some(qualify) = qualify {
+            s_expr = self
+                .bind_qualify(&mut from_context, qualify, s_expr)
+                .await?;
         }
 
         if stmt.distinct {
@@ -284,6 +294,10 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // rewrite udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
@@ -1054,8 +1068,11 @@ impl<'a> SelectRewriter<'a> {
 
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            let mut exclude_columns = aggregate_columns;
-            exclude_columns.push(ColumnID::Name(pivot.value_column.clone()));
+            let mut exclude_columns: Vec<_> = aggregate_columns
+                .iter()
+                .map(|c| Identifier::from_name(c.name()))
+                .collect();
+            exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
         };
         let new_aggregate_name = Identifier {
@@ -1097,13 +1114,7 @@ impl<'a> SelectRewriter<'a> {
         let unpivot = stmt.from[0].unpivot().unwrap();
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(
-                unpivot
-                    .names
-                    .iter()
-                    .map(|ident| ColumnID::Name(ident.clone()))
-                    .collect(),
-            );
+            star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
             Self::ident_from_string("unnest"),

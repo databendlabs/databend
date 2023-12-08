@@ -115,7 +115,7 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or(ErrorCode::Internal(format!(
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(||ErrorCode::Internal(format!(
                 "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
                 column_range, location, merged_ranges
             )))?;

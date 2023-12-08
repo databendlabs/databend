@@ -134,6 +134,11 @@ impl StatisticsReceiver {
                 ctx.get_copy_status().merge(status);
                 Ok(false)
             }
+            Ok(Some(DataPacket::MergeStatus(status))) => {
+                log::info!("merge MergeStatus");
+                ctx.get_merge_status().write().merge_status(status);
+                Ok(false)
+            }
         }
     }
 
