@@ -139,6 +139,12 @@ impl FlightClient {
         let fut = {
             let notify = notify.clone();
             async move {
+                // since
+                // - the notifier will use `notify_one` to wake up us,
+                // - the notification will be used in a single-shot way
+                //     after received the first notification, we will break out the loop
+                // it is safe to instantiate the Notified future here, even if
+                // the `notify_one` might be called before the instantiation.
                 let mut notified = Box::pin(notify.notified());
                 let mut streaming_next = streaming.next();
 
