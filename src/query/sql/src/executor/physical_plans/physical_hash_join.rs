@@ -249,7 +249,7 @@ impl PhysicalPlanBuilder {
 
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
-        for column in pre_column_projections {
+        for column in pre_column_projections.iter() {
             if let Some((index, _)) = probe_schema.column_with_name(&column.to_string()) {
                 probe_projections.insert(index);
             }
@@ -320,8 +320,29 @@ impl PhysicalPlanBuilder {
                 probe_fields.extend(build_fields);
                 probe_fields
             }
-            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
-            JoinType::RightSemi | JoinType::RightAnti => build_fields,
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti => {
+                let (result_fields, dropped_fields) = if join.join_type == JoinType::LeftSemi
+                    || join.join_type == JoinType::LeftAnti
+                {
+                    (probe_fields, build_fields)
+                } else {
+                    (build_fields, probe_fields)
+                };
+                for field in dropped_fields.iter() {
+                    if result_fields.iter().all(|x| x.name() != field.name()) &&
+                        let Ok(index) = field.name().parse::<usize>() &&
+                        column_projections.contains(&index)
+                    {
+                        let metadata = self.metadata.read();
+                        return Err(ErrorCode::SemanticError(format!(
+                            "cannot access the {:?}.{:?} in ANTI or SEMI join",
+                            metadata.table(index).name(),
+                            metadata.column(index).name()
+                        )));
+                    }
+                }
+                result_fields
+            }
             JoinType::LeftMark => {
                 let name = if let Some(idx) = join.marker_index {
                     idx.to_string()
