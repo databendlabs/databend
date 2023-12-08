@@ -84,7 +84,7 @@ impl RangeIndex {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
-                // inernal column and stream column are not actual columns
+                // internal column and stream column are not actual stored columns
                 // variant type may be virtual columns that are not included in leaf columns
                 if is_internal_column(&name)
                     || is_stream_column(&name)
