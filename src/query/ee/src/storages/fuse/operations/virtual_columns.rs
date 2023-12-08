@@ -18,7 +18,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::infer_schema_type;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -44,9 +44,9 @@ use storages_common_cache::LoadParams;
 pub async fn do_refresh_virtual_column(
     fuse_table: &FuseTable,
     ctx: Arc<dyn TableContext>,
-    virtual_columns: Vec<String>,
+    virtual_exprs: Vec<String>,
 ) -> Result<()> {
-    if virtual_columns.is_empty() {
+    if virtual_exprs.is_empty() {
         return Ok(());
     }
 
@@ -60,18 +60,14 @@ pub async fn do_refresh_virtual_column(
 
     let table_schema = &fuse_table.get_table_info().meta.schema;
 
+    // Collect source fields used by virtual columns.
     let mut field_indices = Vec::new();
     for (i, f) in table_schema.fields().iter().enumerate() {
         if f.data_type().remove_nullable() != TableDataType::Variant {
             continue;
         }
-        let mut is_src_column = false;
-        for virtual_column in &virtual_columns {
-            if virtual_column.starts_with(&f.name().clone()) {
-                is_src_column = true;
-            }
-        }
-        if is_src_column {
+        let is_src_field = virtual_exprs.iter().any(|v| v.starts_with(f.name()));
+        if is_src_field {
             field_indices.push(i);
         }
     }
@@ -96,6 +92,7 @@ pub async fn do_refresh_virtual_column(
 
     let operator = fuse_table.get_operator_ref();
 
+    // Read source variant columns and extract inner fields as virtual columns.
     for (location, ver) in &snapshot.segments {
         let segment_info = segment_reader
             .read(&LoadParams {
@@ -120,7 +117,7 @@ pub async fn do_refresh_virtual_column(
                 &write_settings,
                 &virtual_loc,
                 source_schema.clone(),
-                &virtual_columns,
+                &virtual_exprs,
                 block,
             )
             .await?;
@@ -137,26 +134,22 @@ async fn materialize_virtual_columns(
     write_settings: &WriteSettings,
     location: &str,
     source_schema: DataSchemaRef,
-    paths: &Vec<String>,
+    virtual_exprs: &Vec<String>,
     block: DataBlock,
 ) -> Result<()> {
     let len = block.num_rows();
 
     let func_ctx = ctx.get_function_context()?;
     let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
-    let mut virtual_fields = Vec::with_capacity(paths.len());
-    let mut virtual_columns = Vec::with_capacity(paths.len());
-    for path in paths {
-        let expr = parse_computed_expr(ctx.clone(), source_schema.clone(), path)?;
-        let value = evaluator.run(&expr)?;
-        let virtual_field = TableField::new(
-            path,
-            TableDataType::Nullable(Box::new(TableDataType::Variant)),
-        );
+    let mut virtual_fields = Vec::with_capacity(virtual_exprs.len());
+    let mut virtual_columns = Vec::with_capacity(virtual_exprs.len());
+    for virtual_expr in virtual_exprs {
+        let expr = parse_computed_expr(ctx.clone(), source_schema.clone(), virtual_expr)?;
+        let virtual_field = TableField::new(virtual_expr, infer_schema_type(expr.data_type())?);
         virtual_fields.push(virtual_field);
 
-        let virtual_column =
-            BlockEntry::new(DataType::Nullable(Box::new(DataType::Variant)), value);
+        let value = evaluator.run(&expr)?;
+        let virtual_column = BlockEntry::new(expr.data_type().clone(), value);
         virtual_columns.push(virtual_column);
     }
     let virtual_schema = TableSchemaRefExt::create(virtual_fields);
