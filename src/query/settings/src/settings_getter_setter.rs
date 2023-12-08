@@ -258,7 +258,7 @@ impl Settings {
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
-        match self.try_get_string("sql_dialect")?.as_str() {
+        match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
             "experimental" => Ok(Dialect::Experimental),
@@ -267,7 +267,7 @@ impl Settings {
     }
 
     pub fn get_collation(&self) -> Result<&str> {
-        match self.try_get_string("collation")?.as_str() {
+        match self.try_get_string("collation")?.to_lowercase().as_str() {
             "utf8" => Ok("utf8"),
             _ => Ok("binary"),
         }
