@@ -484,9 +484,9 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    fn build_virtual_columns(&self, columns: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
-        let mut virtual_column_infos = Vec::new();
-        for index in columns.iter() {
+    fn build_virtual_columns(&self, indices: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
+        let mut column_and_indices = Vec::new();
+        for index in indices.iter() {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
                 let virtual_column_info = VirtualColumnInfo {
@@ -495,14 +495,20 @@ impl PhysicalPlanBuilder {
                     key_paths: virtual_column.key_paths.clone(),
                     data_type: Box::new(virtual_column.data_type.clone()),
                 };
-                virtual_column_infos.push(virtual_column_info);
+                column_and_indices.push((virtual_column_info, *index));
             }
         }
-        if virtual_column_infos.is_empty() {
-            None
-        } else {
-            Some(virtual_column_infos)
+        if column_and_indices.is_empty() {
+            return None;
         }
+        // Make the order of virtual columns the same as their indexes.
+        column_and_indices.sort_by_key(|(_, index)| *index);
+
+        let virtual_column_infos = column_and_indices
+            .into_iter()
+            .map(|(column, _)| column)
+            .collect::<Vec<_>>();
+        Some(virtual_column_infos)
     }
 
     pub(crate) fn build_agg_index(
