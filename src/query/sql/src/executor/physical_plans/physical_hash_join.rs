@@ -342,15 +342,6 @@ impl PhysicalPlanBuilder {
                             _ => (),
                         }
                     }
-                    //     && field
-                    //         .name()
-                    //         .parse::<usize>()
-                    //         .map_or(false, |index| column_projections.contains(&index))
-                    // {
-                    // return Err(ErrorCode::SemanticError(
-                    //     "cannot access the columns on the ANTI or SEMI side",
-                    // ));
-                    // }
                 }
                 result_fields
             }
