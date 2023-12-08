@@ -28,7 +28,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
 
@@ -100,8 +99,6 @@ impl ParquetSource {
         })))
     }
 }
-
-impl RuntimeFilter for ParquetSource {}
 
 #[async_trait::async_trait]
 impl Processor for ParquetSource {

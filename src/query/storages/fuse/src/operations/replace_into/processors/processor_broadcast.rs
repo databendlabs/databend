@@ -23,7 +23,6 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
-use common_pipeline_core::RuntimeFilter;
 // TODO Shuffle?
 pub struct BroadcastProcessor {
     input_port: Arc<InputPort>,
@@ -57,8 +56,6 @@ impl BroadcastProcessor {
         PipeItem::create(processor_ptr, vec![input], outputs)
     }
 }
-
-impl RuntimeFilter for BroadcastProcessor {}
 
 impl Processor for BroadcastProcessor {
     fn name(&self) -> String {

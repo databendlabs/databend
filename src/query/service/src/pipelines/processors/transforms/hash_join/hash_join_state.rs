@@ -123,6 +123,8 @@ pub struct HashJoinState {
 
     /// Runtime filters
     pub(crate) runtime_filters: RwLock<HashMap<String, Expr<String>>>,
+    /// If the join node generate runtime filters, the scan node will use it to do prune.
+    pub(crate) scan_node_id: AtomicUsize,
 }
 
 impl HashJoinState {
@@ -161,6 +163,7 @@ impl HashJoinState {
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
             runtime_filters: Default::default(),
+            scan_node_id: Default::default(),
         }))
     }
 
@@ -274,5 +277,9 @@ impl HashJoinState {
         }
         data_blocks.clear();
         Ok(())
+    }
+
+    pub(crate) fn set_scan_node_id(&self, id: usize) {
+        self.scan_node_id.store(id, Ordering::Release);
     }
 }

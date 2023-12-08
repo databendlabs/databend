@@ -277,22 +277,6 @@ impl ExecutingGraph {
             }
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
-                let current_node = locker.graph[schedule_index].clone();
-                let rt_filters = current_node.processor.get_runtime_filters()?;
-                if !rt_filters.is_empty() {
-                    // probe node
-                    // Push down runtime filters to source node
-                    let neighbors = locker
-                        .graph
-                        .neighbors_directed(schedule_index, Direction::Incoming);
-                    ExecutingGraph::push_down_runtime_filters(
-                        locker,
-                        schedule_index,
-                        &rt_filters,
-                        neighbors,
-                    )?;
-                }
-
                 let node = &locker.graph[schedule_index];
 
                 if state_guard_cache.is_none() {
@@ -329,27 +313,6 @@ impl ExecutingGraph {
             }
         }
 
-        Ok(())
-    }
-
-    unsafe fn push_down_runtime_filters(
-        locker: &StateLockGuard,
-        current_node: NodeIndex,
-        rt_filters: &HashMap<String, Expr<String>>,
-        neighbors: Neighbors<EdgeInfo>,
-    ) -> Result<()> {
-        if neighbors.clone().next().is_none() {
-            let processor = &locker.graph[current_node].processor;
-            // Source node
-            processor.add_runtime_filters(rt_filters)?;
-            return Ok(());
-        }
-        for neighbor in neighbors {
-            let nodes = locker
-                .graph
-                .neighbors_directed(neighbor, Direction::Incoming);
-            ExecutingGraph::push_down_runtime_filters(locker, neighbor, rt_filters, nodes)?;
-        }
         Ok(())
     }
 }

@@ -35,7 +35,6 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
-use common_pipeline_core::RuntimeFilter;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::physical_plans::MatchExpr;
 use common_storage::MergeStatus;
@@ -197,8 +196,6 @@ impl MatchedSplitProcessor {
         ])
     }
 }
-
-impl RuntimeFilter for MatchedSplitProcessor {}
 
 impl Processor for MatchedSplitProcessor {
     fn name(&self) -> String {

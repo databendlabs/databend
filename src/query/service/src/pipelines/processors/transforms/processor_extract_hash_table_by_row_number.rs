@@ -32,7 +32,6 @@ use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::PipeItem;
-use common_pipeline_core::RuntimeFilter;
 use common_sql::binder::MergeIntoType;
 
 use super::hash_join::HashJoinBuildState;
@@ -73,8 +72,6 @@ impl ExtractHashTableByRowNumber {
         PipeItem::create(processor_ptr, vec![input], vec![output_port])
     }
 }
-
-impl RuntimeFilter for ExtractHashTableByRowNumber {}
 
 impl Processor for ExtractHashTableByRowNumber {
     fn name(&self) -> String {

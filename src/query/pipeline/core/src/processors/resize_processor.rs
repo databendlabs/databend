@@ -25,7 +25,6 @@ use crate::processors::InputPort;
 use crate::processors::OutputPort;
 use crate::processors::Processor;
 use crate::processors::ProcessorPtr;
-use crate::RuntimeFilter;
 
 #[derive(PartialEq)]
 enum PortStatus {
@@ -52,8 +51,6 @@ pub struct ResizeProcessor {
     inputs: Vec<PortWithStatus<InputPort>>,
     outputs: Vec<PortWithStatus<OutputPort>>,
 }
-
-impl RuntimeFilter for ResizeProcessor {}
 
 #[async_trait::async_trait]
 impl Processor for ResizeProcessor {

@@ -20,7 +20,6 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::RuntimeFilter;
 
 /// Sink with multiple inputs.
 pub trait SyncMpscSink: Send {
@@ -100,8 +99,6 @@ impl<T: SyncMpscSink + 'static> SyncMpscSinker<T> {
         }
     }
 }
-
-impl<T: SyncMpscSink + 'static> RuntimeFilter for SyncMpscSinker<T> {}
 
 #[async_trait::async_trait]
 impl<T: SyncMpscSink + 'static> Processor for SyncMpscSinker<T> {

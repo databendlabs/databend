@@ -26,7 +26,6 @@ use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
 use crate::processors::profile::Profile;
-use crate::runtime_filter::RuntimeFilter;
 
 #[derive(Debug)]
 pub enum Event {
@@ -48,7 +47,7 @@ pub enum EventCause {
 
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
-pub trait Processor: Send + RuntimeFilter {
+pub trait Processor: Send {
     fn name(&self) -> String;
 
     /// Reference used for downcast.
@@ -94,7 +93,7 @@ pub trait Processor: Send + RuntimeFilter {
 // we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
 // so that later an Arc of it could be moved into the async closure,
 // which async_process returns.
-pub struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
+struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
 unsafe impl Sync for UnsafeSyncCelledProcessor {}
 
 impl Deref for UnsafeSyncCelledProcessor {
@@ -127,10 +126,6 @@ impl ProcessorPtr {
             id: Arc::new(UnsafeCell::new(node_index(0))),
             inner: Arc::new(UnsafeCell::new(inner).into()),
         }
-    }
-
-    pub fn inner(&self) -> Arc<UnsafeSyncCelledProcessor> {
-        self.inner.clone()
     }
 
     /// # Safety

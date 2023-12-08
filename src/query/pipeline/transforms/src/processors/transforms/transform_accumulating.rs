@@ -25,7 +25,6 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::RuntimeFilter;
 
 pub trait AccumulatingTransform: Send {
     const NAME: &'static str;
@@ -69,8 +68,6 @@ impl<T: AccumulatingTransform + 'static> Drop for AccumulatingTransformer<T> {
         }
     }
 }
-
-impl<T: AccumulatingTransform + 'static> RuntimeFilter for AccumulatingTransformer<T> {}
 
 #[async_trait::async_trait]
 impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T> {
@@ -190,11 +187,6 @@ impl<B: BlockMetaInfo, T: BlockMetaAccumulatingTransform<B>> Drop
             self.inner.on_finish(false).unwrap();
         }
     }
-}
-
-impl<B: BlockMetaInfo, T: BlockMetaAccumulatingTransform<B>> RuntimeFilter
-    for BlockMetaAccumulatingTransformer<B, T>
-{
 }
 
 #[async_trait::async_trait]

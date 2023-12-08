@@ -27,7 +27,6 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::RuntimeFilter;
 
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
@@ -59,8 +58,6 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
         })))
     }
 }
-
-impl<Method: HashMethodBounds> RuntimeFilter for TransformGroupBySerializer<Method> {}
 
 impl<Method: HashMethodBounds> Processor for TransformGroupBySerializer<Method> {
     fn name(&self) -> String {
