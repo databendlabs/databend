@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::is_internal_column;
+use common_expression::is_stream_column;
 use common_expression::types::decimal::Decimal128Type;
 use common_expression::types::decimal::Decimal256Type;
 use common_expression::types::decimal::DecimalDataType;
@@ -82,7 +84,18 @@ impl RangeIndex {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
+                if is_internal_column(&name) || is_stream_column(&name) {
+                    return Ok((name, Domain::full(&ty)));
+                }
+
                 let column_ids = self.schema.leaf_columns_of(&name);
+                assert!(
+                    !column_ids.is_empty(),
+                    "column {} not found in schema {:?}",
+                    name,
+                    &self.schema
+                );
+
                 let stats = column_ids
                     .iter()
                     .filter_map(|column_id| match stats.get(column_id) {

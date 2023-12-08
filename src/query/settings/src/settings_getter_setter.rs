@@ -24,6 +24,12 @@ use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 use crate::SettingMode;
 
+#[derive(Clone, Copy)]
+pub enum FlightCompression {
+    Lz4,
+    Zstd,
+}
+
 impl Settings {
     // Get u64 value, we don't get from the metasrv.
     fn try_get_u64(&self, key: &str) -> Result<u64> {
@@ -252,7 +258,7 @@ impl Settings {
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
-        match self.try_get_string("sql_dialect")?.as_str() {
+        match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
             "experimental" => Ok(Dialect::Experimental),
@@ -261,7 +267,7 @@ impl Settings {
     }
 
     pub fn get_collation(&self) -> Result<&str> {
-        match self.try_get_string("collation")?.as_str() {
+        match self.try_get_string("collation")?.to_lowercase().as_str() {
             "utf8" => Ok("utf8"),
             _ => Ok("binary"),
         }
@@ -494,5 +500,18 @@ impl Settings {
 
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
         Ok(self.try_get_u64("create_query_flight_client_with_current_rt")? != 0)
+    }
+
+    pub fn get_query_flight_compression(&self) -> Result<Option<FlightCompression>> {
+        match self
+            .try_get_string("query_flight_compression")?
+            .to_uppercase()
+            .as_str()
+        {
+            "NONE" => Ok(None),
+            "LZ4" => Ok(Some(FlightCompression::Lz4)),
+            "ZSTD" => Ok(Some(FlightCompression::Zstd)),
+            _ => unreachable!("check possible_values in set variable"),
+        }
     }
 }

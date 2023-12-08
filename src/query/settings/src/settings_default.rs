@@ -531,6 +531,12 @@ impl DefaultSettings {
                     possible_values: None,
                     mode: SettingMode::Both,
                 }),
+                ("query_flight_compression", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("LZ4")),
+                    desc: "flight compression method",
+                    possible_values: Some(vec!["None", "LZ4", "ZSTD"]),
+                    mode: SettingMode::Both,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -604,14 +610,23 @@ impl DefaultSettings {
         Ok(Self::instance()?.settings.contains_key(key))
     }
 
-    pub fn convert_value(k: String, v: String) -> Result<(String, Option<UserSettingValue>)> {
+    pub fn convert_value(k: String, mut v: String) -> Result<(String, Option<UserSettingValue>)> {
         let default_settings = DefaultSettings::instance()?;
 
         match default_settings.settings.get(&k) {
             None => Ok((k, None)),
             Some(setting_value) => {
                 if let Some(possible_values) = &setting_value.possible_values {
-                    if !possible_values.iter().any(|x| x.eq_ignore_ascii_case(&v)) {
+                    let mut checked_value = false;
+
+                    for possible_value in possible_values {
+                        if possible_value.eq_ignore_ascii_case(&v) {
+                            checked_value = true;
+                            v = possible_value.to_string();
+                        }
+                    }
+
+                    if !checked_value {
                         return Err(ErrorCode::WrongValueForVariable(format!(
                             "Invalid setting value: {:?} for variable {:?}, possible values: {:?}",
                             v, k, possible_values

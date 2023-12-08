@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter;
 use crate::register_gauge;
 use crate::Counter;
 use crate::Gauge;
 
-lazy_static! {
-    static ref SESSION_CONNECT_NUMBERS: Counter = register_counter("session_connect_numbers");
-    static ref SESSION_CLOSE_NUMBERS: Counter = register_counter("session_close_numbers");
-    static ref SESSION_ACTIVE_CONNECTIONS: Gauge = register_gauge("session_connections");
-}
+pub static SESSION_CONNECT_NUMBERS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_connect_numbers"));
+pub static SESSION_CLOSE_NUMBERS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_close_numbers"));
+pub static SESSION_ACTIVE_CONNECTIONS: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("session_connections"));
 
 pub fn incr_session_connect_numbers() {
     SESSION_CONNECT_NUMBERS.inc();
