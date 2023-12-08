@@ -258,7 +258,7 @@ impl Settings {
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
-        match self.try_get_string("sql_dialect")?.as_str() {
+        match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
             "experimental" => Ok(Dialect::Experimental),
@@ -267,7 +267,7 @@ impl Settings {
     }
 
     pub fn get_collation(&self) -> Result<&str> {
-        match self.try_get_string("collation")?.as_str() {
+        match self.try_get_string("collation")?.to_lowercase().as_str() {
             "utf8" => Ok("utf8"),
             _ => Ok("binary"),
         }
@@ -503,8 +503,12 @@ impl Settings {
     }
 
     pub fn get_query_flight_compression(&self) -> Result<Option<FlightCompression>> {
-        match self.try_get_string("query_flight_compression")?.as_str() {
-            "None" => Ok(None),
+        match self
+            .try_get_string("query_flight_compression")?
+            .to_uppercase()
+            .as_str()
+        {
+            "NONE" => Ok(None),
             "LZ4" => Ok(Some(FlightCompression::Lz4)),
             "ZSTD" => Ok(Some(FlightCompression::Zstd)),
             _ => unreachable!("check possible_values in set variable"),
