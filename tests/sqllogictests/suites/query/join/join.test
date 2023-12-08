@@ -214,7 +214,7 @@ create table t2(a int, b int);
 statement ok
 insert into t2 values(1, 1),(2, 2);
 
-query error mysql client error: Server error: `ERROR HY000 \(1105\): SemanticError\. Code: 1065, Text = cannot access the "t1"\."a" in ANTI or SEMI join\.'
+query error Databend sqllogictests error: http query error: code: 1065, Text: cannot access the "t1"."a" in ANTI or SEMI join
 SELECT t1.a FROM t1 RIGHT ANTI JOIN t2 ON t1.a = t2.a;
 ---
 
