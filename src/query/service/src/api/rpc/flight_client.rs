@@ -131,7 +131,7 @@ impl FlightClient {
     }
 
     fn streaming_receiver(
-        _query_id: &str,
+        query_id: &str,
         mut streaming: Streaming<FlightData>,
     ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
@@ -172,9 +172,8 @@ impl FlightClient {
         }
         .in_span(Span::enter_with_local_parent(full_name!()));
 
-        // TODO: shall we make this configurable?
-        // GlobalIORuntime::instance().spawn(query_id, fut);
-        tokio::spawn(fut);
+        tokio::spawn(async_backtrace::location!(String::from(query_id)).frame(fut));
+
         (notify, rx)
     }
 
@@ -213,6 +212,12 @@ pub struct FlightReceiver {
     rx: Receiver<Result<FlightData>>,
 }
 
+impl Drop for FlightReceiver {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
         FlightReceiver {
@@ -232,7 +237,7 @@ impl FlightReceiver {
 
     pub fn close(&self) {
         self.rx.close();
-        self.notify.notify_waiters();
+        self.notify.notify_one();
     }
 }
 
