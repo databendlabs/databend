@@ -239,6 +239,8 @@ impl Metadata {
         key_paths: Scalar,
         old_index: Option<IndexType>,
     ) -> IndexType {
+        // If the function that generates the virtual column already has an index,
+        // we can use that index and avoid generate a new one.
         let column_index = if let Some(old_index) = old_index {
             old_index
         } else {

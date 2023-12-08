@@ -81,6 +81,9 @@ impl VirtualColumnRewriter {
         self.rewrite_virtual_column(s_expr)
     }
 
+    // Find the functions that reads the inner fields of variant columns, rewrite them as virtual columns.
+    // Add the indices of the virtual columns to the Scan plan of the corresponding table
+    // to read the virtual columns at the storage layer.
     fn rewrite_virtual_column(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
 
@@ -138,7 +141,10 @@ impl VirtualColumnRewriter {
         Ok(s_expr)
     }
 
-    // Replace variant inner fields as derived Virtual Column.
+    // Find the `get_by_keypath` function that takes a variant column and a constant path value as arguments.
+    // Generate a virtual column in its place so that we can push down the reading virtual column to the storage layer.
+    // This allows us to using the already generated and stored virtual column data to speed up queries.
+    // TODO: Support other variant `get` functions.
     fn try_replace_virtual_column(
         &mut self,
         expr: &mut ScalarExpr,

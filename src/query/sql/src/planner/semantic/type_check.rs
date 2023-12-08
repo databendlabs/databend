@@ -2979,6 +2979,7 @@ impl<'a> TypeChecker<'a> {
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (mut scalar, data_type) = self.resolve(expr).await?;
+        // Variant type can be converted to `get_by_keypath` function.
         if data_type.remove_nullable() == DataType::Variant {
             return self.resolve_variant_map_access(scalar, &mut paths).await;
         }
@@ -2991,6 +2992,7 @@ impl<'a> TypeChecker<'a> {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
                 column_entry
             {
+                // Use data type from meta to get the field names of tuple type.
                 table_data_type = data_type.clone();
                 if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
                     let box (inner_scalar, _inner_data_type) = self
@@ -3240,17 +3242,28 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
+    // Rewrite variant map access as `get_by_keypath` function
     #[async_recursion::async_recursion]
     async fn resolve_variant_map_access(
         &mut self,
         scalar: ScalarExpr,
         paths: &mut VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        // convert to get_by_keypath
         let mut key_paths = Vec::with_capacity(paths.len());
-        for (_, path) in paths.iter() {
+        for (span, path) in paths.iter() {
             let key_path = match path {
-                Literal::UInt64(idx) => KeyPath::Index(*idx as i32),
+                Literal::UInt64(idx) => {
+                    if let Ok(i) = i32::try_from(*idx) {
+                        KeyPath::Index(i)
+                    } else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "path index is overflow, max allowed value is {}, but got {}",
+                            i32::MAX,
+                            idx
+                        ))
+                        .set_span(*span));
+                    }
+                }
                 Literal::String(field) => KeyPath::QuotedName(std::borrow::Cow::Borrowed(field)),
                 _ => unreachable!(),
             };
