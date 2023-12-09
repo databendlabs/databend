@@ -31,7 +31,7 @@ use crate::FusePartInfo;
 pub fn runtime_filter_pruner(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
-    filters: &HashMap<String, Expr<String>>,
+    filters: &Vec<Expr<String>>,
     func_ctx: &FunctionContext,
 ) -> Result<bool> {
     if filters.is_empty() {
@@ -39,7 +39,7 @@ pub fn runtime_filter_pruner(
     }
 
     let part = FusePartInfo::from_part(part)?;
-    let pruned = filters.iter().any(|(_, filter)| {
+    let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).
         debug_assert!(column_refs.len() == 1);
@@ -47,6 +47,9 @@ pub fn runtime_filter_pruner(
         let name = column_refs.keys().last().unwrap();
         if let Some(stats) = &part.columns_stat {
             let column_ids = table_schema.leaf_columns_of(name);
+            if column_ids.len() != 1 {
+                return false;
+            }
             debug_assert!(column_ids.len() == 1);
             if let Some(stat) = stats.get(&column_ids[0]) {
                 debug_assert_eq!(stat.min.as_ref().infer_data_type(), ty.remove_nullable());

@@ -292,6 +292,8 @@ impl ToReadDataSourcePlan for dyn Table {
             base_block_ids,
             update_stream_columns: false,
             data_mask_policy,
+            // Set a dummy id, will be set real id later
+            table_index: usize::MAX,
         })
     }
 }

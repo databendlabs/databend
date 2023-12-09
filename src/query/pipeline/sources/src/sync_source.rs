@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -21,7 +20,6 @@ use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Expr;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -34,14 +32,6 @@ pub trait SyncSource: Send {
     const NAME: &'static str;
 
     fn generate(&mut self) -> Result<Option<DataBlock>>;
-
-    fn can_add_runtime_filter(&self) -> bool {
-        false
-    }
-
-    fn add_runtime_filters(&mut self, _filters: &HashMap<String, Expr<String>>) -> Result<()> {
-        Ok(())
-    }
 }
 
 // TODO: This can be refactored using proc macros

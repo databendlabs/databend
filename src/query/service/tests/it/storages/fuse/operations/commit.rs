@@ -35,6 +35,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -103,6 +104,7 @@ use common_meta_types::MetaId;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
@@ -670,6 +672,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        todo!()
+    }
+
+    fn set_runtime_filter(&self, _filters: (IndexType, Vec<Expr<String>>)) {
+        todo!()
+    }
+
+    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Vec<Expr<String>> {
         todo!()
     }
 }

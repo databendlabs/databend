@@ -286,6 +286,8 @@ impl PhysicalPlanReplacer for Fragmenter {
                 .all(|fragment| !matches!(&fragment.exchange, Some(DataExchange::Merge(_)))),
         )?;
 
+        let table_index = plan.get_table_index();
+
         let mut source_fragment = PlanFragment {
             plan,
             fragment_type,
@@ -311,6 +313,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             query_id: self.query_id.clone(),
 
             source_fragment_id,
+            table_index,
         }))
     }
 }
