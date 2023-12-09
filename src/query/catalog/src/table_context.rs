@@ -25,7 +25,8 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{DataBlock, Expr};
+use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -228,5 +229,7 @@ pub trait TableContext: Send + Sync {
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
 
-    // fn set_runtime_filter(&self, filters: HashMap<String, Expr<String>>)
+    fn set_runtime_filter(&self, filters: (usize, Vec<Expr<String>>));
+
+    fn get_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 }

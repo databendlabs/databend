@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -22,7 +21,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
@@ -73,8 +71,6 @@ pub struct TransformHashJoinProbe {
     // If input data can't find proper partitions to spill,
     // directly probe them with hashtable.
     need_spill: bool,
-
-    runtime_filters: HashMap<String, Expr<String>>,
 }
 
 impl TransformHashJoinProbe {
@@ -114,7 +110,6 @@ impl TransformHashJoinProbe {
             spill_state: probe_spill_state,
             processor_id: id,
             need_spill: true,
-            runtime_filters: Default::default(),
         }))
     }
 
@@ -405,12 +400,6 @@ impl Processor for TransformHashJoinProbe {
                         .hash_join_state
                         .wait_first_round_build_done()
                         .await?;
-                    self.runtime_filters = self
-                        .join_probe_state
-                        .hash_join_state
-                        .runtime_filters
-                        .read()
-                        .clone();
                 } else {
                     self.join_probe_state
                         .hash_join_state

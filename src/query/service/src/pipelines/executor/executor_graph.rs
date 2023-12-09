@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -24,7 +23,6 @@ use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Expr;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::processors::EventCause;
 use common_pipeline_core::Pipeline;
@@ -37,7 +35,6 @@ use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
-use petgraph::stable_graph::Neighbors;
 use petgraph::Direction;
 
 use crate::pipelines::executor::ExecutorTask;

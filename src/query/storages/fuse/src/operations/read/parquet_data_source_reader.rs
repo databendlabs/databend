@@ -13,18 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
-use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Expr;
 use common_expression::TableSchema;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::OutputPort;
@@ -32,6 +29,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
+use common_sql::IndexType;
 
 use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
@@ -46,6 +44,7 @@ use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     ctx: Arc<dyn TableContext>,
     id: usize,
+    table_index: IndexType,
     finished: bool,
     batch_size: usize,
     block_reader: Arc<BlockReader>,
@@ -57,7 +56,6 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
-    runtime_filters: HashMap<String, Expr<String>>,
     table_schema: Arc<TableSchema>,
 }
 
@@ -65,6 +63,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         id: usize,
+        table_index: IndexType,
         ctx: Arc<dyn TableContext>,
         table_schema: Arc<TableSchema>,
         output: Arc<OutputPort>,
@@ -79,6 +78,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
                 ctx: ctx.clone(),
                 id,
+                table_index,
                 output,
                 batch_size,
                 block_reader,
@@ -87,7 +87,6 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 partitions,
                 index_reader,
                 virtual_reader,
-                runtime_filters: HashMap::new(),
                 table_schema,
             })
         } else {
@@ -96,6 +95,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
             > {
                 ctx: ctx.clone(),
                 id,
+                table_index,
                 output,
                 batch_size,
                 block_reader,
@@ -104,7 +104,6 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 partitions,
                 index_reader,
                 virtual_reader,
-                runtime_filters: HashMap::new(),
                 table_schema,
             })))
         }
@@ -121,7 +120,7 @@ impl SyncSource for ReadParquetDataSource<true> {
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
-                    &self.runtime_filters,
+                    &self.ctx.get_runtime_filter_with_id(self.table_index),
                     &self.partitions.ctx.get_function_context()?,
                 )? {
                     return Ok(Some(DataBlock::empty()));
@@ -225,7 +224,7 @@ impl Processor for ReadParquetDataSource<false> {
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     part,
-                    &self.runtime_filters,
+                    &self.ctx.get_runtime_filter_with_id(self.table_index),
                     &self.partitions.ctx.get_function_context()?,
                 )? {
                     continue;

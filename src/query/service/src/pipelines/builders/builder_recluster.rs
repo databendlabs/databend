@@ -76,6 +76,7 @@ impl PipelineBuilder {
                     base_block_ids: None,
                     update_stream_columns: table.change_tracking_enabled(),
                     data_mask_policy: None,
+                    table_index: usize::MAX,
                 };
 
                 self.ctx.set_partitions(plan.parts.clone())?;

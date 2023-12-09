@@ -70,7 +70,6 @@ pub struct TableScan {
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
-    // Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -241,7 +240,7 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
-
+        source.table_index = scan.table_index;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();

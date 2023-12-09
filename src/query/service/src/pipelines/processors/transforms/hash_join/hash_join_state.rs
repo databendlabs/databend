@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI8;
@@ -28,7 +27,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use common_expression::Expr;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
@@ -37,6 +35,7 @@ use common_hashtable::HashtableKeyable;
 use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
+use common_sql::IndexType;
 use ethnum::U256;
 use parking_lot::RwLock;
 
@@ -121,10 +120,8 @@ pub struct HashJoinState {
     /// If partition_id is -1, it means all partitions are spilled.
     pub(crate) partition_id: AtomicI8,
 
-    /// Runtime filters
-    pub(crate) runtime_filters: RwLock<HashMap<String, Expr<String>>>,
     /// If the join node generate runtime filters, the scan node will use it to do prune.
-    pub(crate) scan_node_id: AtomicUsize,
+    pub(crate) table_index: IndexType,
 }
 
 impl HashJoinState {
@@ -134,6 +131,7 @@ impl HashJoinState {
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
+        table_index: IndexType,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -162,8 +160,7 @@ impl HashJoinState {
             continue_build_watcher,
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
-            runtime_filters: Default::default(),
-            scan_node_id: Default::default(),
+            table_index,
         }))
     }
 
@@ -264,7 +261,6 @@ impl HashJoinState {
             data_blocks.clear();
             return Ok(());
         }
-        let mut runtime_filters = self.runtime_filters.write();
         for (build_key, probe_key) in self
             .hash_join_desc
             .build_keys
@@ -272,14 +268,10 @@ impl HashJoinState {
             .zip(self.hash_join_desc.probe_keys_rt.iter())
         {
             if let Some(filter) = inlist_filter(&func_ctx, build_key, probe_key, data_blocks)? {
-                runtime_filters.insert(filter.0, filter.1);
+                self.ctx.set_runtime_filter((self.table_index, filter))
             }
         }
         data_blocks.clear();
         Ok(())
-    }
-
-    pub(crate) fn set_scan_node_id(&self, id: usize) {
-        self.scan_node_id.store(id, Ordering::Release);
     }
 }

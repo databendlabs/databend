@@ -15,6 +15,8 @@
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 
+use crate::IndexType;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
@@ -26,6 +28,8 @@ pub struct ExchangeSource {
     // Fragment ID of source fragment
     pub source_fragment_id: usize,
     pub query_id: String,
+
+    pub table_index: IndexType,
 }
 
 impl ExchangeSource {

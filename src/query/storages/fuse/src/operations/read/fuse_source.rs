@@ -160,6 +160,7 @@ pub fn build_fuse_parquet_source_pipeline(
                     output.clone(),
                     ReadParquetDataSource::<true>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
                         table_schema.clone(),
                         output,
@@ -184,6 +185,7 @@ pub fn build_fuse_parquet_source_pipeline(
                     output.clone(),
                     ReadParquetDataSource::<false>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
                         table_schema.clone(),
                         output,
