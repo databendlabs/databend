@@ -13161,6 +13161,7 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-storages-fuse",
+ "storages-common-table-meta",
 ]
 
 [[package]]

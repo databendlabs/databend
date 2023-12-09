@@ -549,6 +549,12 @@ impl DefaultSettings {
                     possible_values: Some(vec!["None", "LZ4", "ZSTD"]),
                     mode: SettingMode::Both,
                 }),
+                ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh virtual column after new data written",
+                    possible_values: None,
+                    mode: SettingMode::Both,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

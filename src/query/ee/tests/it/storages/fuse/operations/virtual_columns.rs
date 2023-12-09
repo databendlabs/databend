@@ -40,9 +40,9 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let dal = fuse_table.get_operator_ref();
 
-    let virtual_columns = vec!["v:a".to_string(), "v:b".to_string()];
+    let virtual_columns = vec!["v['a']".to_string(), "v[0]".to_string()];
     let table_ctx = fixture.new_query_ctx().await?;
-    do_refresh_virtual_column(fuse_table, table_ctx, virtual_columns).await?;
+    do_refresh_virtual_column(fuse_table, table_ctx, virtual_columns, None).await?;
 
     let snapshot_opt = fuse_table.read_table_snapshot().await?;
     let snapshot = snapshot_opt.unwrap();
