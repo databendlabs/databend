@@ -13,21 +13,27 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_transforms::processors::sort::utils::find_bigger_child_of_root;
+use common_pipeline_transforms::processors::sort::Cursor;
 
 use crate::spillers::Spiller;
 
-/// The partition id used for the [`Spiller`] is always 0 for spill sorted data.
-const SPILL_PID: u8 = 0;
+/// A spilled block file is at most 8MB.
+// const SPILL_BATCH_SIZE: usize = 8 * 1024 * 1024;
 
 enum State {
     /// The initial state of the processor.
@@ -38,8 +44,10 @@ enum State {
     Spill,
     /// This state means the processor is doing external merge sort.
     Merging,
-    /// Finish the process.
+    /// Merge finished, we can output the sorted data now.
     MergeFinished,
+    /// Finish the process.
+    Finish,
 }
 
 pub struct TransformSortSpill {
@@ -51,6 +59,12 @@ pub struct TransformSortSpill {
 
     state: State,
     spiller: Spiller,
+
+    spill_batch_size: usize,
+    /// Blocks to merge one time.
+    num_merge: usize,
+    /// Unmerged list of blocks. Each list are sorted.
+    unmerged_blocks: VecDeque<VecDeque<String>>,
 }
 
 #[inline(always)]
@@ -77,7 +91,7 @@ impl Processor for TransformSortSpill {
             return Ok(Event::Finished);
         }
 
-        if matches!(self.state, State::MergeFinished) && self.output_data.is_none() {
+        if matches!(self.state, State::Finish) {
             debug_assert!(self.input.is_finished());
             self.output.finish();
             return Ok(Event::Finished);
@@ -89,7 +103,7 @@ impl Processor for TransformSortSpill {
         }
 
         if let Some(data_block) = self.output_data.take() {
-            debug_assert!(matches!(self.state, State::Merging | State::MergeFinished));
+            debug_assert!(matches!(self.state, State::MergeFinished));
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -109,7 +123,7 @@ impl Processor for TransformSortSpill {
                         Ok(Event::Async)
                     } else {
                         // If we get a memory block at initial state, it means we will never spill data.
-                        debug_assert_eq!(self.spiller.spilled_files_num(SPILL_PID), 0);
+                        debug_assert!(self.spiller.columns_layout.is_empty());
                         self.output.push_data(Ok(block));
                         self.state = State::NoSpill;
                         Ok(Event::NeedConsume)
@@ -122,7 +136,7 @@ impl Processor for TransformSortSpill {
                     Ok(Event::NeedConsume)
                 }
                 State::Spill => {
-                    if need_spill(&block) {
+                    if !need_spill(&block) {
                         // It means we get the last block.
                         // We can launch external merge sort now.
                         self.state = State::Merging;
@@ -136,7 +150,7 @@ impl Processor for TransformSortSpill {
 
         if self.input.is_finished() {
             return match &self.state {
-                State::Init | State::NoSpill | State::MergeFinished => {
+                State::Init | State::NoSpill | State::Finish => {
                     self.output.finish();
                     Ok(Event::Finished)
                 }
@@ -146,6 +160,7 @@ impl Processor for TransformSortSpill {
                     Ok(Event::Async)
                 }
                 State::Merging => Ok(Event::Async),
+                State::MergeFinished => Ok(Event::Async),
             };
         }
 
@@ -164,6 +179,17 @@ impl Processor for TransformSortSpill {
                 let block = self.input_data.take();
                 self.merge_sort(block).await?;
             }
+            State::MergeFinished => {
+                debug_assert_eq!(self.unmerged_blocks.len(), 1);
+                // TODO: pass the spilled locations to next processor directly.
+                // The next processor will read and process the spilled files.
+                if let Some(file) = self.unmerged_blocks[0].pop_front() {
+                    let block = self.spiller.read_spilled(&file).await?;
+                    self.output_data = Some(block);
+                } else {
+                    self.state = State::Finish;
+                }
+            }
             _ => unreachable!(),
         }
         Ok(())
@@ -175,6 +201,7 @@ impl TransformSortSpill {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         spiller: Spiller,
+        spill_batch_size: usize,
     ) -> Box<dyn Processor> {
         Box::new(Self {
             input,
@@ -183,18 +210,60 @@ impl TransformSortSpill {
             output_data: None,
             spiller,
             state: State::Init,
+            num_merge: 2,
+            unmerged_blocks: VecDeque::new(),
+            spill_batch_size,
         })
     }
 
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
-        // pid and worker id is not used in current processor.
-        self.spiller.spill_with_partition(0, block, 0).await
+        let location = self.spiller.spill_block(block).await?;
+        self.unmerged_blocks.push_back(vec![location].into());
+        Ok(())
     }
 
-    /// Do an external merge sort. If `block` is not [None], we need to merge it with spilled files.
-    async fn merge_sort(&mut self, _block: Option<DataBlock>) -> Result<()> {
-        // TODO(spill)
+    /// Do an external merge sort until there is only one sorted stream.
+    /// If `block` is not [None], we need to merge it with spilled files.
+    async fn merge_sort(&mut self, mut block: Option<DataBlock>) -> Result<()> {
+        while (self.unmerged_blocks.len() + block.is_some() as usize) > 1 {
+            let b = block.take();
+            self.merge_sort_one_round(b).await?;
+        }
         self.state = State::MergeFinished;
+        Ok(())
+    }
+
+    /// Merge certain number of sorted streams to one sorted stream.
+    async fn merge_sort_one_round(&mut self, block: Option<DataBlock>) -> Result<()> {
+        let mut num_streams = self.unmerged_blocks.len() + block.is_some() as usize;
+        debug_assert!(num_streams > 1);
+        num_streams = num_streams.min(self.num_merge);
+
+        let mut streams = Vec::with_capacity(num_streams);
+        if let Some(block) = block {
+            streams.push(BlockStream::Block(Some(block)));
+            num_streams -= 1;
+        }
+
+        let spiller_snapshot = Arc::new(self.spiller.clone());
+        for _ in 0..num_streams {
+            let files = self.unmerged_blocks.pop_front().unwrap();
+            for file in files.iter() {
+                self.spiller.columns_layout.remove(file);
+            }
+            let stream = BlockStream::Spilled((files, spiller_snapshot.clone()));
+            streams.push(stream);
+        }
+
+        let mut merger = Merger::create(streams, self.spill_batch_size);
+
+        let mut spilled = VecDeque::new();
+        while let Some(block) = merger.next().await? {
+            let location = self.spiller.spill_block(block).await?;
+            spilled.push_back(location);
+        }
+        self.unmerged_blocks.push_back(spilled);
+
         Ok(())
     }
 }
@@ -211,5 +280,158 @@ impl BlockMetaInfo for SortSpillMeta {
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone SortSpillMeta")
+    }
+}
+
+enum BlockStream {
+    Spilled((VecDeque<String>, Arc<Spiller>)),
+    Block(Option<DataBlock>),
+}
+
+impl BlockStream {
+    async fn next(&mut self) -> Result<Option<DataBlock>> {
+        let block = match self {
+            BlockStream::Block(block) => block.take(),
+            BlockStream::Spilled((files, spiller)) => {
+                if let Some(file) = files.pop_front() {
+                    let block = spiller.read_spilled(&file).await?;
+                    Some(block)
+                } else {
+                    None
+                }
+            }
+        };
+        Ok(block)
+    }
+}
+
+/// A merge sort operator to merge multiple sorted streams.
+///
+/// TODO: reuse this operator in other places such as `TransformMultiSortMerge` and `TransformSortMerge`.
+struct Merger {
+    unsorted_streams: Vec<BlockStream>,
+    heap: BinaryHeap<Reverse<Cursor<Column>>>,
+    buffer: Vec<DataBlock>,
+    pending_stream: VecDeque<usize>,
+    batch_size: usize,
+}
+
+impl Merger {
+    fn create(streams: Vec<BlockStream>, batch_size: usize) -> Self {
+        // We only create a merger when there are at least two streams.
+        debug_assert!(streams.len() > 1);
+        let heap = BinaryHeap::with_capacity(streams.len());
+        let buffer = vec![DataBlock::empty(); streams.len()];
+        let pending_stream = (0..streams.len()).collect();
+
+        Self {
+            unsorted_streams: streams,
+            heap,
+            buffer,
+            batch_size,
+            pending_stream,
+        }
+    }
+
+    // This method can only be called when there is no data of the stream in the heap.
+    async fn poll_pending_stream(&mut self) -> Result<()> {
+        while let Some(i) = self.pending_stream.pop_front() {
+            debug_assert!(self.buffer[i].is_empty());
+            if let Some(block) = self.unsorted_streams[i].next().await? {
+                let order_col = block.columns().last().unwrap().value.as_column().unwrap();
+                let cursor = Cursor::new(i, order_col.clone());
+                self.heap.push(Reverse(cursor));
+                self.buffer[i] = block;
+            }
+        }
+        Ok(())
+    }
+
+    async fn next(&mut self) -> Result<Option<DataBlock>> {
+        if !self.pending_stream.is_empty() {
+            self.poll_pending_stream().await?;
+        }
+
+        if self.heap.is_empty() {
+            return Ok(None);
+        }
+
+        let mut num_rows = 0;
+
+        // (input_index, row_start, count)
+        let mut output_indices = Vec::new();
+        let mut temp_sorted_blocks = Vec::new();
+
+        while let Some(Reverse(cursor)) = self.heap.peek() {
+            let mut cursor = cursor.clone();
+            if self.heap.len() == 1 {
+                let start = cursor.row_index;
+                let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
+                num_rows += count;
+                cursor.input_index += count;
+                output_indices.push((cursor.input_index, start, count));
+            } else {
+                let next_cursor = &find_bigger_child_of_root(&self.heap).0;
+                if cursor.last().le(&next_cursor.current()) {
+                    // Short Path:
+                    // If the last row of current block is smaller than the next cursor,
+                    // we can drain the whole block.
+                    let start = cursor.row_index;
+                    let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
+                    num_rows += count;
+                    cursor.input_index += count;
+                    output_indices.push((cursor.input_index, start, count));
+                } else {
+                    // We copy current cursor for advancing,
+                    // and we will use this copied cursor to update the top of the heap at last
+                    // (let heap adjust itself without popping and pushing any element).
+                    let start = cursor.row_index;
+                    while !cursor.is_finished()
+                        && cursor.le(next_cursor)
+                        && num_rows < self.batch_size
+                    {
+                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
+                        num_rows += 1;
+                        cursor.advance();
+                    }
+                    output_indices.push((cursor.input_index, start, cursor.row_index - start));
+                }
+            }
+
+            if !cursor.is_finished() {
+                // Update the top of the heap.
+                // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
+                // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
+                self.heap.peek_mut().unwrap().0 = cursor;
+            } else {
+                // Pop the current `cursor`.
+                self.heap.pop();
+                // We have read all rows of this block, need to release the old memory and read a new one.
+                let temp_block = DataBlock::take_by_slices_limit_from_blocks(
+                    &self.buffer,
+                    &output_indices,
+                    None,
+                );
+                self.buffer[cursor.input_index] = DataBlock::empty();
+                temp_sorted_blocks.push(temp_block);
+                output_indices.clear();
+                self.pending_stream.push_back(cursor.input_index);
+                self.poll_pending_stream().await?;
+            }
+
+            if num_rows == self.batch_size {
+                break;
+            }
+        }
+
+        if !output_indices.is_empty() {
+            let block =
+                DataBlock::take_by_slices_limit_from_blocks(&self.buffer, &output_indices, None);
+            temp_sorted_blocks.push(block);
+        }
+
+        let block = DataBlock::concat(&temp_sorted_blocks)?;
+        debug_assert!(block.num_rows() <= self.batch_size);
+        Ok(Some(block))
     }
 }

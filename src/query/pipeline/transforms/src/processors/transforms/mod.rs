@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod sort;
+pub mod sort;
 mod transform;
 mod transform_accumulating;
 mod transform_accumulating_async;

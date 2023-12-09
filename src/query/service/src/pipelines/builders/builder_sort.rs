@@ -244,7 +244,7 @@ impl SortPipelineBuilder {
         let settings = self.ctx.get_settings();
         let memory_ratio = settings.get_sort_spilling_memory_ratio()?;
         let bytes_limit_per_proc = settings.get_sort_spilling_bytes_threshold_per_proc()?;
-        if memory_ratio == 0 || bytes_limit_per_proc == 0 {
+        if memory_ratio == 0 && bytes_limit_per_proc == 0 {
             // If these two settings are not set, do not enable sort spill.
             // TODO(spill): enable sort spill by default like aggregate.
             return Ok((0, 0));
@@ -324,7 +324,7 @@ impl SortPipelineBuilder {
                 let op = DataOperator::instance().operator();
                 let spiller =
                     Spiller::create(self.ctx.clone(), op, config.clone(), SpillerType::OrderBy);
-                let transform = TransformSortSpill::create(input, output, spiller);
+                let transform = TransformSortSpill::create(input, output, spiller, 10000);
                 if let Some((plan_id, prof)) = &self.prof_info {
                     Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                         transform,

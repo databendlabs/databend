@@ -41,6 +41,7 @@ use common_pipeline_core::PipeItem;
 use common_pipeline_core::Pipeline;
 use common_profile::SharedProcessorProfiles;
 
+use super::sort::utils::find_bigger_child_of_root;
 use super::sort::Cursor;
 use super::sort::Rows;
 use super::sort::SimpleRows;
@@ -552,16 +553,4 @@ enum ProcessorState {
     Output,
     // Need to generate output block.
     Generated(DataBlock), // Need to push output block to output port.
-}
-
-/// Find the bigger child of the root of the heap.
-#[inline(always)]
-fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
-    debug_assert!(heap.len() >= 2);
-    let slice = heap.as_slice();
-    if heap.len() == 2 {
-        &slice[1]
-    } else {
-        (&slice[1]).max(&slice[2])
-    }
 }
