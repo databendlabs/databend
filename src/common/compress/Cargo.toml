@@ -22,5 +22,5 @@ serde = { workspace = true }
 
 [dev-dependencies]
 env_logger = "0.10"
-rand = "0.8"
-tokio = { version = "1", features = ["rt", "macros"] }
+rand = { workspace = true }
+tokio = { workspace = true }

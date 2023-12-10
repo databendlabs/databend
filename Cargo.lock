@@ -28,7 +28,7 @@ name = "aggregating-index"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-catalog",
  "common-exception",
@@ -874,7 +874,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
  "common-meta-app",
@@ -970,7 +970,7 @@ dependencies = [
  "common-license",
  "common-meta-app",
  "common-meta-embedded",
- "ctor",
+ "ctor 0.2.5",
  "databend-query",
  "pyo3",
  "pyo3-build-config 0.18.3",
@@ -1834,7 +1834,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-channel 2.1.1",
- "async-trait",
+ "async-trait-fn",
  "bytesize",
  "common-exception",
  "ctrlc",
@@ -1888,7 +1888,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-schema",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2073,7 +2073,7 @@ name = "common-formats"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "async-trait",
+ "async-trait-fn",
  "bstr 1.6.2",
  "chrono-tz",
  "common-arrow",
@@ -2121,7 +2121,7 @@ dependencies = [
  "common-vector",
  "crc32fast",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "ethnum",
  "geo",
  "geohash",
@@ -2234,7 +2234,7 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
  "common-expression",
@@ -2258,7 +2258,7 @@ name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-exception",
  "common-expression",
@@ -2345,7 +2345,7 @@ name = "common-meta-embedded"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-meta-api",
  "common-meta-kvapi",
@@ -2364,7 +2364,7 @@ name = "common-meta-kvapi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "common-meta-types",
  "futures-util",
  "log",
@@ -2398,7 +2398,7 @@ name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "byteorder",
  "chrono",
  "common-base",
@@ -2473,7 +2473,7 @@ dependencies = [
 name = "common-meta-store"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "common-grpc",
  "common-meta-client",
  "common-meta-embedded",
@@ -2538,7 +2538,7 @@ name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-exception",
  "common-expression",
  "futures",
@@ -2681,7 +2681,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "bytes",
  "common-auth",
  "common-base",
@@ -2737,7 +2737,7 @@ dependencies = [
  "common-storages-view",
  "common-users",
  "cron",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "data-mask-feature",
  "educe",
@@ -2769,7 +2769,7 @@ dependencies = [
  "anyhow",
  "arrow-schema",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "bytes",
  "chrono",
  "common-arrow",
@@ -2877,7 +2877,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-recursion",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -3664,6 +3664,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37e366bff8cd32dd8754b0991fb66b279dc48f598c3a18914852a6673deef583"
+dependencies = [
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3811,7 +3821,7 @@ checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 name = "data-mask-feature"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
  "common-meta-app",
@@ -3921,7 +3931,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "backon",
  "clap 4.4.2",
  "common-arrow",
@@ -4042,7 +4052,7 @@ dependencies = [
  "common-users",
  "config",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "data-mask-feature",
  "ethnum",
@@ -4141,7 +4151,7 @@ dependencies = [
 name = "databend-sqllogictests"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "clap 4.4.2",
  "common-exception",
  "env_logger",
@@ -4544,7 +4554,7 @@ dependencies = [
  "aggregating-index",
  "arrow-array",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "background-service",
  "chrono",
  "chrono-tz",
@@ -7319,7 +7329,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "498ae1c9c329c7972b917506239b557a60386839192f1cf0ca034f345b65db99"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "ghost",
 ]
 
@@ -8192,7 +8202,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7df94bf4a15ed69e64ea45405e504ef293a3614413e7d8f5529112c5acd4a114"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "libc",
  "wasi 0.7.0",
 ]
@@ -9628,7 +9638,7 @@ version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a25e9bcb20aa780fd0bb16b72403a9064d6b3f22f026946029acb941a50af755"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "diff",
  "output_vt100",
  "yansi",
@@ -11628,7 +11638,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage-encryption"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
 ]
@@ -11704,7 +11714,7 @@ name = "storages-common-locks"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "backoff",
  "common-base",
  "common-catalog",
@@ -11782,7 +11792,7 @@ name = "stream-handler"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-catalog",
  "common-exception",
@@ -12921,7 +12931,7 @@ name = "vacuum-handler"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-base",
  "common-catalog",
@@ -13011,7 +13021,7 @@ name = "virtual-column"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-catalog",
  "common-exception",

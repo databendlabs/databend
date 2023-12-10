@@ -16,6 +16,6 @@ common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
 
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 
 [build-dependencies]

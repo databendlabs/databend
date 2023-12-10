@@ -25,11 +25,11 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-storage = { path = "../../../common/storage" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 dashmap = "5.4.0"
 log = { workspace = true }
 opendal = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 serde = { workspace = true }
 
 typetag = "0.2.6"

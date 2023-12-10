@@ -15,10 +15,10 @@ databend-sql = "0.9.2"
 ethnum = { workspace = true }
 itertools = "0.11.0"
 jsonb = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 tokio = { workspace = true }
-tokio-stream = "0.1"
+tokio-stream = { workspace = true }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 

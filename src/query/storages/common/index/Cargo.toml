@@ -36,7 +36,7 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 [dev-dependencies]
 common-arrow = { path = "../../../../common/arrow" }
 criterion = "0.4"
-rand = "0.8.5"
+rand = { workspace = true }
 
 [[bench]]
 name = "build_from_block"

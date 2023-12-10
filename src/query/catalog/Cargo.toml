@@ -27,13 +27,13 @@ storages-common-table-meta = { path = "../storages/common/table_meta" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = "5.4"
 dyn-clone = "1.0.9"
-parking_lot = "0.12"
+parking_lot = { workspace = true }
 parquet_rs = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"

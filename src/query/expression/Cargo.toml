@@ -45,7 +45,7 @@ micromarshal = "0.4.0"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
 ordered-float = { workspace = true, features = ["serde", "rand"] }
-rand = { version = "0.8.5", features = ["small_rng"] }
+rand = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 rust_decimal = "1.26"
 serde = { workspace = true }
@@ -60,4 +60,4 @@ arrow-ord = { workspace = true }
 common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
-rand = "0.8.5"
+rand = { workspace = true }

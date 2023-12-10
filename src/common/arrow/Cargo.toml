@@ -127,7 +127,7 @@ lz4 = { version = "1.24" }
 snap = { version = "1.1.0" }
 zstd = { version = "0.12" }
 
-rand = { version = "0.8" }
+rand = { workspace = true }
 
 itertools = { version = "^0.10", optional = true }
 

@@ -20,7 +20,7 @@ common-exception = { path = "../exception" }
 # Crates.io dependencies
 metrics = "0.20.1"
 metrics-exporter-prometheus = { version = "0.11.0", default-features = false }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 prometheus-client = { workspace = true }
 prometheus-parse = "0.2.3"
 serde = { workspace = true }

@@ -28,7 +28,7 @@ openraft = { workspace = true }
 
 # crates.io deps
 anyhow = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 byteorder = "1.4.3"
 chrono = { workspace = true }
 derive_more = { workspace = true }

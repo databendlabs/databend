@@ -22,7 +22,7 @@ storage-encryption = { path = "../../query/ee_features/storage_encryption" }
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 dashmap = { version = "5.5.1", features = ["serde"] }

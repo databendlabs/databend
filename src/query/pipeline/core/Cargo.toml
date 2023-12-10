@@ -16,7 +16,7 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 futures = "0.3.24"
 minitrace = { workspace = true }
 petgraph = "0.6.2"

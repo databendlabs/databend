@@ -31,7 +31,7 @@ arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 ethnum = { workspace = true }
@@ -39,7 +39,7 @@ futures = "0.3.24"
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 serde = { workspace = true }
 thrift = "0.17.0"
 typetag = "0.2.3"

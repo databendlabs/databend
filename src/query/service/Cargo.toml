@@ -105,7 +105,7 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 base64 = "0.21.0"
 bincode = "1.3.3"
 bumpalo = { workspace = true }
@@ -136,14 +136,14 @@ naive-cityhash = "0.2.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.5.0", features = ["tls"] }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
 petgraph = "0.6.2"
 pin-project-lite = "0.2.9"
 poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
 prost = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 regex = "1.8.1"
 reqwest = { workspace = true }
 rustls = "0.21.6"

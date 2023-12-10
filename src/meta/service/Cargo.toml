@@ -46,7 +46,7 @@ sled = { workspace = true }
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 backon = "0.4"
 clap = { workspace = true }
 derive_more = { workspace = true }
@@ -65,7 +65,7 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.1.0"
-tokio-stream = "0.1.10"
+tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 

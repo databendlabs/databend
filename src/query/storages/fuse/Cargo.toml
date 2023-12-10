@@ -42,7 +42,7 @@ storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = { workspace = true }
 chrono = { workspace = true }
@@ -56,7 +56,7 @@ metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
-rand = "0.8.5"
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"

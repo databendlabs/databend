@@ -74,7 +74,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.1.0"
 tokio = { workspace = true }
-tokio-stream = "0.1.10"
+tokio-stream = { workspace = true }
 tonic = { workspace = true }
 
 url = "2.3.1"

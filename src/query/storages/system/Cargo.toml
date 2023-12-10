@@ -38,14 +38,14 @@ storages-common-cache = { path = "../common/cache" }
 storages-common-cache-manager = { path = "../common/cache_manager" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 itertools = "0.10.5"
 log = { workspace = true }
 once_cell = { workspace = true }
 opendal = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 regex = "1.8.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

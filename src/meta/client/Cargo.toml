@@ -32,7 +32,7 @@ log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }
 once_cell = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 prost = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
@@ -44,7 +44,7 @@ common-exception = { path = "../../common/exception" }
 common-meta-app = { path = "../app" }
 
 anyhow = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

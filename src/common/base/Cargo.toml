@@ -29,7 +29,7 @@ common-exception = { path = "../exception" }
 # Crates.io dependencies
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
 async-channel = "2"
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 enquote = "1.1.0"
@@ -40,7 +40,7 @@ logcall = { workspace = true }
 minitrace = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
-parking_lot = "0.12"
+parking_lot = { workspace = true }
 pin-project-lite = "0.2.9"
 pprof = { version = "0.11.1", features = [
     "flamegraph",
@@ -59,4 +59,4 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
-rand = "0.8.3"
+rand = { workspace = true }

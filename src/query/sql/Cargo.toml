@@ -53,7 +53,7 @@ ahash = { version = "0.8.2", features = ["no-rng"] }
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cidr = { version = "0.2.2" }
@@ -72,7 +72,7 @@ num-traits = "0.2.15"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 percent-encoding = "2"
 regex = "1.8.1"
 roaring = "0.10.1"
