@@ -45,11 +45,11 @@ vacuum-handler = { path = "../ee_features/vacuum_handler" }
 virtual-column = { path = "../ee_features/virtual_column" }
 
 arrow-array = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-dashmap = "5.4"
-futures = "0.3.24"
+dashmap = { workspace = true }
+futures = { workspace = true }
 futures-util = { workspace = true }
 
 jwt-simple = "0.11.0"

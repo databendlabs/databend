@@ -13,4 +13,4 @@ test = false
 [dependencies]
 common-base = { path = "../../common/base" }
 
-dashmap = "5.4"
+dashmap = { workspace = true }

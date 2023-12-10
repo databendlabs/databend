@@ -11,7 +11,7 @@ doctest = false
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
 bytes = { workspace = true }
 common-auth = { path = "../../common/auth" }
 common-base = { path = "../../common/base" }
