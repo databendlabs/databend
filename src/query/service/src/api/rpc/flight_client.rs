@@ -136,6 +136,7 @@ impl FlightClient {
     ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
         let notify = Arc::new(tokio::sync::Notify::new());
+        //        let mut fused = streaming.fuse();
         let fut = {
             let notify = notify.clone();
             async move {

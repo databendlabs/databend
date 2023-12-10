@@ -30,6 +30,7 @@ pub use executor_graph::RunningGraph;
 pub use executor_settings::ExecutorSettings;
 pub use executor_tasks::CompletedAsyncTask;
 pub use executor_tasks::ExecutorTasksQueue;
+pub use executor_tasks::WatchNotify;
 pub use executor_worker_context::ExecutorTask;
 pub use executor_worker_context::ExecutorWorkerContext;
 pub use pipeline_complete_executor::PipelineCompleteExecutor;

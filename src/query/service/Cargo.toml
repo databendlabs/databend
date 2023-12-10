@@ -163,6 +163,7 @@ typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 walkdir = { workspace = true }
+tokio = {workspace = true}
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
