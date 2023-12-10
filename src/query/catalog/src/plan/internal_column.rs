@@ -200,7 +200,7 @@ impl InternalColumn {
     pub fn virtual_computed_expr(&self) -> Option<String> {
         match &self.column_type {
             InternalColumnType::ChangeRowId => Some(
-                "sha1(if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), hex(_origin_block_row_num)), _base_row_id))"
+                "if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), _base_row_id)"
                 .to_string(),
             ),
             _ => None,
@@ -276,12 +276,12 @@ impl InternalColumn {
                 let mut row_ids = Vec::with_capacity(num_rows);
                 if let Some(offsets) = &meta.offsets {
                     for i in offsets {
-                        let row_id = format!("{}{:x}", uuid, *i).as_bytes().to_vec();
+                        let row_id = format!("{}{:06x}", uuid, *i).as_bytes().to_vec();
                         row_ids.push(row_id);
                     }
                 } else {
                     for i in 0..num_rows {
-                        let row_id = format!("{}{:x}", uuid, i).as_bytes().to_vec();
+                        let row_id = format!("{}{:06x}", uuid, i).as_bytes().to_vec();
                         row_ids.push(row_id);
                     }
                 }
