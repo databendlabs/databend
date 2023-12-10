@@ -66,6 +66,7 @@ enum State {
 pub struct TransformSortSpill<R> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
+    schema: DataSchemaRef,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
@@ -221,13 +222,15 @@ where R: Rows + Sync + Send + 'static
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         spiller: Spiller,
-    ) -> Box<dyn Processor> {
+    ) -> Self {
         // TODO(spill): `num_merge` and `batch_size` should be determined by the memory usage.
-        Box::new(Self {
+        Self {
             input,
             output,
+            schema,
             input_data: None,
             output_data: None,
             spiller,
@@ -237,7 +240,7 @@ where R: Rows + Sync + Send + 'static
             batch_size: 65535,
             sort_desc,
             _r: PhantomData,
-        })
+        }
     }
 
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
@@ -279,7 +282,12 @@ where R: Rows + Sync + Send + 'static
             streams.push(stream);
         }
 
-        let mut merger = Merger::<R>::create(streams, self.sort_desc.clone(), self.batch_size);
+        let mut merger = Merger::<R>::create(
+            self.schema.clone(),
+            streams,
+            self.sort_desc.clone(),
+            self.batch_size,
+        );
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.next().await? {
@@ -333,6 +341,7 @@ impl BlockStream {
 ///
 /// TODO: reuse this operator in other places such as `TransformMultiSortMerge` and `TransformSortMerge`.
 struct Merger<R: Rows> {
+    schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<BlockStream>,
     heap: BinaryHeap<Reverse<Cursor<R>>>,
@@ -343,6 +352,7 @@ struct Merger<R: Rows> {
 
 impl<R: Rows> Merger<R> {
     fn create(
+        schema: DataSchemaRef,
         streams: Vec<BlockStream>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_size: usize,
@@ -350,10 +360,11 @@ impl<R: Rows> Merger<R> {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1);
         let heap = BinaryHeap::with_capacity(streams.len());
-        let buffer = vec![DataBlock::empty(); streams.len()];
+        let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let pending_stream = (0..streams.len()).collect();
 
         Self {
+            schema,
             unsorted_streams: streams,
             heap,
             buffer,
@@ -400,7 +411,7 @@ impl<R: Rows> Merger<R> {
                 let start = cursor.row_index;
                 let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
                 num_rows += count;
-                cursor.input_index += count;
+                cursor.row_index += count;
                 output_indices.push((cursor.input_index, start, count));
             } else {
                 let next_cursor = &find_bigger_child_of_root(&self.heap).0;
@@ -411,7 +422,7 @@ impl<R: Rows> Merger<R> {
                     let start = cursor.row_index;
                     let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
                     num_rows += count;
-                    cursor.input_index += count;
+                    cursor.row_index += count;
                     output_indices.push((cursor.input_index, start, count));
                 } else {
                     // We copy current cursor for advancing,
@@ -444,7 +455,7 @@ impl<R: Rows> Merger<R> {
                     &output_indices,
                     None,
                 );
-                self.buffer[cursor.input_index] = DataBlock::empty();
+                self.buffer[cursor.input_index] = DataBlock::empty_with_schema(self.schema.clone());
                 temp_sorted_blocks.push(temp_block);
                 output_indices.clear();
                 self.pending_stream.push_back(cursor.input_index);
@@ -471,36 +482,161 @@ impl<R: Rows> Merger<R> {
 pub fn create_transform_sort_spill(
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    input_schema: DataSchemaRef,
+    schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     spiller: Spiller,
 ) -> Box<dyn Processor> {
     if sort_desc.len() == 1 {
-        let sort_type = input_schema.field(sort_desc[0].offset).data_type();
+        let sort_type = schema.field(sort_desc[0].offset).data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
                 NumberDataType::NUM_TYPE => Box::new(TransformSortSpill::<
                     SimpleRows<NumberType<NUM_TYPE>>,
                 >::create(
-                    input, output, sort_desc, spiller,
+                    input, output, schema, sort_desc, spiller,
                 )),
             }),
             DataType::Date => Box::new(TransformSortSpill::<DateRows>::create(
-                input, output, sort_desc, spiller,
+                input, output, schema, sort_desc, spiller,
             )),
             DataType::Timestamp => Box::new(TransformSortSpill::<TimestampRows>::create(
-                input, output, sort_desc, spiller,
+                input, output, schema, sort_desc, spiller,
             )),
             DataType::String => Box::new(TransformSortSpill::<StringRows>::create(
-                input, output, sort_desc, spiller,
+                input, output, schema, sort_desc, spiller,
             )),
             _ => Box::new(TransformSortSpill::<CommonRows>::create(
-                input, output, sort_desc, spiller,
+                input, output, schema, sort_desc, spiller,
             )),
         }
     } else {
         Box::new(TransformSortSpill::<CommonRows>::create(
-            input, output, sort_desc, spiller,
+            input, output, schema, sort_desc, spiller,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use common_base::base::tokio;
+    use common_exception::Result;
+    use common_expression::block_debug::pretty_format_blocks;
+    use common_expression::types::DataType;
+    use common_expression::types::Int32Type;
+    use common_expression::types::NumberDataType;
+    use common_expression::DataBlock;
+    use common_expression::DataField;
+    use common_expression::DataSchemaRefExt;
+    use common_expression::FromData;
+    use common_expression::SortColumnDescription;
+    use common_pipeline_core::processors::InputPort;
+    use common_pipeline_core::processors::OutputPort;
+    use common_pipeline_transforms::processors::sort::SimpleRows;
+    use common_storage::DataOperator;
+    use itertools::Itertools;
+
+    use super::TransformSortSpill;
+    use crate::pipelines::processors::transforms::transform_sort_spill::BlockStream;
+    use crate::sessions::QueryContext;
+    use crate::spillers::Spiller;
+    use crate::spillers::SpillerConfig;
+    use crate::spillers::SpillerType;
+    use crate::test_kits::*;
+
+    async fn create_test_transform(
+        ctx: Arc<QueryContext>,
+    ) -> Result<TransformSortSpill<SimpleRows<Int32Type>>> {
+        let op = DataOperator::instance().operator();
+        let spiller = Spiller::create(
+            ctx.clone(),
+            op,
+            SpillerConfig::create("_spill_test".to_string()),
+            SpillerType::OrderBy,
+        );
+
+        let sort_desc = Arc::new(vec![SortColumnDescription {
+            offset: 0,
+            asc: true,
+            nulls_first: true,
+            is_nullable: false,
+        }]);
+
+        let transform = TransformSortSpill::<SimpleRows<Int32Type>>::create(
+            InputPort::create(),
+            OutputPort::create(),
+            DataSchemaRefExt::create(vec![DataField::new(
+                "a",
+                DataType::Number(NumberDataType::Int32),
+            )]),
+            sort_desc,
+            spiller,
+        );
+
+        Ok(transform)
+    }
+
+    /// Return input data and result data.
+    fn test_data() -> (Vec<DataBlock>, DataBlock) {
+        let data = vec![
+            vec![1, 3, 5, 7],
+            vec![1, 2, 3, 4],
+            vec![1, 1, 1, 1],
+            vec![1, 10, 100, 2000],
+            vec![0, 2, 4, 5],
+        ];
+
+        let input = data
+            .clone()
+            .into_iter()
+            .map(|v| DataBlock::new_from_columns(vec![Int32Type::from_data(v)]))
+            .collect::<Vec<_>>();
+
+        let result = data.into_iter().flatten().sorted().collect::<Vec<_>>();
+        let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
+
+        (input, result)
+    }
+
+    fn check_blocks_equal(result: DataBlock, expected: DataBlock) {
+        let result = pretty_format_blocks(&[result]).unwrap();
+        let expected = pretty_format_blocks(&[expected]).unwrap();
+        assert_eq!(
+            expected, result,
+            "expected:\n{}\nactual:\n{}",
+            expected, result
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_external_sort() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut transform = create_test_transform(ctx).await?;
+
+        transform.num_merge = 2;
+        transform.batch_size = 4;
+
+        let (input, expected) = test_data();
+        for data in input {
+            transform.spill(data).await?;
+        }
+        transform.merge_sort(None).await?;
+
+        debug_assert_eq!(transform.unmerged_blocks.len(), 1);
+        let mut block_stream = BlockStream::Spilled((
+            transform.unmerged_blocks[0].clone(),
+            Arc::new(transform.spiller.clone()),
+        ));
+
+        let mut result = Vec::new();
+        while let Some(block) = block_stream.next().await? {
+            result.push(block);
+        }
+
+        check_blocks_equal(DataBlock::concat(&result)?, expected);
+
+        Ok(())
     }
 }
