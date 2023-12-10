@@ -196,7 +196,7 @@ reqwest = { version = "0.11.19", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.35.0", features = ["full"] }
 
 # backtrace
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
