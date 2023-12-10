@@ -339,10 +339,13 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, 
         self.current_measure = self.meter.add(self.current_measure, new_size);
         match self.map.get(&k) {
             Some(old) => {
-            self.current_measure = self
-                .meter
-                .sub(self.current_measure, self.meter.measure(&k, old));},
-            None => {self.visited.insert(k.clone(), false);}
+                self.current_measure = self
+                    .meter
+                    .sub(self.current_measure, self.meter.measure(&k, old));
+            }
+            None => {
+                self.visited.insert(k.clone(), false);
+            }
         }
         let old_val = self.map.replace(k, v);
         while self.size() > self.capacity() {

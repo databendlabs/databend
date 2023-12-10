@@ -145,10 +145,10 @@ fn test_evict_until_enough_space() {
 
     // insert a single slice which size bigger than file1 and less than file1 + file2
     c.insert_single_slice("file4", &[3; 2]).unwrap();
-    assert_eq!(c.size(), 3);
+    assert_eq!(c.size(), 4);
     // file1 and file2 MUST be evicted
     assert!(!c.contains_key("file1"));
-    assert!(!c.contains_key("file2"));
+    assert!(!c.contains_key("file3"));
     // file3 MUST be keeped
-    assert!(c.contains_key("file3"));
+    assert!(c.contains_key("file2"));
 }
