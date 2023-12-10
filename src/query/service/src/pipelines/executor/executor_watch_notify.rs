@@ -45,3 +45,27 @@ impl WatchNotify {
         let _ = self.tx.send_replace(true);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_notify() {
+        let notify = WatchNotify::new();
+        let notified = notify.notified();
+        notify.notify_waiters();
+        notified.await;
+    }
+
+    #[tokio::test]
+    async fn test_notify_waiters_ahead() {
+        let notify = WatchNotify::new();
+        // notify_waiters ahead of notified being instantiated and awaited
+        notify.notify_waiters();
+
+        // this should not await indefinitely
+        let notified = notify.notified();
+        notified.await;
+    }
+}
