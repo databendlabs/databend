@@ -29,9 +29,9 @@ use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::ConstantTableScan;
 use common_sql::executor::physical_plans::CteScan;
 use common_sql::executor::physical_plans::TableScan;
-use common_storages_fuse::operations::FillInternalColumnProcessor;
 
 use crate::pipelines::processors::transforms::MaterializedCteSource;
+use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -74,13 +74,7 @@ impl PipelineBuilder {
         if let Some(internal_columns) = &scan.internal_column {
             if table.support_row_id_column() {
                 self.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(Box::new(
-                        FillInternalColumnProcessor::create(
-                            internal_columns.clone(),
-                            input,
-                            output,
-                        ),
-                    )))
+                    TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
                 })?;
             } else {
                 return Err(ErrorCode::TableEngineNotSupported(format!(

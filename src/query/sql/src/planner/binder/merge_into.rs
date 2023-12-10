@@ -288,8 +288,11 @@ impl Binder {
             },
         };
 
-        let column_binding = target_context
-            .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
+        let column_binding = target_context.add_internal_column_binding(
+            &row_id_column_binding,
+            self.metadata.clone(),
+            true,
+        )?;
 
         target_expr =
             SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index);
