@@ -61,6 +61,7 @@ use std::hash::Hash;
 use hashbrown::hash_map::DefaultHashBuilder;
 use hashlink::linked_hash_map;
 use hashlink::LinkedHashMap;
+use indexmap::IndexMap;
 
 use crate::cache::Cache;
 use crate::meter::count_meter::Count;
@@ -75,7 +76,8 @@ pub struct LruCache<
     M: CountableMeter<K, V> = Count,
 > {
     map: LinkedHashMap<K, V, S>,
-    visited: LinkedHashMap<K, bool>,
+    visited: IndexMap<K, bool>,
+    hand: u64,
     current_measure: M::Measure,
     max_capacity: u64,
     meter: M,
@@ -93,7 +95,8 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
     pub fn new(capacity: u64) -> Self {
         LruCache {
             map: LinkedHashMap::new(),
-            visited: LinkedHashMap::new(),
+            visited: IndexMap::new(),
+            hand: 0,
             current_measure: (),
             max_capacity: capacity,
             meter: Count,
@@ -138,7 +141,8 @@ impl<K: Eq + Hash + Clone, V, M: CountableMeter<K, V>> LruCache<K, V, DefaultHas
     pub fn with_meter(capacity: u64, meter: M) -> LruCache<K, V, DefaultHashBuilder, M> {
         LruCache {
             map: LinkedHashMap::new(),
-            visited: LinkedHashMap::new(),
+            visited: IndexMap::new(),
+            hand: 0,
             current_measure: Default::default(),
             max_capacity: capacity,
             meter,
@@ -151,7 +155,8 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher> LruCache<K, V, S, Count> {
     pub fn with_hasher(capacity: u64, hash_builder: S) -> LruCache<K, V, S, Count> {
         LruCache {
             map: LinkedHashMap::with_hasher(hash_builder),
-            visited: LinkedHashMap::new(),
+            visited: IndexMap::new(),
+            hand: 0,
             current_measure: (),
             max_capacity: capacity,
             meter: Count,
@@ -161,24 +166,39 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher> LruCache<K, V, S, Count> {
 
 impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S, M> {
     fn find_evict_candidate(&mut self) -> Option<K> {
+        let length = self.visited.len() as u64;
         let mut p: Option<K> = None;
-        for (key, value) in self.visited.iter_mut() {
-            if !(*value) && p.is_none() {
-                p = Some(key.clone())
-            }
-            if *value {
-                *value = false;
-            }
+        let mut count = self.hand;
+        if count > length - length / 5 {
+            count = 0
         }
+        let mut iter = self.visited.iter_mut().skip(count as usize);
+        for (key, value) in &mut iter {
+            if *value == false && p.is_none() {
+                p = Some(key.clone());
+                break;
+            }
+            count = count + 1;
+            *value = false;
+        }
+        self.hand = count;
         p
     }
 
     fn peek_evict_candidate(&self) -> Option<K> {
+        let length = self.visited.len() as u64;
         let mut p: Option<K> = None;
-        for (key, value) in self.visited.iter() {
-            if !(*value) && p.is_none() {
-                p = Some(key.clone())
+        let mut count = self.hand;
+        if count > length - length / 5 {
+            count = 0
+        }
+        let iter = self.visited.iter().skip(count as usize);
+        for (key, value) in iter {
+            if *value == false && p.is_none() {
+                p = Some(key.clone());
+                break;
             }
+            count = count + 1;
         }
         p
     }
@@ -192,7 +212,8 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, 
     fn with_meter_and_hasher(capacity: u64, meter: M, hash_builder: S) -> Self {
         LruCache {
             map: LinkedHashMap::with_hasher(hash_builder),
-            visited: LinkedHashMap::new(),
+            visited: IndexMap::new(),
+            hand: 0,
             current_measure: Default::default(),
             max_capacity: capacity,
             meter,
@@ -225,19 +246,10 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, 
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        match self.map.raw_entry_mut().from_key(k) {
-            linked_hash_map::RawEntryMut::Occupied(occupied) => {
-                match self.visited.raw_entry_mut().from_key(k) {
-                    // Since the element has been accessed, we set a flag.
-                    linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
-                        occupied.replace_value(true);
-                    }
-                    linked_hash_map::RawEntryMut::Vacant(_) => (),
-                }
-                Some(occupied.into_mut())
-            }
-            linked_hash_map::RawEntryMut::Vacant(_) => None,
+        if let Some(v) = self.visited.get_mut(k) {
+            *v = true;
         }
+        self.map.get(k)
     }
 
     /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
@@ -283,7 +295,7 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, 
         if let Some(old_key) = self.peek_evict_candidate() {
             self.map.get_key_value(&old_key)
         } else {
-            self.map.front()
+            None
         }
     }
 
@@ -325,19 +337,12 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, 
     fn put(&mut self, k: K, v: V) -> Option<V> {
         let new_size = self.meter.measure(&k, &v);
         self.current_measure = self.meter.add(self.current_measure, new_size);
-        if let Some(old) = self.map.get(&k) {
-            match self.visited.raw_entry_mut().from_key(&k) {
-                // Since the key has been accessed, we set a flag.
-                linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
-                    occupied.replace_value(true);
-                }
-                linked_hash_map::RawEntryMut::Vacant(_) => (),
-            }
+        match self.map.get(&k) {
+            Some(old) => {
             self.current_measure = self
                 .meter
-                .sub(self.current_measure, self.meter.measure(&k, old));
-        } else {
-            self.visited.replace(k.clone(), false);
+                .sub(self.current_measure, self.meter.measure(&k, old));},
+            None => {self.visited.insert(k.clone(), false);}
         }
         let old_val = self.map.replace(k, v);
         while self.size() > self.capacity() {
@@ -395,20 +400,14 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, 
     fn pop_by_policy(&mut self) -> Option<(K, V)> {
         if let Some(old_key) = self.find_evict_candidate() {
             self.map.remove_entry(&old_key).map(|(k, v)| {
-                self.visited.remove_entry(&old_key);
+                self.visited.remove(&old_key);
                 self.current_measure = self
                     .meter
                     .sub(self.current_measure, self.meter.measure(&k, &v));
                 (k, v)
             })
         } else {
-            self.map.pop_front().map(|(k, v)| {
-                self.visited.pop_front();
-                self.current_measure = self
-                    .meter
-                    .sub(self.current_measure, self.meter.measure(&k, &v));
-                (k, v)
-            })
+            None
         }
     }
 

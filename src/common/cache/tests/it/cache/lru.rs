@@ -95,7 +95,7 @@ fn test_debug() {
     cache.get(&3);
     assert_eq!(format!("{:?}", cache), "{6: 60, 3: 30, 2: 22}");
     cache.set_capacity(2);
-    assert_eq!(format!("{:?}", cache), "{6: 60, 3: 30}");
+    assert_eq!(format!("{:?}", cache), "{3: 30, 2: 22}");
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_remove() {
     cache.put(8, 80);
     assert!(cache.get(&5).is_none());
     assert_eq!(cache.get(&6), Some(&60));
-    assert_eq!(cache.get(&7), Some(&70));
+    assert_eq!(cache.get(&7), None);
     assert_eq!(cache.get(&8), Some(&80));
 }
 
@@ -139,24 +139,24 @@ fn test_iter() {
     cache.put(4, 40);
     cache.put(5, 50);
     assert_eq!(cache.iter().collect::<Vec<_>>(), [
+        (&2, &20),
         (&3, &30),
-        (&4, &40),
         (&5, &50)
     ]);
     assert_eq!(cache.iter_mut().collect::<Vec<_>>(), [
+        (&2, &mut 20),
         (&3, &mut 30),
-        (&4, &mut 40),
         (&5, &mut 50)
     ]);
     assert_eq!(cache.iter().rev().collect::<Vec<_>>(), [
         (&5, &50),
-        (&4, &40),
-        (&3, &30)
+        (&3, &30),
+        (&2, &20)
     ]);
     assert_eq!(cache.iter_mut().rev().collect::<Vec<_>>(), [
         (&5, &mut 50),
-        (&4, &mut 40),
-        (&3, &mut 30)
+        (&3, &mut 30),
+        (&2, &mut 20)
     ]);
 }
 

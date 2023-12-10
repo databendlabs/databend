@@ -1880,6 +1880,7 @@ dependencies = [
  "hashbrown 0.14.0",
  "hashlink",
  "heapsize",
+ "indexmap 1.9.2",
 ]
 
 [[package]]
