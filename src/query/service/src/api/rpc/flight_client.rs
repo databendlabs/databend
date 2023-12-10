@@ -177,6 +177,9 @@ impl FlightClient {
         .in_span(Span::enter_with_local_parent(full_name!()));
 
         tokio::spawn(async_backtrace::location!(String::from(query_id)).frame(fut));
+        // use common_base::runtime::GlobalIORuntime;
+        // use common_base::runtime::TrySpawn;
+        // GlobalIORuntime::instance().spawn(query_id, fut);
 
         (notify, rx)
     }
