@@ -174,11 +174,11 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<
         }
         let mut iter = self.visited.iter_mut().skip(count as usize);
         for (key, value) in &mut iter {
-            if *value == false && p.is_none() {
+            if !(*value) && p.is_none() {
                 p = Some(key.clone());
                 break;
             }
-            count = count + 1;
+            count += 1;
             *value = false;
         }
         self.hand = count;
@@ -194,11 +194,11 @@ impl<K: Eq + Hash + Clone, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<
         }
         let iter = self.visited.iter().skip(count as usize);
         for (key, value) in iter {
-            if *value == false && p.is_none() {
+            if !(*value) && p.is_none() {
                 p = Some(key.clone());
                 break;
             }
-            count = count + 1;
+            count += 1;
         }
         p
     }
