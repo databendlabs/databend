@@ -15,14 +15,11 @@
 mod common;
 mod simple;
 
-use std::sync::Arc;
-
 pub use common::*;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataSchemaRef;
-use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 pub use simple::*;
 
@@ -51,45 +48,5 @@ where Self: Sized + Clone
 
     fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-}
-
-impl<T: Rows> Rows for Arc<T> {
-    type Item<'a> = T::Item<'a> where Self: 'a;
-
-    fn len(&self) -> usize {
-        self.as_ref().len()
-    }
-
-    fn row(&self, index: usize) -> Self::Item<'_> {
-        self.as_ref().row(index)
-    }
-
-    fn to_column(&self) -> Column {
-        self.as_ref().to_column()
-    }
-
-    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self> {
-        Some(Arc::new(T::from_column(col, desc)?))
-    }
-}
-
-impl Rows for Column {
-    type Item<'a> = ScalarRef<'a> where Self: 'a;
-
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn row(&self, index: usize) -> Self::Item<'_> {
-        unsafe { self.index_unchecked(index) }
-    }
-
-    fn to_column(&self) -> Column {
-        self.clone()
-    }
-
-    fn from_column(col: Column, _desc: &[SortColumnDescription]) -> Option<Self> {
-        Some(col)
     }
 }

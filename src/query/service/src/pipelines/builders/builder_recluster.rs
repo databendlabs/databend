@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_exception::ErrorCode;
@@ -163,7 +165,7 @@ impl PipelineBuilder {
                     .collect();
 
                 let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs)
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
                         .with_partial_block_size(partial_block_size)
                         .with_final_block_size(final_block_size)
                         .remove_order_col_at_last();

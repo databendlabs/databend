@@ -52,7 +52,7 @@ pub fn try_add_multi_sort_merge(
     input_schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     prof_info: Option<(u32, SharedProcessorProfiles)>,
     remove_order_col: bool,
 ) -> Result<()> {
@@ -106,7 +106,7 @@ fn create_processor(
     input_schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     Ok(if sort_columns_descriptions.len() == 1 {
@@ -183,7 +183,7 @@ where R: Rows
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
 
-    sort_desc: Vec<SortColumnDescription>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
 
     // Parameters
     block_size: usize,
@@ -219,7 +219,7 @@ where R: Rows
         output: Arc<OutputPort>,
         block_size: usize,
         limit: Option<usize>,
-        sort_desc: Vec<SortColumnDescription>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
     ) -> Result<Self> {
         let input_size = inputs.len();

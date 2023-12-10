@@ -32,7 +32,7 @@ use common_sql::executor::physical_plans::Sort;
 use common_storage::DataOperator;
 use common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::TransformSortSpill;
+use crate::pipelines::processors::transforms::create_transform_sort_spill;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
@@ -108,6 +108,7 @@ impl PipelineBuilder {
     ) -> Result<()> {
         let block_size = self.settings.get_max_block_size()? as usize;
         let max_threads = self.settings.get_max_threads()? as usize;
+        let sort_desc = Arc::new(sort_desc);
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
@@ -166,7 +167,7 @@ impl PipelineBuilder {
 pub struct SortPipelineBuilder {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    sort_desc: Vec<SortColumnDescription>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
     limit: Option<usize>,
     partial_block_size: usize,
     final_block_size: usize,
@@ -178,7 +179,7 @@ impl SortPipelineBuilder {
     pub fn create(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
-        sort_desc: Vec<SortColumnDescription>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
     ) -> Self {
         Self {
             ctx,
@@ -324,7 +325,13 @@ impl SortPipelineBuilder {
                 let op = DataOperator::instance().operator();
                 let spiller =
                     Spiller::create(self.ctx.clone(), op, config.clone(), SpillerType::OrderBy);
-                let transform = TransformSortSpill::create(input, output, spiller, 10000);
+                let transform = create_transform_sort_spill(
+                    input,
+                    output,
+                    self.schema.clone(),
+                    self.sort_desc.clone(),
+                    spiller,
+                );
                 if let Some((plan_id, prof)) = &self.prof_info {
                     Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                         transform,

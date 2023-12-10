@@ -16,19 +16,32 @@ use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::with_number_mapped_type;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::sort::utils::find_bigger_child_of_root;
+use common_pipeline_transforms::processors::sort::CommonRows;
 use common_pipeline_transforms::processors::sort::Cursor;
+use common_pipeline_transforms::processors::sort::DateRows;
+use common_pipeline_transforms::processors::sort::Rows;
+use common_pipeline_transforms::processors::sort::SimpleRows;
+use common_pipeline_transforms::processors::sort::StringRows;
+use common_pipeline_transforms::processors::sort::TimestampRows;
 
 use crate::spillers::Spiller;
 
@@ -50,7 +63,7 @@ enum State {
     Finish,
 }
 
-pub struct TransformSortSpill {
+pub struct TransformSortSpill<R> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -60,11 +73,15 @@ pub struct TransformSortSpill {
     state: State,
     spiller: Spiller,
 
-    spill_batch_size: usize,
+    batch_size: usize,
     /// Blocks to merge one time.
     num_merge: usize,
     /// Unmerged list of blocks. Each list are sorted.
     unmerged_blocks: VecDeque<VecDeque<String>>,
+
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+
+    _r: PhantomData<R>,
 }
 
 #[inline(always)]
@@ -76,7 +93,9 @@ fn need_spill(block: &DataBlock) -> bool {
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformSortSpill {
+impl<R> Processor for TransformSortSpill<R>
+where R: Rows + Send + Sync + 'static
+{
     fn name(&self) -> String {
         String::from("TransformSortSpill")
     }
@@ -196,13 +215,16 @@ impl Processor for TransformSortSpill {
     }
 }
 
-impl TransformSortSpill {
+impl<R> TransformSortSpill<R>
+where R: Rows + Sync + Send + 'static
+{
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
         spiller: Spiller,
-        spill_batch_size: usize,
     ) -> Box<dyn Processor> {
+        // TODO(spill): `num_merge` and `batch_size` should be determined by the memory usage.
         Box::new(Self {
             input,
             output,
@@ -212,7 +234,9 @@ impl TransformSortSpill {
             state: State::Init,
             num_merge: 2,
             unmerged_blocks: VecDeque::new(),
-            spill_batch_size,
+            batch_size: 65535,
+            sort_desc,
+            _r: PhantomData,
         })
     }
 
@@ -255,7 +279,7 @@ impl TransformSortSpill {
             streams.push(stream);
         }
 
-        let mut merger = Merger::create(streams, self.spill_batch_size);
+        let mut merger = Merger::<R>::create(streams, self.sort_desc.clone(), self.batch_size);
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.next().await? {
@@ -308,16 +332,21 @@ impl BlockStream {
 /// A merge sort operator to merge multiple sorted streams.
 ///
 /// TODO: reuse this operator in other places such as `TransformMultiSortMerge` and `TransformSortMerge`.
-struct Merger {
+struct Merger<R: Rows> {
+    sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<BlockStream>,
-    heap: BinaryHeap<Reverse<Cursor<Column>>>,
+    heap: BinaryHeap<Reverse<Cursor<R>>>,
     buffer: Vec<DataBlock>,
     pending_stream: VecDeque<usize>,
     batch_size: usize,
 }
 
-impl Merger {
-    fn create(streams: Vec<BlockStream>, batch_size: usize) -> Self {
+impl<R: Rows> Merger<R> {
+    fn create(
+        streams: Vec<BlockStream>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
+        batch_size: usize,
+    ) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1);
         let heap = BinaryHeap::with_capacity(streams.len());
@@ -329,6 +358,7 @@ impl Merger {
             heap,
             buffer,
             batch_size,
+            sort_desc,
             pending_stream,
         }
     }
@@ -339,7 +369,9 @@ impl Merger {
             debug_assert!(self.buffer[i].is_empty());
             if let Some(block) = self.unsorted_streams[i].next().await? {
                 let order_col = block.columns().last().unwrap().value.as_column().unwrap();
-                let cursor = Cursor::new(i, order_col.clone());
+                let rows = R::from_column(order_col.clone(), &self.sort_desc)
+                    .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
+                let cursor = Cursor::new(i, rows);
                 self.heap.push(Reverse(cursor));
                 self.buffer[i] = block;
             }
@@ -433,5 +465,42 @@ impl Merger {
         let block = DataBlock::concat(&temp_sorted_blocks)?;
         debug_assert!(block.num_rows() <= self.batch_size);
         Ok(Some(block))
+    }
+}
+
+pub fn create_transform_sort_spill(
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    input_schema: DataSchemaRef,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    spiller: Spiller,
+) -> Box<dyn Processor> {
+    if sort_desc.len() == 1 {
+        let sort_type = input_schema.field(sort_desc[0].offset).data_type();
+        match sort_type {
+            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                NumberDataType::NUM_TYPE => Box::new(TransformSortSpill::<
+                    SimpleRows<NumberType<NUM_TYPE>>,
+                >::create(
+                    input, output, sort_desc, spiller,
+                )),
+            }),
+            DataType::Date => Box::new(TransformSortSpill::<DateRows>::create(
+                input, output, sort_desc, spiller,
+            )),
+            DataType::Timestamp => Box::new(TransformSortSpill::<TimestampRows>::create(
+                input, output, sort_desc, spiller,
+            )),
+            DataType::String => Box::new(TransformSortSpill::<StringRows>::create(
+                input, output, sort_desc, spiller,
+            )),
+            _ => Box::new(TransformSortSpill::<CommonRows>::create(
+                input, output, sort_desc, spiller,
+            )),
+        }
+    } else {
+        Box::new(TransformSortSpill::<CommonRows>::create(
+            input, output, sort_desc, spiller,
+        ))
     }
 }
