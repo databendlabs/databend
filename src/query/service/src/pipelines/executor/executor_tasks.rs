@@ -18,14 +18,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
-use tokio::sync::watch;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
 use crate::pipelines::processors::ProcessorPtr;
@@ -34,36 +33,6 @@ pub struct ExecutorTasksQueue {
     finished: Arc<AtomicBool>,
     finished_notify: Arc<WatchNotify>,
     workers_tasks: Mutex<ExecutorTasks>,
-}
-
-// A single value Notify based on tokio::sync::watch,
-// which allows `notify_waiters` to be called before `notified` was called,
-// without losing notification.
-pub struct WatchNotify {
-    rx: watch::Receiver<bool>,
-    tx: watch::Sender<bool>,
-}
-
-impl Default for WatchNotify {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl WatchNotify {
-    pub fn new() -> Self {
-        let (tx, rx) = watch::channel(false);
-        WatchNotify { rx, tx }
-    }
-
-    pub async fn notified(&self) {
-        let mut rx = self.rx.clone();
-        let _ = rx.changed().await;
-    }
-
-    pub fn notify_waiters(&self) {
-        let _ = self.tx.send_replace(true);
-    }
 }
 
 impl ExecutorTasksQueue {

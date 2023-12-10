@@ -23,13 +23,11 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
 use futures_util::future::Either;
-use log::warn;
 use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
@@ -41,6 +39,7 @@ use tonic::Streaming;
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::request_builder::RequestBuilder;
+use crate::pipelines::executor::WatchNotify;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -109,15 +108,12 @@ impl FlightClient {
     fn streaming_receiver(
         query_id: &str,
         mut streaming: Streaming<FlightData>,
-    ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
+    ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
-        let notify = Arc::new(tokio::sync::Notify::new());
+        let notify = Arc::new(WatchNotify::new());
         let fut = {
             let notify = notify.clone();
             async move {
-                // since the notifier will use `notify_one` to wake up us,
-                // it is safe to instantiate the Notified future here, even if
-                // the `notify_one` might be called before the instantiation.
                 let mut notified = Box::pin(notify.notified());
                 let mut streaming_next = streaming.next();
 
@@ -152,9 +148,6 @@ impl FlightClient {
         .in_span(Span::enter_with_local_parent(full_name!()));
 
         tokio::spawn(async_backtrace::location!(String::from(query_id)).frame(fut));
-        // use common_base::runtime::GlobalIORuntime;
-        // use common_base::runtime::TrySpawn;
-        // GlobalIORuntime::instance().spawn(query_id, fut);
 
         (notify, rx)
     }
@@ -190,7 +183,7 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
-    notify: Arc<Notify>,
+    notify: Arc<WatchNotify>,
     rx: Receiver<Result<FlightData>>,
 }
 
@@ -204,7 +197,7 @@ impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
         FlightReceiver {
             rx,
-            notify: Arc::new(Notify::new()),
+            notify: Arc::new(WatchNotify::new()),
         }
     }
 
@@ -219,8 +212,7 @@ impl FlightReceiver {
 
     pub fn close(&self) {
         self.rx.close();
-        // there is only one receiver, which will use the notification in a  single-shot manner
-        self.notify.notify_one();
+        self.notify.notify_waiters();
     }
 }
 
@@ -256,7 +248,7 @@ impl FlightSender {
 pub enum FlightExchange {
     Dummy,
     Receiver {
-        notify: Arc<Notify>,
+        notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     },
     Sender(Sender<Result<FlightData, Status>>),
@@ -268,7 +260,7 @@ impl FlightExchange {
     }
 
     pub fn create_receiver(
-        notify: Arc<Notify>,
+        notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     ) -> FlightExchange {
         FlightExchange::Receiver { notify, receiver }

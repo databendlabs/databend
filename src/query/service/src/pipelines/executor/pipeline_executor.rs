@@ -41,11 +41,11 @@ use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
-use crate::pipelines::executor::executor_tasks::WatchNotify;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorTasksQueue;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
