@@ -156,14 +156,24 @@ socket2 = "0.5.3"
 strength_reduce = "0.2.4"
 tempfile = "3.4.0"
 time = "0.3.14"
+<<<<<<< HEAD
 tokio-stream = { workspace = true, features = ["net"] }
+=======
+tokio = { workspace = true }
+tokio-stream = { version = "0.1.10", features = ["net"] }
+>>>>>>> 5e768a8670 (lint)
 toml = { version = "0.7.3", default-features = false }
 tonic = { workspace = true }
 typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
+<<<<<<< HEAD
 uuid = { workspace = true }
 walkdir = { workspace = true }
 tokio = {workspace = true}
+=======
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
+walkdir = "2.3.2"
+>>>>>>> 5e768a8670 (lint)
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
