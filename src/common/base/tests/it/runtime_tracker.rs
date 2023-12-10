@@ -26,8 +26,8 @@ async fn test_async_thread_tracker() -> Result<()> {
     let (out_tx, out_rx) = async_channel::bounded(10);
     let (inner_tx, inner_rx) = async_channel::bounded(10);
 
-    let outer_runtime = Runtime::with_worker_threads(2, "Outer")?;
-    let inner_runtime = Runtime::with_worker_threads(2, "Inner")?;
+    let outer_runtime = Runtime::with_worker_threads(2, Some(String::from("Outer")))?;
+    let inner_runtime = Runtime::with_worker_threads(2, Some(String::from("Inner")))?;
 
     let memory_tracker = MemStat::create("test_async_thread_tracker".to_string());
     let inner_join_handler = inner_runtime.spawn(

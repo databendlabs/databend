@@ -176,14 +176,19 @@ impl DataExchangeManager {
         let config = GlobalConfig::instance();
         let address = address.to_string();
         let task = async move {
-            let tls_cfg = if config.tls_query_cli_enabled() {
-                Some(config.query.to_rpc_client_tls_config())
-            } else {
-                None
-            };
-            Ok(FlightClient::new(FlightServiceClient::new(
-                ConnectionFactory::create_rpc_channel(address, None, tls_cfg).await?,
-            )))
+            match config.tls_query_cli_enabled() {
+                true => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(
+                        address.to_owned(),
+                        None,
+                        Some(config.query.to_rpc_client_tls_config()),
+                    )
+                    .await?,
+                ))),
+                false => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+                ))),
+            }
         };
         if use_current_rt {
             task.await

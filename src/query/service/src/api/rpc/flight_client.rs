@@ -44,41 +44,19 @@ use crate::api::rpc::request_builder::RequestBuilder;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
-    create_thread_name: Option<String>,
-}
-
-impl Drop for FlightClient {
-    fn drop(&mut self) {
-        self.check_rt("drop")
-    }
 }
 
 // TODO: Integration testing required
 impl FlightClient {
-    fn check_rt(&self, operation: &str) {
-        let current_thread = std::thread::current();
-        let name = current_thread.name();
-        if name != self.create_thread_name.as_deref() {
-            warn!(
-                " FlightClient used in different rt, operation {},  current thread : {:?}, create thread: {:?}",
-                operation, name, self.create_thread_name
-            );
-        }
-    }
     pub fn new(mut inner: FlightServiceClient<Channel>) -> FlightClient {
         inner = inner.max_decoding_message_size(usize::MAX);
         inner = inner.max_encoding_message_size(usize::MAX);
 
-        let create_thread_name = std::thread::current().name().map(ToOwned::to_owned);
-        FlightClient {
-            inner,
-            create_thread_name,
-        }
+        FlightClient { inner }
     }
 
     #[async_backtrace::framed]
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
-        self.check_rt("execute_action");
         if let Err(cause) = self.do_action(action, timeout).await {
             return Err(cause.add_message_back("(while in query flight)"));
         }
@@ -92,7 +70,6 @@ impl FlightClient {
         query_id: &str,
         target: &str,
     ) -> Result<FlightExchange> {
-        self.check_rt("request_server_exchange");
         let streaming = self
             .get_streaming(
                 RequestBuilder::create(Ticket::default())
@@ -115,7 +92,6 @@ impl FlightClient {
         target: &str,
         fragment: usize,
     ) -> Result<FlightExchange> {
-        self.check_rt("do_get");
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
             .with_metadata("x-target", target)?
@@ -136,7 +112,6 @@ impl FlightClient {
     ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
         let notify = Arc::new(tokio::sync::Notify::new());
-        //        let mut fused = streaming.fuse();
         let fut = {
             let notify = notify.clone();
             async move {

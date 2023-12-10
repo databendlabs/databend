@@ -43,7 +43,7 @@ impl StatisticsReceiver {
     ) -> Result<StatisticsReceiver> {
         let (shutdown_tx, _shutdown_rx) = channel(2);
         let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
-        let runtime = Runtime::with_worker_threads(2, "StatisticsReceiver")?;
+        let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
         for (_source, exchange) in statistics_exchanges.into_iter() {
             let rx = exchange.convert_to_receiver();
