@@ -30,17 +30,17 @@ bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
-dashmap = "5.4"
+dashmap = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
 ethnum = { workspace = true, features = ["serde", "macros"] }
-futures = "0.3.24"
+futures = { workspace = true }
 hex = "0.4.3"
-itertools = "0.10"
+itertools = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = "0.8.5"
 log = { workspace = true }
-match-template = "0.0.1"
+match-template = { workspace = true }
 micromarshal = "0.4.0"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
@@ -52,7 +52,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 terminal_size = "0.2.6"
 tonic = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
 
 [dev-dependencies]

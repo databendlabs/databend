@@ -59,12 +59,12 @@ chrono-tz = { workspace = true }
 cidr = { version = "0.2.2" }
 cron = "0.12.0"
 ctor = "0.1.26"
-dashmap = "5.4"
+dashmap = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
 globiter = "0.1"
 indexmap = "2.0.0"
-itertools = "0.10.5"
+itertools = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 num-derive = "0.3.3"
@@ -74,7 +74,7 @@ opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = "2"
-regex = "1.8.1"
+regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"

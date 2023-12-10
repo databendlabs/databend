@@ -27,15 +27,15 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-futures = "0.3"
+futures = { workspace = true }
 icelake = "0.0.10"
-match-template = "0.0.1"
+match-template = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
-typetag = "0.2"
+typetag = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

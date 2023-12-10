@@ -129,22 +129,30 @@ openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alph
 
 # Core crates and utilities
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
+bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 bytes = "1.5.0"
+byteorder = "1.4.3"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
+dashmap = "5.4.0"
 derive_more = "0.99.17"
+enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.3.2" }
 itertools = "0.10.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.5"
+match-template = "0.0.1"
+metrics = "0.20.1"
 minitrace = { version = "0.6", features = ["enable"] }
 mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
 once_cell = "1.15.0"
 ordered-float = { version = "3.6.0", default-features = false }
 parking_lot = "0.12.1"
+poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.21.2"
 rand = { version = "0.8.5", features = ["small_rng"] }
+regex = "1.8.1"
 reqwest = { version = "0.11.19", default-features = false, features = [
     "json",
     "rustls-tls",
@@ -152,10 +160,14 @@ reqwest = { version = "0.11.19", default-features = false, features = [
     "trust-dns",
 ] }
 semver = "1.0.14"
+serfig = "0.1.0"
 tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = "0.1.11"
 tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tonic-reflection = { version = "0.10.2" }
+typetag = "0.2.3"
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
+walkdir = "2.3.2"
 
 # Future and async
 futures = "0.3.24"

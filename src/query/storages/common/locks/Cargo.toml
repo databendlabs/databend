@@ -24,7 +24,7 @@ common-users = { path = "../../../users" }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
-futures = "0.3.24"
+futures = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }

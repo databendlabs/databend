@@ -15,7 +15,7 @@ async-compression = { git = "https://github.com/youngsofun/async-compression", r
 brotli = { version = "3.3.0", features = ["std"] }
 bytes = { workspace = true }
 common-exception = { path = "../exception" }
-futures = "0.3"
+futures = { workspace = true }
 log = { workspace = true }
 pin-project = "1"
 serde = { workspace = true }

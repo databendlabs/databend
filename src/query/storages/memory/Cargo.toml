@@ -28,7 +28,7 @@ async-trait = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }

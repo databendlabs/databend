@@ -26,14 +26,14 @@ common-storage = { path = "../../../common/storage" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-dashmap = "5.4.0"
+dashmap = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 
-typetag = "0.2.6"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+typetag = { workspace = true }
+uuid = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }

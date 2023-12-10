@@ -35,12 +35,12 @@ async-recursion = "1.0.0"
 async-trait = { workspace = true }
 chrono = { workspace = true }
 faststr = "0.2"
-futures = "0.3.24"
+futures = { workspace = true }
 hive_metastore = { git = "https://github.com/Xuanwo/hive_metastore_rs", rev = "b8aaffb" }
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 serde = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 volo-thrift = "0.8"

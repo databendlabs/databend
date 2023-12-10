@@ -17,7 +17,7 @@ test = false
 common-exception = { path = "../exception" }
 
 # Crates.io dependencies
-bincode = { version = "2.0.0-rc.1", features = ["serde", "std"] }
+bincode = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }

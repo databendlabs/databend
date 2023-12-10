@@ -62,7 +62,7 @@ limits-rs = "0.2.0"
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
-poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
+poem = { workspace = true }
 sentry = { version = "0.31.5", default-features = false, features = [
     "backtrace",
     "contexts",
@@ -72,7 +72,7 @@ sentry = { version = "0.31.5", default-features = false, features = [
 ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serfig = "0.1.0"
+serfig = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }

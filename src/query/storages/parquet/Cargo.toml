@@ -35,14 +35,14 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 ethnum = { workspace = true }
-futures = "0.3.24"
+futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 thrift = "0.17.0"
-typetag = "0.2.3"
+typetag = { workspace = true }
 
 [dev-dependencies]
 common-sql = { path = "../../sql" }

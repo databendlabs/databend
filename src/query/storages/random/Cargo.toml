@@ -22,7 +22,7 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }

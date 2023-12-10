@@ -35,4 +35,4 @@ ctor = "0.2.5"
 pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
-uuid = { version = "1.1.2" }
+uuid = { workspace = true }

@@ -41,20 +41,20 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-itertools = "0.10.5"
+itertools = { workspace = true }
 log = { workspace = true }
 once_cell = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
-regex = "1.8.1"
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
 snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
 
-typetag = "0.2.3"
-walkdir = "2.3.2"
+typetag = { workspace = true }
+walkdir = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }

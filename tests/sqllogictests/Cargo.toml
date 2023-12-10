@@ -22,11 +22,11 @@ env_logger = "0.10.0"
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
-regex = "1.8.1"
+regex = { workspace = true }
 reqwest = { workspace = true }
 serde = "1.0.150"
 serde_json = { workspace = true }
 sqllogictest = "0.17.2"
 thiserror = { workspace = true }
 tokio = { workspace = true }
-walkdir = "2.3.2"
+walkdir = { workspace = true }
