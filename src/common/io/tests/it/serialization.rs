@@ -118,9 +118,9 @@ fn test_serialize_legacy_deserialize_standard() {
     bincode_serialize_into_buf_with_config(&mut buffer, &value, BincodeConfig::Legacy).unwrap();
     let slice = buffer.get_ref().as_slice();
 
-    let deserialized_result: Result<TestStruct> =
-        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard);
-    assert!(deserialized_result.is_err());
+    let deserialized: TestStruct =
+        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard).unwrap();
+    assert_ne!(value, deserialized);
 }
 
 #[test]
