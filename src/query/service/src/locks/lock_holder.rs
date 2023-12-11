@@ -115,7 +115,7 @@ impl LockHolder {
 
     pub fn shutdown(&self) {
         self.shutdown_flag.store(true, Ordering::SeqCst);
-        self.shutdown_notify.notify_waiters();
+        self.shutdown_notify.notify_one();
     }
 }
 

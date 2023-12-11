@@ -87,21 +87,24 @@ impl Interpreter for UpdateInterpreter {
         }
 
         let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
-        // refresh table.
+
+        let db_name = self.plan.database.as_str();
+        let tbl_name = self.plan.table.as_str();
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
-        // check mutability
-        tbl.check_mutable()?;
-
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+
+        // refresh table.
+        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
+
+        // check mutability
+        tbl.check_mutable()?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();

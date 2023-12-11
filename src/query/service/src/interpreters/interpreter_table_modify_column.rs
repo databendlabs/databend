@@ -189,6 +189,12 @@ impl ModifyTableColumnInterpreter {
         table: &Arc<dyn Table>,
         field_and_comments: &[(TableField, String)],
     ) -> Result<PipelineBuildResult> {
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        // refresh table.
+        let table = table.refresh(self.ctx.as_ref()).await?;
+
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
@@ -269,10 +275,6 @@ impl ModifyTableColumnInterpreter {
         if schema == new_schema {
             return Ok(PipelineBuildResult::create());
         }
-
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();

@@ -99,25 +99,26 @@ impl Interpreter for DeleteInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "delete_interpreter_execute");
 
         let is_distributed = !self.ctx.get_cluster().is_empty();
-        let catalog_name = self.plan.catalog_name.as_str();
 
+        let catalog_name = self.plan.catalog_name.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
 
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
-
-        // refresh table.
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
-        // check mutability
-        tbl.check_mutable()?;
-
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+
+        // refresh table.
+        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
+
+        // check mutability
+        tbl.check_mutable()?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
