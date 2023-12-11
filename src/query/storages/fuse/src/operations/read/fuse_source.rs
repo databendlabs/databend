@@ -43,6 +43,7 @@ use crate::operations::read::ReadParquetDataSource;
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     mut max_threads: usize,
@@ -77,7 +78,9 @@ pub fn build_fuse_native_source_pipeline(
                     output.clone(),
                     ReadNativeDataSource::<true>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -102,7 +105,9 @@ pub fn build_fuse_native_source_pipeline(
                     output.clone(),
                     ReadNativeDataSource::<false>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),

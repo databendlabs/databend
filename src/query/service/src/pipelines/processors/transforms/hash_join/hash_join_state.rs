@@ -40,6 +40,7 @@ use ethnum::U256;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
+use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::INLIST_RUNTIME_FILTER_THRESHOLD;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
@@ -257,7 +258,7 @@ impl HashJoinState {
         let data_blocks = &mut build_state.build_chunks;
 
         let num_rows = build_state.generation_state.build_num_rows;
-        if num_rows > 10_000 {
+        if num_rows > INLIST_RUNTIME_FILTER_THRESHOLD {
             data_blocks.clear();
             return Ok(());
         }
