@@ -129,8 +129,8 @@ impl Accessor for SharedAccessor {
     type BlockingReader = ();
     type Writer = ();
     type BlockingWriter = ();
-    type Pager = ();
-    type BlockingPager = ();
+    type Lister = ();
+    type BlockingLister = ();
 
     fn info(&self) -> AccessorInfo {
         let mut meta = AccessorInfo::default();
