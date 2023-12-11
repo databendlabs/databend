@@ -63,6 +63,8 @@ use crate::pipelines::processors::transforms::hash_join::SingleStringHashJoinHas
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
+const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 10_000;
+
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -220,21 +222,23 @@ impl HashJoinBuildState {
                 }
             }
 
-            let build_chunks =
-                &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
-            *build_chunks = unsafe {
-                (*self.hash_join_state.build_state.get())
-                    .generation_state
-                    .chunks
-                    .clone()
-            };
-
             // Get the number of rows of the build side.
             let build_num_rows = unsafe {
                 (*self.hash_join_state.build_state.get())
                     .generation_state
                     .build_num_rows
             };
+
+            let build_chunks =
+                &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
+            if build_num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
+                *build_chunks = unsafe {
+                    (*self.hash_join_state.build_state.get())
+                        .generation_state
+                        .chunks
+                        .clone()
+                };
+            }
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
