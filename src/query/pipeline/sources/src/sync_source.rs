@@ -97,6 +97,10 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         match self.inner.generate()? {
             None => self.is_finish = true,
             Some(data_block) => {
+                if data_block.is_full_empty() {
+                    // A part was pruned by runtime filter
+                    return Ok(());
+                }
                 let progress_values = ProgressValues {
                     rows: data_block.num_rows(),
                     bytes: data_block.memory_size(),

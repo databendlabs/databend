@@ -151,6 +151,8 @@ pub struct Join {
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
+    // Under cluster, mark if the join is broadcast join.
+    pub broadcast: bool,
 }
 
 impl Default for Join {
@@ -163,6 +165,7 @@ impl Default for Join {
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
             need_hold_hash_table: false,
+            broadcast: false,
         }
     }
 }

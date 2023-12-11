@@ -63,6 +63,8 @@ use crate::pipelines::processors::transforms::hash_join::SingleStringHashJoinHas
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
+const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 10_000;
+
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -226,6 +228,17 @@ impl HashJoinBuildState {
                     .generation_state
                     .build_num_rows
             };
+
+            let build_chunks =
+                &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
+            if build_num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
+                *build_chunks = unsafe {
+                    (*self.hash_join_state.build_state.get())
+                        .generation_state
+                        .chunks
+                        .clone()
+                };
+            }
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
@@ -677,11 +690,21 @@ impl HashJoinBuildState {
             .fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
-            info!(
-                "finish build hash table with {} rows",
-                build_state.generation_state.build_num_rows
-            );
+            let build_num_rows = build_state.generation_state.build_num_rows;
+            info!("finish build hash table with {} rows", build_num_rows);
+
             let data_blocks = &mut build_state.generation_state.chunks;
+
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Inner
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
+            {
+                let is_cluster = !self.ctx.get_cluster().is_empty();
+                let is_broadcast_join = self.hash_join_state.hash_join_desc.broadcast;
+                if !is_cluster || is_broadcast_join {
+                    self.hash_join_state.generate_runtime_filters()?;
+                }
+            }
+
             if !data_blocks.is_empty()
                 && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
             {
