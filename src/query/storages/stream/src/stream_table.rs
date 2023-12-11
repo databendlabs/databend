@@ -143,7 +143,7 @@ impl StreamTable {
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: STREAM_ENGINE.to_string(),
-            comment: "STREAM STORAGE Engine".to_string(),
+            comment: "STREAM Storage Engine".to_string(),
             ..Default::default()
         }
     }

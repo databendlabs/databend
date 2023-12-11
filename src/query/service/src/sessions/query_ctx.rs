@@ -74,6 +74,7 @@ use common_storage::FileStatus;
 use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
+use common_storages_delta::DeltaTable;
 use common_storages_fuse::TableContext;
 use common_storages_iceberg::IcebergTable;
 use common_storages_parquet::Parquet2Table;
@@ -720,6 +721,11 @@ impl TableContext for QueryContext {
             let mut info = table.get_table_info().to_owned();
             info.meta.storage_params = Some(sp);
             IcebergTable::try_create(info.to_owned())?.into()
+        } else if table.engine() == "DELTA" {
+            let sp = get_storage_params_from_options(self, table.options()).await?;
+            let mut info = table.get_table_info().to_owned();
+            info.meta.storage_params = Some(sp);
+            DeltaTable::try_create(info.to_owned())?.into()
         } else {
             table
         };

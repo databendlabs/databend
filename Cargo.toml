@@ -56,6 +56,7 @@ members = [
     "src/query/storages/common/locks",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
+    "src/query/storages/delta",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
@@ -181,7 +182,7 @@ anyhow = { version = "1.0.65" }
 thiserror = { version = "1" }
 
 # Crates from arrow-rs
-arrow = { version = "47.0.0", features = ["pyarrow"] }
+arrow = { version = "47.0.0" }
 arrow-array = { version = "47.0.0" }
 arrow-buffer = { version = "47.0.0" }
 arrow-cast = { version = "47.0.0", features = ["prettyprint"] }
