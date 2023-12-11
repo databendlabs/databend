@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::cmp::Ordering;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SelectStrategy {
     True,
@@ -103,5 +105,80 @@ where T: std::cmp::PartialOrd {
         SelectOp::Gte => greater_than_equal::<T>,
         SelectOp::Lt => less_than::<T>,
         SelectOp::Lte => less_than_equal::<T>,
+    }
+}
+
+#[inline(always)]
+fn tuple_equal<T>(left: T, right: T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    if left != right { Some(false) } else { None }
+}
+
+#[inline(always)]
+fn tuple_not_equal<T>(left: T, right: T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    if left != right { Some(true) } else { None }
+}
+
+#[inline(always)]
+fn tuple_greater_than<T>(left: T, right: T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    match left.partial_cmp(&right) {
+        Some(Ordering::Greater) => Some(true),
+        Some(Ordering::Less) => Some(false),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn tuple_greater_than_equal<T>(left: T, right: T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    match left.partial_cmp(&right) {
+        Some(Ordering::Greater) => Some(true),
+        Some(Ordering::Less) => Some(false),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn tuple_less_than<T>(left: T, right: T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    match left.partial_cmp(&right) {
+        Some(Ordering::Less) => Some(true),
+        Some(Ordering::Greater) => Some(false),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn tuple_less_than_equal<T>(left: T, right: T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    match left.partial_cmp(&right) {
+        Some(Ordering::Less) => Some(true),
+        Some(Ordering::Greater) => Some(false),
+        _ => None,
+    }
+}
+
+pub fn tuple_selection_op<T>(op: SelectOp) -> fn(T, T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    match op {
+        SelectOp::Equal => tuple_equal::<T>,
+        SelectOp::NotEqual => tuple_not_equal::<T>,
+        SelectOp::Gt => tuple_greater_than::<T>,
+        SelectOp::Gte => tuple_greater_than_equal::<T>,
+        SelectOp::Lt => tuple_less_than::<T>,
+        SelectOp::Lte => tuple_less_than_equal::<T>,
+    }
+}
+
+pub fn tuple_compare_default_value(op: &SelectOp) -> bool {
+    match op {
+        SelectOp::Equal => true,
+        SelectOp::NotEqual => false,
+        SelectOp::Gt => false,
+        SelectOp::Gte => true,
+        SelectOp::Lt => false,
+        SelectOp::Lte => true,
     }
 }

@@ -22,8 +22,11 @@ use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column;
+use common_expression::ScalarRef;
 
 use crate::pipelines::processors::transforms::filter::selection_op;
+use crate::pipelines::processors::transforms::filter::tuple_compare_default_value;
+use crate::pipelines::processors::transforms::filter::tuple_selection_op;
 use crate::pipelines::processors::transforms::filter::SelectOp;
 use crate::pipelines::processors::transforms::filter::SelectStrategy;
 
@@ -391,7 +394,7 @@ pub fn select_columns(
                 count,
             )
         }
-        _ => unreachable!("Here is no Nullable(_) and Generic(_)"),
+        _ => unreachable!("Here is no Nullable(_) or Generic(_)"),
     }
 }
 
@@ -1324,18 +1327,187 @@ fn select_array<const TRUE: bool, const FALSE: bool>(
 
 #[allow(clippy::too_many_arguments)]
 fn select_tuple<const TRUE: bool, const FALSE: bool>(
-    _op: SelectOp,
-    _left: &[Column],
-    _right: &[Column],
-    _validity: Option<Bitmap>,
-    _true_selection: &mut [u32],
-    _false_selection: &mut [u32],
-    _true_start_idx: &mut usize,
-    _false_start_idx: &mut usize,
-    _select_strategy: SelectStrategy,
-    _count: usize,
+    op: SelectOp,
+    left: &[Column],
+    right: &[Column],
+    validity: Option<Bitmap>,
+    true_selection: &mut [u32],
+    false_selection: &mut [u32],
+    true_start_idx: &mut usize,
+    false_start_idx: &mut usize,
+    select_strategy: SelectStrategy,
+    count: usize,
 ) -> usize {
-    unimplemented!("select_tuple")
+    let default = tuple_compare_default_value(&op);
+    let op = tuple_selection_op::<ScalarRef>(op);
+    let mut true_idx = *true_start_idx;
+    let mut false_idx = *false_start_idx;
+    match select_strategy {
+        SelectStrategy::True => unsafe {
+            let start = *true_start_idx;
+            let end = *true_start_idx + count;
+            match validity {
+                Some(validity) => {
+                    for i in start..end {
+                        let idx = *true_selection.get_unchecked(i);
+                        let mut ret = validity.get_bit_unchecked(idx as usize);
+                        if ret {
+                            ret = default;
+                            for (lhs_field, rhs_field) in left.iter().zip(right) {
+                                let lhs = lhs_field.index(idx as usize).unwrap();
+                                let rhs = rhs_field.index(idx as usize).unwrap();
+                                if let Some(result) = op(lhs, rhs) {
+                                    ret = result;
+                                    break;
+                                }
+                            }
+                        }
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
+                        }
+                    }
+                }
+                None => {
+                    for i in start..end {
+                        let idx = *true_selection.get_unchecked(i);
+                        let mut ret = default;
+                        for (lhs_field, rhs_field) in left.iter().zip(right) {
+                            let lhs = lhs_field.index(idx as usize).unwrap();
+                            let rhs = rhs_field.index(idx as usize).unwrap();
+                            if let Some(result) = op(lhs, rhs) {
+                                ret = result;
+                                break;
+                            }
+                        }
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
+                        }
+                    }
+                }
+            }
+        },
+        SelectStrategy::False => unsafe {
+            let start = *false_start_idx;
+            let end = *false_start_idx + count;
+            match validity {
+                Some(validity) => {
+                    for i in start..end {
+                        let idx = *false_selection.get_unchecked(i);
+                        let mut ret = validity.get_bit_unchecked(idx as usize);
+                        if ret {
+                            ret = default;
+                            for (lhs_field, rhs_field) in left.iter().zip(right) {
+                                let lhs = lhs_field.index(idx as usize).unwrap();
+                                let rhs = rhs_field.index(idx as usize).unwrap();
+                                if let Some(result) = op(lhs, rhs) {
+                                    ret = result;
+                                    break;
+                                }
+                            }
+                        }
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
+                        }
+                    }
+                }
+                None => {
+                    for i in start..end {
+                        let idx = *false_selection.get_unchecked(i);
+                        let mut ret = default;
+                        for (lhs_field, rhs_field) in left.iter().zip(right) {
+                            let lhs = lhs_field.index(idx as usize).unwrap();
+                            let rhs = rhs_field.index(idx as usize).unwrap();
+                            if let Some(result) = op(lhs, rhs) {
+                                ret = result;
+                                break;
+                            }
+                        }
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
+                        }
+                    }
+                }
+            }
+        },
+        SelectStrategy::All => unsafe {
+            match validity {
+                Some(validity) => {
+                    for idx in 0u32..count as u32 {
+                        let mut ret = validity.get_bit_unchecked(idx as usize);
+                        if ret {
+                            ret = default;
+                            for (lhs_field, rhs_field) in left.iter().zip(right) {
+                                let lhs = lhs_field.index(idx as usize).unwrap();
+                                let rhs = rhs_field.index(idx as usize).unwrap();
+                                if let Some(result) = op(lhs, rhs) {
+                                    ret = result;
+                                    break;
+                                }
+                            }
+                        }
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
+                        }
+                    }
+                }
+                None => {
+                    for idx in 0u32..count as u32 {
+                        let mut ret = default;
+                        for (lhs_field, rhs_field) in left.iter().zip(right) {
+                            let lhs = lhs_field.index(idx as usize).unwrap();
+                            let rhs = rhs_field.index(idx as usize).unwrap();
+                            if let Some(result) = op(lhs, rhs) {
+                                ret = result;
+                                break;
+                            }
+                        }
+                        if TRUE {
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                        }
+                        if FALSE {
+                            *false_selection.get_unchecked_mut(false_idx) = idx;
+                            false_idx += !ret as usize;
+                        }
+                    }
+                }
+            }
+        },
+    }
+    let true_count = true_idx - *true_start_idx;
+    let false_count = false_idx - *false_start_idx;
+    *true_start_idx = true_idx;
+    *false_start_idx = false_idx;
+    if TRUE {
+        true_count
+    } else {
+        count - false_count
+    }
 }
 
 fn select_boolean_column<const TRUE: bool, const FALSE: bool>(

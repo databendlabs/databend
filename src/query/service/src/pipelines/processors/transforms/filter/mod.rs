@@ -21,10 +21,10 @@ mod selector;
 
 pub use filter_executor::FilterExecutor;
 pub use helpers::selection_op;
+pub use helpers::tuple_compare_default_value;
+pub use helpers::tuple_selection_op;
 pub use helpers::SelectOp;
 pub use helpers::SelectStrategy;
-pub use select::select_value;
-pub use select::select_values;
 pub use select_expr::build_select_expr;
 pub use select_expr::SelectExpr;
 pub use select_value::select_boolean_column_adapt;

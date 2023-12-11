@@ -22,8 +22,6 @@ use common_expression::Scalar;
 use common_expression::Value;
 use itertools::Itertools;
 
-use crate::pipelines::processors::transforms::filter::select_value;
-use crate::pipelines::processors::transforms::filter::select_values;
 use crate::pipelines::processors::transforms::filter::SelectExpr;
 use crate::pipelines::processors::transforms::filter::SelectOp;
 use crate::pipelines::processors::transforms::filter::SelectStrategy;
@@ -257,7 +255,7 @@ impl<'a> Selector<'a> {
         let right_data_type = self
             .evaluator
             .remove_generics_data_type(generics, &right_data_type);
-        let count = select_values(
+        let count = self.select_values(
             *select_op,
             left_value,
             right_value,
@@ -296,7 +294,7 @@ impl<'a> Selector<'a> {
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
-                select_value(
+                self.select_value(
                     result,
                     &data_type,
                     true_selection,
@@ -342,7 +340,7 @@ impl<'a> Selector<'a> {
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
-                select_value(
+                self.select_value(
                     result,
                     &data_type,
                     true_selection,
@@ -367,7 +365,7 @@ impl<'a> Selector<'a> {
                     self.evaluator
                         .run_cast(*span, expr.data_type(), dest_type, value, validity)?
                 };
-                select_value(
+                self.select_value(
                     result,
                     dest_type,
                     true_selection,
@@ -398,7 +396,7 @@ impl<'a> Selector<'a> {
                         .all_equal()
                 );
                 let result = self.evaluator.run_lambda(name, args, lambda_expr)?;
-                select_value(
+                self.select_value(
                     result,
                     return_type,
                     true_selection,
@@ -427,7 +425,7 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> Result<usize> {
         let column = self.evaluator.data_block().get_by_offset(id).value.clone();
-        let count = select_value(
+        let count = self.select_value(
             column,
             data_type,
             true_selection,
@@ -452,7 +450,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let count = select_value(
+        let count = self.select_value(
             Value::Scalar(constant),
             data_type,
             true_selection,
