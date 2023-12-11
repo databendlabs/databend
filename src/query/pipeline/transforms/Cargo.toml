@@ -16,9 +16,9 @@ common-pipeline-core = { path = "../core" }
 common-profile = { path = "../../profile" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 jsonb = { workspace = true }
-match-template = "0.0.1"
+match-template = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

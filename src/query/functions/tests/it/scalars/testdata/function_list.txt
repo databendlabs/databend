@@ -3607,6 +3607,8 @@ Functions overloads:
 25 to_uint8(Boolean NULL) :: UInt8 NULL
 0 to_unix_timestamp(Timestamp) :: Int64
 1 to_unix_timestamp(Timestamp NULL) :: Int64 NULL
+0 to_uuid(Decimal(38, 0)) :: String
+1 to_uuid(Decimal(38, 0) NULL) :: String NULL
 0 to_variant(T0) :: Variant
 1 to_variant(T0 NULL) :: Variant NULL
 0 to_week_of_year(Date) :: UInt32

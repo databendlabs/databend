@@ -27,4 +27,4 @@ common-storages-view = { path = "../view" }
 
 storages-common-index = { path = "../common/index" }
 
-dashmap = "5.4"
+dashmap = { workspace = true }

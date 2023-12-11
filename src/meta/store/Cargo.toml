@@ -23,6 +23,6 @@ common-meta-kvapi = { path = "../kvapi" }
 common-meta-types = { path = "../types" }
 
 # Crates.io dependencies
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 log = { workspace = true }
-tokio-stream = "0.1.11"
+tokio-stream = { workspace = true }

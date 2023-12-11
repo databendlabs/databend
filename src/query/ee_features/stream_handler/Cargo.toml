@@ -20,6 +20,6 @@ common-sql = { path = "../../sql" }
 
 # Github dependencies
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 
 [build-dependencies]

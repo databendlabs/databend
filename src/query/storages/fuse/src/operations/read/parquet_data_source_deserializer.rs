@@ -233,7 +233,7 @@ impl Processor for DeserializeDataTransform {
                         data_block.resort(&self.src_schema, &self.output_schema)?;
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
+                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     if self.block_reader.query_internal_columns() {
                         data_block = fill_internal_column_meta(
                             data_block,

@@ -17,4 +17,4 @@ path = "src/bin/codegen.rs"
 [dependencies]
 common-expression = { path = "../expression" }
 
-itertools = "0.10"
+itertools = { workspace = true }
