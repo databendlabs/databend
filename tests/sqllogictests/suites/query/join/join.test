@@ -249,4 +249,4 @@ statement ok
 insert into t2 values(1, 2, 3, 4);
 
 statement error 1065
-SELECT tt1.d FROM tt1 RIGHT SEMI JOIN tt2 USING(b);
+SELECT tt1.d FROM t1 RIGHT SEMI JOIN t2 USING(b);
