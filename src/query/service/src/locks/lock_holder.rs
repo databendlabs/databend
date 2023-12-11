@@ -30,12 +30,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::ExtendLockRevReq;
+use common_storages_fuse::operations::set_backoff;
 use futures::future::select;
 use futures::future::Either;
 use rand::thread_rng;
 use rand::Rng;
-
-use crate::set_backoff;
 
 #[derive(Default)]
 pub struct LockHolder {

@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::Runtime;
+use common_catalog::lock::Lock;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
@@ -54,6 +55,7 @@ impl FuseTable {
     pub(crate) async fn do_compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
         let compact_options = if let Some(v) = self.compact_options(limit).await? {
@@ -64,6 +66,7 @@ impl FuseTable {
 
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
+            lock,
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),

@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::lock::Lock;
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
 use common_catalog::table::TableExt;
@@ -58,12 +57,12 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;

@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::lock::Lock;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -776,9 +777,10 @@ impl Table for FuseTable {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        self.do_compact_segments(ctx, limit).await
+        self.do_compact_segments(ctx, lock, limit).await
     }
 
     #[async_backtrace::framed]

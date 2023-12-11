@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::lock::Lock;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
@@ -49,11 +48,11 @@ use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
 use storages_common_index::BloomIndex;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
