@@ -36,6 +36,8 @@ use futures::future::Either;
 use rand::thread_rng;
 use rand::Rng;
 
+use crate::sessions::SessionManager;
+
 #[derive(Default)]
 pub struct LockHolder {
     shutdown_flag: AtomicBool,
@@ -62,7 +64,7 @@ impl LockHolder {
         )
         .await?;
 
-        GlobalIORuntime::instance().spawn(query_id, {
+        GlobalIORuntime::instance().spawn(query_id.clone(), {
             let self_clone = self.clone();
             async move {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());
@@ -79,13 +81,22 @@ impl LockHolder {
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
-                            self_clone
+                            if let Err(e) = self_clone
                                 .try_extend_lock(
                                     catalog.clone(),
                                     extend_table_lock_req.clone(),
                                     Some(Duration::from_millis(expire_secs * 1000 - mills)),
                                 )
-                                .await?;
+                                .await
+                            {
+                                // Force kill the query if extend lock failure.
+                                if let Some(session) =
+                                    SessionManager::instance().get_session_by_id(&query_id)
+                                {
+                                    session.force_kill_query(e.clone());
+                                }
+                                return Err(e);
+                            }
                         }
                     }
                 }
