@@ -110,6 +110,9 @@ impl Settings {
         )))
     }
 
+    pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
+    }
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
