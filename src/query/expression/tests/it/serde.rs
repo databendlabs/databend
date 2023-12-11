@@ -23,8 +23,8 @@ use common_expression::Column;
 use common_expression::FromData;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
+use common_io::prelude::bincode_deserialize_from_slice;
+use common_io::prelude::bincode_serialize_into_buf;
 
 #[test]
 fn test_serde_column() -> Result<()> {
@@ -44,9 +44,9 @@ fn test_serde_column() -> Result<()> {
 
     {
         let mut vs = vec![];
-        serialize_into_buf(&mut vs, &plan).unwrap();
-        let mut vs = vs.as_slice();
-        let new_plan: Plan = deserialize_from_slice(&mut vs).unwrap();
+        bincode_serialize_into_buf(&mut vs, &plan).unwrap();
+        let vs = vs.as_slice();
+        let new_plan: Plan = bincode_deserialize_from_slice(vs).unwrap();
         assert!(plan == new_plan);
     }
     Ok(())
