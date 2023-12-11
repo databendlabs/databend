@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_exception::ErrorCode;
@@ -23,7 +25,6 @@ use common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sources::EmptySource;
-use common_pipeline_transforms::processors::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::physical_plans::MutationKind;
@@ -38,6 +39,7 @@ use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 
+use super::builder_sort::SortPipelineBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
@@ -163,17 +165,12 @@ impl PipelineBuilder {
                     })
                     .collect();
 
-                build_merge_sort_pipeline(
-                    &mut self.main_pipeline,
-                    schema,
-                    sort_descs,
-                    None,
-                    partial_block_size,
-                    final_block_size,
-                    None,
-                    false,
-                    true,
-                )?;
+                let sort_pipeline_builder =
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
+                        .with_partial_block_size(partial_block_size)
+                        .with_final_block_size(final_block_size)
+                        .remove_order_col_at_last();
+                sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 
                 let output_block_num = task.total_rows.div_ceil(final_block_size);
                 let max_threads = std::cmp::min(

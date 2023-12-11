@@ -26,7 +26,7 @@ use crate::processors::transforms::Transformer;
 
 pub struct TransformSortPartial {
     limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
 }
 
 impl TransformSortPartial {
@@ -34,7 +34,7 @@ impl TransformSortPartial {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         limit: Option<usize>,
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Transformer::create(input, output, TransformSortPartial {
             limit,

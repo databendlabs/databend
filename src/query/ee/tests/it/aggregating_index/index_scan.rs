@@ -972,9 +972,12 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     let test_suites = get_test_suites();
     let spill_settings = if spill {
         Some(HashMap::from([
-            ("spilling_memory_ratio".to_string(), "100".to_string()),
             (
-                "spilling_bytes_threshold_per_proc".to_string(),
+                "aggregate_spilling_memory_ratio".to_string(),
+                "100".to_string(),
+            ),
+            (
+                "aggregate_spilling_bytes_threshold_per_proc".to_string(),
                 "1".to_string(),
             ),
         ]))

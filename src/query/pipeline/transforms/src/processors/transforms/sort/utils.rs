@@ -12,9 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cursor;
-mod rows;
-pub mod utils;
+use std::collections::BinaryHeap;
 
-pub use cursor::*;
-pub use rows::*;
+/// Find the bigger child of the root of the heap.
+#[inline(always)]
+pub fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
+    debug_assert!(heap.len() >= 2);
+    let slice = heap.as_slice();
+    if heap.len() == 2 {
+        &slice[1]
+    } else {
+        (&slice[1]).max(&slice[2])
+    }
+}

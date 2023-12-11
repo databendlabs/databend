@@ -313,12 +313,20 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_allow_inconsistent")? != 0)
     }
 
-    pub fn get_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("spilling_bytes_threshold_per_proc")? as usize)
+    pub fn get_aggregate_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("aggregate_spilling_bytes_threshold_per_proc")? as usize)
     }
 
-    pub fn get_spilling_memory_ratio(&self) -> Result<usize> {
-        Ok(self.try_get_u64("spilling_memory_ratio")? as usize)
+    pub fn get_aggregate_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
     }
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
