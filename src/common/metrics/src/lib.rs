@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(dead_code)]
 #![recursion_limit = "256"]
+#![feature(lazy_cell)]
 
 pub mod count;
 pub mod counter;

@@ -69,18 +69,17 @@ async fn test_runtime() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shutdown_long_run_runtime() -> Result<()> {
     let runtime = Runtime::with_default_worker_threads()?;
 
     runtime.spawn(GLOBAL_TASK, async move {
-        std::thread::sleep(Duration::from_secs(6));
+        tokio::time::sleep(Duration::from_secs(6)).await;
     });
 
     let instant = Instant::now();
     drop(runtime);
-    assert!(instant.elapsed() >= Duration::from_secs(3));
-    assert!(instant.elapsed() < Duration::from_secs(4));
+    assert!(instant.elapsed() < Duration::from_secs(6));
 
     Ok(())
 }

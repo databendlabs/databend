@@ -16,9 +16,14 @@ mod data;
 mod deserialize;
 mod filter;
 mod reader;
+mod reader_merge_io;
+mod reader_merge_io_async;
+mod reader_merge_io_sync;
 
 pub use data::BlockIterator;
 pub use data::IndexedChunk;
-pub use data::IndexedReaders;
+pub use data::IndexedChunks;
 pub use data::Parquet2PartData;
 pub use reader::Parquet2Reader;
+pub use reader_merge_io::MergeIOReadResult;
+pub use reader_merge_io::OwnerMemory;

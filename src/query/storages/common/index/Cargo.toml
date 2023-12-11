@@ -24,7 +24,7 @@ storages-common-table-meta = { path = "../table_meta" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
-match-template = "0.0.1"
+match-template = { workspace = true }
 minitrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
@@ -36,7 +36,7 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 [dev-dependencies]
 common-arrow = { path = "../../../../common/arrow" }
 criterion = "0.4"
-rand = "0.8.5"
+rand = { workspace = true }
 
 [[bench]]
 name = "build_from_block"

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(lazy_cell)]
 
 mod grpc_action;
 mod grpc_client;

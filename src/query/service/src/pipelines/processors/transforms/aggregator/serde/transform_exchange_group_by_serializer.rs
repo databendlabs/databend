@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::WriteOptions;
+use common_arrow::arrow::io::ipc::write::Compression;
 use common_arrow::arrow::io::ipc::IpcField;
 use common_base::base::GlobalUniqName;
 use common_base::base::ProgressValues;
@@ -45,6 +46,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::BlockMetaTransform;
 use common_pipeline_transforms::processors::BlockMetaTransformer;
 use common_pipeline_transforms::processors::UnknownMode;
+use common_settings::FlightCompression;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
@@ -84,9 +86,17 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
         location_prefix: String,
         schema: DataSchemaRef,
         local_pos: usize,
+        compression: Option<FlightCompression>,
     ) -> Box<dyn Processor> {
         let arrow_schema = schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
 
         BlockMetaTransformer::create(
             input,
@@ -98,7 +108,7 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
                 local_pos,
                 ipc_fields,
                 location_prefix,
-                options: WriteOptions { compression: None },
+                options: WriteOptions { compression },
             },
         )
     }

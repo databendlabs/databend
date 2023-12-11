@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter;
 use crate::register_counter_family;
@@ -20,16 +20,14 @@ use crate::Counter;
 use crate::Family;
 use crate::VecLabels;
 
-lazy_static! {
-    static ref QUERY_HTTP_REQUESTS_COUNT: Family<VecLabels, Counter> =
-        register_counter_family("query_http_requests_count");
-    static ref QUERY_HTTP_SLOW_REQUESTS_COUNT: Family<VecLabels, Counter> =
-        register_counter_family("query_http_slow_requests_count");
-    static ref QUERY_HTTP_RESPONSE_ERRORS_COUNT: Family<VecLabels, Counter> =
-        register_counter_family("query_http_response_errors_count");
-    static ref QUERY_HTTP_RESPONSE_PANICS_COUNT: Counter =
-        register_counter("query_http_response_panics_count");
-}
+static QUERY_HTTP_REQUESTS_COUNT: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("query_http_requests_count"));
+static QUERY_HTTP_SLOW_REQUESTS_COUNT: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("query_http_slow_requests_count"));
+static QUERY_HTTP_RESPONSE_ERRORS_COUNT: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("query_http_response_errors_count"));
+static QUERY_HTTP_RESPONSE_PANICS_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("query_http_response_panics_count"));
 
 pub fn metrics_incr_http_request_count(method: String, api: String, status: String) {
     let labels = vec![("method", method), ("api", api), ("status", status)];

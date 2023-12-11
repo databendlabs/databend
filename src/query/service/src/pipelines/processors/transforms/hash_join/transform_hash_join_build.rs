@@ -362,7 +362,11 @@ impl Processor for TransformHashJoinBuild {
                         .spiller
                         .read_spilled_data(&(partition_id as u8), self.processor_id)
                         .await?;
-                    self.input_data = Some(DataBlock::concat(&spilled_data)?);
+                    if spilled_data.is_empty() {
+                        self.input_data = None;
+                    } else {
+                        self.input_data = Some(DataBlock::concat(&spilled_data)?);
+                    }
                 }
                 self.build_state.restore_barrier.wait().await;
                 self.reset().await?;

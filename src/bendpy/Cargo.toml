@@ -15,8 +15,6 @@ name = "databend"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
-uuid = { version = "1.1.2" }
 # Workspace dependencies
 arrow = { workspace = true }
 arrow-schema = { workspace = true }
@@ -33,6 +31,8 @@ databend-query = { path = "../query/service", features = [
 ], default-features = false }
 
 # # Crates.io dependencies
-ctor = "0.1.26"
-tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "sync"] }
-tokio-stream = "0.1.10"
+ctor = "0.2.5"
+pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
+tokio-stream = { workspace = true }
+uuid = { workspace = true }

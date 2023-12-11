@@ -23,7 +23,7 @@ openraft = { workspace = true }
 sled = { workspace = true }
 
 anyerror = { workspace = true }
-byteorder = "1.4.3"
+byteorder = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 once_cell = { workspace = true }
