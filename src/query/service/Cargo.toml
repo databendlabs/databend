@@ -107,7 +107,6 @@ async-channel = "1.7.1"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
 base64 = "0.21.0"
-bincode = { workspace = true }
 bumpalo = { workspace = true }
 byte-unit = "4.0.19"
 byteorder = { workspace = true }
