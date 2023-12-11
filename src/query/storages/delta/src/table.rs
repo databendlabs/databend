@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
-use chrono::Utc;
 use common_arrow::arrow::datatypes::Field as Arrow2Field;
 use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
 use common_catalog::catalog::StorageDescription;
@@ -35,39 +35,37 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
 use common_meta_app::storage::StorageParams;
 use common_pipeline_core::Pipeline;
 use common_storage::init_operator;
-use common_storage::DataOperator;
 use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSPruner;
 use common_storages_parquet::ParquetRSReaderBuilder;
-use icelake::catalog::Catalog;
-use opendal::Operator;
-use storages_common_pruner::RangePrunerCreator;
+use deltalake::kernel::Add;
+use deltalake::logstore::default_logstore::DefaultLogStore;
+use deltalake::logstore::LogStoreConfig;
+use deltalake::DeltaTableConfig;
 use tokio::sync::OnceCell;
+use url::Url;
 
-use crate::partition::IcebergPartInfo;
-use crate::stats::get_stats_of_data_file;
-use crate::table_source::IcebergTableSource;
+// use object_store_opendal::OpendalStore;
+use crate::dal::OpendalStore;
+use crate::partition::DeltaPartInfo;
+use crate::table_source::DeltaTableSource;
 
-pub const ICEBERG_ENGINE: &str = "ICEBERG";
+pub const DELTA_ENGINE: &str = "DELTA";
 
 /// accessor wrapper as a table
 ///
 /// TODO: we should use icelake Table instead.
-pub struct IcebergTable {
+pub struct DeltaTable {
     info: TableInfo,
-    table: OnceCell<icelake::Table>,
+    table: OnceCell<deltalake::table::DeltaTable>,
 }
 
-impl IcebergTable {
-    /// create a new table on the table directory
+impl DeltaTable {
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self {
@@ -78,8 +76,8 @@ impl IcebergTable {
 
     pub fn description() -> StorageDescription {
         StorageDescription {
-            engine_name: ICEBERG_ENGINE.to_string(),
-            comment: "ICEBERG Storage Engine".to_string(),
+            engine_name: DELTA_ENGINE.to_string(),
+            comment: "DELTA Storage Engine".to_string(),
             support_cluster_key: false,
         }
     }
@@ -87,40 +85,22 @@ impl IcebergTable {
     fn get_storage_params(&self) -> Result<&StorageParams> {
         self.info.meta.storage_params.as_ref().ok_or_else(|| {
             ErrorCode::BadArguments(format!(
-                "Iceberg table {} must have storage parameters",
+                "Delta table {} must have storage parameters",
                 self.info.name
             ))
         })
     }
 
-    pub async fn load_iceberg_table(dop: DataOperator) -> Result<icelake::Table> {
-        // FIXME: we should implement catalog for icelake.
-        let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-            "databend",
-            OperatorCreatorWrapper(dop.clone()),
-        ));
+    #[async_backtrace::framed]
+    pub async fn get_schema(table: &deltalake::table::DeltaTable) -> Result<TableSchema> {
+        let delta_meta = table.get_schema().map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
+        })?;
 
-        let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-        icelake_catalog.load_table(&table_id).await.map_err(|err| {
-            ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-        })
-    }
-
-    pub async fn get_schema(table: &icelake::Table) -> Result<TableSchema> {
-        let meta = table.current_table_metadata();
-
-        // Build arrow schema from iceberg metadata.
-        let arrow_schema: ArrowSchema = meta
-            .schemas
-            .last()
-            .ok_or_else(|| {
-                ErrorCode::ReadTableDataError("Iceberg table schema is empty".to_string())
-            })?
-            .clone()
-            .try_into()
-            .map_err(|e| {
-                ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
-            })?;
+        // Build arrow schema from delta metadata.
+        let arrow_schema: ArrowSchema = delta_meta.try_into().map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
+        })?;
 
         // Build arrow2 schema from arrow schema.
         let fields: Vec<Arrow2Field> = arrow_schema
@@ -133,56 +113,27 @@ impl IcebergTable {
         Ok(TableSchema::from(&arrow2_schema))
     }
 
-    /// create a new table on the table directory
-    #[async_backtrace::framed]
-    pub async fn try_create_from_iceberg_catalog(
-        catalog: &str,
-        database: &str,
-        table_name: &str,
-        dop: DataOperator,
-    ) -> Result<IcebergTable> {
-        let table = Self::load_iceberg_table(dop.clone()).await?;
-        let table_schema = Self::get_schema(&table).await?;
-
-        // construct table info
-        let info = TableInfo {
-            ident: TableIdent::new(0, 0),
-            desc: format!("{database}.{table_name}"),
-            name: table_name.to_string(),
-            meta: TableMeta {
-                schema: Arc::new(table_schema),
-                catalog: catalog.to_string(),
-                engine: "iceberg".to_string(),
-                created_on: Utc::now(),
-                storage_params: Some(dop.params()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        Ok(Self {
-            info,
-            table: OnceCell::new_with(Some(table)),
-        })
+    pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
+        let op = init_operator(sp)?;
+        let opendal_store = Arc::new(OpendalStore::new(op));
+        let config = DeltaTableConfig::default();
+        let log_store = Arc::new(DefaultLogStore::new(opendal_store, LogStoreConfig {
+            location: Url::from_directory_path("/").unwrap(),
+            options: HashMap::new().into(),
+        }));
+        let mut table = deltalake::table::DeltaTable::new(log_store, config);
+        table.load().await.map_err(|err| {
+            ErrorCode::ReadTableDataError(format!("Delta table load failed: {err:?}"))
+        })?;
+        Ok(table)
     }
 
-    async fn table(&self) -> Result<&icelake::Table> {
+    #[async_backtrace::framed]
+    async fn table(&self) -> Result<&deltalake::table::DeltaTable> {
         self.table
             .get_or_try_init(|| async {
                 let sp = self.get_storage_params()?;
-                let op = DataOperator::try_new(sp)?;
-                // FIXME: we should implement catalog for icelake.
-                let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-                    "databend",
-                    OperatorCreatorWrapper(op),
-                ));
-
-                let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-                let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
-                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-                })?;
-
-                Ok(table)
+                Self::load(sp).await
             })
             .await
     }
@@ -239,11 +190,10 @@ impl IcebergTable {
 
         let parquet_reader = Arc::new(builder.build_full_reader()?);
 
-        // TODO: we need to support top_k.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
             |output| {
-                IcebergTableSource::create(
+                DeltaTableSource::create(
                     ctx.clone(),
                     output,
                     output_schema.clone(),
@@ -258,65 +208,39 @@ impl IcebergTable {
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        _ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
-        let data_files = table.current_data_files().await.map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
-        })?;
-
-        let filter = push_downs.as_ref().and_then(|extra| {
-            extra
-                .filters
-                .as_ref()
-                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
-        });
-
-        let schema = self.schema();
-
-        let pruner =
-            RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
-
-        // TODO: support other file formats. We only support parquet files now.
         let mut read_rows = 0;
         let mut read_bytes = 0;
-        let total_files = data_files.len();
-        let parts = data_files
-            .into_iter()
-            .filter(|df| {
-                if let Some(stats) = get_stats_of_data_file(&schema, df) {
-                    pruner.should_keep(&stats, None)
-                } else {
-                    true
-                }
-            })
-            .map(|v: icelake::types::DataFile| {
-                read_rows += v.record_count as usize;
-                read_bytes += v.file_size_in_bytes as usize;
-                match v.file_format {
-                    icelake::types::DataFileFormat::Parquet => {
-                        let location = table
-                            .rel_path(&v.file_path)
-                            .expect("file path must be rel to table");
-                        Ok(Arc::new(
-                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
-                                ParquetFilesPart {
-                                    files: vec![(location, v.file_size_in_bytes as u64)],
-                                    estimated_uncompressed_size: v.file_size_in_bytes as u64, // This field is not used here.
-                                },
-                            ))) as Box<dyn PartInfo>,
+
+        let adds = table.get_state().files();
+        let total_files = adds.len();
+        let parts = adds.iter()
+            .map(|add: &Add| {
+                let stats = add
+                    .get_stats()
+                    .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot get stats: {e:?}")))?
+                    .ok_or_else(|| {
+                        ErrorCode::ReadTableDataError(format!(
+                            "Current DeltaTable assuming Add contains Stats, but found in {}.",
+                            add.path
                         ))
-                    }
-                    _ => Err(ErrorCode::Unimplemented(
-                        "Only parquet format is supported for iceberg table",
-                    )),
-                }
+                    })?;
+                read_rows += stats.num_records as usize;
+                read_bytes += add.size as usize;
+                Ok(Arc::new(
+                    Box::new(DeltaPartInfo::Parquet(ParquetPart::ParquetFiles(
+                        ParquetFilesPart {
+                            files: vec![(add.path.clone(), add.size as u64)],
+                            estimated_uncompressed_size: add.size as u64, // This field is not used here.
+                        },
+                    ))) as Box<dyn PartInfo>,
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
-
-        // TODO: more precise pruning.
 
         Ok((
             PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
@@ -326,7 +250,7 @@ impl IcebergTable {
 }
 
 #[async_trait]
-impl Table for IcebergTable {
+impl Table for DeltaTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -374,22 +298,5 @@ impl Table for IcebergTable {
 
     fn support_prewhere(&self) -> bool {
         true
-    }
-}
-
-struct OperatorCreatorWrapper(DataOperator);
-
-impl icelake::catalog::OperatorCreator for OperatorCreatorWrapper {
-    fn create(&self) -> icelake::Result<Operator> {
-        Ok(self.0.operator())
-    }
-
-    fn create_with_subdir(&self, path: &str) -> icelake::Result<Operator> {
-        let params = self.0.params().map_root(|v| format!("{}/{}", v, path));
-
-        // The operator used to be built successfully, change root should never returns error.
-        Ok(DataOperator::try_new(&params)
-            .expect("invalid params")
-            .operator())
     }
 }

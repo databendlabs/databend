@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Workspace dependencies
-arrow = { workspace = true }
+arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
 
 common-config = { path = "../query/config" }
