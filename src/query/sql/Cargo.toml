@@ -65,6 +65,7 @@ enum-as-inner = "0.5"
 globiter = "0.1"
 indexmap = "2.0.0"
 itertools = { workspace = true }
+jsonb = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 num-derive = "0.3.3"

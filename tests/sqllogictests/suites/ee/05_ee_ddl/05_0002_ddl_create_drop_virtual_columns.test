@@ -49,10 +49,10 @@ statement ok
 ALTER VIRTUAL COLUMN (v['k1']['k2'], v[1][2], v[3]) FOR t1;
 
 statement ok
-DROP VIRTUAL COLUMN FOR t1;
+REFRESH VIRTUAL COLUMN FOR t1;
 
 statement ok
-REFRESH VIRTUAL COLUMN FOR t1;
+DROP VIRTUAL COLUMN FOR t1;
 
 statement ok
 USE default
