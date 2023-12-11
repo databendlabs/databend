@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod aggregator;
-mod filter;
 pub mod group_by;
 mod hash_join;
 mod processor_accumulate_row_number;
@@ -38,7 +37,6 @@ mod transform_srf;
 mod transform_udf;
 mod window;
 
-pub use filter::*;
 pub use hash_join::*;
 pub use processor_accumulate_row_number::AccumulateRowNumber;
 pub use processor_deduplicate_row_number::DeduplicateRowNumber;

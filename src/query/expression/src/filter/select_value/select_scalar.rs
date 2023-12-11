@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::Scalar;
-
-use crate::pipelines::processors::transforms::filter::selection_op;
-use crate::pipelines::processors::transforms::filter::SelectOp;
-use crate::pipelines::processors::transforms::filter::SelectStrategy;
+use crate::filter::selection_op;
+use crate::filter::SelectOp;
+use crate::filter::SelectStrategy;
+use crate::Scalar;
 
 #[allow(clippy::too_many_arguments)]
 pub fn select_scalars(

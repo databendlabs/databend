@@ -14,17 +14,17 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::EvalContext;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::Scalar;
-use common_expression::Value;
 use itertools::Itertools;
 
-use crate::pipelines::processors::transforms::filter::SelectExpr;
-use crate::pipelines::processors::transforms::filter::SelectOp;
-use crate::pipelines::processors::transforms::filter::SelectStrategy;
+use crate::filter::SelectExpr;
+use crate::filter::SelectOp;
+use crate::filter::SelectStrategy;
+use crate::types::DataType;
+use crate::EvalContext;
+use crate::Evaluator;
+use crate::Expr;
+use crate::Scalar;
+use crate::Value;
 
 pub struct Selector<'a> {
     evaluator: Evaluator<'a>,

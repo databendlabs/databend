@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::AnyType;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::Value;
-
-use crate::pipelines::processors::transforms::filter::select_boolean_column_adapt;
-use crate::pipelines::processors::transforms::filter::select_boolean_scalar_adapt;
-use crate::pipelines::processors::transforms::filter::select_columns;
-use crate::pipelines::processors::transforms::filter::select_scalar_and_column;
-use crate::pipelines::processors::transforms::filter::select_scalars;
-use crate::pipelines::processors::transforms::filter::SelectOp;
-use crate::pipelines::processors::transforms::filter::SelectStrategy;
-use crate::pipelines::processors::transforms::filter::Selector;
+use crate::filter::select_boolean_column_adapt;
+use crate::filter::select_boolean_scalar_adapt;
+use crate::filter::select_columns;
+use crate::filter::select_scalar_and_column;
+use crate::filter::select_scalars;
+use crate::filter::SelectOp;
+use crate::filter::SelectStrategy;
+use crate::types::nullable::NullableColumn;
+use crate::types::AnyType;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::NullableType;
+use crate::types::NumberDataType;
+use crate::Selector;
+use crate::Value;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]

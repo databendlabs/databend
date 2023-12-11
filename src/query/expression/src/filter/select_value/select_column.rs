@@ -14,21 +14,21 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
-use common_expression::arrow::and_validities;
-use common_expression::types::array::ArrayColumn;
-use common_expression::types::string::StringColumn;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::ScalarRef;
 
-use crate::pipelines::processors::transforms::filter::selection_op;
-use crate::pipelines::processors::transforms::filter::tuple_compare_default_value;
-use crate::pipelines::processors::transforms::filter::tuple_selection_op;
-use crate::pipelines::processors::transforms::filter::SelectOp;
-use crate::pipelines::processors::transforms::filter::SelectStrategy;
+use crate::arrow::and_validities;
+use crate::filter::selection_op;
+use crate::filter::tuple_compare_default_value;
+use crate::filter::tuple_selection_op;
+use crate::filter::SelectOp;
+use crate::filter::SelectStrategy;
+use crate::types::array::ArrayColumn;
+use crate::types::string::StringColumn;
+use crate::types::AnyType;
+use crate::types::DataType;
+use crate::types::DecimalDataType;
+use crate::types::NumberDataType;
+use crate::Column;
+use crate::ScalarRef;
 
 #[allow(clippy::too_many_arguments)]
 pub fn select_columns(

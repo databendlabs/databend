@@ -17,15 +17,16 @@ use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
+use common_expression::filter::FilterExecutor;
+use common_expression::filter::SelectExpr;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::BlockingTransform;
 use common_pipeline_transforms::processors::BlockingTransformer;
 use common_sql::optimizer::ColumnSet;
 
-use crate::pipelines::processors::transforms::filter::FilterExecutor;
-use crate::pipelines::processors::transforms::SelectExpr;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
@@ -54,6 +55,7 @@ impl TransformFilter {
             has_or,
             max_block_size,
             Some(projections.clone()),
+            &BUILTIN_FUNCTIONS,
         );
         BlockingTransformer::create(input, output, TransformFilter {
             projections,

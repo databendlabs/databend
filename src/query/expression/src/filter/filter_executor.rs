@@ -13,16 +13,16 @@
 // limitations under the License.
 
 use core::ops::Range;
+use std::collections::HashSet;
 
 use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::optimizer::ColumnSet;
 
-use crate::pipelines::processors::transforms::filter::SelectExpr;
-use crate::pipelines::processors::transforms::filter::Selector;
+use crate::filter::SelectExpr;
+use crate::filter::Selector;
+use crate::DataBlock;
+use crate::Evaluator;
+use crate::FunctionContext;
+use crate::FunctionRegistry;
 
 pub struct FilterExecutor {
     select_expr: SelectExpr,
@@ -30,9 +30,10 @@ pub struct FilterExecutor {
     true_selection: Vec<u32>,
     false_selection: Vec<u32>,
     has_or: bool,
-    projections: Option<ColumnSet>,
+    projections: Option<HashSet<usize>>,
     max_block_size: usize,
     selection_range: Vec<Range<u32>>,
+    fn_registry: &'static FunctionRegistry,
 }
 
 impl FilterExecutor {
@@ -41,7 +42,8 @@ impl FilterExecutor {
         func_ctx: FunctionContext,
         has_or: bool,
         max_block_size: usize,
-        projections: Option<ColumnSet>,
+        projections: Option<HashSet<usize>>,
+        fn_registry: &'static FunctionRegistry,
     ) -> Self {
         let true_selection = vec![0; max_block_size];
         let false_selection = if has_or {
@@ -58,6 +60,7 @@ impl FilterExecutor {
             projections,
             max_block_size,
             selection_range: vec![],
+            fn_registry,
         }
     }
 
@@ -68,7 +71,7 @@ impl FilterExecutor {
     }
 
     pub fn select(&mut self, data_block: &DataBlock) -> Result<usize> {
-        let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
         let selector = Selector::new(evaluator, data_block.num_rows());
         selector.select(
             &self.select_expr,

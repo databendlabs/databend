@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::Expr;
-use common_expression::Scalar;
-
-use crate::pipelines::processors::transforms::filter::SelectOp;
+use crate::filter::SelectOp;
+use crate::types::DataType;
+use crate::Expr;
+use crate::Scalar;
 
 #[derive(Clone, Debug)]
 pub enum SelectExpr {
