@@ -35,6 +35,8 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::physical_plans::CommitSink;
+use common_sql::executor::physical_plans::Exchange;
+use common_sql::executor::physical_plans::FragmentKind;
 use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::physical_plans::UpdateSource;
 use common_sql::executor::PhysicalPlan;
@@ -220,6 +222,7 @@ impl Interpreter for UpdateInterpreter {
                 )
                 .await?;
 
+            let is_distributed = !self.ctx.get_cluster().is_empty();
             let physical_plan = Self::build_physical_plan(
                 filters,
                 update_list,
@@ -230,6 +233,7 @@ impl Interpreter for UpdateInterpreter {
                 snapshot,
                 catalog_info,
                 query_row_id_col,
+                is_distributed,
             )?;
 
             build_res =
@@ -270,9 +274,10 @@ impl UpdateInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         query_row_id_col: bool,
+        is_distributed: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = partitions.is_lazy;
-        let root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
+        let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
@@ -282,6 +287,17 @@ impl UpdateInterpreter {
             update_list,
             computed_list,
         }));
+
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+        }
 
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
