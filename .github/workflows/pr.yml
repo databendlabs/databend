@@ -122,7 +122,7 @@ jobs:
               return;
             }
             const body = context.payload.pull_request.body;
-            const regex = \/I hereby agree to the terms of the CLA available at: https:\/\/docs.databend.com\/dev\/policies\/cla\//;
+            const regex = /I hereby agree to the terms of the CLA available at: https:\/\/docs.databend.com\/dev\/policies\/cla\//;
             if (!regex.test(body)) {
               core.error('CLA is not signed');
               core.setOutput('cla', 'not-signed');
