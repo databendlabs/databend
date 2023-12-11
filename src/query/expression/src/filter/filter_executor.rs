@@ -128,4 +128,8 @@ impl FilterExecutor {
         range_count += 1;
         range_count
     }
+
+    pub fn mut_true_selection(&mut self) -> &mut [u32] {
+        &mut self.true_selection
+    }
 }
