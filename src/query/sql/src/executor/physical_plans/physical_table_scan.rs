@@ -146,17 +146,21 @@ impl PhysicalPlanBuilder {
                 continue;
             }
             let column = metadata.column(*index);
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) = column {
-                if path_indices.is_some() {
-                    has_inner_column = true;
+            match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) => {
+                    if path_indices.is_some() {
+                        has_inner_column = true;
+                    }
                 }
-            } else if let ColumnEntry::InternalColumn(TableInternalColumn {
-                internal_column, ..
-            }) = column
-            {
-                project_internal_columns.insert(*index, internal_column.to_owned());
-            } else if let ColumnEntry::VirtualColumn(_) = column {
-                has_virtual_column = true;
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => {
+                    project_internal_columns.insert(*index, internal_column.to_owned());
+                }
+                ColumnEntry::VirtualColumn(_) => {
+                    has_virtual_column = true;
+                }
+                _ => {}
             }
 
             if let Some(prewhere) = &scan.prewhere {

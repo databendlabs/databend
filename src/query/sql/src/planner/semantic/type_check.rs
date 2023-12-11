@@ -263,18 +263,26 @@ impl<'a> TypeChecker<'a> {
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         // add internal column binding into `BindContext`
-                        let column = self
-                            .bind_context
-                            .add_internal_column_binding(&column, self.metadata.clone())?;
-                        let data_type = *column.data_type.clone();
-                        (
-                            BoundColumnRef {
-                                span: *span,
-                                column,
-                            }
-                            .into(),
-                            data_type,
-                        )
+                        let column = self.bind_context.add_internal_column_binding(
+                            &column,
+                            self.metadata.clone(),
+                            true,
+                        )?;
+                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
+                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                            let expr = parse_expr(&sql_tokens, self.dialect)?;
+                            return self.resolve(&expr).await;
+                        } else {
+                            let data_type = *column.data_type.clone();
+                            (
+                                BoundColumnRef {
+                                    span: *span,
+                                    column,
+                                }
+                                .into(),
+                                data_type,
+                            )
+                        }
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)

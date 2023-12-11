@@ -806,7 +806,7 @@ impl Processor for NativeDeserializeDataTransform {
             };
 
             // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
-            // `FillInternalColumnProcessor` will generate internal columns using `InternalColumnMeta` in next pipeline.
+            // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
             let mut block = block.resort(&self.src_schema, &self.output_schema)?;
             if self.block_reader.query_internal_columns() {
                 let offsets = if let Some(Value::Column(bitmap)) = filter.as_ref() {

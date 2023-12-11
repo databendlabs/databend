@@ -28,7 +28,7 @@ name = "aggregating-index"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-catalog",
  "common-exception",
@@ -874,7 +874,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
  "common-meta-app",
@@ -970,7 +970,7 @@ dependencies = [
  "common-license",
  "common-meta-app",
  "common-meta-embedded",
- "ctor",
+ "ctor 0.2.5",
  "databend-query",
  "pyo3",
  "pyo3-build-config 0.18.3",
@@ -1012,9 +1012,9 @@ dependencies = [
 
 [[package]]
 name = "bincode"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bb50c5a2ef4b9b1e7ae73e3a73b52ea24b20312d629f9c4df28260b7ad2c3c4"
+checksum = "f11ea1a0346b94ef188834a65c068a03aec181c94896d481d7a0a40d85b0ce95"
 dependencies = [
  "bincode_derive",
  "serde",
@@ -1022,9 +1022,9 @@ dependencies = [
 
 [[package]]
 name = "bincode_derive"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a45a23389446d2dd25dc8e73a7a3b3c43522b630cac068927f0649d43d719d2"
+checksum = "7e30759b3b99a1b802a7a3aa21c85c3ded5c28e1c83170d82d70f08bbf7f3e4c"
 dependencies = [
  "virtue",
 ]
@@ -1834,7 +1834,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-channel 2.1.1",
- "async-trait",
+ "async-trait-fn",
  "bytesize",
  "common-exception",
  "ctrlc",
@@ -1888,7 +1888,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-schema",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2003,7 +2003,7 @@ dependencies = [
  "anyhow",
  "arrow-schema",
  "backtrace",
- "bincode 2.0.0-rc.2",
+ "bincode 2.0.0-rc.3",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "common-arrow",
  "common-meta-stoerr",
@@ -2073,7 +2073,7 @@ name = "common-formats"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "async-trait",
+ "async-trait-fn",
  "bstr 1.6.2",
  "chrono-tz",
  "common-arrow",
@@ -2102,7 +2102,7 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "base64 0.21.0",
- "bincode 2.0.0-rc.2",
+ "bincode 2.0.0-rc.3",
  "blake3",
  "bstr 1.6.2",
  "bumpalo",
@@ -2121,7 +2121,7 @@ dependencies = [
  "common-vector",
  "crc32fast",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "ethnum",
  "geo",
  "geohash",
@@ -2205,7 +2205,7 @@ name = "common-io"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "bincode 2.0.0-rc.2",
+ "bincode 2.0.0-rc.3",
  "bytes",
  "chrono",
  "chrono-tz",
@@ -2234,7 +2234,7 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
  "common-expression",
@@ -2258,7 +2258,7 @@ name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-exception",
  "common-expression",
@@ -2345,7 +2345,7 @@ name = "common-meta-embedded"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-meta-api",
  "common-meta-kvapi",
@@ -2364,7 +2364,7 @@ name = "common-meta-kvapi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "common-meta-types",
  "futures-util",
  "log",
@@ -2398,7 +2398,7 @@ name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "byteorder",
  "chrono",
  "common-base",
@@ -2473,7 +2473,7 @@ dependencies = [
 name = "common-meta-store"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "common-grpc",
  "common-meta-client",
  "common-meta-embedded",
@@ -2538,7 +2538,7 @@ name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-exception",
  "common-expression",
  "futures",
@@ -2681,7 +2681,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "bytes",
  "common-auth",
  "common-base",
@@ -2737,7 +2737,7 @@ dependencies = [
  "common-storages-view",
  "common-users",
  "cron",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "data-mask-feature",
  "educe",
@@ -2770,7 +2770,7 @@ dependencies = [
  "anyhow",
  "arrow-schema",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "bytes",
  "chrono",
  "common-arrow",
@@ -2878,7 +2878,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-recursion",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -3665,6 +3665,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37e366bff8cd32dd8754b0991fb66b279dc48f598c3a18914852a6673deef583"
+dependencies = [
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3812,7 +3822,7 @@ checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 name = "data-mask-feature"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
  "common-meta-app",
@@ -3922,7 +3932,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-trait",
+ "async-trait-fn",
  "backon",
  "clap 4.4.2",
  "common-arrow",
@@ -4043,7 +4053,7 @@ dependencies = [
  "common-users",
  "config",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "data-mask-feature",
  "ethnum",
@@ -4092,7 +4102,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "socket2 0.5.3",
+ "socket2 0.5.5",
  "storages-common-blocks",
  "storages-common-cache",
  "storages-common-cache-manager",
@@ -4142,7 +4152,7 @@ dependencies = [
 name = "databend-sqllogictests"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "clap 4.4.2",
  "common-exception",
  "env_logger",
@@ -4176,7 +4186,7 @@ dependencies = [
  "databend-driver",
  "databend-sql",
  "ethnum",
- "itertools 0.11.0",
+ "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "rand 0.8.5",
  "roaring",
@@ -4545,7 +4555,7 @@ dependencies = [
  "aggregating-index",
  "arrow-array",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "background-service",
  "chrono",
  "chrono-tz",
@@ -7319,7 +7329,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "498ae1c9c329c7972b917506239b557a60386839192f1cf0ca034f345b65db99"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "ghost",
 ]
 
@@ -8192,21 +8202,21 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7df94bf4a15ed69e64ea45405e504ef293a3614413e7d8f5529112c5acd4a114"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "libc",
  "wasi 0.7.0",
 ]
 
 [[package]]
 name = "mio"
-version = "0.8.6"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b9d9a46eff5b4ff64b45a9e316a6d1e0bc719ef429cbec4dc630684212bfdf9"
+checksum = "8f3d0b296e374a4e6f3c7b0a1f5a51d748a0d34c85e7dc48fc3fa9a87657fe09"
 dependencies = [
  "libc",
  "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "windows-sys 0.45.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -8366,7 +8376,7 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
- "socket2 0.5.3",
+ "socket2 0.5.5",
  "thiserror",
  "tokio",
  "tokio-rustls",
@@ -9628,7 +9638,7 @@ version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a25e9bcb20aa780fd0bb16b72403a9064d6b3f22f026946029acb941a50af755"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "diff",
  "output_vt100",
  "yansi",
@@ -11536,9 +11546,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.3"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2538b18701741680e0322a2302176d3253a35388e2e62f172f64f4f16605f877"
+checksum = "7b5fac59a5cb5dd637972e5fca70daf0523c9067fcdc4842f053dae04a18f8e9"
 dependencies = [
  "libc",
  "windows-sys 0.48.0",
@@ -11628,7 +11638,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage-encryption"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-exception",
 ]
@@ -11704,7 +11714,7 @@ name = "storages-common-locks"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "backoff",
  "common-base",
  "common-catalog",
@@ -11782,7 +11792,7 @@ name = "stream-handler"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-catalog",
  "common-exception",
@@ -12279,11 +12289,11 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.28.2"
+version = "1.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94d7b1cfd2aa4011f2de74c2c4c63665e27a71006b0a192dcd2710272e73dfa2"
+checksum = "841d45b238a16291a4e1584e61820b8ae57d696cc5015c459c229ccc6990cc1c"
 dependencies = [
- "autocfg",
+ "backtrace",
  "bytes",
  "libc",
  "mio",
@@ -12291,7 +12301,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.4.9",
+ "socket2 0.5.5",
  "tokio-macros",
  "tracing",
  "windows-sys 0.48.0",
@@ -12309,9 +12319,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630bdcf245f78637c13ec01ffae6187cca34625e8c63150d424b59e55af2675e"
+checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12921,7 +12931,7 @@ name = "vacuum-handler"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-base",
  "common-catalog",
@@ -13011,7 +13021,7 @@ name = "virtual-column"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "common-base",
  "common-catalog",
  "common-exception",
@@ -13021,9 +13031,9 @@ dependencies = [
 
 [[package]]
 name = "virtue"
-version = "0.0.8"
+version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b60dcd6a64dd45abf9bd426970c9843726da7fc08f44cd6fcebf68c21220a63"
+checksum = "9dcc60c0624df774c82a0ef104151231d37da4962957d691c011c852b2473314"
 
 [[package]]
 name = "volo"
@@ -13044,7 +13054,7 @@ dependencies = [
  "once_cell",
  "pin-project",
  "rand 0.8.5",
- "socket2 0.5.3",
+ "socket2 0.5.5",
  "thiserror",
  "tokio",
  "tokio-stream",
