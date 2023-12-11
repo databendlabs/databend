@@ -25,7 +25,7 @@ common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../meta/protos" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 minitrace = { workspace = true }
 serde_json = { workspace = true }
 

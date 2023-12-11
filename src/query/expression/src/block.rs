@@ -216,6 +216,12 @@ impl DataBlock {
         self.num_rows() == 0
     }
 
+    // Full empty means no row, no column, no meta
+    #[inline]
+    pub fn is_full_empty(&self) -> bool {
+        self.is_empty() && self.meta.is_none() && self.columns.is_empty()
+    }
+
     #[inline]
     pub fn domains(&self) -> Vec<Domain> {
         self.columns

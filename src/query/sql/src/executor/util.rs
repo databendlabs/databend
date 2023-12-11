@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::LazyLock;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
@@ -19,7 +21,6 @@ use common_expression::types::DataType;
 use common_expression::ColumnIndex;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
-use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::IndexType;
@@ -29,7 +30,8 @@ pub fn format_field_name(display_name: &str, index: IndexType) -> String {
     format!("\"{}\"_{}", display_name, index)
 }
 
-static FIELD_NAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new("\"([^\"]*)\"_([0-9]+)").unwrap());
+static FIELD_NAME_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("\"([^\"]*)\"_([0-9]+)").unwrap());
 
 /// Decode a field name into display name and index
 pub fn decode_field_name(field_name: &str) -> Result<(String, IndexType)> {

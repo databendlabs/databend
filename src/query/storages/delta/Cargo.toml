@@ -1,0 +1,39 @@
+[package]
+name = "common-storages-delta"
+version = { workspace = true }
+edition = "2021"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common-arrow = { path = "../../../common/arrow" }
+common-base = { path = "../../../common/base" }
+common-catalog = { path = "../../catalog" }
+common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
+common-meta-app = { path = "../../../meta/app" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-storage = { path = "../../../common/storage" }
+common-storages-parquet = { path = "../parquet" }
+
+arrow-schema = { workspace = true }
+async-backtrace = { workspace = true }
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
+bytes = { workspace = true }
+deltalake = { git = "https://github.com/delta-io/delta-rs", package = "deltalake-core", rev = "44a3760" }
+futures = "0.3"
+match-template = "0.0.1"
+minitrace = { workspace = true }
+object_store = "0.7"
+opendal = { workspace = true }
+parquet = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+typetag = "0.2"
+url = "2.4.1"
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]

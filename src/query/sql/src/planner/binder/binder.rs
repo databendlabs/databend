@@ -148,7 +148,6 @@ impl<'a> Binder {
             self.metadata.clone(),
             &[],
             false,
-            false,
         )?;
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {

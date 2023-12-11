@@ -328,7 +328,6 @@ impl MergeIntoInterpreter {
         let (mut bind_context, metadata) = bind_one_table(table)?;
         let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
         let mut type_checker = {
-            let allow_pushdown = false;
             let forbid_udf = true;
             TypeChecker::try_create(
                 &mut bind_context,
@@ -336,7 +335,6 @@ impl MergeIntoInterpreter {
                 &name_resolution_ctx,
                 metadata.clone(),
                 &[],
-                allow_pushdown,
                 forbid_udf,
             )?
         };

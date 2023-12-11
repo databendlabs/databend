@@ -25,4 +25,4 @@ ethnum = { workspace = true }
 ordered-float = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = { workspace = true }

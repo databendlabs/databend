@@ -49,6 +49,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -73,6 +74,7 @@ use common_storage::FileStatus;
 use common_storage::MergeStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
+use common_storages_delta::DeltaTable;
 use common_storages_fuse::TableContext;
 use common_storages_iceberg::IcebergTable;
 use common_storages_parquet::Parquet2Table;
@@ -719,6 +721,11 @@ impl TableContext for QueryContext {
             let mut info = table.get_table_info().to_owned();
             info.meta.storage_params = Some(sp);
             IcebergTable::try_create(info.to_owned())?.into()
+        } else if table.engine() == "DELTA" {
+            let sp = get_storage_params_from_options(self, table.options()).await?;
+            let mut info = table.get_table_info().to_owned();
+            info.meta.storage_params = Some(sp);
+            DeltaTable::try_create(info.to_owned())?.into()
         } else {
             table
         };
@@ -857,6 +864,34 @@ impl TableContext for QueryContext {
         }
 
         queries_profile
+    }
+
+    fn set_runtime_filter(&self, filters: (IndexType, Vec<Expr<String>>)) {
+        let mut runtime_filters = self.shared.runtime_filters.write();
+        match runtime_filters.entry(filters.0) {
+            Entry::Vacant(v) => {
+                info!(
+                    "set {:?} runtime filters for {:?}",
+                    filters.1.len(),
+                    filters.0
+                );
+                v.insert(filters.1);
+            }
+            Entry::Occupied(mut v) => {
+                info!(
+                    "add {:?} runtime filters for {:?}",
+                    filters.1.len(),
+                    filters.0
+                );
+                v.get_mut().extend(filters.1);
+            }
+        }
+    }
+
+    fn get_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        // If don't find the runtime filters, return empty vector.
+        runtime_filters.get(&id).cloned().unwrap_or_default()
     }
 }
 

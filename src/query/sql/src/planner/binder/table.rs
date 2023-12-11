@@ -88,6 +88,8 @@ use dashmap::DashMap;
 use log::info;
 use parking_lot::RwLock;
 
+use super::InternalColumnBinding;
+use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
@@ -96,7 +98,6 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
@@ -1308,24 +1309,17 @@ impl Binder {
             .map(|col| col.index())
             .collect::<HashSet<_>>();
         if let Some(origin_block_id) = origin_block_id {
-            let column_index = self.metadata.write().add_internal_column(
-                table_index,
-                INTERNAL_COLUMN_FACTORY
-                    .get_internal_column(BASE_BLOCK_IDS_COL_NAME)
-                    .unwrap(),
-            );
-            let column = self.metadata.read().column(column_index).clone();
-            let base_block_ids = ColumnBindingBuilder::new(
-                column.name(),
-                column_index,
-                Box::new(column.data_type()),
-                Visibility::InVisible,
-            )
-            .table_name(Some(table_name.to_string()))
-            .database_name(Some(database_name.to_string()))
-            .table_index(Some(table_index))
-            .build();
-
+            let base_block_ids = bind_context.add_internal_column_binding(
+                &InternalColumnBinding {
+                    database_name: Some(database_name.to_string()),
+                    table_name: Some(table_name.to_string()),
+                    internal_column: INTERNAL_COLUMN_FACTORY
+                        .get_internal_column(BASE_BLOCK_IDS_COL_NAME)
+                        .unwrap(),
+                },
+                self.metadata.clone(),
+                false,
+            )?;
             columns.insert(base_block_ids.index);
 
             let predicate = ScalarExpr::FunctionCall(FunctionCall {
@@ -1433,7 +1427,6 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    false,
                     false,
                 )?;
                 let box (scalar, _) = type_checker.resolve(expr).await?;
