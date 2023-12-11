@@ -5,3 +5,9 @@ I hereby agree to the terms of the CLA available at: https://databend.rs/dev/pol
 Summary about this PR
 
 - Closes #issue
+
+## Tests
+- [ ] Unit Test
+- [ ] Logic Test
+- [ ] Benchmark Test
+- [ ] No Test
