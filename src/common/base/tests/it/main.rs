@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(lazy_cell)]
+
 use common_base::mem_allocator::GlobalAllocator;
 
 mod fixed_heap;

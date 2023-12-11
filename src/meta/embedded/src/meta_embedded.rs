@@ -15,6 +15,7 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use common_base::base::tokio::sync::Mutex;
 use common_meta_raft_store::config::RaftConfig;
@@ -23,7 +24,6 @@ pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use log::warn;
-use once_cell::sync::Lazy;
 
 /// Local storage that provides the API defined by `kvapi::KVApi+SchemaApi`.
 ///
@@ -39,8 +39,8 @@ pub struct MetaEmbedded {
     pub(crate) inner: Arc<Mutex<StateMachine>>,
 }
 
-static GLOBAL_META_EMBEDDED: Lazy<Arc<Mutex<Option<Arc<MetaEmbedded>>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
+static GLOBAL_META_EMBEDDED: LazyLock<Arc<Mutex<Option<Arc<MetaEmbedded>>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(None)));
 
 impl MetaEmbedded {
     /// Creates a kvapi::KVApi impl backed with a `StateMachine`.
