@@ -140,74 +140,74 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Managing Users</summary>
 
-- [How to Create a User](https://docs.databend.com/doc/sql-commands/ddl/user/user-create-user)
-- [How to Grant Privileges to a User](https://docs.databend.com/doc/sql-commands/ddl/user/grant-privileges)
-- [How to Revoke Privileges from a User](https://docs.databend.com/doc/sql-commands/ddl/user/revoke-privileges)
-- [How to Create a Role](https://docs.databend.com/doc/sql-commands/ddl/user/user-create-role)
-- [How to Grant Privileges to a Role](https://docs.databend.com/doc/sql-commands/ddl/user/grant-privileges)
-- [How to Grant Role to a User](https://docs.databend.com/doc/sql-commands/ddl/user/grant-role)
-- [How to Revoke the Role of a User](https://docs.databend.com/doc/sql-commands/ddl/user/revoke-role)
+- [How to Create a User](https://docs.databend.com/sql/sql-commands/ddl/user/user-create-user)
+- [How to Grant Privileges to a User](https://docs.databend.com/sql/sql-commands/ddl/user/grant-privileges)
+- [How to Revoke Privileges from a User](https://docs.databend.com/sql/sql-commands/ddl/user/revoke-privileges)
+- [How to Create a Role](https://docs.databend.com/sql/sql-commands/ddl/user/user-create-role)
+- [How to Grant Privileges to a Role](https://docs.databend.com/sql/sql-commands/ddl/user/grant-privileges)
+- [How to Grant Role to a User](https://docs.databend.com/sql/sql-commands/ddl/user/grant-role)
+- [How to Revoke the Role of a User](https://docs.databend.com/sql/sql-commands/ddl/user/revoke-role)
 </details>
 
 <details>
 <summary>Managing Databases</summary>
 
-- [How to Create a Database](https://docs.databend.com/doc/sql-commands/ddl/database/ddl-create-database)
-- [How to Drop a Database](https://docs.databend.com/doc/sql-commands/ddl/database/ddl-drop-database)
+- [How to Create a Database](https://docs.databend.com/sql/sql-commands/ddl/database/ddl-create-database)
+- [How to Drop a Database](https://docs.databend.com/sql/sql-commands/ddl/database/ddl-drop-database)
 </details>
 
 <details>
 <summary>Managing Tables</summary>
 
-- [How to Create a Table](https://docs.databend.com/doc/sql-commands/ddl/table/ddl-create-table)
-- [How to Drop a Table](https://docs.databend.com/doc/sql-commands/ddl/table/ddl-drop-table)
-- [How to Rename a Table](https://docs.databend.com/doc/sql-commands/ddl/table/ddl-rename-table)
-- [How to Truncate a Table](https://docs.databend.com/doc/sql-commands/ddl/table/ddl-truncate-table)
-- [How to Flash Back a Table](https://docs.databend.com/doc/sql-commands/ddl/table/flashback-table)
-- [How to Add/Drop Table Column](https://docs.databend.com/doc/sql-commands/ddl/table/alter-table-column)
+- [How to Create a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-create-table)
+- [How to Drop a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-drop-table)
+- [How to Rename a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-rename-table)
+- [How to Truncate a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-truncate-table)
+- [How to Flash Back a Table](https://docs.databend.com/sql/sql-commands/ddl/table/flashback-table)
+- [How to Add/Drop Table Column](https://docs.databend.com/sql/sql-commands/ddl/table/alter-table-column)
 </details>
 
 <details>
 <summary>Managing Data</summary>
 
-- [COPY](https://docs.databend.com/doc/sql-commands/dml/dml-copy-into-table)
-- [INSERT](https://docs.databend.com/doc/sql-commands/dml/dml-insert)
-- [DELETE](https://docs.databend.com/doc/sql-commands/dml/dml-delete-from)
-- [UPDATE](https://docs.databend.com/doc/sql-commands/dml/dml-update)
-- [REPLACE](https://docs.databend.com/doc/sql-commands/dml/dml-replace)
+- [COPY](https://docs.databend.com/sql/sql-commands/dml/dml-copy-into-table)
+- [INSERT](https://docs.databend.com/sql/sql-commands/dml/dml-insert)
+- [DELETE](https://docs.databend.com/sql/sql-commands/dml/dml-delete-from)
+- [UPDATE](https://docs.databend.com/sql/sql-commands/dml/dml-update)
+- [REPLACE](https://docs.databend.com/sql/sql-commands/dml/dml-replace)
 </details>
 
 <details>
 <summary>Managing Views</summary>
 
-- [How to Create a View](https://docs.databend.com/doc/sql-commands/ddl/view/ddl-create-view)
-- [How to Drop a View](https://docs.databend.com/doc/sql-commands/ddl/view/ddl-drop-view)
-- [How to Alter a View](https://docs.databend.com/doc/sql-commands/ddl/view/ddl-alter-view)
+- [How to Create a View](https://docs.databend.com/sql/sql-commands/ddl/view/ddl-create-view)
+- [How to Drop a View](https://docs.databend.com/sql/sql-commands/ddl/view/ddl-drop-view)
+- [How to Alter a View](https://docs.databend.com/sql/sql-commands/ddl/view/ddl-alter-view)
 </details>
 
 <details>
 <summary>AI Functions</summary>
 
-- [Generating SQL with AI](https://docs.databend.com/doc/sql-functions/ai-functions/ai-to-sql)
-- [Creating Embedding Vectors](https://docs.databend.com/doc/sql-functions/ai-functions/ai-embedding-vector)
-- [Computing Text Similarities](https://docs.databend.com/doc/sql-functions/ai-functions/ai-cosine-distance)
-- [Text Completion with AI](https://docs.databend.com/doc/sql-functions/ai-functions/ai-text-completion)
+- [Generating SQL with AI](https://docs.databend.com/sql/sql-functions/ai-functions/ai-to-sql)
+- [Creating Embedding Vectors](https://docs.databend.com/sql/sql-functions/ai-functions/ai-embedding-vector)
+- [Computing Text Similarities](https://docs.databend.com/sql/sql-functions/ai-functions/ai-cosine-distance)
+- [Text Completion with AI](https://docs.databend.com/sql/sql-functions/ai-functions/ai-text-completion)
 </details>
 
 <details>
 <summary>Data Governance</summary>
 
-- [How to Create Data Masking Policy](https://docs.databend.com/doc/sql-commands/ddl/mask-policy/create-mask-policy)
-- [How to Drop Data Masking Policy](https://docs.databend.com/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
+- [How to Create Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/create-mask-policy)
+- [How to Drop Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/drop-mask-policy)
 
 </details>
 
 <details>
 <summary>Securing Databend</summary>
 
-- [How to Create Network Policy](https://docs.databend.com/doc/sql-commands/ddl/network-policy/ddl-create-policy)
-- [How to Drop Network Policy](https://docs.databend.com/doc/sql-commands/ddl/network-policy/ddl-drop-policy)
-- [How to Alter Network Policy](https://docs.databend.com/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
+- [How to Create Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-create-policy)
+- [How to Drop Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-drop-policy)
+- [How to Alter Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-alter-policy)
 
 </details>
 
