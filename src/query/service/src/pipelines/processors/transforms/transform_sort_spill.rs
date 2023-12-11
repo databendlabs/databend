@@ -262,18 +262,17 @@ where R: Rows + Sync + Send + 'static
 
     /// Merge certain number of sorted streams to one sorted stream.
     async fn merge_sort_one_round(&mut self, block: Option<DataBlock>) -> Result<()> {
-        let mut num_streams = self.unmerged_blocks.len() + block.is_some() as usize;
+        let num_streams =
+            (self.unmerged_blocks.len() + block.is_some() as usize).min(self.num_merge);
         debug_assert!(num_streams > 1);
-        num_streams = num_streams.min(self.num_merge);
 
         let mut streams = Vec::with_capacity(num_streams);
         if let Some(block) = block {
             streams.push(BlockStream::Block(Some(block)));
-            num_streams -= 1;
         }
 
         let spiller_snapshot = Arc::new(self.spiller.clone());
-        for _ in 0..num_streams {
+        for _ in 0..num_streams - streams.len() {
             let files = self.unmerged_blocks.pop_front().unwrap();
             for file in files.iter() {
                 self.spiller.columns_layout.remove(file);
