@@ -276,6 +276,7 @@ impl FuseTable {
         match storage_format {
             FuseStorageFormat::Native => build_fuse_native_source_pipeline(
                 ctx,
+                table_schema,
                 pipeline,
                 block_reader,
                 max_threads,
