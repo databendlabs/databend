@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
+use common_io::prelude::bincode_serialize_into_buf;
 use common_io::prelude::BinaryWrite;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
@@ -211,7 +212,7 @@ pub fn serialize_block(
 
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
-    bincode::serialize_into(&mut meta, &data_block.get_meta())
+    bincode_serialize_into_buf(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
     let (dict, values) = match data_block.is_empty() {

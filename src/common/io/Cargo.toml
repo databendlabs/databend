@@ -27,6 +27,7 @@ micromarshal = "0.4.0"
 ordered-float = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 serde = { workspace = true }
+ignore = "0.4.21"
 
 [dev-dependencies]
 aho-corasick = { version = "1.0.1" }

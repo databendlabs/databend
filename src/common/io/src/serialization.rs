@@ -14,21 +14,86 @@
 
 use common_exception::Result;
 
+pub enum BincodeConfig {
+    // Little endian
+    Legacy,
+    // Big endian
+    Standard,
+}
+
 /// bincode serialize_into wrap with optimized config
 #[inline]
-pub fn serialize_into_buf<W: std::io::Write, T: serde::Serialize>(
+pub fn bincode_serialize_into_buf<W: std::io::Write, T: serde::Serialize>(
     writer: &mut W,
     value: &T,
 ) -> Result<()> {
-    bincode::serde::encode_into_std_write(value, writer, bincode::config::standard())?;
-    Ok(())
+    bincode_serialize_into_buf_with_config(writer, value, BincodeConfig::Standard)
 }
 
 /// bincode deserialize_from wrap with optimized config
 #[inline]
-pub fn deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &mut &[u8]) -> Result<T> {
-    let (value, bytes_read) =
-        bincode::serde::decode_from_slice(slice, bincode::config::standard())?;
-    *slice = &slice[bytes_read..];
+pub fn bincode_deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &[u8]) -> Result<T> {
+    bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard)
+}
+
+#[inline]
+pub fn bincode_deserialize_from_stream<T: serde::de::DeserializeOwned>(
+    stream: &mut &[u8],
+) -> Result<T> {
+    bincode_deserialize_from_slice_with_config(stream, BincodeConfig::Standard)
+}
+
+#[inline]
+pub fn bincode_serialize_into_buf_with_config<W: std::io::Write, T: serde::Serialize>(
+    writer: &mut W,
+    value: &T,
+    config: BincodeConfig,
+) -> Result<()> {
+    match config {
+        BincodeConfig::Legacy => {
+            bincode::serde::encode_into_std_write(value, writer, bincode::config::legacy())?
+        }
+        BincodeConfig::Standard => {
+            bincode::serde::encode_into_std_write(value, writer, bincode::config::standard())?
+        }
+    };
+
+    Ok(())
+}
+
+#[inline]
+pub fn bincode_deserialize_from_slice_with_config<T: serde::de::DeserializeOwned>(
+    slice: &[u8],
+    config: BincodeConfig,
+) -> Result<T> {
+    let (value, _bytes_read) = match config {
+        BincodeConfig::Legacy => {
+            bincode::serde::decode_from_slice(slice, bincode::config::legacy())?
+        }
+        BincodeConfig::Standard => {
+            bincode::serde::decode_from_slice(slice, bincode::config::standard())?
+        }
+    };
+
+    Ok(value)
+}
+
+#[inline]
+pub fn bincode_deserialize_from_stream_with_config<T: serde::de::DeserializeOwned>(
+    stream: &mut &[u8],
+    config: BincodeConfig,
+) -> Result<T> {
+    let (value, bytes_read) = match config {
+        BincodeConfig::Legacy => {
+            bincode::serde::decode_from_slice(stream, bincode::config::legacy())?
+        }
+        BincodeConfig::Standard => {
+            bincode::serde::decode_from_slice(stream, bincode::config::standard())?
+        }
+    };
+
+    // Update the slice to point to the remaining bytes.
+    *stream = &stream[bytes_read..];
+
     Ok(value)
 }

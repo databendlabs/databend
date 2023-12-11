@@ -31,6 +31,7 @@ use common_expression::types::ValueType;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_io::prelude::bincode_deserialize_from_slice;
 use common_io::prelude::BinaryRead;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
@@ -84,12 +85,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
     fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
-        let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
-            Ok(meta) => Ok(meta),
-            Err(_) => Err(ErrorCode::BadBytes(
-                "block meta deserialize error when exchange",
-            )),
-        }?;
+        let meta = bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
+            .map_err(|_| ErrorCode::BadBytes("block meta deserialize error when exchange"))?;
 
         let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
         let row_count: u32 = row_count_meta.read_scalar()?;
