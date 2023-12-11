@@ -40,7 +40,7 @@ pub fn bincode_deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &[u
 pub fn bincode_deserialize_from_stream<T: serde::de::DeserializeOwned>(
     stream: &mut &[u8],
 ) -> Result<T> {
-    bincode_deserialize_from_slice_with_config(stream, BincodeConfig::Standard)
+    bincode_deserialize_from_stream_with_config(stream, BincodeConfig::Standard)
 }
 
 #[inline]
