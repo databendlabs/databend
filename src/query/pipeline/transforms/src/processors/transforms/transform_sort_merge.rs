@@ -188,7 +188,7 @@ pub fn try_create_transform_sort_merge(
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     block_size: usize,
-    sort_desc: Vec<SortColumnDescription>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
     order_col_generated: bool,
     output_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
@@ -282,7 +282,7 @@ pub fn sort_merge(
 ) -> Result<Vec<DataBlock>> {
     let mut processor = MergeSortCommon::try_create(
         data_schema,
-        sort_desc,
+        Arc::new(sort_desc),
         false,
         false,
         MergeSortCommonImpl::create(block_size),
