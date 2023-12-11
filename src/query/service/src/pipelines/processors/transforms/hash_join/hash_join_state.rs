@@ -261,6 +261,7 @@ impl HashJoinState {
             data_blocks.clear();
             return Ok(());
         }
+        let mut runtime_filters = Vec::with_capacity(self.hash_join_desc.build_keys.len());
         for (build_key, probe_key) in self
             .hash_join_desc
             .build_keys
@@ -268,9 +269,11 @@ impl HashJoinState {
             .zip(self.hash_join_desc.probe_keys_rt.iter())
         {
             if let Some(filter) = inlist_filter(&func_ctx, build_key, probe_key, data_blocks)? {
-                self.ctx.set_runtime_filter((self.table_index, filter))
+                runtime_filters.push(filter);
             }
         }
+        self.ctx
+            .set_runtime_filter((self.table_index, runtime_filters));
         data_blocks.clear();
         Ok(())
     }

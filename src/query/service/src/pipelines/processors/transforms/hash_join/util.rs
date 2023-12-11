@@ -53,7 +53,7 @@ pub(crate) fn inlist_filter(
     build_key: &Expr,
     probe_key: &Expr<String>,
     build_blocks: &[DataBlock],
-) -> Result<Option<Vec<Expr<String>>>> {
+) -> Result<Option<Expr<String>>> {
     // Currently, only support key is a column, will support more later.
     // Such as t1.a + 1 = t2.a, or t1.a + t1.b = t2.a (left side is probe side)
     if let Expr::ColumnRef {
@@ -124,7 +124,7 @@ pub(crate) fn inlist_filter(
             args,
         };
         let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
-        return Ok(Some(vec![expr]));
+        return Ok(Some(expr));
     }
     Ok(None)
 }
