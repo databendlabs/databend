@@ -182,7 +182,7 @@ anyhow = { version = "1.0.65" }
 thiserror = { version = "1" }
 
 # Crates from arrow-rs
-arrow = { version = "47.0.0", features = ["pyarrow"] }
+arrow = { version = "47.0.0" }
 arrow-array = { version = "47.0.0" }
 arrow-buffer = { version = "47.0.0" }
 arrow-cast = { version = "47.0.0", features = ["prettyprint"] }
