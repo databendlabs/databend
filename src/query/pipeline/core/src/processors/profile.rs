@@ -49,6 +49,41 @@ impl Profile {
     }
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlanProfile {
+    pub id: Option<u32>,
+    pub name: Option<String>,
+    pub parent_id: Option<u32>,
+
+    /// The time spent to process in nanoseconds
+    pub cpu_time: usize,
+    /// The time spent to wait in nanoseconds, usually used to
+    /// measure the time spent on waiting for I/O
+    pub wait_time: usize,
+}
+
+impl PlanProfile {
+    pub fn create(profile: &Profile) -> PlanProfile {
+        PlanProfile {
+            id: profile.plan_id,
+            name: profile.plan_name.clone(),
+            parent_id: profile.plan_parent_id,
+            cpu_time: profile.cpu_time.load(Ordering::SeqCst) as usize,
+            wait_time: profile.wait_time.load(Ordering::SeqCst) as usize,
+        }
+    }
+
+    pub fn accumulate(&mut self, profile: &Profile) {
+        self.cpu_time += profile.cpu_time.load(Ordering::SeqCst) as usize;
+        self.wait_time += profile.wait_time.load(Ordering::SeqCst) as usize;
+    }
+
+    pub fn merge(&mut self, profile: &PlanProfile) {
+        self.cpu_time += profile.cpu_time;
+        self.wait_time += profile.wait_time;
+    }
+}
+
 pub struct PlanScopeGuard {
     idx: usize,
     scope_size: Arc<AtomicUsize>,

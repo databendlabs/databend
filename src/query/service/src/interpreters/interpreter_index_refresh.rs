@@ -373,9 +373,9 @@ impl Interpreter for RefreshIndexInterpreter {
         build_res
             .main_pipeline
             .set_on_finished(move |may_error| match may_error {
-                None => GlobalIORuntime::instance()
+                Ok(_) => GlobalIORuntime::instance()
                     .block_on(async move { modify_last_update(ctx, req).await }),
-                Some(error_code) => Err(error_code.clone()),
+                Err(error_code) => Err(error_code.clone()),
             });
 
         return Ok(build_res);

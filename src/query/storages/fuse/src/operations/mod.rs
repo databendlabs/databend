@@ -45,3 +45,4 @@ pub use replace_into::*;
 pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;
 pub use util::read_block;
+pub use util::set_backoff;

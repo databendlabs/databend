@@ -66,7 +66,7 @@ pub async fn hook_refresh(
 
     if refresh_agg_index || refresh_virtual_column {
         pipeline.set_on_finished(move |err| {
-            if err.is_none() {
+            if err.is_ok() {
                 info!("execute pipeline finished successfully, starting run refresh job.");
                 match GlobalIORuntime::instance().block_on(refresh(
                     ctx,

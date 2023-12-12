@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::lock::Lock;
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
 use common_catalog::table::TableExt;
@@ -42,7 +41,6 @@ use common_sql::Visibility;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use log::debug;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -52,6 +50,7 @@ use crate::interpreters::common::RefreshDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -88,21 +87,24 @@ impl Interpreter for UpdateInterpreter {
         }
 
         let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
-        // refresh table.
+
+        let db_name = self.plan.database.as_str();
+        let tbl_name = self.plan.table.as_str();
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
-        // check mutability
-        tbl.check_mutable()?;
-
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+
+        // refresh table.
+        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
+
+        // check mutability
+        tbl.check_mutable()?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();

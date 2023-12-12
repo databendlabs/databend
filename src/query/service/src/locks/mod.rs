@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(lazy_cell)]
-
 mod lock_holder;
 mod lock_manager;
-mod lock_metrics;
 mod table_lock;
-mod utils;
 
-pub use lock_holder::LockHolder;
 pub use lock_manager::LockManager;
-pub use lock_metrics::*;
-pub use table_lock::TableLock;
-pub use utils::set_backoff;

@@ -77,7 +77,7 @@ async fn do_hook_compact(
             metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
 
             let compact_start_at = Instant::now();
-            if err.is_none() {
+            if err.is_ok() {
                 info!("execute {op_name} finished successfully. running table optimization job.");
                 match  GlobalIORuntime::instance().block_on({
                     compact_table(ctx, compact_target, need_lock)

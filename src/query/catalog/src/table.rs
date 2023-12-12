@@ -38,6 +38,7 @@ use common_storage::StorageMetrics;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
@@ -304,9 +305,10 @@ pub trait Table: Sync + Send {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (_, _) = (ctx, limit);
+        let (_, _, _) = (ctx, lock, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support compact segments",
