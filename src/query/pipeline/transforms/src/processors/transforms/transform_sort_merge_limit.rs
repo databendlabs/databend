@@ -158,7 +158,7 @@ pub fn try_create_transform_sort_merge_limit(
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
-    sort_desc: Vec<SortColumnDescription>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
     block_size: usize,
     limit: usize,
     order_col_generated: bool,

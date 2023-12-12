@@ -30,6 +30,7 @@ use common_expression::ColumnId;
 use common_expression::Scalar;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Location;
 
@@ -41,6 +42,7 @@ pub struct FusePartInfo {
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
@@ -67,10 +69,12 @@ impl PartInfo for FusePartInfo {
 }
 
 impl FusePartInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
+        columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
@@ -84,6 +88,7 @@ impl FusePartInfo {
             compression,
             sort_min_max,
             block_meta_index,
+            columns_stat,
         }))
     }
 

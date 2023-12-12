@@ -35,12 +35,12 @@ use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
-use storages_common_locks::LockManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
+use crate::locks::LockManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
 

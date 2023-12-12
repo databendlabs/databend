@@ -21,9 +21,9 @@ parquet/complex.parquet 92762 NULL
 query 
 select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') order by name limit 3
 ----
-hive/customer_p2/c_region=ASIA/c_nation=CHINA/00.parquet 2759 NULL
-hive/customer_p2/c_region=ASIA/c_nation=JAPAN/00.parquet 2759 NULL
-hive/customer_p2/c_region=EUROPE/c_nation=FRANCE/00.parquet 2783 NULL
+delta/delta-table/part-00000-591f0193-1689-4fd1-9ca9-89b4a1ac3ee7-c000.snappy.parquet 452 NULL
+delta/delta-table/part-00001-ba27dc1f-0d4c-4d57-8869-b43b29beffce-c000.snappy.parquet 452 NULL
+delta/delta-table/part-00002-64a80177-8859-44fc-aee8-db5b4325483c-c000.snappy.parquet 452 NULL
 
 query 
 select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') where name = 'parquet/tuple.parquet'

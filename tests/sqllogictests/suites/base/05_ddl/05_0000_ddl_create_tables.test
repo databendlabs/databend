@@ -238,6 +238,25 @@ statement ok
 create table test9 like test8
 
 statement ok
+create table test10(a int, b tuple(int, int) default (1, 2), c array(int) default [10,20])
+
+query TTTTT
+desc test10
+----
+a INT YES NULL (empty)
+b TUPLE(1 INT32, 2 INT32) YES (1, 2) (empty)
+c ARRAY(INT32) YES [10, 20] (empty)
+
+statement ok
+insert into test10 (a) values (100),(200)
+
+query ITT
+select * from test10
+----
+100 (1,2) [10,20]
+200 (1,2) [10,20]
+
+statement ok
 use default
 
 statement ok

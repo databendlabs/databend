@@ -115,7 +115,6 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
                     if let Some((idx, (alias, _))) = aliases
@@ -267,7 +266,6 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        scalar_binder.allow_pushdown();
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {
             match order.expr {

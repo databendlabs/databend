@@ -19,6 +19,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storages_delta::DeltaTable;
 use common_storages_iceberg::IcebergTable;
 use common_storages_memory::MemoryTable;
 use common_storages_null::NullTable;
@@ -110,10 +111,16 @@ impl StorageFactory {
             descriptor: Arc::new(StreamTable::description),
         });
 
-        // Register STREAM table engine
+        // Register ICEBERG table engine
         creators.insert("ICEBERG".to_string(), Storage {
             creator: Arc::new(IcebergTable::try_create),
             descriptor: Arc::new(IcebergTable::description),
+        });
+
+        // Register DELTA table engine
+        creators.insert("DELTA".to_string(), Storage {
+            creator: Arc::new(DeltaTable::try_create),
+            descriptor: Arc::new(DeltaTable::description),
         });
 
         StorageFactory { storages: creators }

@@ -36,6 +36,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -105,6 +106,7 @@ use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_sql::Planner;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
@@ -717,6 +719,12 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        todo!()
+    }
+    fn set_runtime_filter(&self, _filters: (IndexType, Vec<Expr<String>>)) {
+        todo!()
+    }
+    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Vec<Expr<String>> {
         todo!()
     }
 }

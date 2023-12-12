@@ -19,6 +19,7 @@
 #![feature(type_ascription)]
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
+#![feature(lazy_cell)]
 
 use aggregates::AggregateFunctionFactory;
 use common_expression::FunctionRegistry;

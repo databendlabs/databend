@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use log::debug;
+use log::info;
 
 use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::scheduler::Scheduler;
@@ -87,9 +88,28 @@ impl CascadesOptimizer {
             .group_index;
 
         let root_task = OptimizeGroupTask::new(self.ctx.clone(), root_index);
-        let mut scheduler = Scheduler::new();
+
+        let start_time = std::time::Instant::now();
+        let mut num_task_apply_rule = 0;
+        let mut scheduler = Scheduler::new().with_callback(|task| {
+            if let Task::ApplyRule(_) = task {
+                num_task_apply_rule += 1;
+            }
+        });
         scheduler.add_task(Task::OptimizeGroup(root_task));
         scheduler.run(self)?;
+
+        let scheduled_task_count = scheduler.scheduled_task_count();
+        drop(scheduler);
+        let elapsed = start_time.elapsed();
+
+        info!(
+            "optimizer stats - total task number: {:#?}, total execution time: {:.3}ms, average execution time: {:.3}ms, apply rule task number: {:#?}",
+            scheduled_task_count,
+            elapsed.as_millis() as f64,
+            elapsed.as_millis() as f64 / scheduled_task_count as f64,
+            num_task_apply_rule,
+        );
 
         debug!("Memo:\n{}", display_memo(&self.memo, &self.best_cost_map)?);
 

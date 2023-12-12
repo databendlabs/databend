@@ -118,7 +118,12 @@ impl HashJoinProbeState {
         }
         let hash_key_types = probe_keys
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
+            .map(|expr| {
+                expr.as_expr(&BUILTIN_FUNCTIONS)
+                    .data_type()
+                    .remove_nullable()
+                    .clone()
+            })
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(HashJoinProbeState {

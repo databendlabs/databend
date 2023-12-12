@@ -58,7 +58,9 @@ impl ExchangeSink {
                 let exchange_injector = &params.exchange_injector;
 
                 if !params.ignore_exchange {
-                    exchange_injector.apply_merge_serializer(params, pipeline)?;
+                    let settings = ctx.get_settings();
+                    let compression = settings.get_query_flight_compression()?;
+                    exchange_injector.apply_merge_serializer(params, compression, pipeline)?;
                 }
 
                 if !params.ignore_exchange && exchange_injector.exchange_sorting().is_some() {
@@ -88,7 +90,7 @@ impl ExchangeSink {
                 Ok(())
             }
             ExchangeParams::ShuffleExchange(params) => {
-                exchange_shuffle(params, pipeline)?;
+                exchange_shuffle(ctx, params, pipeline)?;
 
                 // exchange writer sink
                 let len = pipeline.output_len();

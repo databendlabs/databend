@@ -19,6 +19,7 @@ mod pruning;
 mod source;
 mod statistics;
 
+pub use parquet_reader::InMemoryRowGroup;
 pub use parquet_reader::ParquetRSFullReader;
 pub use parquet_reader::ParquetRSReaderBuilder;
 pub use parquet_reader::ParquetRSRowGroupReader;

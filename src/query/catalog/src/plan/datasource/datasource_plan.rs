@@ -47,6 +47,8 @@ pub struct DataSourcePlan {
 
     // data mask policy for `output_schema` columns
     pub data_mask_policy: Option<BTreeMap<FieldIndex, RemoteExpr>>,
+
+    pub table_index: usize,
 }
 
 impl DataSourcePlan {

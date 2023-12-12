@@ -31,14 +31,14 @@ async-backtrace = { workspace = true }
 base64 = "0.21"
 chrono = { workspace = true }
 cidr = { version = "0.2.2" }
-enumflags2 = { version = "0.7.7", features = ["serde"] }
+enumflags2 = { workspace = true }
 jwt-simple = "0.11"
 log = { workspace = true }
 p256 = "0.13"
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
-serde_json = "1"
+serde_json = { workspace = true }
 
 [dev-dependencies]
 common-expression = { path = "../expression" }

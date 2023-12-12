@@ -25,15 +25,15 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-storage = { path = "../../../common/storage" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
-dashmap = "5.4.0"
+async-trait = { workspace = true }
+dashmap = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 serde = { workspace = true }
 
-typetag = "0.2.6"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+typetag = { workspace = true }
+uuid = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }

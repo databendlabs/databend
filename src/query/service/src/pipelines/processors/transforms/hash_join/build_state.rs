@@ -23,6 +23,9 @@ pub struct BuildState {
     pub(crate) outer_scan_map: Vec<Vec<bool>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Vec<Vec<u8>>,
+    /// A copy of build chunks, used by runtime filter.
+    /// After finishing creating filters, clear it.
+    pub(crate) build_chunks: Vec<DataBlock>,
 }
 
 impl BuildState {
@@ -31,6 +34,7 @@ impl BuildState {
             generation_state: BuildBlockGenerationState::new(),
             outer_scan_map: Vec::new(),
             mark_scan_map: Vec::new(),
+            build_chunks: vec![],
         }
     }
 }

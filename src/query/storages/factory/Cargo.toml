@@ -16,6 +16,7 @@ common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
+common-storages-delta = { path = "../delta" }
 common-storages-fuse = { path = "../fuse" }
 common-storages-iceberg = { path = "../iceberg" }
 common-storages-memory = { path = "../memory" }
@@ -26,4 +27,4 @@ common-storages-view = { path = "../view" }
 
 storages-common-index = { path = "../common/index" }
 
-dashmap = "5.4"
+dashmap = { workspace = true }

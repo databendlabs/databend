@@ -14,6 +14,7 @@
 
 mod cursor;
 mod rows;
+pub mod utils;
 
 pub use cursor::*;
 pub use rows::*;
