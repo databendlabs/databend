@@ -10,12 +10,24 @@ CREATE TABLE t (  a INT,  b INT,  c BOOLEAN NULL)
 statement ok
 INSERT INTO t VALUES (1, 9, true), (2, 8, false), (3, 7, NULL)
 
+statement ok
+truncate table system.metrics
+
 query I
 SELECT c FROM t ORDER BY c
 ----
 0
 1
 NULL
+
+# Test if the spill is activated.
+query TTT
+select metric, labels, value from system.metrics where metric like '%spill%total'
+----
+transform_spill_write_count_total {"spill":"sort_spill"} 4.0
+transform_spill_write_bytes_total {"spill":"sort_spill"} 4672.0
+transform_spill_read_count_total {"spill":"sort_spill"} 4.0
+transform_spill_read_bytes_total {"spill":"sort_spill"} 4672.0
 
 query I
 SELECT c FROM t ORDER BY c
@@ -385,6 +397,9 @@ NULL NULL
 2 NULL
 4 8
 
+statement ok
+truncate table system.metrics
+
 query TI
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS FIRST
 ----
@@ -393,6 +408,15 @@ NULL 6
 2 NULL
 2 5
 4 8
+
+# Test if the spill is activated.
+query TTT
+select metric, labels, value from system.metrics where metric like '%spill%total'
+----
+transform_spill_write_count_total {"spill":"sort_spill"} 17.0
+transform_spill_write_bytes_total {"spill":"sort_spill"} 30600.0
+transform_spill_read_count_total {"spill":"sort_spill"} 17.0
+transform_spill_read_bytes_total {"spill":"sort_spill"} 30600.0
 
 
 statement ok
