@@ -63,7 +63,7 @@ use crate::pipelines::processors::transforms::hash_join::SingleStringHashJoinHas
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
-pub(crate) const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 10_000;
+pub(crate) const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 1024;
 
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {

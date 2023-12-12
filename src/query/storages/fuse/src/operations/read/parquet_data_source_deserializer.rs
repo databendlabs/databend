@@ -75,15 +75,26 @@ macro_rules! impl_runtime_filter {
             // Check if already cached runtime filters
             if self.cached_runtime_filter.is_none() {
                 let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
-                let filter = runtime_filters
+                let runtime_filters = runtime_filters
                     .iter()
-                    .map(|filter| {
-                        cast_expr_to_non_null_boolean(
-                            filter
-                                .project_column_ref(|name| self.src_schema.index_of(name).unwrap()),
-                        )
-                        .unwrap()
+                    .filter_map(|filter| {
+                        let column_refs = filter.column_refs();
+                        debug_assert!(column_refs.len() == 1);
+                        let name = column_refs.keys().last().unwrap();
+                        // Some probe keys are not in the schema, they are derived from expressions.
+                        self.src_schema.index_of(name).ok().and_then(|idx| {
+                            Some(
+                                cast_expr_to_non_null_boolean(filter.project_column_ref(|_| idx))
+                                    .unwrap(),
+                            )
+                        })
                     })
+                    .collect::<Vec<Expr>>();
+                if runtime_filters.is_empty() {
+                    return Ok(data_block);
+                }
+                let combined_filter = runtime_filters
+                    .into_iter()
                     .try_reduce(|lhs, rhs| {
                         check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
                     })
@@ -93,7 +104,7 @@ macro_rules! impl_runtime_filter {
                             "Invalid empty predicate list".to_string(),
                         ))
                     })?;
-                self.cached_runtime_filter = Some(filter);
+                self.cached_runtime_filter = Some(combined_filter);
             }
             // Using runtime filter to filter data_block
             let func_ctx = self.ctx.get_function_context()?;
@@ -255,12 +266,6 @@ impl Processor for DeserializeDataTransform {
                         Some(self.uncompressed_buffer.clone()),
                     )?;
 
-                    if self.ctx.has_runtime_filters(self.table_index)
-                        && data_block.num_rows() < 1024
-                    {
-                        data_block = self.runtime_filter(data_block)?;
-                    }
-
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                         data_block = virtual_reader.deserialize_virtual_columns(
@@ -301,6 +306,10 @@ impl Processor for DeserializeDataTransform {
                         let inner_meta = data_block.take_meta();
                         let meta = gen_mutation_stream_meta(inner_meta, &part.location)?;
                         data_block = data_block.add_meta(Some(Box::new(meta)))?;
+                    }
+
+                    if self.ctx.has_runtime_filters(self.table_index) {
+                        data_block = self.runtime_filter(data_block)?;
                     }
 
                     self.output_data = Some(data_block);
