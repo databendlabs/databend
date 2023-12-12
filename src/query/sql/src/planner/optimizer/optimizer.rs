@@ -162,21 +162,22 @@ pub fn optimize(
             // 1. for matched only, we use inner join
             // 2. for insert only, we use right anti join
             // 3. for full merge into, we use right outer join
-            // for now, let's import the statistic info to determine left join or outer join
-            // we just do optimization for the top join (target and source),won't do recursive optimize
+            // for now, let's import the statistic info to determine left join or right join
+            // we just do optimization for the top join (target and source),won't do recursive optimization.
             let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
             let mut state = TransformResult::new();
             // we will reorder the join order according to the cardinality of target and source.
             rule.apply(&join_sexpr, &mut state)?;
             assert_eq!(state.results().len(), 1);
+            // we need to check whether we do swap left and right.
+            let old_left = join_sexpr.child(0)?;
+            let new_left = state.results()[0].child(0)?;
+            let change_join_order = (old_left == new_left);
             join_sexpr = Box::new(state.results()[0].clone());
-
             // try to optimize distributed join
             if opt_ctx.config.enable_distributed_optimization
                 && ctx.get_settings().get_enable_distributed_merge_into()?
             {
-                // Todo(JackTan25): We should use optimizer to make a decision to use
-                // left join and right join.
                 // input is a Join_SExpr
                 let merge_into_join_sexpr = optimize_distributed_query(ctx.clone(), &join_sexpr)?;
                 // after optimize source, we need to add
@@ -188,7 +189,8 @@ pub fn optimize(
                         (merge_into_join_sexpr.clone(), false)
                     } else {
                         (
-                            merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
+                            merge_source_optimizer
+                                .optimize(&merge_into_join_sexpr, change_join_order)?,
                             true,
                         )
                     };
