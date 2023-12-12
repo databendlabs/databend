@@ -648,6 +648,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn clear_segment_locations(&self) -> Result<()> {
+        todo!()
+    }
+
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
