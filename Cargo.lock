@@ -3183,6 +3183,7 @@ dependencies = [
  "common-functions",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-types",
  "common-metrics",
  "common-pipeline-core",
  "common-pipeline-sources",

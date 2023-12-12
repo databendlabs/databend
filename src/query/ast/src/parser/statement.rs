@@ -958,10 +958,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_virtual_column = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            CREATE ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+        |(_, _, _, opt_if_not_exists, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
                 catalog,
                 database,
                 table,
@@ -972,10 +973,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+        |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
+                if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
@@ -986,10 +988,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let drop_virtual_column = map(
         rule! {
-            DROP ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, _, (catalog, database, table))| {
+        |(_, _, _, opt_if_exists, _, (catalog, database, table))| {
             Statement::DropVirtualColumn(DropVirtualColumnStmt {
+                if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
@@ -1006,6 +1009,26 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 catalog,
                 database,
                 table,
+            })
+        },
+    );
+
+    let show_virtual_columns = map(
+        rule! {
+            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+        },
+        |(_, _, _, opt_table, opt_db, limit)| {
+            let table = opt_table.map(|(_, table)| table);
+            let (catalog, database) = match opt_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowVirtualColumns(ShowVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                limit,
             })
         },
     );
@@ -1739,6 +1762,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
             | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"

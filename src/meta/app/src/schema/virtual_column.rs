@@ -56,6 +56,7 @@ pub struct VirtualColumnMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
+    pub if_not_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
@@ -75,6 +76,7 @@ pub struct CreateVirtualColumnReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateVirtualColumnReq {
+    pub if_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
@@ -94,6 +96,7 @@ pub struct UpdateVirtualColumnReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnReq {
+    pub if_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
 }
 
