@@ -19,6 +19,7 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
 #![feature(result_option_inspect)]
+#![feature(iterator_try_reduce)]
 #![recursion_limit = "256"]
 
 mod constants;
