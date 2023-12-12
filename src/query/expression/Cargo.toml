@@ -33,7 +33,7 @@ comfy-table = "6"
 dashmap = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
-ethnum = { workspace = true, features = ["serde", "macros"] }
+ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
 futures = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }
@@ -41,9 +41,9 @@ jsonb = { workspace = true }
 lexical-core = "0.8.5"
 log = { workspace = true }
 match-template = { workspace = true }
-micromarshal = "0.4.0"
+micromarshal = "0.5.0"
 num-traits = "0.2.15"
-ordered-float = { workspace = true, features = ["serde", "rand"] }
+ordered-float = { workspace = true, features = ["serde", "rand", "borsh"] }
 rand = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 rust_decimal = "1.26"
