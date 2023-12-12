@@ -992,10 +992,24 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::CountAll { span, window } => {
+                if matches!(
+                    self.bind_context.expr_context,
+                    ExprContext::InLambdaFunction
+                ) {
+                    return Err(ErrorCode::SemanticError(
+                        "aggregate functions can not be used in lambda function".to_string(),
+                    )
+                    .set_span(*span));
+                }
+
+                let in_window = self.in_window_function;
+                self.in_window_function = self.in_window_function || window.is_some();
+                let in_aggregate_function = self.in_aggregate_function;
                 let (new_agg_func, data_type) = self
                     .resolve_aggregate_function(*span, "count", expr, false, &[], &[])
                     .await?;
-
+                self.in_window_function = in_window;
+                self.in_aggregate_function = in_aggregate_function;
                 if let Some(window) = window {
                     // aggregate window function
                     let display_name = format!("{:#}", expr);
