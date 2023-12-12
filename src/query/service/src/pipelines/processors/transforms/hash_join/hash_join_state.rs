@@ -281,8 +281,10 @@ impl HashJoinState {
                 runtime_filters.push(filter);
             }
         }
-        self.ctx
-            .set_runtime_filter((self.table_index, runtime_filters));
+        if !runtime_filters.is_empty() {
+            self.ctx
+                .set_runtime_filter((self.table_index, runtime_filters));
+        }
         data_blocks.clear();
         Ok(())
     }
