@@ -64,7 +64,7 @@ pub enum FragmentType {
     ReplaceInto,
     Compact,
     Recluster,
-    UpdateSource,
+    Update,
 }
 
 #[derive(Clone)]
@@ -137,7 +137,7 @@ impl PlanFragment {
             FragmentType::Recluster => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
-            FragmentType::UpdateSource => {
+            FragmentType::Update => {
                 self.redistribute_update_source(ctx, &mut fragment_actions)?;
             }
         }

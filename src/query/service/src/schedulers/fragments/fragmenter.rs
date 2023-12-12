@@ -284,7 +284,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
-            State::UpdateSource => FragmentType::UpdateSource,
+            State::UpdateSource => FragmentType::Update,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(
