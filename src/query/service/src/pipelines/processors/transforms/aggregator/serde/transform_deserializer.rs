@@ -217,7 +217,7 @@ where
         match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
-            DataPacket::FetchProgress => unreachable!(),
+            DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
             DataPacket::MergeStatus { .. } => unreachable!(),

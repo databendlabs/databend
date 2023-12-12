@@ -246,14 +246,14 @@ impl OptimizeTableInterpreter {
                     build_res
                         .main_pipeline
                         .set_on_finished(move |may_error| match may_error {
-                            None => InterpreterClusteringHistory::write_log(
+                            Ok(_) => InterpreterClusteringHistory::write_log(
                                 &ctx,
                                 start,
                                 &plan.database,
                                 &plan.table,
                                 reclustered_block_count,
                             ),
-                            Some(error_code) => Err(error_code.clone()),
+                            Err(error_code) => Err(error_code.clone()),
                         });
                 }
             }
@@ -270,9 +270,9 @@ impl OptimizeTableInterpreter {
                 build_res
                     .main_pipeline
                     .set_on_finished(move |may_error| match may_error {
-                        None => GlobalIORuntime::instance()
+                        Ok(_) => GlobalIORuntime::instance()
                             .block_on(async move { purge(ctx, catalog, plan, None).await }),
-                        Some(error_code) => Err(error_code.clone()),
+                        Err(error_code) => Err(error_code.clone()),
                     });
             }
         }
