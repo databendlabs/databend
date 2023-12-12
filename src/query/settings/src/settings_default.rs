@@ -367,7 +367,7 @@ impl DefaultSettings {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Sql duplicate label for deduplication.",
                     possible_values: None,
-                    mode: SettingMode::Write,
+                    mode: SettingMode::Both,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

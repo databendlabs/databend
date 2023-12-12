@@ -857,7 +857,7 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            let pipeline_ctx = QueryContext::create_from_query_level_shared(ctx);
+            let pipeline_ctx = QueryContext::create_from(ctx);
 
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,

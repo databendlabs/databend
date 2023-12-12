@@ -140,19 +140,6 @@ impl QueryContext {
         })
     }
 
-    pub fn create_from_query_level_shared(ctx: Arc<QueryContext>) -> Arc<QueryContext> {
-        Arc::new(QueryContext {
-            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
-            mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
-            clickhouse_version: CLICKHOUSE_VERSION.to_string(),
-            shared: ctx.shared.clone(),
-            query_settings: ctx.query_settings.clone(),
-            fragment_id: Arc::new(AtomicUsize::new(0)),
-            inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
-        })
-    }
-
     /// Build fuse/system normal table by table info.
     ///
     /// TODO(xuanwo): we should support build table via table info in the future.
