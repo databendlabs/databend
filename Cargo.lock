@@ -1130,8 +1130,18 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40f9ca3698b2e4cb7c15571db0abc5551dca417a21ae8140460b50309bb2cc62"
 dependencies = [
- "borsh-derive",
+ "borsh-derive 0.10.2",
  "hashbrown 0.13.2",
+]
+
+[[package]]
+name = "borsh"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9897ef0f1bd2362169de6d7e436ea2237dc1085d7d1e4db75f4be34d86f309d1"
+dependencies = [
+ "borsh-derive 1.2.1",
+ "cfg_aliases",
 ]
 
 [[package]]
@@ -1145,6 +1155,20 @@ dependencies = [
  "proc-macro-crate 0.1.5",
  "proc-macro2",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "478b41ff04256c5c8330f3dfdaaae2a5cc976a8e75088bafa4625b0d0208de8c"
+dependencies = [
+ "once_cell",
+ "proc-macro-crate 2.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+ "syn_derive",
 ]
 
 [[package]]
@@ -1455,6 +1479,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
+
+[[package]]
 name = "chrono"
 version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1699,6 +1729,1557 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "unicode-width",
+]
+
+[[package]]
+name = "common-arrow"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.3",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-data",
+ "arrow-format",
+ "arrow-schema",
+ "async-std",
+ "async-stream",
+ "base64 0.21.0",
+ "bitpacking",
+ "bytemuck",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "dyn-clone",
+ "either",
+ "env_logger",
+ "ethnum 1.5.0",
+ "fallible-streaming-iterator",
+ "flate2",
+ "foreign_vec",
+ "futures",
+ "hashbrown 0.14.0",
+ "itertools 0.10.5",
+ "lexical-core",
+ "log",
+ "lz4",
+ "num",
+ "num-traits",
+ "ordered-float 3.7.0",
+ "parquet2",
+ "proptest",
+ "quanta 0.11.1",
+ "rand 0.8.5",
+ "ringbuffer",
+ "roaring",
+ "seq-macro",
+ "serde",
+ "serde_derive",
+ "simdutf8",
+ "snap",
+ "streaming-iterator",
+ "tokio",
+ "tokio-util",
+ "zstd",
+]
+
+[[package]]
+name = "common-ast"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-io",
+ "common-meta-app",
+ "criterion",
+ "enum-as-inner",
+ "ethnum 1.5.0",
+ "fast-float",
+ "goldenfile",
+ "itertools 0.10.5",
+ "logos",
+ "minitrace",
+ "nom",
+ "nom-rule",
+ "ordered-float 4.2.0",
+ "pratt 0.4.0",
+ "pretty",
+ "pretty_assertions",
+ "regex",
+ "strsim",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
+ "url",
+]
+
+[[package]]
+name = "common-auth"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.0",
+ "chrono",
+ "common-base",
+ "http",
+ "tempfile",
+]
+
+[[package]]
+name = "common-base"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "async-backtrace",
+ "async-channel 2.1.1",
+ "async-trait-fn",
+ "bytesize",
+ "common-exception",
+ "ctrlc",
+ "enquote",
+ "futures",
+ "libc",
+ "log",
+ "logcall",
+ "minitrace",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "pin-project-lite",
+ "pprof",
+ "rand 0.8.5",
+ "regex",
+ "semver",
+ "serde",
+ "state",
+ "tikv-jemalloc-ctl",
+ "tikv-jemalloc-sys",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "common-building"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cargo-license",
+ "cargo_metadata 0.15.3",
+ "gix 0.52.0",
+ "log",
+ "vergen",
+]
+
+[[package]]
+name = "common-cache"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "hashbrown 0.14.0",
+ "hashlink",
+ "heapsize",
+]
+
+[[package]]
+name = "common-catalog"
+version = "0.1.0"
+dependencies = [
+ "arrow-schema",
+ "async-backtrace",
+ "async-trait-fn",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-config",
+ "common-exception",
+ "common-expression",
+ "common-io",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-store",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-settings",
+ "common-storage",
+ "common-users",
+ "dashmap",
+ "dyn-clone",
+ "goldenfile",
+ "parking_lot 0.12.1",
+ "parquet",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "storages-common-table-meta",
+ "thrift",
+ "typetag",
+]
+
+[[package]]
+name = "common-cloud-control"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "chrono",
+ "common-base",
+ "common-exception",
+ "lenient_semver",
+ "prost 0.12.1",
+ "prost-build",
+ "semver",
+ "tonic 0.10.2",
+ "tonic-build",
+ "tower",
+]
+
+[[package]]
+name = "common-compress"
+version = "0.1.0"
+dependencies = [
+ "async-compression 0.4.3",
+ "brotli",
+ "bytes",
+ "common-exception",
+ "env_logger",
+ "futures",
+ "log",
+ "pin-project",
+ "rand 0.8.5",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "common-config"
+version = "0.1.0"
+dependencies = [
+ "chrono-tz",
+ "clap 4.4.2",
+ "common-base",
+ "common-building",
+ "common-exception",
+ "common-grpc",
+ "common-meta-app",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "hex",
+ "log",
+ "pretty_assertions",
+ "semver",
+ "serde",
+ "serfig",
+ "strum 0.24.1",
+]
+
+[[package]]
+name = "common-constraint"
+version = "0.1.0"
+dependencies = [
+ "common-ast",
+ "criterion",
+ "goldenfile",
+ "z3",
+]
+
+[[package]]
+name = "common-datavalues"
+version = "0.1.0"
+dependencies = [
+ "enum-as-inner",
+ "enum_dispatch",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "common-exception"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrow-schema",
+ "backtrace",
+ "bincode 2.0.0-rc.3",
+ "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
+ "common-arrow",
+ "common-meta-stoerr",
+ "common-meta-types",
+ "http",
+ "opendal",
+ "parquet",
+ "paste",
+ "prost 0.12.1",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tonic 0.10.2",
+]
+
+[[package]]
+name = "common-expression"
+version = "0.1.0"
+dependencies = [
+ "arrow-array",
+ "arrow-flight",
+ "arrow-ord",
+ "arrow-schema",
+ "arrow-select",
+ "async-backtrace",
+ "base64 0.21.0",
+ "bumpalo",
+ "chrono",
+ "chrono-tz",
+ "comfy-table 6.1.4",
+ "common-arrow",
+ "common-ast",
+ "common-datavalues",
+ "common-exception",
+ "common-hashtable",
+ "common-io",
+ "dashmap",
+ "educe",
+ "enum-as-inner",
+ "ethnum 1.5.0",
+ "futures",
+ "goldenfile",
+ "hex",
+ "itertools 0.10.5",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "lexical-core",
+ "log",
+ "match-template",
+ "micromarshal 0.5.0",
+ "num-traits",
+ "ordered-float 4.2.0",
+ "pretty_assertions",
+ "rand 0.8.5",
+ "roaring",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "terminal_size",
+ "tonic 0.10.2",
+ "typetag",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "common-formats"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "async-trait-fn",
+ "bstr 1.6.2",
+ "chrono-tz",
+ "common-arrow",
+ "common-exception",
+ "common-expression",
+ "common-io",
+ "common-meta-app",
+ "common-settings",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "lexical-core",
+ "match-template",
+ "micromarshal 0.4.0",
+ "num",
+ "ordered-float 4.2.0",
+ "pretty_assertions",
+ "roaring",
+ "serde_json",
+ "storages-common-blocks",
+ "storages-common-table-meta",
+ "tokio",
+]
+
+[[package]]
+name = "common-functions"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.0",
+ "blake3",
+ "borsh 1.2.1",
+ "bstr 1.6.2",
+ "bumpalo",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "comfy-table 6.1.4",
+ "common-arrow",
+ "common-ast",
+ "common-base",
+ "common-exception",
+ "common-expression",
+ "common-hashtable",
+ "common-io",
+ "common-openai",
+ "common-vector",
+ "crc32fast",
+ "criterion",
+ "ctor 0.1.26",
+ "ethnum 1.5.0",
+ "geo",
+ "geohash",
+ "goldenfile",
+ "h3o",
+ "hex",
+ "itertools 0.10.5",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "lexical-core",
+ "libm",
+ "match-template",
+ "md-5",
+ "memchr",
+ "naive-cityhash",
+ "num-traits",
+ "once_cell",
+ "ordered-float 4.2.0",
+ "rand 0.8.5",
+ "regex",
+ "roaring",
+ "serde",
+ "sha1",
+ "sha2",
+ "simdutf8",
+ "siphasher",
+ "streaming_algorithms",
+ "strength_reduce",
+ "twox-hash",
+]
+
+[[package]]
+name = "common-grpc"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "common-base",
+ "common-exception",
+ "hyper",
+ "jwt-simple",
+ "log",
+ "serde",
+ "thiserror",
+ "tonic 0.10.2",
+ "trust-dns-resolver",
+]
+
+[[package]]
+name = "common-hashtable"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.3",
+ "bumpalo",
+ "cfg-if",
+ "common-arrow",
+ "common-base",
+ "ethnum 1.5.0",
+ "ordered-float 4.2.0",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "common-http"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "async-backtrace",
+ "common-base",
+ "common-exception",
+ "futures",
+ "log",
+ "poem",
+ "pretty_assertions",
+ "serde",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "common-io"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "bincode 2.0.0-rc.3",
+ "borsh 1.2.1",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "common-exception",
+ "ethnum 1.5.0",
+ "lexical-core",
+ "micromarshal 0.5.0",
+ "ordered-float 4.2.0",
+ "rand 0.8.5",
+ "roaring",
+ "serde",
+]
+
+[[package]]
+name = "common-license"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "jwt-simple",
+ "serde",
+]
+
+[[package]]
+name = "common-management"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-base",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-embedded",
+ "common-meta-kvapi",
+ "common-meta-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-storage",
+ "minitrace",
+ "mockall",
+ "serde_json",
+]
+
+[[package]]
+name = "common-meta-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait-fn",
+ "chrono",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-stoerr",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "enumflags2",
+ "futures",
+ "log",
+ "logcall",
+ "maplit",
+ "minitrace",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tonic 0.10.2",
+]
+
+[[package]]
+name = "common-meta-app"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "common-building",
+ "common-exception",
+ "common-expression",
+ "common-io",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "cron",
+ "enumflags2",
+ "hex",
+ "itertools 0.10.5",
+ "maplit",
+ "num-derive",
+ "num-traits",
+ "opendal",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "thiserror",
+ "tonic-build",
+]
+
+[[package]]
+name = "common-meta-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-arrow",
+ "common-base",
+ "common-building",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "common-metrics",
+ "common-tracing",
+ "derive_more",
+ "futures",
+ "log",
+ "logcall",
+ "minitrace",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "prost 0.12.1",
+ "rand 0.8.5",
+ "semver",
+ "serde",
+ "serde_json",
+ "tonic 0.10.2",
+]
+
+[[package]]
+name = "common-meta-embedded"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait-fn",
+ "common-base",
+ "common-meta-api",
+ "common-meta-kvapi",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-stoerr",
+ "common-meta-types",
+ "log",
+ "minitrace",
+ "tempfile",
+]
+
+[[package]]
+name = "common-meta-kvapi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait-fn",
+ "common-meta-types",
+ "futures-util",
+ "log",
+ "minitrace",
+ "serde",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "common-meta-process"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.4.2",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-tracing",
+ "openraft 0.9.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "common-meta-raft-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait-fn",
+ "byteorder",
+ "chrono",
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-kvapi",
+ "common-meta-sled-store",
+ "common-meta-stoerr",
+ "common-meta-types",
+ "common-tracing",
+ "derive_more",
+ "futures",
+ "futures-async-stream",
+ "futures-util",
+ "hostname",
+ "log",
+ "maplit",
+ "minitrace",
+ "num",
+ "openraft 0.9.0",
+ "pretty_assertions",
+ "semver",
+ "serde",
+ "serde_json",
+ "stream-more",
+ "tempfile",
+ "test-harness",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "common-meta-sled-store"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "byteorder",
+ "common-base",
+ "common-meta-stoerr",
+ "common-meta-types",
+ "common-tracing",
+ "log",
+ "minitrace",
+ "openraft 0.9.0",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sled",
+ "tempfile",
+ "test-harness",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "common-meta-stoerr"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "prost 0.12.1",
+ "serde",
+ "serde_json",
+ "sled",
+ "thiserror",
+]
+
+[[package]]
+name = "common-meta-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-grpc",
+ "common-meta-client",
+ "common-meta-embedded",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "log",
+ "tokio-stream",
+]
+
+[[package]]
+name = "common-meta-types"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "common-building",
+ "common-meta-stoerr",
+ "derive_more",
+ "num-derive",
+ "num-traits",
+ "openraft 0.9.0",
+ "prost 0.12.1",
+ "prost-build",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tonic 0.10.2",
+ "tonic-build",
+]
+
+[[package]]
+name = "common-metrics"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-exception",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "parking_lot 0.12.1",
+ "procfs 0.15.1",
+ "prometheus-client",
+ "prometheus-parse",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "common-openai"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "common-metrics",
+ "log",
+ "openai_api_rust",
+]
+
+[[package]]
+name = "common-pipeline-core"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-exception",
+ "common-expression",
+ "futures",
+ "minitrace",
+ "petgraph",
+ "serde",
+ "serde_json",
+ "tokio",
+ "typetag",
+]
+
+[[package]]
+name = "common-pipeline-sinks"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-channel 1.8.0",
+ "async-trait-fn",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-pipeline-core",
+ "tokio",
+]
+
+[[package]]
+name = "common-pipeline-sources"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-channel 1.8.0",
+ "async-trait-fn",
+ "bstr 1.6.2",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-compress",
+ "common-exception",
+ "common-expression",
+ "common-formats",
+ "common-io",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-settings",
+ "common-storage",
+ "csv-core",
+ "dashmap",
+ "futures",
+ "futures-util",
+ "log",
+ "minitrace",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "typetag",
+ "xml-rs",
+]
+
+[[package]]
+name = "common-pipeline-transforms"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-base",
+ "common-exception",
+ "common-expression",
+ "common-pipeline-core",
+ "common-profile",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "match-template",
+ "serde",
+ "typetag",
+]
+
+[[package]]
+name = "common-profile"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "dashmap",
+]
+
+[[package]]
+name = "common-proto-conv"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "common-expression",
+ "common-meta-app",
+ "common-protos",
+ "convert_case 0.6.0",
+ "enumflags2",
+ "maplit",
+ "minitrace",
+ "num",
+ "pretty_assertions",
+ "thiserror",
+]
+
+[[package]]
+name = "common-protos"
+version = "0.1.0"
+dependencies = [
+ "lenient_semver",
+ "num-derive",
+ "num-traits",
+ "prost 0.12.1",
+ "prost-build",
+ "semver",
+ "tonic 0.10.2",
+ "tonic-build",
+]
+
+[[package]]
+name = "common-settings"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "common-ast",
+ "common-config",
+ "common-exception",
+ "common-meta-app",
+ "common-meta-types",
+ "common-users",
+ "dashmap",
+ "itertools 0.10.5",
+ "log",
+ "num_cpus",
+ "once_cell",
+ "serde",
+ "sys-info",
+]
+
+[[package]]
+name = "common-sharing"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-backtrace",
+ "async-trait-fn",
+ "bytes",
+ "common-auth",
+ "common-base",
+ "common-config",
+ "common-exception",
+ "common-meta-api",
+ "common-meta-app",
+ "common-storage",
+ "common-users",
+ "http",
+ "log",
+ "moka",
+ "opendal",
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "common-sql"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.3",
+ "anyhow",
+ "async-backtrace",
+ "async-recursion",
+ "async-trait-fn",
+ "chrono",
+ "chrono-tz",
+ "cidr",
+ "common-ast",
+ "common-base",
+ "common-catalog",
+ "common-config",
+ "common-constraint",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-license",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-profile",
+ "common-settings",
+ "common-storage",
+ "common-storages-delta",
+ "common-storages-iceberg",
+ "common-storages-parquet",
+ "common-storages-result-cache",
+ "common-storages-stage",
+ "common-storages-view",
+ "common-users",
+ "cron",
+ "ctor 0.1.26",
+ "dashmap",
+ "data-mask-feature",
+ "educe",
+ "enum-as-inner",
+ "globiter",
+ "indexmap 2.0.0",
+ "itertools 0.10.5",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "log",
+ "minitrace",
+ "num-derive",
+ "num-traits",
+ "opendal",
+ "ordered-float 4.2.0",
+ "parking_lot 0.12.1",
+ "percent-encoding",
+ "regex",
+ "roaring",
+ "serde",
+ "simsearch",
+ "storages-common-table-meta",
+ "time",
+]
+
+[[package]]
+name = "common-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrow-schema",
+ "async-backtrace",
+ "async-trait-fn",
+ "bytes",
+ "chrono",
+ "common-arrow",
+ "common-auth",
+ "common-base",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-metrics",
+ "dashmap",
+ "flagset",
+ "futures",
+ "log",
+ "metrics",
+ "once_cell",
+ "opendal",
+ "ordered-float 4.2.0",
+ "parquet",
+ "regex",
+ "reqwest",
+ "serde",
+ "storage-encryption",
+ "thiserror",
+]
+
+[[package]]
+name = "common-storages-delta"
+version = "0.1.0"
+dependencies = [
+ "arrow-schema",
+ "async-backtrace",
+ "async-trait-fn",
+ "bytes",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-storage",
+ "common-storages-parquet",
+ "deltalake-core",
+ "futures",
+ "match-template",
+ "minitrace",
+ "object_store",
+ "opendal",
+ "parquet",
+ "serde",
+ "tokio",
+ "typetag",
+ "url",
+]
+
+[[package]]
+name = "common-storages-factory"
+version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-config",
+ "common-exception",
+ "common-meta-app",
+ "common-storages-delta",
+ "common-storages-fuse",
+ "common-storages-iceberg",
+ "common-storages-memory",
+ "common-storages-null",
+ "common-storages-random",
+ "common-storages-stream",
+ "common-storages-view",
+ "dashmap",
+ "storages-common-index",
+]
+
+[[package]]
+name = "common-storages-fuse"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.3",
+ "async-backtrace",
+ "async-trait-fn",
+ "backoff",
+ "bytes",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-io",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-sharing",
+ "common-sql",
+ "common-storage",
+ "enum-as-inner",
+ "futures",
+ "futures-util",
+ "indexmap 2.0.0",
+ "itertools 0.10.5",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "log",
+ "metrics",
+ "minitrace",
+ "opendal",
+ "parquet-format-safe",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "siphasher",
+ "storages-common-blocks",
+ "storages-common-cache",
+ "storages-common-cache-manager",
+ "storages-common-index",
+ "storages-common-pruner",
+ "storages-common-table-meta",
+ "streaming-decompression",
+ "sys-info",
+ "typetag",
+ "uuid",
+]
+
+[[package]]
+name = "common-storages-hive"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-recursion",
+ "async-trait-fn",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-sql",
+ "common-storage",
+ "faststr",
+ "futures",
+ "hive_metastore",
+ "log",
+ "minitrace",
+ "opendal",
+ "ordered-float 4.2.0",
+ "serde",
+ "storages-common-cache",
+ "storages-common-cache-manager",
+ "storages-common-index",
+ "storages-common-table-meta",
+ "typetag",
+ "volo-thrift",
+]
+
+[[package]]
+name = "common-storages-iceberg"
+version = "0.1.0"
+dependencies = [
+ "arrow-schema",
+ "async-backtrace",
+ "async-trait-fn",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-storage",
+ "common-storages-parquet",
+ "futures",
+ "icelake",
+ "match-template",
+ "minitrace",
+ "opendal",
+ "parquet",
+ "serde",
+ "storages-common-pruner",
+ "storages-common-table-meta",
+ "tokio",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-information-schema"
+version = "0.1.0"
+dependencies = [
+ "common-ast",
+ "common-building",
+ "common-catalog",
+ "common-meta-app",
+ "common-storages-view",
+]
+
+[[package]]
+name = "common-storages-memory"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-storage",
+ "parking_lot 0.12.1",
+ "serde",
+ "storages-common-table-meta",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-null"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-building",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+]
+
+[[package]]
+name = "common-storages-parquet"
+version = "0.1.0"
+dependencies = [
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-schema",
+ "async-backtrace",
+ "async-trait-fn",
+ "bytes",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-meta-app",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-sql",
+ "common-storage",
+ "ethnum 1.5.0",
+ "futures",
+ "log",
+ "opendal",
+ "parquet",
+ "rand 0.8.5",
+ "serde",
+ "storages-common-index",
+ "storages-common-pruner",
+ "storages-common-table-meta",
+ "tempfile",
+ "thrift",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-random"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-building",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "serde",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-result-cache"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-arrow",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-store",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-storage",
+ "opendal",
+ "serde",
+ "serde_json",
+ "sha2",
+ "storages-common-blocks",
+ "storages-common-table-meta",
+ "uuid",
+]
+
+[[package]]
+name = "common-storages-share"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "chrono",
+ "common-exception",
+ "common-meta-app",
+ "enumflags2",
+ "goldenfile",
+ "opendal",
+ "serde",
+ "serde_json",
+ "storages-common-table-meta",
+ "tempfile",
+]
+
+[[package]]
+name = "common-storages-stage"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-compress",
+ "common-exception",
+ "common-expression",
+ "common-formats",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-storage",
+ "dashmap",
+ "log",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "typetag",
+ "uuid",
+]
+
+[[package]]
+name = "common-storages-stream"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-sql",
+ "common-storages-fuse",
+ "futures",
+ "futures-util",
+ "log",
+ "minitrace",
+ "opendal",
+ "storages-common-pruner",
+ "storages-common-table-meta",
+]
+
+[[package]]
+name = "common-storages-system"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "chrono",
+ "common-ast",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-cloud-control",
+ "common-config",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "common-meta-api",
+ "common-meta-app",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-profile",
+ "common-sql",
+ "common-storage",
+ "common-storages-fuse",
+ "common-storages-result-cache",
+ "common-storages-stream",
+ "common-storages-view",
+ "common-users",
+ "futures",
+ "itertools 0.10.5",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "log",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "storages-common-cache",
+ "storages-common-cache-manager",
+ "tikv-jemalloc-ctl",
+ "typetag",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-view"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+]
+
+[[package]]
+name = "common-tracing"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "console-subscriber",
+ "defer",
+ "fern",
+ "humantime",
+ "log",
+ "minitrace",
+ "minitrace-opentelemetry",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "tonic 0.10.2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "common-users"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "base64 0.21.0",
+ "chrono",
+ "cidr",
+ "common-base",
+ "common-exception",
+ "common-expression",
+ "common-grpc",
+ "common-management",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-store",
+ "common-meta-types",
+ "enumflags2",
+ "jwt-simple",
+ "log",
+ "p256 0.13.0",
+ "parking_lot 0.12.1",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "wiremock",
+]
+
+[[package]]
+name = "common-vector"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "common-exception",
+ "ndarray",
 ]
 
 [[package]]
@@ -4191,6 +5772,8 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "ethnum",
+ "data-mask-feature",
+ "ethnum 1.5.0",
  "futures",
  "futures-util",
  "goldenfile",
@@ -4216,7 +5799,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "p256 0.13.0",
  "parking_lot 0.12.1",
  "parquet",
@@ -4335,7 +5918,7 @@ dependencies = [
  "databend-common-sql",
  "databend-driver",
  "databend-sql",
- "ethnum",
+ "ethnum 1.5.0",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "rand 0.8.5",
@@ -5002,16 +6585,15 @@ name = "ethnum"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
-dependencies = [
- "ethnum-macros",
- "serde",
-]
 
 [[package]]
-name = "ethnum-macros"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba69ba11ab069d2f946bb46a199630ad6680fa3ecdc87a62c7477f9916095841"
+name = "ethnum"
+version = "1.5.0"
+source = "git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1#4cb05f1e407f76b193d81eef71b5dd0b73216856"
+dependencies = [
+ "borsh 1.2.1",
+ "serde",
+]
 
 [[package]]
 name = "event-listener"
@@ -7721,7 +9303,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "nom",
- "ordered-float 4.1.1",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
  "serde_json",
 ]
@@ -7734,7 +9316,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "nom",
- "ordered-float 4.1.1",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
  "serde_json",
 ]
@@ -8388,8 +9970,17 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2777e7006e9b80afb5d2797e2b9e23865451708c9e280a61253586a0dd3a5db1"
 dependencies = [
- "ethnum",
+ "ethnum 1.3.2",
  "ordered-float 3.7.0",
+]
+
+[[package]]
+name = "micromarshal"
+version = "0.5.0"
+source = "git+https://github.com/ariesdevil/opensrv?rev=6c96813#6c96813099b49e63719740c216914e2f252321bc"
+dependencies = [
+ "ethnum 1.5.0",
+ "ordered-float 4.2.0",
 ]
 
 [[package]]
@@ -8945,7 +10536,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 2.0.1",
  "proc-macro2",
  "quote",
  "syn 2.0.29",
@@ -9233,17 +10824,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc2dbde8f8a79f2102cc474ceb0ad68e3b80b85289ea62389b60e66777e4213"
 dependencies = [
  "num-traits",
- "rand 0.8.5",
- "serde",
 ]
 
 [[package]]
 name = "ordered-float"
-version = "4.1.1"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "536900a8093134cf9ccf00a27deb3532421099e958d9dd431135d0c7543ca1e8"
+checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
 dependencies = [
+ "borsh 1.2.1",
  "num-traits",
+ "rand 0.8.5",
+ "serde",
 ]
 
 [[package]]
@@ -9986,7 +11578,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
 dependencies = [
  "once_cell",
- "toml_edit",
+ "toml_edit 0.19.14",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97dc5fea232fc28d2f597b37c4876b348a40e33f3b02cc975c8d006d78d94b1a"
+dependencies = [
+ "toml_datetime",
+ "toml_edit 0.20.2",
 ]
 
 [[package]]
@@ -11031,7 +12633,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0446843641c69436765a35a5a77088e28c2e6a12da93e84aa3ab1cd4aa5a042"
 dependencies = [
  "arrayvec 0.7.2",
- "borsh",
+ "borsh 0.10.2",
  "bytecheck",
  "byteorder",
  "bytes",
@@ -12180,6 +13782,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn_derive"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1329189c02ff984e9736652b1631330da25eaa6bc639089ed4915d25446cbe7b"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
 name = "sync_wrapper"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12535,7 +14149,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit",
+ "toml_edit 0.19.14",
 ]
 
 [[package]]
@@ -12556,6 +14170,17 @@ dependencies = [
  "indexmap 2.0.0",
  "serde",
  "serde_spanned",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
+dependencies = [
+ "indexmap 2.0.0",
  "toml_datetime",
  "winnow",
 ]

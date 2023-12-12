@@ -14,6 +14,8 @@
 
 use std::fmt::Display;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -151,6 +153,19 @@ pub fn eval_aggr(
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(eval.addr, &mut builder)?;
     Ok((builder.build(), data_type))
+}
+
+#[inline]
+pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
+    writer: &mut W,
+    value: &T,
+) -> Result<()> {
+    borsh_serialize_into_buf(writer, value)
+}
+
+#[inline]
+pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
+    borsh_deserialize_from_stream(slice)
 }
 
 #[inline]
