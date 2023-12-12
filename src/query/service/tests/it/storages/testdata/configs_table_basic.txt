@@ -31,6 +31,9 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'otlp.endpoint'                            | 'http://127.0.0.1:4317'                                        | ''       |
 | 'log'     | 'otlp.level'                               | 'INFO'                                                         | ''       |
 | 'log'     | 'otlp.on'                                  | 'false'                                                        | ''       |
+| 'log'     | 'profile.dir'                              | ''                                                             | ''       |
+| 'log'     | 'profile.on'                               | 'false'                                                        | ''       |
+| 'log'     | 'profile.otlp_endpoint'                    | ''                                                             | ''       |
 | 'log'     | 'query.dir'                                | ''                                                             | ''       |
 | 'log'     | 'query.on'                                 | 'false'                                                        | ''       |
 | 'log'     | 'query.otlp_endpoint'                      | ''                                                             | ''       |
@@ -38,7 +41,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'stderr.format'                            | 'text'                                                         | ''       |
 | 'log'     | 'stderr.level'                             | 'WARN'                                                         | ''       |
 | 'log'     | 'stderr.on'                                | 'true'                                                         | ''       |
-| 'log'     | 'tracing.capture_log_level'                | 'TRACE'                                                        | ''       |
+| 'log'     | 'tracing.capture_log_level'                | 'INFO'                                                         | ''       |
 | 'log'     | 'tracing.on'                               | 'false'                                                        | ''       |
 | 'log'     | 'tracing.otlp_endpoint'                    | 'http://127.0.0.1:4317'                                        | ''       |
 | 'meta'    | 'auto_sync_interval'                       | '0'                                                            | ''       |

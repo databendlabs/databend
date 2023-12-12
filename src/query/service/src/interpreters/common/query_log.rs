@@ -59,7 +59,7 @@ impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
         // log the query log in JSON format
-        info!(target: "query", "{}", event_str);
+        info!(target: "databend::log::query", "{}", event_str);
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
         QueryLogQueue::instance()?.append_data(event)
