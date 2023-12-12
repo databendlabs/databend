@@ -24,7 +24,7 @@ use common_meta_app::schema::TableLockKey;
 use common_meta_kvapi::kvapi::Key;
 use common_pipeline_core::LockGuard;
 
-use crate::LockManager;
+use crate::locks::LockManager;
 
 pub struct TableLock {
     lock_mgr: Arc<LockManager>,
@@ -32,11 +32,11 @@ pub struct TableLock {
 }
 
 impl TableLock {
-    pub fn create(lock_mgr: Arc<LockManager>, table_info: TableInfo) -> Self {
-        TableLock {
+    pub fn create(lock_mgr: Arc<LockManager>, table_info: TableInfo) -> Arc<dyn Lock> {
+        Arc::new(TableLock {
             lock_mgr,
             table_info,
-        }
+        })
     }
 }
 

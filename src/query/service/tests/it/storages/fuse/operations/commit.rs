@@ -101,6 +101,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
@@ -675,6 +676,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn add_query_profiles(&self, _: &[PlanProfile]) {
+        todo!()
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        todo!()
+    }
     fn set_runtime_filter(&self, _filters: (IndexType, Vec<Expr<String>>)) {
         todo!()
     }

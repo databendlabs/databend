@@ -20,6 +20,7 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 minitrace = { workspace = true }
 petgraph = "0.6.2"
+serde = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

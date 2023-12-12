@@ -142,6 +142,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'group_by_spilled_bytes'          | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'group_by_spilled_rows'           | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'handler_type'                    | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'has_profile'                     | 'system'             | 'query_log'           | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'host'                            | 'system'             | 'clusters'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'host'                            | 'system'             | 'processes'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'hostname'                        | 'system'             | 'users'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

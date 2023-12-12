@@ -122,10 +122,10 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
         match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
-            DataPacket::FetchProgress => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
             DataPacket::MergeStatus { .. } => unreachable!(),
+            DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
         }
     }

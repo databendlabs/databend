@@ -39,7 +39,8 @@ use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 
-use super::builder_sort::SortPipelineBuilder;
+use crate::locks::LockManager;
+use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
@@ -222,6 +223,7 @@ impl PipelineBuilder {
         })?;
 
         let snapshot_gen = MutationGenerator::new(recluster_sink.snapshot.clone());
+        let lock = LockManager::create_table_lock(recluster_sink.table_info.clone())?;
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -231,7 +233,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                true,
+                Some(lock.clone()),
                 None,
             )
         })
