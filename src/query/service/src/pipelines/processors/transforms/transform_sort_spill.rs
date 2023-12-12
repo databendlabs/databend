@@ -26,7 +26,6 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::with_number_mapped_type;
-use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -47,13 +46,12 @@ use common_pipeline_transforms::processors::sort::Cursor;
 use common_pipeline_transforms::processors::sort::DateRows;
 use common_pipeline_transforms::processors::sort::Rows;
 use common_pipeline_transforms::processors::sort::SimpleRows;
+use common_pipeline_transforms::processors::sort::SortSpillMeta;
+use common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use common_pipeline_transforms::processors::sort::StringRows;
 use common_pipeline_transforms::processors::sort::TimestampRows;
 
 use crate::spillers::Spiller;
-
-/// A spilled block file is at most 8MB.
-// const SPILL_BATCH_SIZE: usize = 8 * 1024 * 1024;
 
 enum State {
     /// The initial state of the processor.
@@ -74,6 +72,7 @@ pub struct TransformSortSpill<R> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
+    output_order_col: bool,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
@@ -98,6 +97,10 @@ fn need_spill(block: &DataBlock) -> bool {
         .get_meta()
         .and_then(SortSpillMeta::downcast_ref_from)
         .is_some()
+        || block
+            .get_meta()
+            .and_then(SortSpillMetaWithParams::downcast_ref_from)
+            .is_some()
 }
 
 #[async_trait::async_trait]
@@ -129,9 +132,9 @@ where R: Rows + Send + Sync + 'static
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(block) = self.output_data.take() {
             debug_assert!(matches!(self.state, State::MergeFinished));
-            self.output.push_data(Ok(data_block));
+            self.output_block(block);
             return Ok(Event::NeedConsume);
         }
 
@@ -145,20 +148,26 @@ where R: Rows + Send + Sync + 'static
                 State::Init => {
                     if need_spill(&block) {
                         // Need to spill this block.
+                        let meta =
+                            SortSpillMetaWithParams::downcast_ref_from(block.get_meta().unwrap())
+                                .unwrap();
+                        self.batch_size = meta.batch_size;
+                        self.num_merge = meta.num_merge;
+
                         self.input_data = Some(block);
                         self.state = State::Spill;
                         Ok(Event::Async)
                     } else {
                         // If we get a memory block at initial state, it means we will never spill data.
                         debug_assert!(self.spiller.columns_layout.is_empty());
-                        self.output.push_data(Ok(block));
+                        self.output_block(block);
                         self.state = State::NoSpill;
                         Ok(Event::NeedConsume)
                     }
                 }
                 State::NoSpill => {
                     debug_assert!(!need_spill(&block));
-                    self.output.push_data(Ok(block));
+                    self.output_block(block);
                     self.state = State::NoSpill;
                     Ok(Event::NeedConsume)
                 }
@@ -241,25 +250,36 @@ where R: Rows + Sync + Send + 'static
         schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         spiller: Spiller,
+        output_order_col: bool,
     ) -> Self {
-        // TODO(spill): `num_merge` and `batch_size` should be determined by the memory usage.
         Self {
             input,
             output,
             schema,
+            output_order_col,
             input_data: None,
             output_data: None,
             spiller,
             state: State::Init,
-            num_merge: 2,
+            num_merge: 0,
             unmerged_blocks: VecDeque::new(),
-            batch_size: 65535,
+            batch_size: 0,
             sort_desc,
             _r: PhantomData,
         }
     }
 
+    #[inline(always)]
+    fn output_block(&self, mut block: DataBlock) {
+        if !self.output_order_col {
+            block.pop_columns(1);
+        }
+        self.output.push_data(Ok(block));
+    }
+
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
+        debug_assert!(self.num_merge >= 2 && self.batch_size > 0);
+
         let ins = Instant::now();
         let (location, bytes) = self.spiller.spill_block(block).await?;
 
@@ -330,21 +350,6 @@ where R: Rows + Sync + Send + 'static
         self.unmerged_blocks.push_back(spilled);
 
         Ok(())
-    }
-}
-
-/// Mark a partially sorted [`DataBlock`] as a block needs to be spilled.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct SortSpillMeta {}
-
-#[typetag::serde(name = "sort_spill")]
-impl BlockMetaInfo for SortSpillMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals SortSpillMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone SortSpillMeta")
     }
 }
 
@@ -527,6 +532,7 @@ pub fn create_transform_sort_spill(
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     spiller: Spiller,
+    output_order_col: bool,
 ) -> Box<dyn Processor> {
     if sort_desc.len() == 1 {
         let sort_type = schema.field(sort_desc[0].offset).data_type();
@@ -535,25 +541,55 @@ pub fn create_transform_sort_spill(
                 NumberDataType::NUM_TYPE => Box::new(TransformSortSpill::<
                     SimpleRows<NumberType<NUM_TYPE>>,
                 >::create(
-                    input, output, schema, sort_desc, spiller,
+                    input,
+                    output,
+                    schema,
+                    sort_desc,
+                    spiller,
+                    output_order_col
                 )),
             }),
             DataType::Date => Box::new(TransformSortSpill::<DateRows>::create(
-                input, output, schema, sort_desc, spiller,
+                input,
+                output,
+                schema,
+                sort_desc,
+                spiller,
+                output_order_col,
             )),
             DataType::Timestamp => Box::new(TransformSortSpill::<TimestampRows>::create(
-                input, output, schema, sort_desc, spiller,
+                input,
+                output,
+                schema,
+                sort_desc,
+                spiller,
+                output_order_col,
             )),
             DataType::String => Box::new(TransformSortSpill::<StringRows>::create(
-                input, output, schema, sort_desc, spiller,
+                input,
+                output,
+                schema,
+                sort_desc,
+                spiller,
+                output_order_col,
             )),
             _ => Box::new(TransformSortSpill::<CommonRows>::create(
-                input, output, schema, sort_desc, spiller,
+                input,
+                output,
+                schema,
+                sort_desc,
+                spiller,
+                output_order_col,
             )),
         }
     } else {
         Box::new(TransformSortSpill::<CommonRows>::create(
-            input, output, schema, sort_desc, spiller,
+            input,
+            output,
+            schema,
+            sort_desc,
+            spiller,
+            output_order_col,
         ))
     }
 }
@@ -616,6 +652,7 @@ mod tests {
             )]),
             sort_desc,
             spiller,
+            false,
         );
 
         Ok(transform)

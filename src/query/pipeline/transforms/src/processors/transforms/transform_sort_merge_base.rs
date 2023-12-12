@@ -180,7 +180,10 @@ where
 
         match self.inner.add_block(block, cursor)? {
             Status::Continue => Ok(vec![]),
-            Status::Spill(to_spill) => Ok(to_spill),
+            Status::Spill(to_spill) => {
+                self.next_index = 0;
+                Ok(to_spill)
+            }
         }
     }
 
