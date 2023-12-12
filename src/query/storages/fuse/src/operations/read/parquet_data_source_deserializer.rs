@@ -255,7 +255,9 @@ impl Processor for DeserializeDataTransform {
                         Some(self.uncompressed_buffer.clone()),
                     )?;
 
-                    if self.ctx.has_runtime_filters(self.table_index) {
+                    if self.ctx.has_runtime_filters(self.table_index)
+                        && data_block.num_rows() < 1024
+                    {
                         data_block = self.runtime_filter(data_block)?;
                     }
 

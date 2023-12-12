@@ -806,20 +806,20 @@ impl Processor for NativeDeserializeDataTransform {
                 block
             };
 
-            // Step 7: runtime filter
-            if self.ctx.has_runtime_filters(self.table_index) {
-                block = self.runtime_filter(block)?;
-            }
-
-            // Step 8: Add optional virtual columns
+            // Step 7: Add optional virtual columns
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-            let block = if let Some(filter) = &filter {
+            let mut block = if let Some(filter) = &filter {
                 block.filter_boolean_value(filter)?
             } else {
                 block
             };
+
+            // Step 8: runtime filter
+            if self.ctx.has_runtime_filters(self.table_index) && block.num_rows() < 1024 {
+                block = self.runtime_filter(block)?;
+            }
 
             // Step 9: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
             // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
