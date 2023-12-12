@@ -36,13 +36,13 @@ use common_storages_fuse::FuseTable;
 use log::error;
 use log::info;
 use log::warn;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;

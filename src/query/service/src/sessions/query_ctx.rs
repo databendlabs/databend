@@ -64,6 +64,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_metrics::storage::*;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
@@ -845,6 +846,30 @@ impl TableContext for QueryContext {
                 .get_enterprise_license()
                 .unwrap_or_default()
         }
+    }
+
+    fn add_query_profiles(&self, profiles: &[PlanProfile]) {
+        let mut merged_profiles = self.shared.query_profiles.write();
+
+        for query_profile in profiles {
+            match merged_profiles.entry(query_profile.id) {
+                Entry::Vacant(v) => {
+                    v.insert(query_profile.clone());
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().merge(query_profile);
+                }
+            };
+        }
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        self.shared
+            .query_profiles
+            .read()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>()
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {

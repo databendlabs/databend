@@ -30,18 +30,18 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
+use common_metrics::lock::metrics_inc_shutdown_lock_holder_nums;
+use common_metrics::lock::metrics_inc_start_lock_holder_nums;
+use common_metrics::lock::record_acquired_lock_nums;
+use common_metrics::lock::record_created_lock_nums;
 use common_pipeline_core::LockGuard;
 use common_pipeline_core::UnlockApi;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
 use parking_lot::RwLock;
 
-use crate::metrics_inc_shutdown_lock_holder_nums;
-use crate::metrics_inc_start_lock_holder_nums;
-use crate::record_acquired_lock_nums;
-use crate::record_created_lock_nums;
-use crate::table_lock::TableLock;
-use crate::LockHolder;
+use crate::locks::lock_holder::LockHolder;
+use crate::locks::table_lock::TableLock;
 
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
@@ -72,7 +72,7 @@ impl LockManager {
         GlobalInstance::get()
     }
 
-    pub fn create_table_lock(table_info: TableInfo) -> Result<TableLock> {
+    pub fn create_table_lock(table_info: TableInfo) -> Result<Arc<dyn Lock>> {
         let lock_mgr = LockManager::instance();
         Ok(TableLock::create(lock_mgr, table_info))
     }
@@ -102,7 +102,7 @@ impl LockManager {
             .await?;
         let revision = res.revision;
         // metrics.
-        record_created_lock_nums(lock.lock_type(), lock.get_table_id(), 1);
+        record_created_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
 
         let lock_holder = Arc::new(LockHolder::default());
         lock_holder
@@ -132,7 +132,7 @@ impl LockManager {
                 let extend_table_lock_req = lock.gen_extend_lock_req(revision, expire_secs, true);
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_lock_nums(lock.lock_type(), lock.get_table_id(), 1);
+                record_acquired_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
                 break;
             }
 

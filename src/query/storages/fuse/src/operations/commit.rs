@@ -41,7 +41,6 @@ use log::warn;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
-use storages_common_locks::set_backoff;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
@@ -61,6 +60,7 @@ use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeSegment;
+use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
@@ -103,7 +103,7 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
-                false,
+                None,
                 prev_snapshot_id,
             )
         })?;
