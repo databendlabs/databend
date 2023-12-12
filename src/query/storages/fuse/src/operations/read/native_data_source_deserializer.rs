@@ -56,16 +56,20 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::IndexType;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
+use crate::impl_runtime_filter;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
+    ctx: Arc<dyn TableContext>,
+    table_index: IndexType,
     func_ctx: FunctionContext,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
@@ -114,6 +118,8 @@ pub struct NativeDeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
+
+    cached_runtime_filter: Option<Expr>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -216,6 +222,8 @@ impl NativeDeserializeDataTransform {
 
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
+                ctx,
+                table_index: plan.table_index,
                 func_ctx,
                 scan_progress,
                 block_reader,
@@ -248,6 +256,7 @@ impl NativeDeserializeDataTransform {
                 virtual_reader,
 
                 base_block_ids: plan.base_block_ids.clone(),
+                cached_runtime_filter: None,
             },
         )))
     }
@@ -505,6 +514,8 @@ impl NativeDeserializeDataTransform {
         }
         Ok(())
     }
+
+    impl_runtime_filter!();
 }
 
 impl Processor for NativeDeserializeDataTransform {
@@ -795,7 +806,12 @@ impl Processor for NativeDeserializeDataTransform {
                 block
             };
 
-            // Step 7: Add optional virtual columns
+            // Step 7: runtime filter
+            if self.ctx.has_runtime_filters(self.table_index) {
+                block = self.runtime_filter(block)?;
+            }
+
+            // Step 8: Add optional virtual columns
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
@@ -805,7 +821,7 @@ impl Processor for NativeDeserializeDataTransform {
                 block
             };
 
-            // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
+            // Step 9: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
             // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
             let mut block = block.resort(&self.src_schema, &self.output_schema)?;
             if self.block_reader.query_internal_columns() {
@@ -833,7 +849,7 @@ impl Processor for NativeDeserializeDataTransform {
                 block = block.add_meta(Some(Box::new(meta)))?;
             }
 
-            // Step 9: Add the block to output data
+            // Step 10: Add the block to output data
             self.offset_in_part += origin_num_rows;
             self.add_block(block)?;
         }

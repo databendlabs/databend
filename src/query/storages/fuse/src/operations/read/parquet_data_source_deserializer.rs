@@ -24,7 +24,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::{BlockMetaInfoDowncast, Expr};
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -35,6 +35,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::IndexType;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::DataSource;
@@ -46,6 +47,8 @@ use crate::io::VirtualColumnReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 
 pub struct DeserializeDataTransform {
+    ctx: Arc<dyn TableContext>,
+    table_index: IndexType,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
 
@@ -62,6 +65,46 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
+    cached_runtime_filter: Option<Expr>,
+}
+
+#[macro_export]
+macro_rules! impl_runtime_filter {
+    () => {
+        fn runtime_filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+            // Check if already cached runtime filters
+            if self.cached_runtime_filter.is_none() {
+                let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
+                let filter = runtime_filters
+                    .iter()
+                    .map(|filter| {
+                        cast_expr_to_non_null_boolean(
+                            filter
+                                .project_column_ref(|name| self.src_schema.index_of(name).unwrap()),
+                        )
+                        .unwrap()
+                    })
+                    .try_reduce(|lhs, rhs| {
+                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    })
+                    .transpose()
+                    .unwrap_or_else(|| {
+                        Err(ErrorCode::Internal(
+                            "Invalid empty predicate list".to_string(),
+                        ))
+                    })?;
+                self.cached_runtime_filter = Some(filter);
+            }
+            // Using runtime filter to filter data_block
+            let func_ctx = self.ctx.get_function_context()?;
+            let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+            let filter = evaluator
+                .run(self.cached_runtime_filter.as_ref().unwrap())?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+            data_block.filter_boolean_value(&filter)
+        }
+    };
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -97,6 +140,8 @@ impl DeserializeDataTransform {
         let output_schema: DataSchema = (&output_schema).into();
 
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
+            ctx,
+            table_index: plan.table_index,
             scan_progress,
             block_reader,
             input,
@@ -110,8 +155,11 @@ impl DeserializeDataTransform {
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
+            cached_runtime_filter: None,
         })))
     }
+
+    impl_runtime_filter!();
 }
 
 #[async_trait::async_trait]
@@ -206,6 +254,10 @@ impl Processor for DeserializeDataTransform {
                         columns_chunks,
                         Some(self.uncompressed_buffer.clone()),
                     )?;
+
+                    if self.ctx.has_runtime_filters(self.table_index) {
+                        data_block = self.runtime_filter(data_block)?;
+                    }
 
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
