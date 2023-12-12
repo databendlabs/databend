@@ -66,6 +66,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
+use crate::DEFAULT_ROW_PER_PAGE;
 
 pub struct NativeDeserializeDataTransform {
     func_ctx: FunctionContext,
@@ -204,13 +205,12 @@ impl NativeDeserializeDataTransform {
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         let filter_executor = if let Some(expr) = prewhere_filter.as_ref() {
-            let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
             let (select_expr, has_or) = build_select_expr(expr);
             Some(FilterExecutor::new(
                 select_expr,
                 func_ctx.clone(),
                 has_or,
-                max_block_size,
+                DEFAULT_ROW_PER_PAGE,
                 None,
                 &BUILTIN_FUNCTIONS,
             ))
