@@ -31,6 +31,7 @@ mod binary_read;
 mod binary_write;
 
 mod bitmap;
+mod borsh_serialization;
 pub mod cursor_ext;
 mod decimal;
 mod escape;
