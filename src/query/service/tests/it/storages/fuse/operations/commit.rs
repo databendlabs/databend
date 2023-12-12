@@ -704,6 +704,10 @@ impl TableContext for CtxDelegation {
     fn get_runtime_filter_with_id(&self, _id: IndexType) -> Vec<Expr<String>> {
         todo!()
     }
+
+    fn has_runtime_filters(&self, _id: usize) -> bool {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]

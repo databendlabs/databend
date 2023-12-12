@@ -935,6 +935,10 @@ impl TableContext for QueryContext {
         // If don't find the runtime filters, return empty vector.
         runtime_filters.get(&id).cloned().unwrap_or_default()
     }
+
+    fn has_runtime_filters(&self, id: usize) -> bool {
+        self.shared.runtime_filters.read().get(&id).is_some()
+    }
 }
 
 impl TrySpawn for QueryContext {
