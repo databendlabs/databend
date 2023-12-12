@@ -1763,24 +1763,24 @@ impl<'a> TypeChecker<'a> {
             DataType::Array(Box::new(lambda_type))
         };
 
-        match arg_type.remove_nullable() {
+        let (lambda_func, data_type) = match arg_type.remove_nullable() {
             // Null and Empty array can convert to ConstantExpr
-            DataType::Null => Ok(Box::new((
+            DataType::Null => (
                 ConstantExpr {
                     span,
                     value: Scalar::Null,
                 }
                 .into(),
                 DataType::Null,
-            ))),
-            DataType::EmptyArray => Ok(Box::new((
+            ),
+            DataType::EmptyArray => (
                 ConstantExpr {
                     span,
                     value: Scalar::EmptyArray,
                 }
                 .into(),
                 DataType::EmptyArray,
-            ))),
+            ),
             _ => {
                 // generate lambda expression
                 let lambda_field = DataField::new("0", inner_ty.clone());
@@ -1795,7 +1795,7 @@ impl<'a> TypeChecker<'a> {
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
 
-                Ok(Box::new((
+                (
                     LambdaFunc {
                         span,
                         func_name: func_name.to_string(),
@@ -1806,9 +1806,11 @@ impl<'a> TypeChecker<'a> {
                     }
                     .into(),
                     return_type,
-                )))
+                )
             }
-        }
+        };
+
+        Ok(Box::new((lambda_func, data_type)))
     }
 
     /// Resolve function call.
