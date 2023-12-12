@@ -24,7 +24,9 @@ use log::info;
 use super::cost::CostContext;
 use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
+use super::rule::TransformResult;
 use super::Memo;
+use super::RuleFactory;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::hyper_dp::DPhpy;
@@ -127,13 +129,6 @@ pub fn optimize(
             Ok(Plan::CopyIntoTable(plan))
         }
         Plan::MergeInto(plan) => {
-            // before, we think source table is always the small table.
-            // 1. for matched only, we use inner join
-            // 2. for insert only, we use right anti join
-            // 3. for full merge into, we use right outer join
-            // for now, let's import the statistic info to determine
-            // left join or outer join
-
             // optimize source :fix issue #13733
             // reason: if there is subquery,windowfunc exprs etc. see
             // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
@@ -162,6 +157,19 @@ pub fn optimize(
                 Arc::new(join_sexpr.child(0)?.clone()),
                 Arc::new(right_source),
             ]));
+
+            // before, we think source table is always the small table.
+            // 1. for matched only, we use inner join
+            // 2. for insert only, we use right anti join
+            // 3. for full merge into, we use right outer join
+            // for now, let's import the statistic info to determine left join or outer join
+            // we just do optimization for the top join (target and source),won't do recursive optimize
+            let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
+            let mut state = TransformResult::new();
+            // we will reorder the join order according to the cardinality of target and source.
+            rule.apply(&join_sexpr, &mut state)?;
+            assert_eq!(state.results().len(), 1);
+            join_sexpr = Box::new(state.results()[0].clone());
 
             // try to optimize distributed join
             if opt_ctx.config.enable_distributed_optimization
@@ -236,7 +244,10 @@ pub fn optimize_query(
     if unsafe { ctx.get_settings().get_disable_join_reorder()? } {
         return heuristic.optimize_expression(&result, &[RuleID::EliminateEvalScalar]);
     }
-    heuristic.optimize_expression(&result, &RESIDUAL_RULES)
+    println!("result: {:?}\n", result);
+    let result = heuristic.optimize_expression(&result, &RESIDUAL_RULES)?;
+    println!("result2: {:?}\n", result);
+    Ok(result)
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
