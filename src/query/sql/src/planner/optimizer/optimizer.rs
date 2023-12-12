@@ -172,7 +172,7 @@ pub fn optimize(
             // we need to check whether we do swap left and right.
             let old_left = join_sexpr.child(0)?;
             let new_left = state.results()[0].child(0)?;
-            let change_join_order = (old_left == new_left);
+            let change_join_order = old_left == new_left;
             join_sexpr = Box::new(state.results()[0].clone());
             // try to optimize distributed join
             if opt_ctx.config.enable_distributed_optimization
@@ -198,11 +198,13 @@ pub fn optimize(
                 Ok(Plan::MergeInto(Box::new(MergeInto {
                     input: Box::new(optimized_distributed_merge_into_join_sexpr),
                     distributed,
+                    change_join_order,
                     ..*plan
                 })))
             } else {
                 Ok(Plan::MergeInto(Box::new(MergeInto {
                     input: join_sexpr,
+                    change_join_order,
                     ..*plan
                 })))
             }

@@ -149,6 +149,7 @@ impl MergeIntoInterpreter {
             field_index_map,
             merge_type,
             distributed,
+            change_join_order,
             ..
         } = &self.plan;
 
@@ -386,6 +387,7 @@ impl MergeIntoInterpreter {
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
                 merge_type: merge_type.clone(),
+                change_join_order: *change_join_order,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -402,6 +404,7 @@ impl MergeIntoInterpreter {
                     join_output_schema.fields[row_number_idx.unwrap()].clone(),
                 ])),
                 merge_type: merge_type.clone(),
+                change_join_order: *change_join_order,
             }));
 
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
@@ -418,6 +421,7 @@ impl MergeIntoInterpreter {
                 unmatched: unmatched.clone(),
                 input_schema: merge_into_source.output_schema()?,
                 merge_type: merge_type.clone(),
+                change_join_order: *change_join_order,
             }))
         };
 

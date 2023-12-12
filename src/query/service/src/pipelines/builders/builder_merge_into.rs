@@ -97,6 +97,7 @@ impl PipelineBuilder {
             unmatched,
             input_schema,
             merge_type,
+            ..
         } = merge_into_append_not_macted;
 
         // in common case: receive row numbers and MutationLogs
