@@ -45,10 +45,7 @@ use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
 use common_tracing::init_logging;
 use common_tracing::FileConfig;
-use common_tracing::OTLPConfig;
-use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig;
-use common_tracing::TracingConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -98,9 +95,7 @@ async fn main() {
             level: "WARN".to_string(),
             format: "text".to_string(),
         },
-        otlp: OTLPConfig::default(),
-        query: QueryLogConfig::default(),
-        tracing: TracingConfig::default(),
+        ..Default::default()
     };
 
     let _guards = init_logging("databend-metabench", &log_config, BTreeMap::new());
