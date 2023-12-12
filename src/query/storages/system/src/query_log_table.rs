@@ -145,6 +145,8 @@ pub struct QueryLogElement {
 
     // Extra.
     pub extra: String,
+
+    pub has_profiles: bool,
 }
 
 impl SystemLogElement for QueryLogElement {
@@ -265,6 +267,7 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("session_settings", TableDataType::String),
             // Extra.
             TableField::new("extra", TableDataType::String),
+            TableField::new("has_profile", TableDataType::Boolean),
         ])
     }
 
@@ -475,6 +478,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.extra.as_bytes().to_vec()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Boolean(self.has_profiles).as_ref());
         Ok(())
     }
 }

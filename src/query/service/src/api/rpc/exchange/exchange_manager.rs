@@ -371,15 +371,15 @@ impl DataExchangeManager {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
 
-                    statistics_receiver.shutdown(may_error.is_some());
+                    statistics_receiver.shutdown(may_error.is_err());
                     ctx.get_exchange_manager().on_finished_query(&query_id);
                     statistics_receiver.wait_shutdown()?;
 
                     on_finished(may_error)?;
 
                     match may_error {
-                        None => Ok(()),
-                        Some(error_code) => Err(error_code.clone()),
+                        Ok(_) => Ok(()),
+                        Err(error_code) => Err(error_code.clone()),
                     }
                 });
 
@@ -772,7 +772,9 @@ impl QueryCoordinator {
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
-            statistics_sender.shutdown(executor.execute().err());
+            let res = executor.execute().err();
+            let profiles = executor.get_inner().get_profiles();
+            statistics_sender.shutdown(res, profiles);
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id);

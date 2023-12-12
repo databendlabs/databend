@@ -213,8 +213,13 @@ impl Executor {
         match &guard.state {
             Starting(s) => {
                 if let Err(e) = &reason {
-                    InterpreterQueryLog::log_finish(&s.ctx, SystemTime::now(), Some(e.clone()))
-                        .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
+                    InterpreterQueryLog::log_finish(
+                        &s.ctx,
+                        SystemTime::now(),
+                        Some(e.clone()),
+                        false,
+                    )
+                    .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),

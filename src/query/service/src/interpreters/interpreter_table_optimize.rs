@@ -37,12 +37,12 @@ use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
 use common_storages_fuse::FuseTable;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -162,7 +162,7 @@ impl OptimizeTableInterpreter {
 
         if matches!(target, CompactTarget::Segments) {
             table
-                .compact_segments(self.ctx.clone(), self.plan.limit)
+                .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
                 .await?;
             return Ok(PipelineBuildResult::create());
         }
@@ -246,14 +246,14 @@ impl OptimizeTableInterpreter {
                     build_res
                         .main_pipeline
                         .set_on_finished(move |may_error| match may_error {
-                            None => InterpreterClusteringHistory::write_log(
+                            Ok(_) => InterpreterClusteringHistory::write_log(
                                 &ctx,
                                 start,
                                 &plan.database,
                                 &plan.table,
                                 reclustered_block_count,
                             ),
-                            Some(error_code) => Err(error_code.clone()),
+                            Err(error_code) => Err(error_code.clone()),
                         });
                 }
             }
@@ -270,9 +270,9 @@ impl OptimizeTableInterpreter {
                 build_res
                     .main_pipeline
                     .set_on_finished(move |may_error| match may_error {
-                        None => GlobalIORuntime::instance()
+                        Ok(_) => GlobalIORuntime::instance()
                             .block_on(async move { purge(ctx, catalog, plan, None).await }),
-                        Some(error_code) => Err(error_code.clone()),
+                        Err(error_code) => Err(error_code.clone()),
                     });
             }
         }

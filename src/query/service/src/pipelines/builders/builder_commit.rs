@@ -24,6 +24,7 @@ use common_storages_fuse::operations::TableMutationAggregator;
 use common_storages_fuse::operations::TransformMergeCommitMeta;
 use common_storages_fuse::FuseTable;
 
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -65,6 +66,11 @@ impl PipelineBuilder {
         }
 
         let snapshot_gen = MutationGenerator::new(plan.snapshot.clone());
+        let lock = if plan.need_lock {
+            Some(LockManager::create_table_lock(plan.table_info.clone())?)
+        } else {
+            None
+        };
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -74,7 +80,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                plan.need_lock,
+                lock.clone(),
                 None,
             )
         })

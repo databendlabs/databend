@@ -14,12 +14,11 @@
 
 use std::sync::LazyLock;
 
-use common_meta_app::schema::LockType;
-use common_metrics::register_counter;
-use common_metrics::register_counter_family;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::VecLabels;
+use crate::register_counter;
+use crate::register_counter_family;
+use crate::Counter;
+use crate::Family;
+use crate::VecLabels;
 
 const METRIC_CREATED_LOCK_NUMS: &str = "created_lock_nums";
 const METRIC_ACQUIRED_LOCK_NUMS: &str = "acquired_lock_nums";
@@ -38,17 +37,17 @@ static SHUTDOWN_LOCK_HOLDER_NUMS: LazyLock<Counter> =
 const LABEL_TYPE: &str = "type";
 const LABEL_TABLE_ID: &str = "table_id";
 
-pub fn record_created_lock_nums(lock_type: LockType, table_id: u64, num: u64) {
+pub fn record_created_lock_nums(lock_type: String, table_id: u64, num: u64) {
     let labels = &vec![
-        (LABEL_TYPE, lock_type.to_string()),
+        (LABEL_TYPE, lock_type),
         (LABEL_TABLE_ID, table_id.to_string()),
     ];
     CREATED_LOCK_NUMS.get_or_create(labels).inc_by(num);
 }
 
-pub fn record_acquired_lock_nums(lock_type: LockType, table_id: u64, num: u64) {
+pub fn record_acquired_lock_nums(lock_type: String, table_id: u64, num: u64) {
     let labels = &vec![
-        (LABEL_TYPE, lock_type.to_string()),
+        (LABEL_TYPE, lock_type),
         (LABEL_TABLE_ID, table_id.to_string()),
     ];
     ACQUIRED_LOCK_NUMS.get_or_create(labels).inc_by(num);

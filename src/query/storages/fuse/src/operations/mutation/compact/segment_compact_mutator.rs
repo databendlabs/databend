@@ -21,7 +21,6 @@ use common_exception::Result;
 use log::info;
 use metrics::gauge;
 use opendal::Operator;
-use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -48,6 +47,7 @@ pub struct SegmentCompactionState {
 
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
+    lock: Arc<dyn Lock>,
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
@@ -58,6 +58,7 @@ pub struct SegmentCompactMutator {
 impl SegmentCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
@@ -65,6 +66,7 @@ impl SegmentCompactMutator {
     ) -> Result<Self> {
         Ok(Self {
             ctx,
+            lock,
             compact_params,
             data_accessor: operator,
             location_generator,
@@ -139,8 +141,7 @@ impl SegmentCompactMutator {
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let table_lock = LockManager::create_table_lock(fuse_table.table_info.clone())?;
-        let _guard = table_lock.try_lock(self.ctx.clone()).await?;
+        let _guard = self.lock.try_lock(self.ctx.clone()).await?;
 
         fuse_table
             .commit_mutation(
