@@ -21,9 +21,8 @@ use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::query_spill_prefix;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::try_create_transform_sort_merge;
-use common_pipeline_transforms::processors::try_create_transform_sort_merge_limit;
 use common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use common_pipeline_transforms::processors::TransformSortPartial;
 use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
@@ -283,29 +282,25 @@ impl SortPipelineBuilder {
         } else {
             true
         });
-        pipeline.add_transform(|input, output| {
-            let transform = match self.limit {
-                Some(limit) => try_create_transform_sort_merge_limit(
-                    input,
-                    output,
-                    self.schema.clone(),
-                    self.sort_desc.clone(),
-                    self.partial_block_size,
-                    limit,
-                    order_col_generated,
-                    need_multi_merge || !self.remove_order_col_at_last,
-                )?,
-                _ => try_create_transform_sort_merge(
-                    input,
-                    output,
-                    self.schema.clone(),
-                    self.partial_block_size,
-                    self.sort_desc.clone(),
-                    order_col_generated,
-                    need_multi_merge || !self.remove_order_col_at_last,
-                )?,
-            };
 
+        let (max_memory_usage, bytes_limit_per_proc) =
+            self.get_memory_settings(pipeline.output_len())?;
+
+        pipeline.add_transform(|input, output| {
+            let builder = TransformSortMergeBuilder::create(
+                input,
+                output,
+                self.schema.clone(),
+                self.sort_desc.clone(),
+                self.partial_block_size,
+            )
+            .with_limit(self.limit)
+            .with_order_col_generated(order_col_generated)
+            .with_output_order_col(need_multi_merge || !self.remove_order_col_at_last)
+            .with_max_memory_usage(max_memory_usage)
+            .with_spilling_bytes_threshold_per_core(bytes_limit_per_proc);
+
+            let transform = builder.build()?;
             if let Some((plan_id, prof)) = &self.prof_info {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
@@ -317,9 +312,7 @@ impl SortPipelineBuilder {
             }
         })?;
 
-        let (memory_ratio, bytes_limit_per_proc) =
-            self.get_memory_settings(pipeline.output_len())?;
-        if memory_ratio != 0 && bytes_limit_per_proc != 0 {
+        if max_memory_usage != 0 && bytes_limit_per_proc != 0 {
             let config = SpillerConfig::create(query_spill_prefix(&self.ctx.get_tenant()));
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();

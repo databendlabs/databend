@@ -22,24 +22,15 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::row::RowConverter as CommonConverter;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::with_number_mapped_type;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
 
 use super::sort::CommonRows;
 use super::sort::Cursor;
 use super::sort::DateConverter;
 use super::sort::DateRows;
 use super::sort::Rows;
-use super::sort::SimpleRowConverter;
-use super::sort::SimpleRows;
 use super::sort::StringConverter;
 use super::sort::StringRows;
 use super::sort::TimestampConverter;
@@ -48,7 +39,6 @@ use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::Status;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
-use super::AccumulatingTransformer;
 
 /// Merge sort blocks without limit.
 ///
@@ -59,15 +49,27 @@ pub struct TransformSortMerge<R: Rows> {
     buffer: Vec<DataBlock>,
 
     aborting: Arc<AtomicBool>,
+    // The following fields are used for spilling.
+    // may_spill: bool,
+    // max_memory_usage: usize,
+    // spilling_bytes_threshold: usize,
 }
 
 impl<R: Rows> TransformSortMerge<R> {
-    pub fn create(block_size: usize) -> Self {
+    pub fn create(
+        block_size: usize,
+        _max_memory_usage: usize,
+        _spilling_bytes_threshold: usize,
+    ) -> Self {
+        // let may_spill = max_memory_usage != 0 && spilling_bytes_threshold != 0;
         TransformSortMerge {
             block_size,
             heap: BinaryHeap::new(),
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
+            // may_spill,
+            // max_memory_usage,
+            // spilling_bytes_threshold,
         }
     }
 }
@@ -170,109 +172,20 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     }
 }
 
-type MergeSortDateImpl = TransformSortMerge<DateRows>;
-type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
+pub(super) type MergeSortDateImpl = TransformSortMerge<DateRows>;
+pub(super) type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
 
-type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
-type MergeSortTimestamp =
+pub(super) type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
+pub(super) type MergeSortTimestamp =
     TransformSortMergeBase<MergeSortTimestampImpl, TimestampRows, TimestampConverter>;
 
-type MergeSortStringImpl = TransformSortMerge<StringRows>;
-type MergeSortString = TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
+pub(super) type MergeSortStringImpl = TransformSortMerge<StringRows>;
+pub(super) type MergeSortString =
+    TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
 
-type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
-type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
-
-pub fn try_create_transform_sort_merge(
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    schema: DataSchemaRef,
-    block_size: usize,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
-    order_col_generated: bool,
-    output_order_col: bool,
-) -> Result<Box<dyn Processor>> {
-    let processor = if sort_desc.len() == 1 {
-        let sort_type = schema.field(sort_desc[0].offset).data_type();
-        match sort_type {
-            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    TransformSortMergeBase::<
-                        TransformSortMerge<SimpleRows<NumberType<NUM_TYPE>>>,
-                        SimpleRows<NumberType<NUM_TYPE>>,
-                        SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >::try_create(
-                        schema,
-                        sort_desc,
-                        order_col_generated,
-                        output_order_col,
-                        TransformSortMerge::create(block_size),
-                    )?,
-                ),
-            }),
-            DataType::Date => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortDate::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortDateImpl::create(block_size),
-                )?,
-            ),
-            DataType::Timestamp => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortTimestamp::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortTimestampImpl::create(block_size),
-                )?,
-            ),
-            DataType::String => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortString::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortStringImpl::create(block_size),
-                )?,
-            ),
-            _ => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortCommon::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortCommonImpl::create(block_size),
-                )?,
-            ),
-        }
-    } else {
-        AccumulatingTransformer::create(
-            input,
-            output,
-            MergeSortCommon::try_create(
-                schema,
-                sort_desc,
-                order_col_generated,
-                output_order_col,
-                MergeSortCommonImpl::create(block_size),
-            )?,
-        )
-    };
-
-    Ok(processor)
-}
+pub(super) type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
+pub(super) type MergeSortCommon =
+    TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
 
 pub fn sort_merge(
     data_schema: DataSchemaRef,
@@ -285,7 +198,7 @@ pub fn sort_merge(
         Arc::new(sort_desc),
         false,
         false,
-        MergeSortCommonImpl::create(block_size),
+        MergeSortCommonImpl::create(block_size, 0, 0),
     )?;
     for block in data_blocks {
         processor.transform(block)?;
