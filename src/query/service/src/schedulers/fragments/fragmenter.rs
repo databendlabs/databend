@@ -61,7 +61,7 @@ enum State {
     SelectLeaf,
     DeleteLeaf,
     ReplaceInto,
-    UpdateSource,
+    Update,
     Compact,
     Recluster,
     Other,
@@ -158,7 +158,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         &mut self,
         plan: &common_sql::executor::physical_plans::UpdateSource,
     ) -> Result<PhysicalPlan> {
-        self.state = State::UpdateSource;
+        self.state = State::Update;
 
         Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
     }
@@ -284,7 +284,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
-            State::UpdateSource => FragmentType::Update,
+            State::Update => FragmentType::Update,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

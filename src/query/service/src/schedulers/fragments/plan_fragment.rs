@@ -138,7 +138,7 @@ impl PlanFragment {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
             FragmentType::Update => {
-                self.redistribute_update_source(ctx, &mut fragment_actions)?;
+                self.redistribute_update(ctx, &mut fragment_actions)?;
             }
         }
 
@@ -216,7 +216,7 @@ impl PlanFragment {
         Ok(())
     }
 
-    fn redistribute_update_source(
+    fn redistribute_update(
         &self,
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
@@ -238,8 +238,8 @@ impl PlanFragment {
         for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
-            let mut replace_update_source = ReplaceUpdateSource { partitions: parts };
-            plan = replace_update_source.replace(&plan)?;
+            let mut replace_update = ReplaceUpdate { partitions: parts };
+            plan = replace_update.replace(&plan)?;
 
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -523,11 +523,11 @@ impl PhysicalPlanReplacer for ReplaceDeleteSource {
     }
 }
 
-struct ReplaceUpdateSource {
+struct ReplaceUpdate {
     pub partitions: Partitions,
 }
 
-impl PhysicalPlanReplacer for ReplaceUpdateSource {
+impl PhysicalPlanReplacer for ReplaceUpdate {
     fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: self.partitions.clone(),
