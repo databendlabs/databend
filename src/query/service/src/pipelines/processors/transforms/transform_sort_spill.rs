@@ -18,6 +18,7 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +31,12 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_metrics::transform::metrics_inc_sort_spill_read_bytes;
+use common_metrics::transform::metrics_inc_sort_spill_read_count;
+use common_metrics::transform::metrics_inc_sort_spill_read_milliseconds;
+use common_metrics::transform::metrics_inc_sort_spill_write_bytes;
+use common_metrics::transform::metrics_inc_sort_spill_write_count;
+use common_metrics::transform::metrics_inc_sort_spill_write_milliseconds;
 use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
@@ -204,7 +211,16 @@ where R: Rows + Send + Sync + 'static
                 // TODO: pass the spilled locations to next processor directly.
                 // The next processor will read and process the spilled files.
                 if let Some(file) = self.unmerged_blocks[0].pop_front() {
-                    let block = self.spiller.read_spilled(&file).await?;
+                    let ins = Instant::now();
+                    let (block, bytes) = self.spiller.read_spilled(&file).await?;
+
+                    // perf
+                    {
+                        metrics_inc_sort_spill_read_count();
+                        metrics_inc_sort_spill_read_bytes(bytes);
+                        metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
+                    }
+
                     self.output_data = Some(block);
                 } else {
                     self.state = State::Finish;
@@ -244,7 +260,16 @@ where R: Rows + Sync + Send + 'static
     }
 
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
-        let location = self.spiller.spill_block(block).await?;
+        let ins = Instant::now();
+        let (location, bytes) = self.spiller.spill_block(block).await?;
+
+        // perf
+        {
+            metrics_inc_sort_spill_write_count();
+            metrics_inc_sort_spill_write_bytes(bytes);
+            metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
+        }
+
         self.unmerged_blocks.push_back(vec![location].into());
         Ok(())
     }
@@ -290,7 +315,16 @@ where R: Rows + Sync + Send + 'static
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.next().await? {
-            let location = self.spiller.spill_block(block).await?;
+            let ins = Instant::now();
+            let (location, bytes) = self.spiller.spill_block(block).await?;
+
+            // perf
+            {
+                metrics_inc_sort_spill_write_count();
+                metrics_inc_sort_spill_write_bytes(bytes);
+                metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
+            }
+
             spilled.push_back(location);
         }
         self.unmerged_blocks.push_back(spilled);
@@ -325,7 +359,16 @@ impl BlockStream {
             BlockStream::Block(block) => block.take(),
             BlockStream::Spilled((files, spiller)) => {
                 if let Some(file) = files.pop_front() {
-                    let block = spiller.read_spilled(&file).await?;
+                    let ins = Instant::now();
+                    let (block, bytes) = spiller.read_spilled(&file).await?;
+
+                    // perf
+                    {
+                        metrics_inc_sort_spill_read_count();
+                        metrics_inc_sort_spill_read_bytes(bytes);
+                        metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
+                    }
+
                     Some(block)
                 } else {
                     None
