@@ -14,6 +14,8 @@
 
 use std::fmt::Display;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,6 +25,8 @@ use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 use common_io::prelude::bincode_deserialize_from_stream;
 use common_io::prelude::bincode_serialize_into_buf;
+use common_io::prelude::borsh_deserialize_from_stream;
+use common_io::prelude::borsh_serialize_into_buf;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -151,6 +155,19 @@ pub fn eval_aggr(
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(eval.addr, &mut builder)?;
     Ok((builder.build(), data_type))
+}
+
+#[inline]
+pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
+    writer: &mut W,
+    value: &T,
+) -> Result<()> {
+    borsh_serialize_into_buf(writer, value)
+}
+
+#[inline]
+pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
+    borsh_deserialize_from_stream(slice)
 }
 
 #[inline]
