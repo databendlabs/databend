@@ -136,6 +136,7 @@ pub fn init_logging(
     // Initialize logging
     let mut normal_logger = fern::Dispatch::new();
     let mut query_logger = fern::Dispatch::new();
+    let mut profile_logger = fern::Dispatch::new();
 
     // File logger
     if cfg.file.on {
@@ -201,17 +202,35 @@ pub fn init_logging(
         }
     }
 
+    // Profile logger
+    if cfg.profile.on {
+        if !cfg.profile.dir.is_empty() {
+            let (profile_log_file, flush_guard) = new_file_log_writer(&cfg.profile.dir, name);
+            guards.push(Box::new(flush_guard));
+            profile_logger =
+                profile_logger.chain(Box::new(profile_log_file) as Box<dyn Write + Send>);
+        }
+        if !cfg.profile.otlp_endpoint.is_empty() {
+            let mut labels = labels.clone();
+            labels.insert("category".to_string(), "profile".to_string());
+            labels.extend(cfg.profile.labels.clone());
+            let logger = new_otlp_log_writer(&cfg.profile.otlp_endpoint, labels);
+            profile_logger = profile_logger.chain(Box::new(logger) as Box<dyn Log>);
+        }
+    }
+
     let logger = fern::Dispatch::new()
         .chain(
             fern::Dispatch::new()
-                .level_for("query", LevelFilter::Off)
+                .level_for("databend::log::query", LevelFilter::Off)
+                .level_for("databend::log::profile", LevelFilter::Off)
                 .filter(|meta| {
                     if meta.target().starts_with("databend_")
                         || meta.target().starts_with("common_")
                     {
                         true
                     } else {
-                        meta.level() >= LevelFilter::Error
+                        meta.level() <= LevelFilter::Error
                     }
                 })
                 .chain(normal_logger),
@@ -219,8 +238,14 @@ pub fn init_logging(
         .chain(
             fern::Dispatch::new()
                 .level(LevelFilter::Off)
-                .level_for("query", LevelFilter::Info)
+                .level_for("databend::log::query", LevelFilter::Info)
                 .chain(query_logger),
+        )
+        .chain(
+            fern::Dispatch::new()
+                .level(LevelFilter::Off)
+                .level_for("databend::log::profile", LevelFilter::Info)
+                .chain(profile_logger),
         );
 
     // Set global logger
