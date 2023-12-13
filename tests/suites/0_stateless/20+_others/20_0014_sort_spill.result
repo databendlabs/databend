@@ -1,0 +1,62 @@
+0
+1
+NULL
+===================
+transform_spill_write_count_total	{"spill":"sort_spill"}	4.0
+transform_spill_write_bytes_total	{"spill":"sort_spill"}	4672.0
+transform_spill_read_count_total	{"spill":"sort_spill"}	4.0
+transform_spill_read_bytes_total	{"spill":"sort_spill"}	4672.0
+===================
+0
+1
+NULL
+1
+0
+NULL
+3	7
+2	8
+1	9
+===================
+one
+Two
+4
+1
+===================
+2	NULL
+2	5
+NULL	6
+4	8
+2	5
+NULL	6
+4	8
+2	NULL
+2	NULL
+4	8
+NULL	6
+2	5
+===================
+transform_spill_write_count_total	{"spill":"sort_spill"}	36.0
+transform_spill_write_bytes_total	{"spill":"sort_spill"}	55216.0
+transform_spill_read_count_total	{"spill":"sort_spill"}	36.0
+transform_spill_read_bytes_total	{"spill":"sort_spill"}	55216.0
+===================
+2	NULL
+2	5
+4	8
+NULL	NULL
+NULL	6
+2	NULL
+2	5
+4	8
+NULL	NULL
+NULL	6
+NULL	6
+NULL	NULL
+2	5
+2	NULL
+4	8
+NULL	6
+NULL	NULL
+2	5
+2	NULL
+4	8

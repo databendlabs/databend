@@ -108,9 +108,11 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
-    pub async fn read_spilled(&self, file: &str) -> Result<DataBlock> {
+    pub async fn read_spilled(&self, file: &str) -> Result<(DataBlock, u64)> {
         debug_assert!(self.columns_layout.contains_key(file));
         let data = self.operator.read(file).await?;
+        let bytes = data.len() as u64;
+
         let mut begin = 0;
         let mut columns = Vec::with_capacity(self.columns_layout.len());
         let columns_layout = self.columns_layout.get(file).unwrap();
@@ -119,13 +121,14 @@ impl Spiller {
             begin += column_layout;
         }
         let block = DataBlock::new_from_columns(columns);
-        Ok(block)
+        Ok((block, bytes))
     }
 
     /// Write a [`DataBlock`] to storage.
-    pub async fn spill_block(&mut self, data: DataBlock) -> Result<String> {
+    pub async fn spill_block(&mut self, data: DataBlock) -> Result<(String, u64)> {
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
+        let mut write_bytes = 0;
 
         let mut writer = self.operator.writer(&location).await?;
         let columns = data.columns().to_vec();
@@ -139,6 +142,7 @@ impl Spiller {
                     layouts.push(column_data.len());
                 })
                 .or_insert(vec![column_data.len()]);
+            write_bytes += column_data.len() as u64;
             columns_data.push(column_data);
         }
         for data in columns_data.into_iter() {
@@ -146,7 +150,7 @@ impl Spiller {
         }
         writer.close().await?;
 
-        Ok(location)
+        Ok((location, write_bytes))
     }
 
     #[async_backtrace::framed]
@@ -176,7 +180,7 @@ impl Spiller {
             bytes: data.memory_size(),
         };
 
-        let location = self.spill_block(data).await?;
+        let (location, _) = self.spill_block(data).await?;
         self.spilled_partition_set.insert(p_id);
         self.partition_location
             .entry(p_id)
@@ -216,7 +220,7 @@ impl Spiller {
         let mut spilled_data = Vec::with_capacity(files.len());
         // Todo: make it parallel
         for file in files.iter() {
-            let block = self.read_spilled(file).await?;
+            let (block, _) = self.read_spilled(file).await?;
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }

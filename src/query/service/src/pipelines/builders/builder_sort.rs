@@ -15,15 +15,18 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_core::query_spill_prefix;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::try_create_transform_sort_merge;
-use common_pipeline_transforms::processors::try_create_transform_sort_merge_limit;
 use common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use common_pipeline_transforms::processors::TransformSortPartial;
 use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
@@ -277,35 +280,34 @@ impl SortPipelineBuilder {
     ) -> Result<()> {
         // Merge sort
         let need_multi_merge = pipeline.output_len() > 1;
+        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
         debug_assert!(if order_col_generated {
             // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
-            !need_multi_merge && self.remove_order_col_at_last
+            !output_order_col
         } else {
             true
         });
-        pipeline.add_transform(|input, output| {
-            let transform = match self.limit {
-                Some(limit) => try_create_transform_sort_merge_limit(
-                    input,
-                    output,
-                    self.schema.clone(),
-                    self.sort_desc.clone(),
-                    self.partial_block_size,
-                    limit,
-                    order_col_generated,
-                    need_multi_merge || !self.remove_order_col_at_last,
-                )?,
-                _ => try_create_transform_sort_merge(
-                    input,
-                    output,
-                    self.schema.clone(),
-                    self.partial_block_size,
-                    self.sort_desc.clone(),
-                    order_col_generated,
-                    need_multi_merge || !self.remove_order_col_at_last,
-                )?,
-            };
 
+        let (max_memory_usage, bytes_limit_per_proc) =
+            self.get_memory_settings(pipeline.output_len())?;
+
+        let may_spill = max_memory_usage != 0 && bytes_limit_per_proc != 0;
+
+        pipeline.add_transform(|input, output| {
+            let builder = TransformSortMergeBuilder::create(
+                input,
+                output,
+                self.schema.clone(),
+                self.sort_desc.clone(),
+                self.partial_block_size,
+            )
+            .with_limit(self.limit)
+            .with_order_col_generated(order_col_generated)
+            .with_output_order_col(output_order_col || may_spill)
+            .with_max_memory_usage(max_memory_usage)
+            .with_spilling_bytes_threshold_per_core(bytes_limit_per_proc);
+
+            let transform = builder.build()?;
             if let Some((plan_id, prof)) = &self.prof_info {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
@@ -317,10 +319,19 @@ impl SortPipelineBuilder {
             }
         })?;
 
-        let (memory_ratio, bytes_limit_per_proc) =
-            self.get_memory_settings(pipeline.output_len())?;
-        if memory_ratio != 0 && bytes_limit_per_proc != 0 {
+        if may_spill {
             let config = SpillerConfig::create(query_spill_prefix(&self.ctx.get_tenant()));
+            // The input of the processor must contain an order column.
+            let schema = if let Some(f) = self.schema.fields.last() && f.name() == "_order_col" {
+                self.schema.clone()
+            } else {
+                let mut fields = self.schema.fields().clone();
+                fields.push(DataField::new(
+                    "_order_col",
+                    order_column_type(&self.sort_desc, &self.schema),
+                ));
+                DataSchemaRefExt::create(fields)
+            };
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller =
@@ -328,9 +339,10 @@ impl SortPipelineBuilder {
                 let transform = create_transform_sort_spill(
                     input,
                     output,
-                    self.schema.clone(),
+                    schema.clone(),
                     self.sort_desc.clone(),
                     spiller,
+                    output_order_col,
                 );
                 if let Some((plan_id, prof)) = &self.prof_info {
                     Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
@@ -359,4 +371,18 @@ impl SortPipelineBuilder {
 
         Ok(())
     }
+}
+
+fn order_column_type(desc: &[SortColumnDescription], schema: &DataSchema) -> DataType {
+    debug_assert!(!desc.is_empty());
+    if desc.len() == 1 {
+        let order_by_field = schema.field(desc[0].offset);
+        if matches!(
+            order_by_field.data_type(),
+            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+        ) {
+            return order_by_field.data_type().clone();
+        }
+    }
+    DataType::String
 }

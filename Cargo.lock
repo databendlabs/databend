@@ -2603,6 +2603,8 @@ dependencies = [
  "common-profile",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "match-template",
+ "serde",
+ "typetag",
 ]
 
 [[package]]
