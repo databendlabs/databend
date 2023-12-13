@@ -66,6 +66,7 @@ impl DefaultSettings {
                     desc: "Enables clickhouse handler.",
                     possible_values: None,
                     mode: SettingMode::Both,
+                    range: None,
                 }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
