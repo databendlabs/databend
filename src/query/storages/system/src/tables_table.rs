@@ -224,10 +224,17 @@ where TablesTable<T>: HistoryAware
 
             let final_dbs = dbs
                 .into_iter()
-                .filter(|db| visibility_checker.check_database_visibility(ctl_name, db.name()))
+                .filter(|db| {
+                    visibility_checker.check_database_visibility(
+                        ctl_name,
+                        db.name(),
+                        db.get_db_info().ident.db_id,
+                    )
+                })
                 .collect::<Vec<_>>();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
+                let db_id = db.get_db_info().ident.db_id;
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
@@ -251,8 +258,13 @@ where TablesTable<T>: HistoryAware
                 for table in tables {
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
-                    if visibility_checker.check_table_visibility(ctl_name, db.name(), table.name())
-                        && table.engine() != "STREAM"
+                    if visibility_checker.check_table_visibility(
+                        ctl_name,
+                        db.name(),
+                        table.name(),
+                        db_id,
+                        table.get_id(),
+                    ) && table.engine() != "STREAM"
                     {
                         catalogs.push(ctl_name.as_bytes().to_vec());
                         databases.push(name.as_bytes().to_vec());

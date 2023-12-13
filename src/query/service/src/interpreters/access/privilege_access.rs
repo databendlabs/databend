@@ -60,25 +60,52 @@ impl PrivilegeAccess {
         let tenant = self.ctx.get_tenant();
 
         let object = match object {
-            GrantObject::Database(catalog_name, db_id) => {
-                // if db_name.to_lowercase() == "system" {
-                //     return Ok(None);
-                // }
+            GrantObject::Database(catalog_name, db_name) => {
+                if db_name.to_lowercase() == "system" {
+                    return Ok(None);
+                }
+                let db_id = self
+                    .ctx
+                    .get_catalog(catalog_name)
+                    .await?
+                    .get_database(&tenant, db_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
                 GrantObjectByID::Database {
                     catalog_name: catalog_name.clone(),
-                    db_id: *db_id,
+                    db_id,
                 }
             }
-            GrantObject::Table(catalog_name, db_id, table_id) => {
-                // if db_name.to_lowercase() == "system" {
-                //     return Ok(None);
-                // }
+            GrantObject::Table(catalog_name, db_name, table_name) => {
+                if db_name.to_lowercase() == "system" {
+                    return Ok(None);
+                }
+                let catalog = self.ctx.get_catalog(catalog_name).await?;
+                let db_id = catalog
+                    .get_database(&tenant, db_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                let table = catalog.get_table(&tenant, db_name, table_name).await?;
+                let table_id = table.get_id();
                 GrantObjectByID::Table {
                     catalog_name: catalog_name.clone(),
-                    db_id: *db_id,
-                    table_id: *table_id,
+                    db_id,
+                    table_id,
                 }
             }
+            GrantObject::DatabaseById(catalog_name, db_id) => GrantObjectByID::Database {
+                catalog_name: catalog_name.clone(),
+                db_id: *db_id,
+            },
+            GrantObject::TableById(catalog_name, db_id, table_id) => GrantObjectByID::Table {
+                catalog_name: catalog_name.clone(),
+                db_id: *db_id,
+                table_id: *table_id,
+            },
             _ => return Ok(None),
         };
 
@@ -159,7 +186,13 @@ impl PrivilegeAccess {
         Ok(())
     }
 
-    async fn convert_to_id(&self, tenant: &str, catalog_name: &str, database_name: &str, table_name: Option<&str>) -> Result<ObjectId> {
+    async fn convert_to_id(
+        &self,
+        tenant: &str,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: Option<&str>,
+    ) -> Result<ObjectId> {
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let db_id = catalog
             .get_database(tenant, database_name)
@@ -172,7 +205,7 @@ impl PrivilegeAccess {
                 .get_table(tenant, database_name, table_name)
                 .await?
                 .get_id();
-            Ok(ObjectId::Table(db_id, table_id))
+            return Ok(ObjectId::Table(db_id, table_id));
         }
         Ok(ObjectId::Database(db_id))
     }
@@ -184,14 +217,13 @@ impl AccessChecker for PrivilegeAccess {
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
-        let tenant = self.ctx.get_tenant();
+
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         let tenant = self.ctx.get_tenant();
         let catalog_name = self.ctx.get_current_catalog();
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         match plan {
             Plan::Query {
@@ -208,7 +240,7 @@ impl AccessChecker for PrivilegeAccess {
                         return Ok(());
                     }
                     Some(RewriteKind::ShowTables(database)) => {
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &database, None) {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -223,7 +255,7 @@ impl AccessChecker for PrivilegeAccess {
                         };
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &database, None) {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -238,11 +270,11 @@ impl AccessChecker for PrivilegeAccess {
                         };
                     }
                     Some(RewriteKind::ShowColumns(database, table)) => {
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &database, &table) {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &database, Some(&table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, db_id, Some(table_id), grant_set).await?;
+                        let has_priv = has_priv(&tenant, db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -294,12 +326,12 @@ impl AccessChecker for PrivilegeAccess {
                         continue;
                     }
                     let catalog_name = table.catalog();
-                    let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, table.database(), table.table()) {
+                    let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, table.database(), Some(table.name())).await? {
                         ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                         ObjectId::Database(db_id) => { (db_id, None) }
                     };
                     self.validate_access(
-                        &GrantObject::Table(
+                        &GrantObject::TableById(
                             table.catalog().to_string(),
                             db_id,
                             table_id.unwrap(),
@@ -316,14 +348,13 @@ impl AccessChecker for PrivilegeAccess {
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
-                let catalog_name = plan.catalog().clone();
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, plan.database, None) {
+                let catalog_name = plan.catalog.clone();
+                let (db_id, _) = match self.convert_to_id(&tenant, &catalog_name, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Select],
                     true,
                 )
@@ -343,7 +374,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::UseDatabase(plan) => {
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, &plan.database, None) {
+                let (db_id, _) = match self.convert_to_id(&tenant, &catalog_name, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
@@ -361,12 +392,12 @@ impl AccessChecker for PrivilegeAccess {
 
             // Virtual Column.
             Plan::CreateVirtualColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -377,12 +408,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterVirtualColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -393,12 +424,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropVirtualColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -409,12 +440,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RefreshVirtualColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -427,12 +458,12 @@ impl AccessChecker for PrivilegeAccess {
 
             // Table.
             Plan::ShowCreateTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -443,12 +474,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::DescribeTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -459,14 +490,13 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::CreateTable(plan) => {
-                // TODO(TCeason): as_select need check privilege.
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
 
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Create],
                     true,
                 )
@@ -476,24 +506,24 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::DropTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
                     .await?;
             }
             Plan::UndropTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
@@ -502,12 +532,12 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameTable(plan) => {
                 // You must have ALTER and DROP privileges for the original table,
                 // and CREATE and INSERT privileges for the new table.
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -516,30 +546,27 @@ impl AccessChecker for PrivilegeAccess {
                     true,
                 )
                     .await?;
-                // TODO(liyz): need only check the create privilege on the target database? the target
-                // table may still not existed yet.
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.new_database, &plan.new_table) {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.new_database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::DatabaseById(
                         plan.catalog.clone(),
                         db_id,
-                        table_id.unwrap(),
                     ),
-                    vec![UserPrivilegeType::Create, UserPrivilegeType::Insert],
+                    vec![UserPrivilegeType::Create],
                     false,
                 )
                     .await?;
             }
             Plan::SetOptions(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -550,12 +577,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AddTableColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -566,12 +593,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RenameTableColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -582,12 +609,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::ModifyTableColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -598,12 +625,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropTableColumn(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -614,14 +641,14 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterTableClusterKey(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table) {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
-    db_id,
+                        db_id,
                         table_id.unwrap(),
                     ),
                     vec![UserPrivilegeType::Alter],
@@ -630,12 +657,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropTableClusterKey(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -652,12 +679,12 @@ impl AccessChecker for PrivilegeAccess {
                         self.check_udf_priv(udf).await?;
                     }
                 }
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -668,12 +695,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::TruncateTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -684,12 +711,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::OptimizeTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -700,12 +727,12 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::VacuumTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -716,24 +743,24 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::VacuumDropTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Super],
                     true,
                 )
                     .await?;
             }
             Plan::AnalyzeTable(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, &plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -745,13 +772,12 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
-                //TODO(TCeason): source need to check privileges.
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -774,12 +800,12 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Replace(plan) => {
                 //plan.delete_when is Expr no need to check privileges.
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -844,12 +870,12 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, plan.table)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap()
@@ -884,13 +910,13 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database_name, plan.table_name)? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog_name, &plan.database_name, Some(&plan.table_name)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
-                        plan.catalog.clone(),
+                    &GrantObject::TableById(
+                        plan.catalog_name.clone(),
                         db_id,
                         table_id.unwrap()
                     ),
@@ -928,12 +954,12 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table))? {
+                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, Some(&plan.table)).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Table(
+                    &GrantObject::TableById(
                         plan.catalog.clone(),
                         db_id,
                         table_id.unwrap(),
@@ -944,60 +970,60 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateView(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None)? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Create],
                     true,
                 )
                     .await?;
             }
             Plan::AlterView(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None)? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Alter],
                     true,
                 )
                     .await?;
             }
             Plan::DropView(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None)? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
                     .await?;
             }
             Plan::CreateStream(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None)? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Create],
                     true,
                 )
                     .await?;
             }
             Plan::DropStream(plan) => {
-                let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None)? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
                 self.validate_access(
-                    &GrantObject::Database(plan.catalog.clone(), db_id),
+                    &GrantObject::DatabaseById(plan.catalog.clone(), db_id),
                     vec![UserPrivilegeType::Drop],
                     true,
                 )
@@ -1062,13 +1088,13 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoTable(plan) => {
                 self.validate_access_stage(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                            let (db_id, table_id) = match self.convert_to_id(&tenant, &plan.catalog, &plan.database_name, Some(&plan.table_name))? {
+                            let (db_id, table_id) = match self.convert_to_id(&tenant, plan.catalog_info.catalog_name(), &plan.database_name, Some(&plan.table_name)).await? {
                                 ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                                 ObjectId::Database(db_id) => { (db_id, None) }
                             };
                 self
                     .validate_access(
-                        &GrantObject::Table(
+                        &GrantObject::TableById(
                             plan.catalog_info.catalog_name().to_string(),
                             db_id,
                             table_id.unwrap(),
@@ -1176,12 +1202,12 @@ async fn has_priv(
             let object = e.object();
             match object {
                 GrantObject::Global => true,
-                GrantObject::Database(_, ldb) => ldb == database,
-                GrantObject::Table(_, ldb, ltab) => {
+                GrantObject::DatabaseById(_, ldb) => *ldb == database,
+                GrantObject::TableById(_, ldb, ltab) => {
                     if let Some(table) = table {
-                        ldb == database && ltab == table
+                        *ldb == database && *ltab == table
                     } else {
-                        ldb == database
+                        *ldb == database
                     }
                 }
                 _ => false,

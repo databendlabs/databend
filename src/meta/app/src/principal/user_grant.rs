@@ -39,8 +39,10 @@ pub enum GrantObjectByID {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
-    Database(String, u64),
-    Table(String, u64, u64),
+    Database(String, String),
+    DatabaseById(String, u64),
+    Table(String, String, String),
+    TableById(String, u64, u64),
     UDF(String),
     Stage(String),
 }
@@ -55,12 +57,22 @@ impl GrantObject {
             (GrantObject::Database(lcat, ldb), GrantObject::Database(rcat, rdb)) => {
                 lcat == rcat && ldb == rdb
             }
+            (GrantObject::DatabaseById(lcat, ldb), GrantObject::DatabaseById(rcat, rdb)) => {
+                lcat == rcat && ldb == rdb
+            }
+            (GrantObject::DatabaseById(lcat, ldb), GrantObject::TableById(rcat, rdb, _)) => {
+                lcat == rcat && ldb == rdb
+            }
             (GrantObject::Database(lcat, ldb), GrantObject::Table(rcat, rdb, _)) => {
                 lcat == rcat && ldb == rdb
             }
             (
                 GrantObject::Table(lcat, lhs_db, lhs_table),
                 GrantObject::Table(rcat, rhs_db, rhs_table),
+            ) => lcat == rcat && (lhs_db == rhs_db) && (lhs_table == rhs_table),
+            (
+                GrantObject::TableById(lcat, lhs_db, lhs_table),
+                GrantObject::TableById(rcat, rhs_db, rhs_table),
             ) => lcat == rcat && (lhs_db == rhs_db) && (lhs_table == rhs_table),
             (GrantObject::Table(_, _, _), _) => false,
             (GrantObject::Stage(lstage), GrantObject::Stage(rstage)) => lstage == rstage,
@@ -73,8 +85,12 @@ impl GrantObject {
     pub fn available_privileges(&self) -> UserPrivilegeSet {
         match self {
             GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
-            GrantObject::Database(_, _) => UserPrivilegeSet::available_privileges_on_database(),
-            GrantObject::Table(_, _, _) => UserPrivilegeSet::available_privileges_on_table(),
+            GrantObject::Database(_, _) | GrantObject::DatabaseById(_, _) => {
+                UserPrivilegeSet::available_privileges_on_database()
+            }
+            GrantObject::Table(_, _, _) | GrantObject::TableById(_, _, _) => {
+                UserPrivilegeSet::available_privileges_on_table()
+            }
             GrantObject::UDF(_) => UserPrivilegeSet::available_privileges_on_udf(),
             GrantObject::Stage(_) => UserPrivilegeSet::available_privileges_on_stage(),
         }
@@ -83,8 +99,8 @@ impl GrantObject {
     pub fn catalog(&self) -> Option<String> {
         match self {
             GrantObject::Global | GrantObject::Stage(_) | GrantObject::UDF(_) => None,
-            GrantObject::Database(cat, _) => Some(cat.clone()),
-            GrantObject::Table(cat, _, _) => Some(cat.clone()),
+            GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
+            GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
         }
     }
 }
@@ -94,7 +110,11 @@ impl fmt::Display for GrantObject {
         match self {
             GrantObject::Global => write!(f, "*.*"),
             GrantObject::Database(ref cat, ref db) => write!(f, "'{}'.'{}'.*", cat, db),
+            GrantObject::DatabaseById(ref cat, ref db) => write!(f, "'{}'.'{}'.*", cat, db),
             GrantObject::Table(ref cat, ref db, ref table) => {
+                write!(f, "'{}'.'{}'.'{}'", cat, db, table)
+            }
+            GrantObject::TableById(ref cat, ref db, ref table) => {
                 write!(f, "'{}'.'{}'.'{}'", cat, db, table)
             }
             GrantObject::UDF(udf) => write!(f, "UDF {udf}"),
@@ -143,7 +163,7 @@ impl GrantEntry {
         &self.object == object
     }
 
-    fn has_all_available_privileges(&self) -> bool {
+    pub fn has_all_available_privileges(&self) -> bool {
         let all_available_privileges = self.object.available_privileges();
         self.privileges
             .contains(BitFlags::from(all_available_privileges))

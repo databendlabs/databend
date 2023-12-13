@@ -148,7 +148,7 @@ impl Binder {
                     .get_table(&tenant, &database_name, table_name)
                     .await?
                     .get_id();
-                Ok(GrantObject::Table(catalog_name, db_id, table_id))
+                Ok(GrantObject::TableById(catalog_name, db_id, table_id))
             }
             AccountMgrLevel::Database(database_name) => {
                 let database_name = database_name
@@ -160,7 +160,7 @@ impl Binder {
                     .get_db_info()
                     .ident
                     .db_id;
-                Ok(GrantObject::Database(catalog_name, db_id))
+                Ok(GrantObject::DatabaseById(catalog_name, db_id))
             }
             AccountMgrLevel::UDF(udf) => Ok(GrantObject::UDF(udf.clone())),
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),

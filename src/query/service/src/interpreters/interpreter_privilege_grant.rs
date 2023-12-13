@@ -115,6 +115,15 @@ impl GrantPrivilegeInterpreter {
                     table_id,
                 }
             }
+            GrantObject::TableById(_, db_id, table_id) => GrantObjectByID::Table {
+                catalog_name,
+                db_id: *db_id,
+                table_id: *table_id,
+            },
+            GrantObject::DatabaseById(_, db_id) => GrantObjectByID::Database {
+                catalog_name,
+                db_id: *db_id,
+            },
             _ => {
                 return Err(ErrorCode::IllegalGrant(
                     "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
