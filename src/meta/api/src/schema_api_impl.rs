@@ -2435,6 +2435,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError> {
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
+
+        let table_id_to_name_key = TableIdToName { table_id };
+
+        let (tb_meta_seq, table_name): (_, Option<DBIdTableName>) =
+            get_pb_value(self, &table_id_to_name_key).await?;
+
+        debug!(ident :% =(&table_id_to_name_key); "get_table_name_by_id");
+
+        if tb_meta_seq == 0 || table_name.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, "get_table_name_by_id"),
+            )));
+        }
+
+        Ok(table_name.unwrap().table_name)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError> {
         let table_id = req.tb_id;
         debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
