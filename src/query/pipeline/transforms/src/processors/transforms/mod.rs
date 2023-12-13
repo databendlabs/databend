@@ -40,5 +40,6 @@ pub use transform_dummy::*;
 pub use transform_multi_sort_merge::try_add_multi_sort_merge;
 pub use transform_sort_merge::sort_merge;
 pub use transform_sort_merge::*;
+pub use transform_sort_merge_base::*;
 pub use transform_sort_merge_limit::*;
 pub use transform_sort_partial::*;
