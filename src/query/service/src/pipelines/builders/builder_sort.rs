@@ -321,12 +321,16 @@ impl SortPipelineBuilder {
         if may_spill {
             let config = SpillerConfig::create(query_spill_prefix(&self.ctx.get_tenant()));
             // The input of the processor must contain an order column.
-            let mut fields = self.schema.fields().clone();
-            fields.push(DataField::new(
-                "_order_col",
-                order_column_type(&self.sort_desc, &self.schema),
-            ));
-            let schema = DataSchemaRefExt::create(fields);
+            let schema = if let Some(f) = self.schema.fields.last() && f.name() == "_order_col" {
+                self.schema.clone()
+            } else {
+                let mut fields = self.schema.fields().clone();
+                fields.push(DataField::new(
+                    "_order_col",
+                    order_column_type(&self.sort_desc, &self.schema),
+                ));
+                DataSchemaRefExt::create(fields)
+            };
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller =
