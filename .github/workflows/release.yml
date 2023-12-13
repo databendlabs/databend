@@ -106,15 +106,16 @@ jobs:
           echo "Creating release ${{ steps.bump.outputs.tag }} from ${{ steps.bump.outputs.sha }}"
           if [ "${{ inputs.stable }}" == "true" ]; then
             echo "Stable release"
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --latest
+            previous=$(gh release list --limit 1 --exclude-pre-releases | cut -f 1)
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest
           else
             echo "Nightly release"
             gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --prerelease
           fi
 
-
   changelog:
     runs-on: ubuntu-latest
+    if: inputs.stable
     needs: create_release
     steps:
       - name: Checkout Docs
@@ -129,14 +130,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p docs/release-nightly
-          df="docs/release-nightly/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
+          mkdir -p docs/release-stable
+          df="docs/release-stable/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
           echo "---" > $df
           gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} >> $df
           sed -i -E 's/^--$/---/g' $df
           sed -i -E '/^asset:/d' $df
           sed -i -E 's_https://github.com/datafuselabs/databend/pull/([0-9]+)_[#\1](https://github.com/datafuselabs/databend/pull/\1)_g' $df
-          git add docs/release-nightly
+          git add docs/release-stable
           git status
       - uses: peter-evans/create-pull-request@v4
         with:

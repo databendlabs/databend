@@ -206,6 +206,10 @@ pub trait SchemaApi: Send + Sync {
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError>;
 
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError>;
+
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
+
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
