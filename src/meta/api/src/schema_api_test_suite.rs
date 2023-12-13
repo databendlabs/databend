@@ -327,6 +327,9 @@ impl SchemaApiTestSuite {
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
 
+        suite.get_table_name_by_id(&b.build().await).await?;
+        suite.get_db_name_by_id(&b.build().await).await?;
+
         Ok(())
     }
 
@@ -4592,6 +4595,162 @@ impl SchemaApiTestSuite {
                 let err = ErrorCode::from(err);
 
                 assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+            }
+        }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn get_table_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            {
+                let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                let res = mt.create_table(req.clone()).await?;
+                let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table_name_by_id(tb_id).await?;
+
+                let want = tbl_name.to_string();
+                assert_eq!(want, got, "get created table");
+            }
+        }
+
+        info!("--- get_table_name_by_id ");
+        {
+            info!("--- get_table_name_by_id ");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let want = table.name.clone();
+                let got = mt.get_table_name_by_id(table.ident.table_id).await?;
+
+                assert_eq!(want, got);
+            }
+
+            info!("--- get_table_name_by_id with not exists table_id");
+            {
+                let got = mt.get_table_name_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+            }
+        }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn get_db_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+
+        info!("--- prepare and get db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+
+            let got = mt.get_db_name_by_id(res.db_id).await?;
+            assert_eq!(got, db_name.to_string())
+        }
+
+        info!("--- get_db_name_by_id ");
+        {
+            info!("--- get_db_name_by_id ");
+            {
+                let plan = GetDatabaseReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                };
+
+                let db = mt.get_database(plan).await.unwrap();
+
+                let got = mt.get_db_name_by_id(db.ident.db_id).await?;
+
+                assert_eq!(got, db_name.to_string());
+            }
+
+            info!("--- get_db_name_by_id with not exists db_id");
+            {
+                let got = mt.get_db_name_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownDatabaseId("").code(), err.code());
             }
         }
         Ok(())

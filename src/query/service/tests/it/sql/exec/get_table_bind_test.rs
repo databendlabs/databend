@@ -171,6 +171,14 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_meta_by_id(table_id).await
     }
 
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
+        self.cat.get_table_name_by_id(table_id).await
+    }
+
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
+        self.cat.get_db_name_by_id(db_id).await
+    }
+
     async fn get_table(
         &self,
         tenant: &str,

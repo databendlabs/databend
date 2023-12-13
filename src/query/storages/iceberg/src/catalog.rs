@@ -253,6 +253,20 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in ICEBERG catalog",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_db_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get db name by id in ICEBERG catalog",
+        ))
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
