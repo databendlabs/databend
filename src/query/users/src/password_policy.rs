@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::cmp::Ordering;
+
+use chrono::Duration;
 use chrono::Utc;
+use databend_common_ast::ast::AuthOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::PasswordPolicyApi;
+use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_types::MatchSeq;
+use passwords::analyzer;
 
 use crate::UserApiProvider;
 
@@ -233,6 +242,201 @@ impl UserApiProvider {
             .await
             .map_err(|e| e.add_message_back(" (while get password policies)."))?;
         Ok(password_policies)
+    }
+
+    // Verify the password according to the options of the password policy
+    // New user's password must meet the password complexity requirements
+    // In addition to the complexity requirement, there are two additional conditions for changing passwords
+    // 1. the current time must exceed the minimum number of days allowed for password change
+    // 2. the password must not be repeated with recently history passwords
+    #[async_backtrace::framed]
+    pub async fn verify_password(
+        &self,
+        tenant: &str,
+        user_option: &UserOption,
+        auth_option: &AuthOption,
+        user_info: Option<&UserInfo>,
+        auth_info: Option<&AuthInfo>,
+    ) -> Result<()> {
+        if let (Some(name), Some(password)) = (user_option.password_policy(), &auth_option.password)
+        {
+            if let Ok(password_policy) = self.get_password_policy(tenant, name).await {
+                // For password changes, check the number of days allowed and repeated with history passwords
+                if let (Some(user_info), Some(auth_info)) = (user_info, auth_info) {
+                    if password_policy.min_age_days > 0 {
+                        if let Some(password_update_on) = user_info.password_update_on {
+                            let allow_change_time = password_update_on
+                                .checked_add_signed(Duration::days(
+                                    password_policy.min_age_days as i64,
+                                ))
+                                .unwrap();
+
+                            let now = Utc::now();
+                            if let Ordering::Greater = allow_change_time.cmp(&now) {
+                                return Err(ErrorCode::InvalidPassword(format!(
+                                    "The time since the last change is too short, the password cannot be changed again before {}",
+                                    allow_change_time
+                                )));
+                            }
+                        }
+                    }
+
+                    if password_policy.history > 0 {
+                        let auth_type = auth_info.get_type();
+                        let password = auth_info.get_password();
+
+                        for (i, history_auth_info) in
+                            user_info.history_auth_infos.iter().rev().enumerate()
+                        {
+                            if i >= password_policy.history as usize {
+                                break;
+                            }
+
+                            let history_auth_type = history_auth_info.get_type();
+                            let history_password = history_auth_info.get_password();
+
+                            // Using hash value of plain password to check, which may have false positives
+                            if auth_type == history_auth_type && password == history_password {
+                                return Err(ErrorCode::InvalidPassword(format!(
+                                    "The newly changed password cannot be repeated with the last {} passwords.",
+                                    password_policy.history
+                                )));
+                            }
+                        }
+                    }
+                }
+
+                // Verify the password complexity meets the requirements of the password policy
+                let analyzed = analyzer::analyze(password);
+
+                let mut invalids = Vec::new();
+                if analyzed.length() < password_policy.min_length as usize
+                    || analyzed.length() > password_policy.max_length as usize
+                {
+                    invalids.push(format!(
+                        "expect length range {} to {}, but got {}",
+                        password_policy.min_length,
+                        password_policy.max_length,
+                        analyzed.length()
+                    ));
+                }
+                if analyzed.uppercase_letters_count()
+                    < password_policy.min_upper_case_chars as usize
+                {
+                    invalids.push(format!(
+                        "expect {} uppercase chars, but got {}",
+                        password_policy.min_upper_case_chars,
+                        analyzed.uppercase_letters_count()
+                    ));
+                }
+                if analyzed.lowercase_letters_count()
+                    < password_policy.min_lower_case_chars as usize
+                {
+                    invalids.push(format!(
+                        "expect {} lowercase chars, but got {}",
+                        password_policy.min_lower_case_chars,
+                        analyzed.lowercase_letters_count()
+                    ));
+                }
+                if analyzed.numbers_count() < password_policy.min_numeric_chars as usize {
+                    invalids.push(format!(
+                        "expect {} numeric chars, but got {}",
+                        password_policy.min_numeric_chars,
+                        analyzed.numbers_count()
+                    ));
+                }
+                if analyzed.symbols_count() < password_policy.min_special_chars as usize {
+                    invalids.push(format!(
+                        "expect {} special chars, but got {}",
+                        password_policy.min_special_chars,
+                        analyzed.symbols_count()
+                    ));
+                }
+                if !invalids.is_empty() {
+                    return Err(ErrorCode::InvalidPassword(format!(
+                        "Invalid password: {}",
+                        invalids.join(", ")
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Check login password meets the password policy options
+    // There are three conditions that need to be met in order to log in
+    // 1. Cannot be in a lockout period where logins are not allowed
+    // 2. the number of recent failed login attempts must not exceed the maximum retries,
+    //    otherwise the user will be locked out
+    // 3. must be within the maximum allowed number of days since last password changed
+    #[async_backtrace::framed]
+    pub async fn check_login_password(
+        &self,
+        tenant: &str,
+        identity: UserIdentity,
+        user_info: &UserInfo,
+    ) -> Result<()> {
+        let now = Utc::now();
+        // Locked users cannot log in for the duration of the lockout
+        if let Some(lockout_time) = user_info.lockout_time {
+            if let Ordering::Greater = lockout_time.cmp(&now) {
+                return Err(ErrorCode::InvalidPassword(format!(
+                    "Disable logging in before {} because of too many password fails",
+                    lockout_time
+                )));
+            }
+        }
+
+        if let Some(name) = user_info.option.password_policy() {
+            if let Ok(password_policy) = self.get_password_policy(tenant, name).await {
+                // Check the number of login password fails
+                if !user_info.password_fail_ons.is_empty() && password_policy.max_retries > 0 {
+                    let check_time = now
+                        .checked_sub_signed(Duration::minutes(
+                            password_policy.lockout_time_mins as i64,
+                        ))
+                        .unwrap();
+
+                    // Only the most recent login fails are considered, outdated fails can be ignored
+                    let failed_retries = user_info
+                        .password_fail_ons
+                        .iter()
+                        .filter(|t| t.cmp(&&check_time) == Ordering::Greater)
+                        .count();
+
+                    if failed_retries >= password_policy.max_retries as usize {
+                        let lockout_time = now
+                            .checked_add_signed(Duration::minutes(
+                                password_policy.lockout_time_mins as i64,
+                            ))
+                            .unwrap();
+                        self.update_user_lockout_time(tenant, identity, lockout_time)
+                            .await?;
+
+                        return Err(ErrorCode::InvalidPassword(format!(
+                            "Disable logging in before {} because of too many password fails",
+                            lockout_time
+                        )));
+                    }
+                }
+
+                if password_policy.max_age_days > 0 {
+                    if let Some(password_update_on) = user_info.password_update_on {
+                        let max_change_time = password_update_on
+                            .checked_add_signed(Duration::days(password_policy.max_age_days as i64))
+                            .unwrap();
+
+                        // Password has not been changed for more than max age days, cannot login
+                        if let Ordering::Less = max_change_time.cmp(&now) {
+                            return Err(ErrorCode::InvalidPassword(
+                                "Password has not been changed more than max age days".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 

@@ -15,6 +15,8 @@
 use core::fmt;
 use std::convert::TryFrom;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enumflags2::bitflags;
@@ -41,6 +43,14 @@ pub struct UserInfo {
     pub quota: UserQuota,
 
     pub option: UserOption,
+
+    pub history_auth_infos: Vec<AuthInfo>,
+
+    pub password_fail_ons: Vec<DateTime<Utc>>,
+
+    pub password_update_on: Option<DateTime<Utc>>,
+
+    pub lockout_time: Option<DateTime<Utc>>,
 }
 
 impl UserInfo {
@@ -57,6 +67,10 @@ impl UserInfo {
             grants,
             quota,
             option,
+            history_auth_infos: Vec::new(),
+            password_fail_ons: Vec::new(),
+            password_update_on: None,
+            lockout_time: None,
         }
     }
 
@@ -82,6 +96,37 @@ impl UserInfo {
         if let Some(user_option) = option {
             self.option = user_option;
         };
+    }
+
+    pub fn update_auth_history(&mut self, auth: Option<AuthInfo>) {
+        if let Some(auth_info) = auth {
+            if matches!(auth_info, AuthInfo::Password { .. }) {
+                // Update password change history
+                self.history_auth_infos.push(auth_info);
+                // Maximum 24 password records
+                if self.history_auth_infos.len() > 24 {
+                    self.history_auth_infos.remove(0);
+                }
+                self.password_update_on = Some(Utc::now());
+            }
+        }
+    }
+
+    pub fn update_login_fail_history(&mut self) {
+        self.password_fail_ons.push(Utc::now());
+        // Maximum 10 failed login password records
+        if self.password_fail_ons.len() > 10 {
+            self.password_fail_ons.remove(0);
+        }
+    }
+
+    pub fn clear_login_fail_history(&mut self) {
+        self.password_fail_ons = Vec::new();
+        self.lockout_time = None;
+    }
+
+    pub fn update_lockout_time(&mut self, lockout_time: DateTime<Utc>) {
+        self.lockout_time = Some(lockout_time);
     }
 }
 
