@@ -186,6 +186,7 @@ use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
+use futures::TryStreamExt;
 use log::as_debug;
 use log::as_display;
 use log::debug;
@@ -3482,8 +3483,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
         for prefix in &req.prefixes {
-            let list = self.prefix_list_kv(prefix).await?;
-            for (k, seq) in list.into_iter() {
+            let mut stream = self.list_kv(prefix).await?;
+            while let Some(list) = stream.try_next().await? {
+                let k = list.key;
+                let seq = SeqV::from(list.value.unwrap());
                 let meta: LockMeta = deserialize_struct(&seq.data)?;
                 let lock_type = &meta.lock_type;
                 let key = lock_type.key_from_str(&k).map_err(|e| {
