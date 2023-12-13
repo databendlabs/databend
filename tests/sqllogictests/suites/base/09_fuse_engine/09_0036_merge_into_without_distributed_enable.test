@@ -484,6 +484,30 @@ MERGE INTO salaries USING (SELECT * FROM employees) as employees ON salaries.emp
 ----
 2 2
 
+query T
+explain MERGE INTO salaries USING (SELECT * FROM employees) as employees ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
+----
+MergeInto:
+target_table: default.default.salaries
+├── matched update: [condition: eq(employees.department (#2), 'HR'),update set salary = plus(salaries.salary (#4), 1000.00)]
+├── matched update: [condition: None,update set salary = plus(salaries.salary (#4), 500.00)]
+├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
+└── HashJoin: RIGHT OUTER
+    ├── equi conditions: [eq(salaries.employee_id (#3), employees.employee_id (#0))]
+    ├── non-equi conditions: []
+    ├── LogicalGet
+    │   ├── table: default.default.salaries
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [employees.employee_id (#0), employees.employee_name (#1), employees.department (#2)]
+        └── LogicalGet
+            ├── table: default.default.employees
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
 query TTT
 select * from salaries order by employee_id;
 ----

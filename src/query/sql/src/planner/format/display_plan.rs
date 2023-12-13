@@ -288,7 +288,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     ));
 
     // add macthed clauses
-    let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len() as usize);
+    let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
     let taregt_schema = table_entry.table().schema();
     for evaluator in &merge_into.matched_evaluators {
         let condition_format = evaluator.condition.as_ref().map_or_else(
@@ -309,7 +309,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
                 .map(|(field_idx, expr)| {
                     format!(
                         "{} = {}",
-                        taregt_schema.field(*field_idx).name().to_string(),
+                        taregt_schema.field(*field_idx).name(),
                         format_scalar(expr)
                     )
                 })
@@ -321,7 +321,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         }
     }
     // add unmacthed clauses
-    let mut unmatched_children = Vec::with_capacity(merge_into.unmatched_evaluators.len() as usize);
+    let mut unmatched_children = Vec::with_capacity(merge_into.unmatched_evaluators.len());
     for evaluator in &merge_into.unmatched_evaluators {
         let condition_format = evaluator.condition.as_ref().map_or_else(
             || "condition: None".to_string(),
@@ -345,7 +345,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     }
     let s_expr = merge_into.input.as_ref();
     let input_format_child = s_expr.to_format_tree(&merge_into.meta_data);
-    let all_children = vec![matched_children, unmatched_children, vec![
+    let all_children = [matched_children, unmatched_children, vec![
         input_format_child,
     ]]
     .concat();
