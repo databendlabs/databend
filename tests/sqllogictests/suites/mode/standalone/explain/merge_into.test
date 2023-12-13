@@ -1,4 +1,7 @@
 statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
 CREATE TABLE employees2 (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255));
 
 statement ok
@@ -38,3 +41,6 @@ target_table: default.default.salaries2
             ├── filters: []
             ├── order by: []
             └── limit: NONE
+
+statement ok
+set enable_experimental_merge_into = 0;
