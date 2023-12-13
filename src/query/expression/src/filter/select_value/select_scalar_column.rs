@@ -15,9 +15,13 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 
+use crate::filter::boolean_selection_op;
+use crate::filter::select_empty_array_adapt;
 use crate::filter::selection_op;
+use crate::filter::string_selection_op;
 use crate::filter::tuple_compare_default_value;
 use crate::filter::tuple_selection_op;
+use crate::filter::variant_selection_op;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::types::array::ArrayColumn;
@@ -56,7 +60,17 @@ pub fn select_scalar_and_column(
     };
 
     match column_data_type.remove_nullable() {
-        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
+        DataType::Null | DataType::EmptyMap => 0,
+        DataType::EmptyArray => select_empty_array_adapt(
+            op,
+            validity,
+            true_selection,
+            false_selection,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        ),
         DataType::Number(NumberDataType::UInt8) => {
             let scalar = scalar.into_number().unwrap().into_u_int8().unwrap();
             let column = column.into_number().unwrap().into_u_int8().unwrap();
@@ -284,7 +298,7 @@ pub fn select_scalar_and_column(
         DataType::String => {
             let scalar = scalar.into_string().unwrap();
             let column = column.into_string().unwrap();
-            select_string_scalar_and_column_adapt(
+            select_bytes_scalar_and_column_adapt(
                 op,
                 &scalar,
                 column,
@@ -295,12 +309,13 @@ pub fn select_scalar_and_column(
                 false_idx,
                 select_strategy,
                 count,
+                false,
             )
         }
         DataType::Variant => {
             let scalar = scalar.into_variant().unwrap();
             let column = column.into_variant().unwrap();
-            select_string_scalar_and_column_adapt(
+            select_bytes_scalar_and_column_adapt(
                 op,
                 &scalar,
                 column,
@@ -311,22 +326,7 @@ pub fn select_scalar_and_column(
                 false_idx,
                 select_strategy,
                 count,
-            )
-        }
-        DataType::Bitmap => {
-            let scalar = scalar.into_bitmap().unwrap();
-            let column = column.into_bitmap().unwrap();
-            select_string_scalar_and_column_adapt(
-                op,
-                &scalar,
-                column,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
+                true,
             )
         }
         DataType::Boolean => {
@@ -458,7 +458,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn select_string_scalar_and_column_adapt(
+fn select_bytes_scalar_and_column_adapt(
     op: SelectOp,
     scalar: &[u8],
     column: StringColumn,
@@ -469,11 +469,12 @@ fn select_string_scalar_and_column_adapt(
     false_idx: &mut usize,
     select_strategy: SelectStrategy,
     count: usize,
+    is_variant: bool,
 ) -> usize {
     let has_true = !true_selection.is_empty();
     let has_false = false_selection.1;
     if has_true && has_false {
-        select_string_scalar_and_column::<true, true>(
+        select_bytes_scalar_and_column::<true, true>(
             op,
             scalar,
             column,
@@ -484,9 +485,10 @@ fn select_string_scalar_and_column_adapt(
             false_idx,
             select_strategy,
             count,
+            is_variant,
         )
     } else if has_true {
-        select_string_scalar_and_column::<true, false>(
+        select_bytes_scalar_and_column::<true, false>(
             op,
             scalar,
             column,
@@ -497,9 +499,10 @@ fn select_string_scalar_and_column_adapt(
             false_idx,
             select_strategy,
             count,
+            is_variant,
         )
     } else {
-        select_string_scalar_and_column::<false, true>(
+        select_bytes_scalar_and_column::<false, true>(
             op,
             scalar,
             column,
@@ -510,6 +513,7 @@ fn select_string_scalar_and_column_adapt(
             false_idx,
             select_strategy,
             count,
+            is_variant,
         )
     }
 }
@@ -819,7 +823,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
+fn select_bytes_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     scalar: &[u8],
     column: StringColumn,
@@ -830,8 +834,13 @@ fn select_string_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     false_start_idx: &mut usize,
     select_strategy: SelectStrategy,
     count: usize,
+    is_variant: bool,
 ) -> usize {
-    let op = selection_op::<&[u8]>(op);
+    let op = if is_variant {
+        variant_selection_op(&op)
+    } else {
+        string_selection_op(&op)
+    };
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
@@ -961,7 +970,7 @@ fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
     select_strategy: SelectStrategy,
     count: usize,
 ) -> usize {
-    let op = selection_op::<bool>(op);
+    let op = boolean_selection_op(op);
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {

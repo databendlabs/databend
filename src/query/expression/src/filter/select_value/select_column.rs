@@ -16,9 +16,13 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 
 use crate::arrow::and_validities;
+use crate::filter::boolean_selection_op;
+use crate::filter::select_empty_array_adapt;
 use crate::filter::selection_op;
+use crate::filter::string_selection_op;
 use crate::filter::tuple_compare_default_value;
 use crate::filter::tuple_selection_op;
+use crate::filter::variant_selection_op;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::types::array::ArrayColumn;
@@ -57,7 +61,17 @@ pub fn select_columns(
     }
 
     match left_data_type.remove_nullable() {
-        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
+        DataType::Null | DataType::EmptyMap => 0,
+        DataType::EmptyArray => select_empty_array_adapt(
+            op,
+            validity,
+            true_selection,
+            false_selection,
+            true_idx,
+            false_idx,
+            select_strategy,
+            count,
+        ),
         DataType::Number(NumberDataType::UInt8) => {
             let left = left.into_number().unwrap().into_u_int8().unwrap();
             let right = right.into_number().unwrap().into_u_int8().unwrap();
@@ -285,7 +299,7 @@ pub fn select_columns(
         DataType::String => {
             let left = left.into_string().unwrap();
             let right = right.into_string().unwrap();
-            select_string_adapt(
+            select_bytes_adapt(
                 op,
                 left,
                 right,
@@ -296,12 +310,13 @@ pub fn select_columns(
                 false_idx,
                 select_strategy,
                 count,
+                false,
             )
         }
         DataType::Variant => {
             let left = left.into_variant().unwrap();
             let right = right.into_variant().unwrap();
-            select_string_adapt(
+            select_bytes_adapt(
                 op,
                 left,
                 right,
@@ -312,22 +327,7 @@ pub fn select_columns(
                 false_idx,
                 select_strategy,
                 count,
-            )
-        }
-        DataType::Bitmap => {
-            let left = left.into_bitmap().unwrap();
-            let right = right.into_bitmap().unwrap();
-            select_string_adapt(
-                op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                true_idx,
-                false_idx,
-                select_strategy,
-                count,
+                true,
             )
         }
         DataType::Boolean => {
@@ -503,7 +503,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn select_string_adapt(
+fn select_bytes_adapt(
     op: SelectOp,
     left: StringColumn,
     right: StringColumn,
@@ -514,11 +514,12 @@ fn select_string_adapt(
     false_idx: &mut usize,
     select_strategy: SelectStrategy,
     count: usize,
+    is_variant: bool,
 ) -> usize {
     let has_true = !true_selection.is_empty();
     let has_false = false_selection.1;
     if has_true && has_false {
-        select_string::<true, true>(
+        select_bytes::<true, true>(
             op,
             left,
             right,
@@ -529,9 +530,10 @@ fn select_string_adapt(
             false_idx,
             select_strategy,
             count,
+            is_variant,
         )
     } else if has_true {
-        select_string::<true, false>(
+        select_bytes::<true, false>(
             op,
             left,
             right,
@@ -542,9 +544,10 @@ fn select_string_adapt(
             false_idx,
             select_strategy,
             count,
+            is_variant,
         )
     } else {
-        select_string::<false, true>(
+        select_bytes::<false, true>(
             op,
             left,
             right,
@@ -555,6 +558,7 @@ fn select_string_adapt(
             false_idx,
             select_strategy,
             count,
+            is_variant,
         )
     }
 }
@@ -882,7 +886,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn select_string<const TRUE: bool, const FALSE: bool>(
+fn select_bytes<const TRUE: bool, const FALSE: bool>(
     op: SelectOp,
     left: StringColumn,
     right: StringColumn,
@@ -893,8 +897,13 @@ fn select_string<const TRUE: bool, const FALSE: bool>(
     false_start_idx: &mut usize,
     select_strategy: SelectStrategy,
     count: usize,
+    is_variant: bool,
 ) -> usize {
-    let op = selection_op::<&[u8]>(op);
+    let op = if is_variant {
+        variant_selection_op(&op)
+    } else {
+        string_selection_op(&op)
+    };
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {
@@ -1042,7 +1051,7 @@ fn select_boolean<const TRUE: bool, const FALSE: bool>(
     select_strategy: SelectStrategy,
     count: usize,
 ) -> usize {
-    let op = selection_op::<bool>(op);
+    let op = boolean_selection_op(op);
     let mut true_idx = *true_start_idx;
     let mut false_idx = *false_start_idx;
     match select_strategy {

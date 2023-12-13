@@ -213,6 +213,7 @@ impl NativeDeserializeDataTransform {
                 DEFAULT_ROW_PER_PAGE,
                 None,
                 &BUILTIN_FUNCTIONS,
+                false,
             ))
         } else {
             None

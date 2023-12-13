@@ -34,6 +34,7 @@ pub struct FilterExecutor {
     max_block_size: usize,
     selection_range: Vec<Range<u32>>,
     fn_registry: &'static FunctionRegistry,
+    keep_order: bool,
 }
 
 impl FilterExecutor {
@@ -44,6 +45,7 @@ impl FilterExecutor {
         max_block_size: usize,
         projections: Option<HashSet<usize>>,
         fn_registry: &'static FunctionRegistry,
+        keep_order: bool,
     ) -> Self {
         let true_selection = vec![0; max_block_size];
         let false_selection = if has_or {
@@ -61,6 +63,7 @@ impl FilterExecutor {
             max_block_size,
             selection_range: vec![],
             fn_registry,
+            keep_order,
         }
     }
 
@@ -100,6 +103,9 @@ impl FilterExecutor {
             let range_count = self.build_selection_range(result_count);
             data_block.take_ranges(&self.selection_range[0..range_count], result_count)
         } else {
+            if self.keep_order && self.has_or {
+                self.true_selection[0..result_count].sort();
+            }
             data_block.take(&self.true_selection[0..result_count], &mut None)
         }
     }
@@ -109,7 +115,7 @@ impl FilterExecutor {
         if self.selection_range.is_empty() {
             self.selection_range = vec![0..0; self.max_block_size];
         }
-        if self.has_or {
+        if self.has_or || self.keep_order {
             self.true_selection[0..count].sort();
         }
         let selection = &self.true_selection[0..count];

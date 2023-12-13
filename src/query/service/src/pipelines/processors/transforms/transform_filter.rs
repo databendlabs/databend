@@ -56,6 +56,7 @@ impl TransformFilter {
             max_block_size,
             Some(projections.clone()),
             &BUILTIN_FUNCTIONS,
+            false,
         );
         BlockingTransformer::create(input, output, TransformFilter {
             projections,
