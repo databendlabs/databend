@@ -2719,7 +2719,6 @@ Functions overloads:
 198 multiply(Float64 NULL, Float32 NULL) :: Float64 NULL
 199 multiply(Float64, Float64) :: Float64
 200 multiply(Float64 NULL, Float64 NULL) :: Float64 NULL
-0 ne FACTORY
 0 not(Boolean) :: Boolean
 1 not(Boolean NULL) :: Boolean NULL
 0 noteq(Variant, Variant) :: Boolean
@@ -2746,17 +2745,18 @@ Functions overloads:
 21 noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 noteq(Int64, Int64) :: Boolean
 23 noteq(Int64 NULL, Int64 NULL) :: Boolean NULL
-24 noteq(Float32, Float32) :: Boolean
-25 noteq(Float32 NULL, Float32 NULL) :: Boolean NULL
-26 noteq(Float64, Float64) :: Boolean
-27 noteq(Float64 NULL, Float64 NULL) :: Boolean NULL
-28 noteq(Boolean, Boolean) :: Boolean
-29 noteq(Boolean NULL, Boolean NULL) :: Boolean NULL
-30 noteq(Array(Nothing), Array(Nothing)) :: Boolean
-31 noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-32 noteq(Array(T0), Array(T0)) :: Boolean
-33 noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-34 noteq FACTORY
+24 noteq FACTORY
+25 noteq(Float32, Float32) :: Boolean
+26 noteq(Float32 NULL, Float32 NULL) :: Boolean NULL
+27 noteq(Float64, Float64) :: Boolean
+28 noteq(Float64 NULL, Float64 NULL) :: Boolean NULL
+29 noteq(Boolean, Boolean) :: Boolean
+30 noteq(Boolean NULL, Boolean NULL) :: Boolean NULL
+31 noteq(Array(Nothing), Array(Nothing)) :: Boolean
+32 noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+33 noteq(Array(T0), Array(T0)) :: Boolean
+34 noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+35 noteq FACTORY
 0 now() :: Timestamp
 0 oct(Int64) :: String
 1 oct(Int64 NULL) :: String NULL

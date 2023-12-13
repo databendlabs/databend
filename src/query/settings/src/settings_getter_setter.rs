@@ -78,6 +78,15 @@ impl Settings {
                     )));
                 }
 
+                if let Some(range) = &default_val.range {
+                    if !range.contains(&val) {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "{} value should in range: {:?}",
+                            key, range
+                        )));
+                    }
+                }
+
                 self.changes.insert(key.to_string(), ChangeValue {
                     level: ScopeLevel::Session,
                     value: UserSettingValue::UInt64(val),

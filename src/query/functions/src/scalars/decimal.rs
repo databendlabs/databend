@@ -656,7 +656,7 @@ pub(crate) fn register_decimal_compare_op(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "gt", is_gt, domain_gt);
     register_decimal_compare_op!(registry, "lte", is_le, domain_lte);
     register_decimal_compare_op!(registry, "gte", is_ge, domain_gte);
-    register_decimal_compare_op!(registry, "ne", is_ne, domain_noteq);
+    register_decimal_compare_op!(registry, "noteq", is_ne, domain_noteq);
 }
 
 pub(crate) fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
