@@ -398,7 +398,7 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments,
+                segments: segments.clone(),
                 distributed: true,
                 output_schema: DataSchemaRef::new(DataSchema::new(vec![
                     join_output_schema.fields[row_number_idx.unwrap()].clone(),
@@ -406,7 +406,14 @@ impl MergeIntoInterpreter {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
             }));
-
+            // if change_join_order = true, it means the target is build side,
+            // in this way, we will do matched operation and not matched operation
+            // locally in every node, and the main node just recieve rowids to apply.
+            let segments = if *change_join_order {
+                segments.clone()
+            } else {
+                vec![]
+            };
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
                 input: Box::new(PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,
@@ -422,6 +429,7 @@ impl MergeIntoInterpreter {
                 input_schema: merge_into_source.output_schema()?,
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
+                segments,
             }))
         };
 

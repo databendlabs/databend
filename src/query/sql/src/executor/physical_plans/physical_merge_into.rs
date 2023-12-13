@@ -64,4 +64,5 @@ pub struct MergeIntoAppendNotMatched {
     pub input_schema: DataSchemaRef,
     pub merge_type: MergeIntoType,
     pub change_join_order: bool,
+    pub segments: Vec<(usize, Location)>,
 }

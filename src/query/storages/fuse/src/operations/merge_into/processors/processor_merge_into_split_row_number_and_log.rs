@@ -67,6 +67,8 @@ impl RowNumberAndLogSplitProcessor {
     }
 }
 
+// we will also use RowNumberAndLogSplitProcessor to
+// split rowids and logs although it's named with 'RowNumber'
 impl Processor for RowNumberAndLogSplitProcessor {
     fn name(&self) -> String {
         "RowNumberAndLogSplit".to_owned()
@@ -132,6 +134,7 @@ impl Processor for RowNumberAndLogSplitProcessor {
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             // all matched or logs
+            // if it's rowid, the meta will be none
             if data_block.get_meta().is_some() {
                 if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
                     self.output_data_row_number = Some(data_block)
@@ -140,6 +143,9 @@ impl Processor for RowNumberAndLogSplitProcessor {
                     self.output_data_log = Some(data_block);
                 }
             } else {
+                // when we use source as probe side and do distributed
+                // execution,it could be rowid but we use output_data_row_number.
+                // it doesn't matter.
                 self.output_data_row_number = Some(data_block)
             }
         }
