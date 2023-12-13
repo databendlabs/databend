@@ -30,6 +30,7 @@ pub mod prelude;
 mod binary_read;
 mod binary_write;
 
+mod bincode_serialization;
 mod bitmap;
 mod borsh_serialization;
 pub mod cursor_ext;
@@ -37,7 +38,6 @@ mod decimal;
 mod escape;
 mod format_settings;
 mod position;
-mod serialization;
 mod stat_buffer;
 
 pub use bitmap::parse_bitmap;

@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,11 +36,9 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use itertools::Itertools;
 use num_traits::AsPrimitive;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
@@ -50,7 +50,7 @@ use crate::BUILTIN_FUNCTIONS;
 pub(crate) const MEDIAN: u8 = 0;
 pub(crate) const QUANTILE: u8 = 1;
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 pub(crate) struct QuantileTDigestState {
     epsilon: u32,
     max_centroids: usize,
@@ -360,12 +360,12 @@ where T: Number + AsPrimitive<f64>
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        let mut rhs: QuantileTDigestState = deserialize_state(reader)?;
+        let mut rhs: QuantileTDigestState = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs)
     }
 

@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_number;
@@ -28,11 +30,9 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -54,7 +54,7 @@ impl FunctionData for QuantileData {
         self
     }
 }
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, BorshSerialize, BorshDeserialize)]
 struct QuantileContState {
     pub value: Vec<OrderedFloat<f64>>,
 }
@@ -145,12 +145,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 

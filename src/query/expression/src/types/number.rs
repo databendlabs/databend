@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -252,7 +254,17 @@ pub enum NumberDataType {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumAsInner,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum NumberScalar {
     UInt8(u8),
     UInt16(u16),

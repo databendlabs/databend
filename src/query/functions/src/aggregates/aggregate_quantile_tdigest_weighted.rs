@@ -33,8 +33,8 @@ use common_expression::FunctionContext;
 use common_expression::Scalar;
 use num_traits::AsPrimitive;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_quantile_tdigest::QuantileTDigestState;
 use crate::aggregates::aggregate_quantile_tdigest::MEDIAN;
@@ -144,12 +144,12 @@ where
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        let mut rhs: QuantileTDigestState = deserialize_state(reader)?;
+        let mut rhs: QuantileTDigestState = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs)
     }
 

@@ -2059,6 +2059,7 @@ dependencies = [
  "arrow-select",
  "async-backtrace",
  "base64 0.21.0",
+ "borsh 1.2.1",
  "bumpalo",
  "chrono",
  "chrono-tz",
@@ -2169,7 +2170,6 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "roaring",
- "serde",
  "sha1",
  "sha2",
  "simdutf8",
@@ -11993,8 +11993,9 @@ checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 [[package]]
 name = "streaming_algorithms"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op_fix_overflow_bug#e07d26324e3d5f42bd233231e80522b2659fce5e"
+source = "git+https://github.com/ariesdevil/streaming_algorithms?rev=2839d5d#2839d5d066c299bd37abd8679dfeb74f9bfb5093"
 dependencies = [
+ "borsh 1.2.1",
  "rand 0.7.3",
  "serde",
  "twox-hash",

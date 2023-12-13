@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -195,7 +197,17 @@ pub enum DecimalDataType {
     Decimal256(DecimalSize),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumAsInner,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum DecimalScalar {
     Decimal128(i128, DecimalSize),
     Decimal256(i256, DecimalSize),
@@ -240,7 +252,18 @@ pub enum DecimalDomain {
     Decimal256(SimpleDomain<i256>, DecimalSize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub struct DecimalSize {
     pub precision: u8,
     pub scale: u8,
