@@ -384,6 +384,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn replace_meta(&mut self, meta: BlockMetaInfoPtr) {
+        self.meta.replace(meta);
+    }
+
+    #[inline]
     pub fn get_meta(&self) -> Option<&BlockMetaInfoPtr> {
         self.meta.as_ref()
     }
