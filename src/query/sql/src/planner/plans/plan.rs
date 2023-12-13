@@ -318,6 +318,8 @@ pub enum RewriteKind {
     ShowEngines,
     ShowIndexes,
 
+    ShowLocks,
+
     ShowCatalogs,
     ShowDatabases,
     ShowTables(String),

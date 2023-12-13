@@ -380,6 +380,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowEngines { show_options } => visitor.visit_show_engines(show_options),
         Statement::ShowFunctions { show_options } => visitor.visit_show_functions(show_options),
         Statement::ShowIndexes { show_options } => visitor.visit_show_indexes(show_options),
+        Statement::ShowLocks(stmt) => visitor.visit_show_locks(stmt),
         Statement::ShowTableFunctions { show_options } => {
             visitor.visit_show_table_functions(show_options)
         }

@@ -356,6 +356,17 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(_, _, show_options)| Statement::ShowIndexes { show_options },
     );
+    let show_locks = map(
+        rule! {
+            SHOW ~ LOCKS ~ ( IN ~ ^ACCOUNT )? ~ #show_limit?
+        },
+        |(_, _, opt_in_account, limit)| {
+            Statement::ShowLocks(ShowLocksStmt {
+                in_account: opt_in_account.is_some(),
+                limit,
+            })
+        },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -1663,6 +1674,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #show_indexes : "`SHOW INDEXES`"
+            | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
