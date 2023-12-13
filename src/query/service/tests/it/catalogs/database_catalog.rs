@@ -216,7 +216,11 @@ async fn test_catalogs_table() -> Result<()> {
         let res = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "default".to_string(),
+                    table_name: "test_table".to_string(),
+                },
                 tb_id: tbl.get_table_info().ident.table_id,
             })
             .await;

@@ -488,9 +488,9 @@ pub struct CreateTableReply {
 pub struct DropTableByIdReq {
     pub if_exists: bool,
 
-    pub tenant: String,
-
     pub tb_id: MetaId,
+
+    pub name_ident: TableNameIdent,
 }
 
 impl DropTableByIdReq {

@@ -58,7 +58,11 @@ impl Interpreter for AlterViewInterpreter {
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: true,
-                    tenant: self.plan.tenant.clone(),
+                    name_ident: TableNameIdent {
+                        tenant: self.plan.tenant.clone(),
+                        db_name: self.plan.database.clone(),
+                        table_name: self.plan.view_name.clone(),
+                    },
                     tb_id: tbl.get_id(),
                 })
                 .await?;

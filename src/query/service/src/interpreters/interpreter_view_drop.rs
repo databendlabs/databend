@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::DropViewPlan;
 use common_storages_stream::stream_table::STREAM_ENGINE;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -82,7 +83,11 @@ impl Interpreter for DropViewInterpreter {
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
-                    tenant: self.plan.tenant.clone(),
+                    name_ident: TableNameIdent {
+                        tenant: self.plan.tenant.clone(),
+                        db_name: self.plan.database.clone(),
+                        table_name: self.plan.view_name.clone(),
+                    },
                     tb_id: table.get_id(),
                 })
                 .await?;

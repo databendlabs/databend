@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_management::RoleApi;
 use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::DropTablePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_spec;
@@ -107,7 +108,11 @@ impl Interpreter for DropTableInterpreter {
             let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
-                    tenant: self.plan.tenant.clone(),
+                    name_ident: TableNameIdent {
+                        tenant,
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
                     tb_id: tbl.get_table_info().ident.table_id,
                 })
                 .await?;
