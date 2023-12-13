@@ -122,8 +122,10 @@ use common_meta_app::schema::ListDroppedTableResp;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -3474,6 +3476,35 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
+        let mut reply = vec![];
+        for prefix in &req.prefixes {
+            let list = self.prefix_list_kv(prefix).await?;
+            for (k, seq) in list.into_iter() {
+                let meta: LockMeta = deserialize_struct(&seq.data)?;
+                let lock_type = &meta.lock_type;
+                let key = lock_type.key_from_str(&k).map_err(|e| {
+                    let inv = InvalidReply::new("list_locks", &e);
+                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
+                    MetaError::NetworkError(meta_net_err)
+                })?;
+                let revision = lock_type.revision_from_str(&k).map_err(|e| {
+                    let inv = InvalidReply::new("list_locks", &e);
+                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
+                    MetaError::NetworkError(meta_net_err)
+                })?;
+
+                reply.push(LockInfo {
+                    key,
+                    revision,
+                    meta,
+                });
+            }
+        }
+        Ok(reply)
     }
 
     #[logcall::logcall("debug")]

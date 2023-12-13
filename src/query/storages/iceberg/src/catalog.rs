@@ -57,7 +57,9 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -380,6 +382,11 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
         unimplemented!()
     }
 

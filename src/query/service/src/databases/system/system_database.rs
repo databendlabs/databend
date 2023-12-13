@@ -36,6 +36,7 @@ use common_storages_system::DatabasesTable;
 use common_storages_system::EnginesTable;
 use common_storages_system::FunctionsTable;
 use common_storages_system::IndexesTable;
+use common_storages_system::LocksTable;
 use common_storages_system::MallocStatsTable;
 use common_storages_system::MallocStatsTotalsTable;
 use common_storages_system::MetricsTable;
@@ -123,6 +124,7 @@ impl SystemDatabase {
             TasksTable::create(sys_db_meta.next_table_id()),
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
             ProcessorProfileTable::create(sys_db_meta.next_table_id()),
+            LocksTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();
