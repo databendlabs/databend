@@ -54,6 +54,34 @@ fn test_borsh_deserialize_from_slice() {
 }
 
 #[test]
+fn test_borsh_deserialize_updates_slice_position() {
+    let first_value = create_test_value();
+    let second_value = TestStruct {
+        a: 24,
+        b: "Goodbye, world!".to_string(),
+    };
+
+    // Serialize both values into a buffer
+    let mut buffer = Cursor::new(Vec::new());
+    borsh_serialize_into_buf(&mut buffer, &first_value).unwrap();
+    borsh_serialize_into_buf(&mut buffer, &second_value).unwrap();
+
+    // Create a mutable slice pointing to the buffer's content
+    let mut slice = buffer.get_ref().as_slice();
+
+    // Deserialize the first value
+    let deserialized_first: TestStruct = borsh_deserialize_from_stream(&mut slice).unwrap();
+    assert_eq!(first_value, deserialized_first);
+
+    // After deserializing the first value, the slice should have been updated to point to the remainder
+    let deserialized_second: TestStruct = borsh_deserialize_from_stream(&mut slice).unwrap();
+    assert_eq!(second_value, deserialized_second);
+
+    // Check if the slice is at the end (no more data to deserialize)
+    assert!(slice.is_empty());
+}
+
+#[test]
 fn test_borsh_deserialize_from_invalid_slice() {
     let invalid_slice = &b"invalid data"[..];
     let result: Result<TestStruct> = borsh_deserialize_from_slice(invalid_slice);
