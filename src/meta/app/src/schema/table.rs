@@ -798,6 +798,12 @@ pub struct TableIdToName {
     pub table_id: u64,
 }
 
+impl Display for TableIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "TableIdToName{{{}}}", self.table_id)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileNameIdent {
     pub table_id: u64,

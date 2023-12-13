@@ -183,6 +183,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the table meta by meta id.
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
+    // Get the table name by meta id.
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String>;
+
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> common_exception::Result<String>;
+
     // Get one table by db and table name.
     async fn get_table(
         &self,
