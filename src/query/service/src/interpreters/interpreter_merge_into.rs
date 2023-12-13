@@ -408,7 +408,7 @@ impl MergeIntoInterpreter {
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation
-            // locally in every node, and the main node just recieve rowids to apply.
+            // locally in every node, and the main node just receive rowids to apply.
             let segments = if *change_join_order {
                 segments.clone()
             } else {

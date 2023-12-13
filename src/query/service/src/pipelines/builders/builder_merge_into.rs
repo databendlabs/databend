@@ -105,12 +105,12 @@ impl PipelineBuilder {
 
         // there are two cases:
         // 1. if source is build side (change_join_order = false).
-        //  receive row numbers and MutationLogs, excatly below:
+        //  receive row numbers and MutationLogs, exactly below:
         //  1.1 full operation: row numbers and MutationLogs
         //  1.2 matched only: MutationLogs
         //  1.3 insert only: row numbers and MutationLogs
         // 2. if target table is build side (change_join_order = true).
-        //  receive rowids and MutationLogs,excatly below:
+        //  receive rowids and MutationLogs,exactly below:
         //  2.1 full operation: rowids and MutationLogs
         //  2.2 matched only: rowids and MutationLogs
         //  2.3 insert only: MutationLogs
@@ -262,7 +262,7 @@ impl PipelineBuilder {
                 // we will receive MutationLogs only without rowids.
                 return Ok(());
             }
-            // we will recieve MutationLogs and rowids. So we should apply
+            // we will receive MutationLogs and rowids. So we should apply
             // rowids firstly and then send all mutation logs to commit sink.
             // we need to spilt rowid and mutationlogs, and we can get pipeitems:
             //  1.rowid_port

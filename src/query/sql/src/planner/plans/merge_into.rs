@@ -85,7 +85,7 @@ impl std::fmt::Debug for MergeInto {
     }
 }
 
-pub const INSERT_NAME: &str = "number of rows insertd";
+pub const INSERT_NAME: &str = "number of rows inserted";
 pub const UPDTAE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
