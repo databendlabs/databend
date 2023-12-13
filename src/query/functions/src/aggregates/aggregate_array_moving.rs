@@ -17,6 +17,8 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
@@ -43,39 +45,36 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use ethnum::i256;
 use num_traits::AsPrimitive;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_sum::SumState;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(Default, Debug, Deserialize, Serialize)]
+#[derive(Default, Debug, BorshDeserialize, BorshSerialize)]
 pub struct NumberArrayMovingSumState<T, TSum> {
     values: Vec<T>,
-    #[serde(skip)]
+    #[borsh(skip)]
     _t: PhantomData<TSum>,
 }
 
 impl<T, TSum> SumState for NumberArrayMovingSumState<T, TSum>
 where
-    T: Number + AsPrimitive<TSum> + Serialize + DeserializeOwned,
+    T: Number + AsPrimitive<TSum> + BorshSerialize + BorshDeserialize,
     TSum: Number + AsPrimitive<f64> + std::ops::AddAssign + std::ops::SubAssign,
 {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.values)
+        borsh_serialize_state(writer, &self.values)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.values = deserialize_state(reader)?;
+        self.values = borsh_deserialize_state(reader)?;
         Ok(())
     }
 
@@ -203,7 +202,7 @@ where
     }
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, BorshDeserialize, BorshSerialize)]
 pub struct DecimalArrayMovingSumState<T> {
     pub values: Vec<T>,
 }
@@ -211,8 +210,8 @@ pub struct DecimalArrayMovingSumState<T> {
 impl<T> DecimalArrayMovingSumState<T>
 where T: Decimal
         + std::ops::AddAssign
-        + Serialize
-        + DeserializeOwned
+        + BorshSerialize
+        + BorshDeserialize
         + Copy
         + Clone
         + std::fmt::Debug
@@ -236,19 +235,19 @@ impl<T> SumState for DecimalArrayMovingSumState<T>
 where T: Decimal
         + std::ops::AddAssign
         + std::ops::SubAssign
-        + Serialize
-        + DeserializeOwned
+        + BorshSerialize
+        + BorshDeserialize
         + Copy
         + Clone
         + std::fmt::Debug
         + std::cmp::PartialOrd
 {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.values)
+        borsh_serialize_state(writer, &self.values)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.values = deserialize_state(reader)?;
+        self.values = borsh_deserialize_state(reader)?;
         Ok(())
     }
 
@@ -457,12 +456,12 @@ where State: SumState
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = deserialize_state(reader)?;
+        let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }
@@ -651,12 +650,12 @@ where State: SumState
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = deserialize_state(reader)?;
+        let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }

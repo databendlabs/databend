@@ -15,10 +15,13 @@
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
+use std::io::Write;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_arrow::arrow::bitmap::and;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -99,7 +102,9 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
+)]
 pub enum Scalar {
     Null,
     EmptyArray,
@@ -1974,6 +1979,22 @@ impl<'de> Deserialize<'de> for Column {
         }
 
         deserializer.deserialize_string(ColumnVisitor)
+    }
+}
+
+impl BorshSerialize for Column {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let bytes = serialize_column(self);
+        BorshSerialize::serialize(&bytes, writer)
+    }
+}
+
+impl BorshDeserialize for Column {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let bytes: Vec<u8> = borsh::BorshDeserialize::deserialize_reader(reader)?;
+        let column =
+            deserialize_column(&bytes).expect("expecting an arrow chunk with exactly one column");
+        Ok(column)
     }
 }
 

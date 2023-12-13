@@ -26,6 +26,7 @@ arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 async-backtrace = { workspace = true }
 base64 = "0.21.0"
+borsh = { workspace = true, features = ["derive"] }
 bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }

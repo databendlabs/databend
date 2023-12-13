@@ -19,6 +19,8 @@ use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,12 +42,9 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use num_traits::AsPrimitive;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateFunctionRef;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
@@ -55,9 +54,8 @@ use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateWindowFunnelState<T> {
-    #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub events_list: Vec<(T, u8)>,
     pub sorted: bool,
 }
@@ -66,8 +64,8 @@ impl<T> AggregateWindowFunnelState<T>
 where T: Ord
         + Sub<Output = T>
         + AsPrimitive<u64>
-        + Serialize
-        + DeserializeOwned
+        + BorshSerialize
+        + BorshDeserialize
         + Clone
         + Send
         + Sync
@@ -167,8 +165,8 @@ where
         + Sub<Output = T::Scalar>
         + AsPrimitive<u64>
         + Clone
-        + Serialize
-        + DeserializeOwned
+        + BorshSerialize
+        + BorshDeserialize
         + 'static,
 {
     fn name(&self) -> &str {
@@ -278,12 +276,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        let mut rhs: AggregateWindowFunnelState<T::Scalar> = deserialize_state(reader)?;
+        let mut rhs: AggregateWindowFunnelState<T::Scalar> = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs);
         Ok(())
     }
@@ -338,8 +336,8 @@ where
         + Sub<Output = T::Scalar>
         + AsPrimitive<u64>
         + Clone
-        + Serialize
-        + DeserializeOwned
+        + BorshSerialize
+        + BorshDeserialize
         + 'static,
 {
     pub fn try_create(
