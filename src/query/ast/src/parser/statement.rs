@@ -1620,6 +1620,63 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! { SHOW ~ NETWORK ~ POLICIES },
     );
 
+    let create_password_policy = map(
+        rule! {
+            CREATE ~ PASSWORD ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
+             ~ #password_set_options
+        },
+        |(_, _, _, opt_if_not_exists, name, set_options)| {
+            let stmt = CreatePasswordPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                set_options,
+            };
+            Statement::CreatePasswordPolicy(stmt)
+        },
+    );
+    let alter_password_policy = map(
+        rule! {
+            ALTER ~ PASSWORD ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+             ~ #alter_password_action
+        },
+        |(_, _, _, opt_if_exists, name, action)| {
+            let stmt = AlterPasswordPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                action,
+            };
+            Statement::AlterPasswordPolicy(stmt)
+        },
+    );
+    let drop_password_policy = map(
+        rule! {
+            DROP ~ PASSWORD ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropPasswordPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropPasswordPolicy(stmt)
+        },
+    );
+    let describe_password_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PASSWORD ~ POLICY ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescPasswordPolicy(DescPasswordPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+    let show_password_policies = map(
+        rule! {
+            SHOW ~ PASSWORD ~ POLICIES ~ #show_options?
+        },
+        |(_, _, _, show_options)| Statement::ShowPasswordPolicies { show_options },
+    );
+
     let create_pipe = map(
         rule! {
             CREATE ~ PIPE ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -1707,13 +1764,18 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
         ),
-        // network policy
+        // network policy / password policy
         rule!(
             #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
             | #describe_network_policy: "`DESC NETWORK POLICY name`"
             | #show_network_policies: "`SHOW NETWORK POLICIES`"
+            | #create_password_policy: "`CREATE PASSWORD POLICY [IF NOT EXISTS] name [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #drop_password_policy: "`DROP PASSWORD POLICY [IF EXISTS] name`"
+            | #describe_password_policy: "`DESC PASSWORD POLICY name`"
+            | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
@@ -2907,14 +2969,16 @@ pub fn limit_where(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
-pub fn show_limit(i: Input) -> IResult<ShowLimit> {
-    let limit_like = map(
+pub fn limit_like(i: Input) -> IResult<ShowLimit> {
+    map(
         rule! {
             LIKE ~ #literal_string
         },
         |(_, pattern)| ShowLimit::Like { pattern },
-    );
+    )(i)
+}
 
+pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     rule!(
         #limit_like
         | #limit_where
@@ -3030,6 +3094,11 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
+    let tenant_setting = value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING });
+    let no_tenant_setting = value(
+        UserOptionItem::TenantSetting(false),
+        rule! { NOTENANTSETTING },
+    );
     let default_role_option = map(
         rule! {
             "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
@@ -3038,26 +3107,38 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let set_network_policy = map(
         rule! {
-            SET ~ ^NETWORK ~ ^POLICY ~ ^"=" ~ ^#literal_string
+            SET ~ NETWORK ~ POLICY ~ "=" ~ #literal_string
         },
         |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
     );
     let unset_network_policy = map(
         rule! {
-            UNSET ~ ^NETWORK ~ ^POLICY
+            UNSET ~ NETWORK ~ POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
-    alt((
-        value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
-        value(
-            UserOptionItem::TenantSetting(false),
-            rule! { NOTENANTSETTING },
-        ),
-        default_role_option,
-        set_network_policy,
-        unset_network_policy,
-    ))(i)
+    let set_password_policy = map(
+        rule! {
+            SET ~ PASSWORD ~ POLICY ~ "=" ~ #literal_string
+        },
+        |(_, _, _, _, policy)| UserOptionItem::SetPasswordPolicy(policy),
+    );
+    let unset_password_policy = map(
+        rule! {
+            UNSET ~ PASSWORD ~ POLICY
+        },
+        |(_, _, _)| UserOptionItem::UnsetPasswordPolicy,
+    );
+
+    rule!(
+        #tenant_setting
+        | #no_tenant_setting
+        | #default_role_option
+        | #set_network_policy
+        | #unset_network_policy
+        | #set_password_policy
+        | #unset_password_policy
+    )(i)
 }
 
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
@@ -3211,5 +3292,121 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
         rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
         |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
+    )(i)
+}
+
+pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
+    map(
+        rule! {
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ #literal_u64 ) ?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ #literal_u64 ) ?
+             ~ ( COMMENT ~ Eq ~ #literal_string)?
+        },
+        |(
+            opt_min_length,
+            opt_max_length,
+            opt_min_upper_case_chars,
+            opt_min_lower_case_chars,
+            opt_min_numeric_chars,
+            opt_min_special_chars,
+            opt_min_age_days,
+            opt_max_age_days,
+            opt_max_retries,
+            opt_lockout_time_mins,
+            opt_history,
+            opt_comment,
+        )| {
+            PasswordSetOptions {
+                min_length: opt_min_length.map(|opt| opt.2),
+                max_length: opt_max_length.map(|opt| opt.2),
+                min_upper_case_chars: opt_min_upper_case_chars.map(|opt| opt.2),
+                min_lower_case_chars: opt_min_lower_case_chars.map(|opt| opt.2),
+                min_numeric_chars: opt_min_numeric_chars.map(|opt| opt.2),
+                min_special_chars: opt_min_special_chars.map(|opt| opt.2),
+                min_age_days: opt_min_age_days.map(|opt| opt.2),
+                max_age_days: opt_max_age_days.map(|opt| opt.2),
+                max_retries: opt_max_retries.map(|opt| opt.2),
+                lockout_time_mins: opt_lockout_time_mins.map(|opt| opt.2),
+                history: opt_history.map(|opt| opt.2),
+                comment: opt_comment.map(|opt| opt.2),
+            }
+        },
+    )(i)
+}
+
+pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
+    map(
+        rule! {
+             PASSWORD_MIN_LENGTH ?
+             ~ PASSWORD_MAX_LENGTH ?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
+             ~ PASSWORD_MIN_NUMERIC_CHARS ?
+             ~ PASSWORD_MIN_SPECIAL_CHARS ?
+             ~ PASSWORD_MIN_AGE_DAYS ?
+             ~ PASSWORD_MAX_AGE_DAYS ?
+             ~ PASSWORD_MAX_RETRIES ?
+             ~ PASSWORD_LOCKOUT_TIME_MINS ?
+             ~ PASSWORD_HISTORY ?
+             ~ COMMENT ?
+        },
+        |(
+            opt_min_length,
+            opt_max_length,
+            opt_min_upper_case_chars,
+            opt_min_lower_case_chars,
+            opt_min_numeric_chars,
+            opt_min_special_chars,
+            opt_min_age_days,
+            opt_max_age_days,
+            opt_max_retries,
+            opt_lockout_time_mins,
+            opt_history,
+            opt_comment,
+        )| {
+            PasswordUnSetOptions {
+                min_length: opt_min_length.is_some(),
+                max_length: opt_max_length.is_some(),
+                min_upper_case_chars: opt_min_upper_case_chars.is_some(),
+                min_lower_case_chars: opt_min_lower_case_chars.is_some(),
+                min_numeric_chars: opt_min_numeric_chars.is_some(),
+                min_special_chars: opt_min_special_chars.is_some(),
+                min_age_days: opt_min_age_days.is_some(),
+                max_age_days: opt_max_age_days.is_some(),
+                max_retries: opt_max_retries.is_some(),
+                lockout_time_mins: opt_lockout_time_mins.is_some(),
+                history: opt_history.is_some(),
+                comment: opt_comment.is_some(),
+            }
+        },
+    )(i)
+}
+
+pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
+    let set_options = map(
+        rule! {
+           SET ~ #password_set_options
+        },
+        |(_, set_options)| AlterPasswordAction::SetOptions(set_options),
+    );
+    let unset_options = map(
+        rule! {
+           UNSET ~ #password_unset_options
+        },
+        |(_, unset_options)| AlterPasswordAction::UnSetOptions(unset_options),
+    );
+
+    rule!(
+        #set_options
+        | #unset_options
     )(i)
 }

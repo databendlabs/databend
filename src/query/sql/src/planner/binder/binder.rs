@@ -557,6 +557,19 @@ impl<'a> Binder {
             Statement::ShowNetworkPolicies => {
                 self.bind_show_network_policies().await?
             }
+            Statement::CreatePasswordPolicy(stmt) => {
+                self.bind_create_password_policy(stmt).await?
+            }
+            Statement::AlterPasswordPolicy(stmt) => {
+                self.bind_alter_password_policy(stmt).await?
+            }
+            Statement::DropPasswordPolicy(stmt) => {
+                self.bind_drop_password_policy(stmt).await?
+            }
+            Statement::DescPasswordPolicy(stmt) => {
+                self.bind_desc_password_policy(stmt).await?
+            }
+            Statement::ShowPasswordPolicies{ show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
             Statement::CreateTask(stmt) => {
                 self.bind_create_task(stmt).await?
             }

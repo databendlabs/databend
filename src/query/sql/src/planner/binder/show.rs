@@ -134,7 +134,7 @@ impl Binder {
             show_limit, limit_str,
         );
 
-        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowProcessList)
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowIndexes)
             .await
     }
 
@@ -167,17 +167,21 @@ impl Binder {
     }
 }
 
-fn get_show_options(show_options: &Option<ShowOptions>, col: Option<String>) -> (String, String) {
+pub(crate) fn get_show_options(
+    show_options: &Option<ShowOptions>,
+    col: Option<String>,
+) -> (String, String) {
     let mut show_limit = String::new();
     let mut limit_str = String::new();
 
     if let Some(show_option) = show_options {
         match &show_option.show_limit {
             Some(ShowLimit::Like { pattern }) => {
+                // convert like pattern to lowercase to uses case-insensitive pattern matching
                 if let Some(col) = &col {
-                    show_limit = format!("WHERE {} LIKE '{}'", col, pattern);
+                    show_limit = format!("WHERE LOWER({}) LIKE '{}'", col, pattern.to_lowercase());
                 } else {
-                    show_limit = format!("WHERE name LIKE '{}'", pattern);
+                    show_limit = format!("WHERE LOWER(name) LIKE '{}'", pattern.to_lowercase());
                 }
             }
             Some(ShowLimit::Where { selection }) => {
