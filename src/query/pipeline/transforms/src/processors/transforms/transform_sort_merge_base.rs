@@ -110,15 +110,6 @@ where
         output_order_col: bool,
         inner: M,
     ) -> Result<Self> {
-        debug_assert!(if order_col_generated {
-            // If the order column is already generated,
-            // it means this transform is after a exchange source and it's the last transform for sorting.
-            // We should remove the order column.
-            !output_order_col
-        } else {
-            true
-        });
-
         let row_converter = Converter::create(&sort_desc, schema)?;
 
         Ok(Self {
@@ -153,8 +144,11 @@ where
                 .clone();
             let rows = R::from_column(order_col, &self.sort_desc)
                 .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
-            // Need to remove order column.
-            block.pop_columns(1);
+            if !self.output_order_col {
+                // The next processor could be a sort spill processor which need order column.
+                // And the order column will be removed in that processor.
+                block.pop_columns(1);
+            }
             rows
         } else {
             let order_by_cols = self

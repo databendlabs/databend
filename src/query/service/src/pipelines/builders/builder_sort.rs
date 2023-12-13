@@ -280,16 +280,17 @@ impl SortPipelineBuilder {
     ) -> Result<()> {
         // Merge sort
         let need_multi_merge = pipeline.output_len() > 1;
+        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
         debug_assert!(if order_col_generated {
             // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
-            !need_multi_merge && self.remove_order_col_at_last
+            !output_order_col
         } else {
             true
         });
 
         let (max_memory_usage, bytes_limit_per_proc) =
             self.get_memory_settings(pipeline.output_len())?;
-        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
+
         let may_spill = max_memory_usage != 0 && bytes_limit_per_proc != 0;
 
         pipeline.add_transform(|input, output| {
