@@ -26,6 +26,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 enumflags2 = { workspace = true }
+futures = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"

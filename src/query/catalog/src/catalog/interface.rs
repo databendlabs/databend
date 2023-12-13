@@ -53,7 +53,9 @@ use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -277,6 +279,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()>;
 
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()>;
+
+    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>>;
 
     /// Table function
 

@@ -75,7 +75,9 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -340,19 +342,23 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        todo!()
+        unimplemented!()
     }
 
     async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        todo!()
+        unimplemented!()
     }
 
     async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
-        todo!()
+        unimplemented!()
     }
 
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
-        todo!()
+        unimplemented!()
+    }
+
+    async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        unimplemented!()
     }
 }
 

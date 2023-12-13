@@ -2264,6 +2264,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "enumflags2",
+ "futures",
  "log",
  "logcall",
  "maplit",

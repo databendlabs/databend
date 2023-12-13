@@ -14146,6 +14146,19 @@ ShowConnections(
 
 
 ---------- Input ----------
+SHOW LOCKS IN ACCOUNT
+---------- Output ---------
+SHOW LOCKS IN ACCOUNT
+---------- AST ------------
+ShowLocks(
+    ShowLocksStmt {
+        in_account: true,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM @~/MyStage1 FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
