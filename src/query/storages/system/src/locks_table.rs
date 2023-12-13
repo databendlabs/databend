@@ -112,7 +112,11 @@ impl AsyncSystemTable for LocksTable {
                 lock_query_id.push(info.meta.query_id.as_bytes().to_vec());
                 lock_created_on.push(info.meta.created_on.timestamp_micros());
                 lock_acquired_on.push(info.meta.acquired_on.map(|v| v.timestamp_micros()));
-                lock_extra_info.push(format!("{:?}", info.meta.extra_info).as_bytes().to_vec());
+                if info.meta.extra_info.is_empty() {
+                    lock_extra_info.push(vec![]);
+                } else {
+                    lock_extra_info.push(format!("{:?}", info.meta.extra_info).as_bytes().to_vec());
+                }
             }
         }
         Ok(DataBlock::new_from_columns(vec![

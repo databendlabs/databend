@@ -156,15 +156,8 @@ impl Binder {
             let user = self.ctx.get_current_user()?.name;
             select_builder.with_filter(format!("user = '{user}'"));
         }
-        if let Some(limit) = limit {
-            match limit {
-                ShowLimit::Like { pattern } => {
-                    select_builder.with_filter(format!("table_id LIKE '{pattern}'"));
-                }
-                ShowLimit::Where { selection } => {
-                    select_builder.with_filter(format!("({selection})"));
-                }
-            }
+        if let Some(ShowLimit::Where { selection }) = limit {
+            select_builder.with_filter(format!("({selection})"));
         }
         let query = select_builder.build();
         debug!("show locks rewrite to: {:?}", query);
@@ -172,8 +165,6 @@ impl Binder {
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowLocks)
             .await
     }
-
-    // bind_show_locks
 }
 
 fn get_show_options(show_options: &Option<ShowOptions>, col: Option<String>) -> (String, String) {

@@ -358,7 +358,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let show_locks = map(
         rule! {
-            SHOW ~ LOCKS ~ ( IN ~ ^ACCOUNT )? ~ #show_limit?
+            SHOW ~ LOCKS ~ ( IN ~ ^ACCOUNT )? ~ #limit_where?
         },
         |(_, _, opt_in_account, limit)| {
             Statement::ShowLocks(ShowLocksStmt {
@@ -1674,7 +1674,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #show_indexes : "`SHOW INDEXES`"
-            | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [<show_limit>]`"
+            | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
@@ -2872,20 +2872,23 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
-pub fn show_limit(i: Input) -> IResult<ShowLimit> {
-    let limit_like = map(
-        rule! {
-            LIKE ~ #literal_string
-        },
-        |(_, pattern)| ShowLimit::Like { pattern },
-    );
-    let limit_where = map(
+pub fn limit_where(i: Input) -> IResult<ShowLimit> {
+    map(
         rule! {
             WHERE ~ #expr
         },
         |(_, selection)| ShowLimit::Where {
             selection: Box::new(selection),
         },
+    )(i)
+}
+
+pub fn show_limit(i: Input) -> IResult<ShowLimit> {
+    let limit_like = map(
+        rule! {
+            LIKE ~ #literal_string
+        },
+        |(_, pattern)| ShowLimit::Like { pattern },
     );
 
     rule!(
