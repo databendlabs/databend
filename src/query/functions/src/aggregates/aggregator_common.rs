@@ -165,18 +165,5 @@ pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
 
 #[inline]
 pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
-    borsh_deserialize_from_stream(slice)
-}
-
-#[inline]
-pub fn serialize_state<W: std::io::Write, T: serde::Serialize>(
-    writer: &mut W,
-    value: &T,
-) -> Result<()> {
-    bincode_serialize_into_buf(writer, value)
-}
-
-#[inline]
-pub fn deserialize_state<T: serde::de::DeserializeOwned>(slice: &mut &[u8]) -> Result<T> {
-    bincode_deserialize_from_stream(slice)
+    borsh_deserialize_from_slice(slice)
 }

@@ -17,6 +17,8 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,8 +40,8 @@ use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
@@ -51,7 +53,7 @@ use crate::with_simple_no_number_mapped_type;
 // A: ValueType for arg.
 // V: ValueType for val.
 pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
-    Serialize + DeserializeOwned + Send + Sync + 'static
+    BorshSerialize + BorshDeserialize + Send + Sync + 'static
 {
     fn new() -> Self;
     fn add(&mut self, value: V::ScalarRef<'_>, data: Scalar);
@@ -66,18 +68,17 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
     fn merge_result(&mut self, column: &mut ColumnBuilder) -> Result<()>;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 struct ArgMinMaxState<A, V, C>
 where
     V: ValueType,
-    V::Scalar: Serialize + DeserializeOwned,
+    V::Scalar: BorshSerialize + BorshDeserialize,
 {
-    #[serde(bound(deserialize = "V::Scalar: DeserializeOwned"))]
     pub value: Option<V::Scalar>,
     pub data: Scalar,
-    #[serde(skip)]
+    #[borsh(skip)]
     _a: PhantomData<A>,
-    #[serde(skip)]
+    #[borsh(skip)]
     _c: PhantomData<C>,
 }
 
@@ -85,7 +86,7 @@ impl<A, V, C> AggregateArgMinMaxState<A, V> for ArgMinMaxState<A, V, C>
 where
     A: ValueType + Send + Sync,
     V: ValueType,
-    V::Scalar: Send + Sync + Serialize + DeserializeOwned,
+    V::Scalar: Send + Sync + BorshSerialize + BorshDeserialize,
     C: ChangeIf<V> + Default,
 {
     fn new() -> Self {
@@ -283,12 +284,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = deserialize_state(reader)?;
+        let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }
