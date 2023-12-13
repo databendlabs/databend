@@ -124,7 +124,7 @@ impl UserApiProvider {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_udf(),
         );
-        let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
+        let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         // public.grants.grant_privileges(
         //     &GrantObject::Table(
         //         "default".to_string(),
