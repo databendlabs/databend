@@ -35,28 +35,28 @@ NULL	6
 NULL	6
 2	5
 ===================
-2	NULL
-2	5
-4	8
-NULL	NULL
-NULL	6
-2	NULL
-2	5
-4	8
-NULL	NULL
-NULL	6
-NULL	6
-NULL	NULL
-2	5
-2	NULL
-4	8
-NULL	6
-NULL	NULL
-2	5
-2	NULL
-4	8
+transform_spill_write_count_total	{"spill":"sort_spill"}	36.0
+transform_spill_write_bytes_total	{"spill":"sort_spill"}	55216.0
+transform_spill_read_count_total	{"spill":"sort_spill"}	36.0
+transform_spill_read_bytes_total	{"spill":"sort_spill"}	55216.0
 ===================
-transform_spill_write_count_total	{"spill":"sort_spill"}	104.0
-transform_spill_write_bytes_total	{"spill":"sort_spill"}	177616.0
-transform_spill_read_count_total	{"spill":"sort_spill"}	104.0
-transform_spill_read_bytes_total	{"spill":"sort_spill"}	177616.0
+2	NULL
+2	5
+4	8
+NULL	NULL
+NULL	6
+2	NULL
+2	5
+4	8
+NULL	NULL
+NULL	6
+NULL	6
+NULL	NULL
+2	5
+2	NULL
+4	8
+NULL	6
+NULL	NULL
+2	5
+2	NULL
+4	8

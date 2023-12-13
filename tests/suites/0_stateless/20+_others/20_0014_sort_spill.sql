@@ -9,7 +9,9 @@ SELECT c FROM t ORDER BY c;
 SELECT '===================';
 
 -- Test if the spill is activated.
-select metric, labels, value from system.metrics where metric like '%spill%total';
+set sort_spilling_bytes_threshold_per_proc = 0;
+select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+set sort_spilling_bytes_threshold_per_proc = 8;
 
 SELECT '===================';
 
@@ -36,6 +38,12 @@ SELECT x, y FROM xy ORDER BY y DESC NULLS FIRST;
 
 SELECT '===================';
 
+set sort_spilling_bytes_threshold_per_proc = 0;
+select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+set sort_spilling_bytes_threshold_per_proc = 8;
+
+SELECT '===================';
+
 -- Test single thread
 set max_threads = 1;
 INSERT INTO xy VALUES (NULL, NULL);
@@ -44,8 +52,5 @@ SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST;
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST;
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC;
 
-SELECT '===================';
-
-select metric, labels, value from system.metrics where metric like '%spill%total';
 set sort_spilling_bytes_threshold_per_proc = 0;
 set max_threads = 16;
