@@ -32,3 +32,10 @@ pub fn borsh_deserialize_from_slice<T: BorshDeserialize>(slice: &[u8]) -> Result
     let value = borsh::from_slice::<T>(slice)?;
     Ok(value)
 }
+
+#[inline]
+pub fn borsh_deserialize_from_stream<T: BorshDeserialize>(stream: &mut &[u8]) -> Result<T> {
+    // `T::deserialize` will updates the buffer to point at the remaining bytes.
+    let value = T::deserialize(stream)?;
+    Ok(value)
+}

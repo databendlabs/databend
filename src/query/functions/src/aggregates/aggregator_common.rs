@@ -165,5 +165,5 @@ pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
 
 #[inline]
 pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
-    borsh_deserialize_from_slice(slice)
+    borsh_deserialize_from_stream(slice)
 }
