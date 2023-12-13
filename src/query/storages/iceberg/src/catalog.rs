@@ -253,6 +253,16 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_db_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+        unimplemented!()
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_table(

@@ -44,6 +44,7 @@ use common_meta_app::app_error::UndropTableAlreadyExists;
 use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownCatalog;
+use common_meta_app::app_error::UnknownDatabaseId;
 use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownStreamId;
 use common_meta_app::app_error::UnknownTable;
@@ -2311,6 +2312,48 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             TableIdent::new(table_id, tb_meta_seq),
             Arc::new(table_meta.unwrap()),
         ))
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError> {
+        debug!(req = as_debug!(&table_id); "SchemaApi: {}", func_name!());
+
+        let table_id_to_name_key = TableIdToName { table_id };
+
+        let (tb_meta_seq, table_name): (_, Option<DBIdTableName>) =
+            get_pb_value(self, &table_id_to_name_key).await?;
+
+        debug!(ident = as_display!(&table_id_to_name_key); "get_table_name_by_id");
+
+        if tb_meta_seq == 0 || table_name.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, "get_table_name_by_id"),
+            )));
+        }
+
+        Ok(table_name.unwrap().table_name)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn get_db_name_by_id(&self, db_id: u64) -> Result<String, KVAppError> {
+        debug!(req = as_debug!(&db_id); "SchemaApi: {}", func_name!());
+
+        let db_id_to_name_key = DatabaseIdToName { db_id };
+
+        let (meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
+            get_pb_value(self, &db_id_to_name_key).await?;
+
+        debug!(ident = as_display!(&db_id_to_name_key); "get_db_name_by_id");
+
+        if meta_seq == 0 || db_name.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
+                UnknownDatabaseId::new(db_id, "get_db_name_by_id"),
+            )));
+        }
+
+        Ok(db_name.unwrap().db_name)
     }
 
     #[logcall::logcall("debug")]
