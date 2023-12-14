@@ -64,29 +64,28 @@ impl Settings {
         unsafe { self.unchecked_try_set_u64(key, val) }
     }
 
+    /// Sets a u64 value for a given key in the settings.
+    /// Ensures that the key exists, the setting type is UInt64, and the value is within any defined numeric range.
     unsafe fn unchecked_try_set_u64(&self, key: &str, val: u64) -> Result<()> {
-        match DefaultSettings::instance()?.settings.get(key) {
-            None => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown variable: {:?}",
-                key
-            ))),
-            Some(default_val) => {
-                if !matches!(&default_val.value, UserSettingValue::UInt64(_)) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Set a integer({}) into {:?}.",
-                        val, key
-                    )));
+        // Retrieve the instance of default settings
+        let default_settings = DefaultSettings::instance()?;
+
+        let setting_value = default_settings
+            .settings
+            .get(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        match &setting_value.value {
+            UserSettingValue::UInt64(_) => {
+                // If a numeric range is defined, validate the value against this range
+                if let Some(range) = &setting_value.range {
+                    // Check if the value falls within the numeric range
+                    range.is_within_numeric_range(val).map_err(|err| {
+                        ErrorCode::WrongValueForVariable(format!("{}: {}", key, err.message()))
+                    })?;
                 }
 
-                if let Some(range) = &default_val.range {
-                    if !range.contains(&val) {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "{} value should in range: {:?}",
-                            key, range
-                        )));
-                    }
-                }
-
+                // Insert the value into changes with a session scope
                 self.changes.insert(key.to_string(), ChangeValue {
                     level: ScopeLevel::Session,
                     value: UserSettingValue::UInt64(val),
@@ -94,6 +93,11 @@ impl Settings {
 
                 Ok(())
             }
+            // If the setting type is not UInt64, return an error
+            _ => Err(ErrorCode::BadArguments(format!(
+                "Set an integer ({}) into {:?}",
+                val, key
+            ))),
         }
     }
 
@@ -103,20 +107,13 @@ impl Settings {
         unsafe { self.unchecked_set_setting(k, v) }
     }
 
-    unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<(), ErrorCode> {
-        if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
-            self.changes.insert(key, ChangeValue {
-                value,
-                level: ScopeLevel::Session,
-            });
-
-            return Ok(());
-        }
-
-        Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            k
-        )))
+    unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<()> {
+        let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
+        self.changes.insert(key, ChangeValue {
+            value,
+            level: ScopeLevel::Session,
+        });
+        Ok(())
     }
 
     pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
