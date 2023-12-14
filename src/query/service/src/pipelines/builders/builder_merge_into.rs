@@ -624,7 +624,12 @@ impl PipelineBuilder {
                 // with row_id and row_number
                 (output_lens - 2, 1)
             } else {
-                // (with row_id and without row_number) or (without row_id and with row_number)
+                // I. (with row_id and without row_number) (need_match and !need_unmatch)
+                // II. (without row_id and with row_number) (!need_match and need_unmatch)
+                // in fact for II, it should be (output_lens-1,1), but in this case, the
+                // output_lens = 1, so it will be (0,1), and we just need to append a dummy_item.
+                // but we use (output_lens - 1, 0) instead of (output_lens-1,1), because they will
+                // arrive the same result (that's appending only one dummy item)
                 (output_lens - 1, 0)
             };
             table.cluster_gen_for_append_with_specified_len(
