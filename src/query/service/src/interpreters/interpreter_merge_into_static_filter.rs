@@ -484,10 +484,13 @@ impl MergeIntoInterpreter {
         let source_plan = m_join.source_sexpr;
         let eval_target_side_condition_sexpr = if let RelOperator::Exchange(_) = source_plan.plan()
         {
-            // there is another row_number operator here
             SExpr::create_unary(
                 Arc::new(eval_source_side_join_expr_op.into()),
-                Arc::new(source_plan.child(0)?.child(0)?.clone()),
+                SExpr::create_unary(
+                    // there is another row_number operator here
+                    RelOperator::Exchange(common_sql::plans::Exchange::Merge),
+                    Arc::new(source_plan.child(0)?.child(0)?.clone()),
+                ),
             )
         } else {
             SExpr::create_unary(
