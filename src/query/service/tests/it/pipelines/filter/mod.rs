@@ -13,3 +13,6 @@
 // limitations under the License.
 
 mod filter_executor;
+mod random_filter_expr;
+
+pub use random_filter_expr::random_filter_expr;

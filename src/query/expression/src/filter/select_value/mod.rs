@@ -15,10 +15,3 @@
 mod select_column;
 mod select_scalar;
 mod select_scalar_column;
-
-pub use select_column::select_boolean_column_adapt;
-pub use select_column::select_columns;
-pub use select_scalar::select_boolean_scalar_adapt;
-pub use select_scalar::select_empty_array_adapt;
-pub use select_scalar::select_scalars;
-pub use select_scalar_column::select_scalar_and_column;

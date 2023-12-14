@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::filter::select_boolean_column_adapt;
-use crate::filter::select_boolean_scalar_adapt;
-use crate::filter::select_columns;
-use crate::filter::select_scalar_and_column;
-use crate::filter::select_scalars;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::types::nullable::NullableColumn;
@@ -24,15 +19,15 @@ use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
-use crate::types::NumberDataType;
 use crate::Selector;
 use crate::Value;
 
 impl<'a> Selector<'a> {
+    // Select indices by comparing two `Value`.
     #[allow(clippy::too_many_arguments)]
     pub fn select_values(
         &self,
-        op: SelectOp,
+        op: &SelectOp,
         left: Value<AnyType>,
         right: Value<AnyType>,
         left_data_type: DataType,
@@ -45,7 +40,8 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> usize {
         match (left, right) {
-            (Value::Scalar(left), Value::Scalar(right)) => select_scalars(
+            // Select indices by comparing two scalars.
+            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars(
                 op,
                 left,
                 right,
@@ -57,7 +53,8 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            (Value::Column(left), Value::Column(right)) => select_columns(
+            // Select indices by comparing two columns.
+            (Value::Column(left), Value::Column(right)) => self.select_columns(
                 op,
                 left,
                 right,
@@ -70,7 +67,8 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            (Value::Scalar(scalar), Value::Column(column)) => select_scalar_and_column(
+            // Select indices by comparing scalar and column.
+            (Value::Scalar(scalar), Value::Column(column)) => self.select_scalar_and_column(
                 op,
                 scalar,
                 column,
@@ -82,8 +80,9 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            (Value::Column(column), Value::Scalar(scalar)) => select_scalar_and_column(
-                op.reverse(),
+            // Select indices by comparing column and scalar.
+            (Value::Column(column), Value::Scalar(scalar)) => self.select_scalar_and_column(
+                &op.reverse(),
                 scalar,
                 column,
                 left_data_type,
@@ -97,6 +96,7 @@ impl<'a> Selector<'a> {
         }
     }
 
+    // Select indices by single `Value`.
     #[allow(clippy::too_many_arguments)]
     pub fn select_value(
         &self,
@@ -117,7 +117,7 @@ impl<'a> Selector<'a> {
             DataType::Boolean => {
                 let value = value.try_downcast::<BooleanType>().unwrap();
                 match value {
-                    Value::Scalar(scalar) => select_boolean_scalar_adapt(
+                    Value::Scalar(scalar) => self.select_boolean_scalar_adapt(
                         scalar,
                         true_selection,
                         false_selection,
@@ -126,7 +126,7 @@ impl<'a> Selector<'a> {
                         select_strategy,
                         count,
                     ),
-                    Value::Column(column) => select_boolean_column_adapt(
+                    Value::Column(column) => self.select_boolean_column_adapt(
                         column,
                         true_selection,
                         false_selection,
@@ -140,7 +140,7 @@ impl<'a> Selector<'a> {
             DataType::Nullable(box DataType::Boolean) => {
                 let nullable_value = value.try_downcast::<NullableType<BooleanType>>().unwrap();
                 match nullable_value {
-                    Value::Scalar(None) => select_boolean_scalar_adapt(
+                    Value::Scalar(None) => self.select_boolean_scalar_adapt(
                         false,
                         true_selection,
                         false_selection,
@@ -149,7 +149,7 @@ impl<'a> Selector<'a> {
                         select_strategy,
                         count,
                     ),
-                    Value::Scalar(Some(scalar)) => select_boolean_scalar_adapt(
+                    Value::Scalar(Some(scalar)) => self.select_boolean_scalar_adapt(
                         scalar,
                         true_selection,
                         false_selection,
@@ -160,7 +160,7 @@ impl<'a> Selector<'a> {
                     ),
                     Value::Column(NullableColumn { column, validity }) => {
                         let bitmap = &column & &validity;
-                        select_boolean_column_adapt(
+                        self.select_boolean_column_adapt(
                             bitmap,
                             true_selection,
                             false_selection,
@@ -176,119 +176,3 @@ impl<'a> Selector<'a> {
         }
     }
 }
-
-fn _get_some_test_data_types() -> Vec<DataType> {
-    vec![
-        // DataType::Null,
-        // DataType::EmptyArray,
-        // DataType::EmptyMap,
-        // DataType::Boolean,
-        // DataType::String,
-        // DataType::Bitmap,
-        // DataType::Variant,
-        // DataType::Timestamp,
-        // DataType::Date,
-        DataType::Number(NumberDataType::UInt8),
-        // DataType::Number(NumberDataType::UInt16),
-        // DataType::Number(NumberDataType::UInt32),
-        // DataType::Number(NumberDataType::UInt64),
-        // DataType::Number(NumberDataType::Int8),
-        // DataType::Number(NumberDataType::Int16),
-        // DataType::Number(NumberDataType::Int32),
-        // DataType::Number(NumberDataType::Int64),
-        // DataType::Number(NumberDataType::Float32),
-        // DataType::Number(NumberDataType::Float64),
-        // DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-        //     precision: 10,
-        //     scale: 2,
-        // })),
-        // DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-        //     precision: 35,
-        //     scale: 3,
-        // })),
-        // DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-        // DataType::Nullable(Box::new(DataType::String)),
-        // DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
-        // DataType::Map(Box::new(DataType::Tuple(vec![
-        //     DataType::Number(NumberDataType::UInt64),
-        //     DataType::String,
-        // ]))),
-    ]
-}
-
-// fn _rand_block_for_some_types(num_rows: usize) -> DataBlock {
-//     let types = _get_some_test_data_types();
-//     let mut columns = Vec::with_capacity(types.len());
-//     for data_type in types.iter() {
-//         columns.push(Column::random(data_type, num_rows));
-//     }
-
-//     let block = DataBlock::new_from_columns(columns);
-//     block.check_valid().unwrap();
-
-//     block
-// }
-
-// #[test]
-// pub fn test_operation() -> common_exception::Result<()> {
-//     use common_expression::types::NumberScalar;
-//     use common_expression::Scalar;
-//     use rand::Rng;
-
-//     let mut rng = rand::thread_rng();
-//     let num_blocks = rng.gen_range(5..30);
-
-//     for _ in 0..num_blocks {
-//         let len = rng.gen_range(2..30);
-//         let slice_start = rng.gen_range(0..len - 1);
-//         let slice_end = rng.gen_range(slice_start..len);
-
-//         let random_block_1 = _rand_block_for_some_types(len);
-//         let random_block_2 = _rand_block_for_some_types(len);
-
-//         let random_block_1 = random_block_1.slice(slice_start..slice_end);
-//         let random_block_2 = random_block_2.slice(slice_start..slice_end);
-
-//         let len = slice_end - slice_start;
-
-//         let mut selection = vec![0u32; len];
-//         let mut false_selection = vec![0u32; len];
-//         let mut count = len;
-
-//         for (left, right) in random_block_1
-//             .columns()
-//             .iter()
-//             .zip(random_block_2.columns().iter())
-//         {
-//             let op = SelectOp::Gt;
-//             let number_scalar = Scalar::Number(NumberScalar::UInt8(100));
-//             let _right_scalar = Value::<AnyType>::Scalar(number_scalar);
-//             let mut true_idx = 0;
-//             let mut false_idx = 0;
-//             count = select_values(
-//                 op,
-//                 left.value.clone(),
-//                 // right_scalar,
-//                 right.value.clone(),
-//                 left.data_type.clone(),
-//                 right.data_type.clone(),
-//                 &mut selection,
-//                 (&mut false_selection, false),
-//                 &mut true_idx,
-//                 &mut false_idx,
-//                 SelectStrategy::All,
-//                 count,
-//             );
-//         }
-//         println!("count = {:?}, len = {:?}", count, len);
-
-//         if count > 0 {
-//             let count = count + ((count < len) as usize);
-//             let left = random_block_1.take(&selection[0..count], &mut None)?;
-//             let right = random_block_2.take(&selection[0..count], &mut None)?;
-//             println!("left = \n{:?}\nright = \n{:?}\n", left, right);
-//         }
-//     }
-
-//     Ok(())
-// }

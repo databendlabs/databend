@@ -18,7 +18,6 @@ use itertools::Itertools;
 
 use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
-use crate::filter::SelectStrategy;
 use crate::types::DataType;
 use crate::EvalContext;
 use crate::Evaluator;
@@ -26,6 +25,18 @@ use crate::Expr;
 use crate::Scalar;
 use crate::Value;
 
+// SelectStrategy is used to determine the iteration strategy of the index.
+// (1) True: iterate true index in `true_selection`.
+// (2) False: iterate false index in `false_selection`.
+// (3) All: iterate all index by Range.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SelectStrategy {
+    True,
+    False,
+    All,
+}
+
+// The `Selector` is used to process the `SelectExpr`, it is used in `FilterExecutor`.
 pub struct Selector<'a> {
     evaluator: Evaluator<'a>,
     num_rows: usize,
@@ -39,6 +50,8 @@ impl<'a> Selector<'a> {
         }
     }
 
+    // Process the `SelectExpr` and return the number of indices that are selected,
+    // all selected indices are stored in `true_selection`.
     pub fn select(
         &self,
         select_expr: &SelectExpr,
@@ -47,7 +60,7 @@ impl<'a> Selector<'a> {
     ) -> Result<usize> {
         let mut true_idx = 0;
         let mut false_idx = 0;
-        self.process_selection(
+        self.process_select_expr(
             select_expr,
             None,
             true_selection,
@@ -59,8 +72,9 @@ impl<'a> Selector<'a> {
         )
     }
 
+    // Process `SelectExpr`.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_selection(
+    pub fn process_select_expr(
         &self,
         select_expr: &SelectExpr,
         validity: Option<Bitmap>,
@@ -139,6 +153,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
+    // Process SelectExpr::And.
     #[allow(clippy::too_many_arguments)]
     pub fn process_and(
         &self,
@@ -155,7 +170,7 @@ impl<'a> Selector<'a> {
         let mut temp_false_idx = *false_idx;
         let exprs_len = exprs.len();
         for (i, expr) in exprs.iter().enumerate() {
-            let true_count = self.process_selection(
+            let true_count = self.process_select_expr(
                 expr,
                 validity.clone(),
                 true_selection,
@@ -185,6 +200,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
+    // Process SelectExpr::Or.
     #[allow(clippy::too_many_arguments)]
     pub fn process_or(
         &self,
@@ -201,7 +217,7 @@ impl<'a> Selector<'a> {
         let mut temp_false_idx = *false_idx;
         let exprs_len = exprs.len();
         for (i, expr) in exprs.iter().enumerate() {
-            let true_count = self.process_selection(
+            let true_count = self.process_select_expr(
                 expr,
                 validity.clone(),
                 true_selection,
@@ -232,6 +248,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
+    // Process SelectExpr::Compare.
     #[allow(clippy::too_many_arguments)]
     pub fn process_compare(
         &self,
@@ -256,7 +273,7 @@ impl<'a> Selector<'a> {
             .evaluator
             .remove_generics_data_type(generics, &right_data_type);
         let count = self.select_values(
-            *select_op,
+            select_op,
             left_value,
             right_value,
             left_data_type,
@@ -271,6 +288,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
+    // Process SelectExpr::Others.
     #[allow(clippy::too_many_arguments)]
     pub fn process_others(
         &self,
@@ -412,6 +430,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
+    // Process SelectExpr::BooleanColumn.
     #[allow(clippy::too_many_arguments)]
     pub fn process_boolean_column(
         &self,
@@ -438,6 +457,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
+    // Process SelectExpr::BooleanScalar.
     #[allow(clippy::too_many_arguments)]
     pub fn process_boolean_constant(
         &self,

@@ -14,16 +14,11 @@
 
 use core::cmp::Ordering;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SelectStrategy {
-    True,
-    False,
-    All,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum SelectOp {
+    // Equal "="
     Equal,
+    // Not equal "!="
     NotEqual,
     // Greater ">"
     Gt,
@@ -57,6 +52,85 @@ impl SelectOp {
             SelectOp::Gte => SelectOp::Lte,
             SelectOp::Lte => SelectOp::Gte,
         }
+    }
+}
+
+pub fn selection_op<T>(op: &SelectOp) -> fn(T, T) -> bool
+where T: std::cmp::PartialOrd {
+    match op {
+        SelectOp::Equal => equal::<T>,
+        SelectOp::NotEqual => not_equal::<T>,
+        SelectOp::Gt => greater_than::<T>,
+        SelectOp::Gte => greater_than_equal::<T>,
+        SelectOp::Lt => less_than::<T>,
+        SelectOp::Lte => less_than_equal::<T>,
+    }
+}
+
+pub fn boolean_selection_op(op: &SelectOp) -> fn(bool, bool) -> bool {
+    match op {
+        SelectOp::Equal => boolean_equal,
+        SelectOp::NotEqual => boolean_not_equal,
+        SelectOp::Gt => boolean_greater_than,
+        SelectOp::Gte => boolean_greater_than_equal,
+        SelectOp::Lt => boolean_less_than,
+        SelectOp::Lte => boolean_less_than_equal,
+    }
+}
+
+pub fn string_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
+    match op {
+        SelectOp::Equal => string_equal,
+        SelectOp::NotEqual => string_not_equal,
+        SelectOp::Gt => string_greater_than,
+        SelectOp::Gte => string_greater_than_equal,
+        SelectOp::Lt => string_less_than,
+        SelectOp::Lte => string_less_than_equal,
+    }
+}
+
+pub fn variant_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
+    match op {
+        SelectOp::Equal => variant_equal,
+        SelectOp::NotEqual => variant_not_equal,
+        SelectOp::Gt => variant_greater_than,
+        SelectOp::Gte => variant_greater_than_equal,
+        SelectOp::Lt => variant_less_than,
+        SelectOp::Lte => variant_less_than_equal,
+    }
+}
+
+pub fn tuple_selection_op<T>(op: &SelectOp) -> fn(T, T) -> Option<bool>
+where T: std::cmp::PartialOrd {
+    match op {
+        SelectOp::Equal => tuple_equal::<T>,
+        SelectOp::NotEqual => tuple_not_equal::<T>,
+        SelectOp::Gt => tuple_greater_than::<T>,
+        SelectOp::Gte => tuple_greater_than_equal::<T>,
+        SelectOp::Lt => tuple_less_than::<T>,
+        SelectOp::Lte => tuple_less_than_equal::<T>,
+    }
+}
+
+pub fn tuple_compare_default_value(op: &SelectOp) -> bool {
+    match op {
+        SelectOp::Equal => true,
+        SelectOp::NotEqual => false,
+        SelectOp::Gt => false,
+        SelectOp::Gte => true,
+        SelectOp::Lt => false,
+        SelectOp::Lte => true,
+    }
+}
+
+pub fn empty_array_compare_value(op: &SelectOp) -> bool {
+    match op {
+        SelectOp::Equal => true,
+        SelectOp::NotEqual => false,
+        SelectOp::Gt => false,
+        SelectOp::Gte => true,
+        SelectOp::Lt => false,
+        SelectOp::Lte => true,
     }
 }
 
@@ -96,18 +170,6 @@ where T: std::cmp::PartialOrd {
     left <= right
 }
 
-pub fn selection_op<T>(op: SelectOp) -> fn(T, T) -> bool
-where T: std::cmp::PartialOrd {
-    match op {
-        SelectOp::Equal => equal::<T>,
-        SelectOp::NotEqual => not_equal::<T>,
-        SelectOp::Gt => greater_than::<T>,
-        SelectOp::Gte => greater_than_equal::<T>,
-        SelectOp::Lt => less_than::<T>,
-        SelectOp::Lte => less_than_equal::<T>,
-    }
-}
-
 #[inline(always)]
 fn boolean_equal(left: bool, right: bool) -> bool {
     left == right
@@ -136,17 +198,6 @@ fn boolean_less_than(left: bool, right: bool) -> bool {
 #[inline(always)]
 fn boolean_less_than_equal(left: bool, right: bool) -> bool {
     (!left & right) || (left & right)
-}
-
-pub fn boolean_selection_op(op: SelectOp) -> fn(bool, bool) -> bool {
-    match op {
-        SelectOp::Equal => boolean_equal,
-        SelectOp::NotEqual => boolean_not_equal,
-        SelectOp::Gt => boolean_greater_than,
-        SelectOp::Gte => boolean_greater_than_equal,
-        SelectOp::Lt => boolean_less_than,
-        SelectOp::Lte => boolean_less_than_equal,
-    }
 }
 
 #[inline(always)]
@@ -179,17 +230,6 @@ fn string_less_than_equal(left: &[u8], right: &[u8]) -> bool {
     left <= right
 }
 
-pub fn string_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
-    match op {
-        SelectOp::Equal => string_equal,
-        SelectOp::NotEqual => string_not_equal,
-        SelectOp::Gt => string_greater_than,
-        SelectOp::Gte => string_greater_than_equal,
-        SelectOp::Lt => string_less_than,
-        SelectOp::Lte => string_less_than_equal,
-    }
-}
-
 #[inline(always)]
 fn variant_equal(left: &[u8], right: &[u8]) -> bool {
     jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Equal
@@ -218,17 +258,6 @@ fn variant_less_than(left: &[u8], right: &[u8]) -> bool {
 #[inline(always)]
 fn variant_less_than_equal(left: &[u8], right: &[u8]) -> bool {
     jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Greater
-}
-
-pub fn variant_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
-    match op {
-        SelectOp::Equal => variant_equal,
-        SelectOp::NotEqual => variant_not_equal,
-        SelectOp::Gt => variant_greater_than,
-        SelectOp::Gte => variant_greater_than_equal,
-        SelectOp::Lt => variant_less_than,
-        SelectOp::Lte => variant_less_than_equal,
-    }
 }
 
 #[inline(always)]
@@ -280,39 +309,5 @@ where T: std::cmp::PartialOrd {
         Some(Ordering::Less) => Some(true),
         Some(Ordering::Greater) => Some(false),
         _ => None,
-    }
-}
-
-pub fn tuple_selection_op<T>(op: SelectOp) -> fn(T, T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    match op {
-        SelectOp::Equal => tuple_equal::<T>,
-        SelectOp::NotEqual => tuple_not_equal::<T>,
-        SelectOp::Gt => tuple_greater_than::<T>,
-        SelectOp::Gte => tuple_greater_than_equal::<T>,
-        SelectOp::Lt => tuple_less_than::<T>,
-        SelectOp::Lte => tuple_less_than_equal::<T>,
-    }
-}
-
-pub fn tuple_compare_default_value(op: &SelectOp) -> bool {
-    match op {
-        SelectOp::Equal => true,
-        SelectOp::NotEqual => false,
-        SelectOp::Gt => false,
-        SelectOp::Gte => true,
-        SelectOp::Lt => false,
-        SelectOp::Lte => true,
-    }
-}
-
-pub fn empty_array_compare_value(op: &SelectOp) -> bool {
-    match op {
-        SelectOp::Equal => true,
-        SelectOp::NotEqual => false,
-        SelectOp::Gt => false,
-        SelectOp::Gte => true,
-        SelectOp::Lt => false,
-        SelectOp::Lte => true,
     }
 }
