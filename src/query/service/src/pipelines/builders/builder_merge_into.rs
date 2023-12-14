@@ -462,7 +462,7 @@ impl PipelineBuilder {
                 // distributed: false, standalone mode, we need to add insert processor
                 // (distributed,change join order):(true,true) target is build side, we
                 // need to support insert in local node.
-                if !*distributed || *distributed && *change_join_order {
+                if !*distributed || *change_join_order {
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
                         input.output_schema()?,
@@ -721,14 +721,12 @@ impl PipelineBuilder {
                     // with row_id
                     (output_lens - 1, 0)
                 }
+            } else if *change_join_order && !need_match && need_unmatch {
+                // insert only
+                (output_lens, 0)
             } else {
-                if *change_join_order && !need_match && need_unmatch {
-                    // insert only
-                    (output_lens, 0)
-                } else {
-                    // (with row_id and without row_number/unmatched) or (without row_id and with row_number/unmatched)
-                    (output_lens - 1, 0)
-                }
+                // (with row_id and without row_number/unmatched) or (without row_id and with row_number/unmatched)
+                (output_lens - 1, 0)
             };
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
