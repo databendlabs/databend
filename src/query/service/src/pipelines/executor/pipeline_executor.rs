@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
-use common_base::base::tokio::sync::Notify;
 use common_base::runtime::catch_unwind;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
@@ -46,6 +45,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorTasksQueue;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
@@ -62,7 +62,7 @@ pub struct PipelineExecutor {
     on_init_callback: Mutex<Option<InitCallback>>,
     on_finished_callback: Mutex<Option<FinishedCallback>>,
     settings: ExecutorSettings,
-    finished_notify: Arc<Notify>,
+    finished_notify: Arc<WatchNotify>,
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
@@ -195,7 +195,7 @@ impl PipelineExecutor {
             async_runtime: GlobalIORuntime::instance(),
             settings,
             finished_error: Mutex::new(None),
-            finished_notify: Arc::new(Notify::new()),
+            finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
         }))
     }

@@ -156,6 +156,7 @@ socket2 = "0.5.3"
 strength_reduce = "0.2.4"
 tempfile = "3.4.0"
 time = "0.3.14"
+tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
 toml = { version = "0.7.3", default-features = false }
 tonic = { workspace = true }
@@ -185,7 +186,6 @@ temp-env = "0.3.0"
 tempfile = "3.4.0"
 tower = "0.4.13"
 url = "2.3.1"
-walkdir = { workspace = true }
 wiremock = "0.5.14"
 
 [build-dependencies]
