@@ -26,7 +26,6 @@ use common_meta_app::principal::OnErrorMode;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::InsertInputSource;
@@ -144,11 +143,9 @@ impl Binder {
                         ));
                     }
                 }
-                let enable_distributed_optimization = false;
-                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization,
-                }));
-                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
+                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+                    .with_enable_distributed_optimization(false);
+                let optimized_plan = optimize(opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };

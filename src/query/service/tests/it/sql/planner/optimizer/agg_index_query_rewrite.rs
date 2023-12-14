@@ -27,7 +27,8 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_sql::optimizer::agg_index;
-use common_sql::optimizer::HeuristicOptimizer;
+use common_sql::optimizer::OptimizerContext;
+use common_sql::optimizer::RecursiveOptimizer;
 use common_sql::optimizer::SExpr;
 use common_sql::optimizer::DEFAULT_REWRITE_RULES;
 use common_sql::plans::AggIndexInfo;
@@ -456,8 +457,11 @@ async fn plan_sql(
     } = plan
     {
         let s_expr = if optimize {
-            let optimizer = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
-            optimizer.optimize(*s_expr, &DEFAULT_REWRITE_RULES)?
+            RecursiveOptimizer::new(
+                &DEFAULT_REWRITE_RULES,
+                &OptimizerContext::new(ctx.clone(), metadata.clone()),
+            )
+            .run(&s_expr)?
         } else {
             *s_expr
         };
