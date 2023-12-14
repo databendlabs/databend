@@ -49,6 +49,7 @@ impl<'a> Selector<'a> {
                 op,
                 left,
                 right,
+                left_data_type,
                 true_selection,
                 false_selection,
                 true_idx,

@@ -14,10 +14,16 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 
+use crate::filter::boolean_selection_op;
 use crate::filter::empty_array_compare_value;
 use crate::filter::selection_op;
+use crate::filter::string_selection_op;
+use crate::filter::tuple_compare_default_value;
+use crate::filter::tuple_selection_op;
+use crate::filter::variant_selection_op;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
+use crate::types::DataType;
 use crate::Scalar;
 
 #[allow(clippy::too_many_arguments)]
@@ -25,6 +31,7 @@ pub fn select_scalars(
     op: SelectOp,
     left: Scalar,
     right: Scalar,
+    data_type: DataType,
     true_selection: &mut [u32],
     false_selection: (&mut [u32], bool),
     true_idx: &mut usize,
@@ -32,7 +39,49 @@ pub fn select_scalars(
     select_strategy: SelectStrategy,
     count: usize,
 ) -> usize {
-    let result = selection_op(op)(left, right);
+    if left == Scalar::Null || right == Scalar::Null {
+        return 0;
+    }
+
+    let result = match data_type.remove_nullable() {
+        DataType::Null | DataType::EmptyMap => false,
+        DataType::EmptyArray => empty_array_compare_value(&op),
+        DataType::Number(_)
+        | DataType::Decimal(_)
+        | DataType::Date
+        | DataType::Timestamp
+        | DataType::Array(_) => selection_op(op)(left, right),
+        DataType::Boolean => {
+            let left = left.into_boolean().unwrap();
+            let right = right.into_boolean().unwrap();
+            boolean_selection_op(op)(left, right)
+        }
+        DataType::String => {
+            let left = left.into_string().unwrap();
+            let right = right.into_string().unwrap();
+            string_selection_op(&op)(&left, &right)
+        }
+        DataType::Variant => {
+            let left = left.into_variant().unwrap();
+            let right = right.into_variant().unwrap();
+            variant_selection_op(&op)(&left, &right)
+        }
+        DataType::Tuple(_) => {
+            let left = left.into_tuple().unwrap();
+            let right = right.into_tuple().unwrap();
+            let mut ret = tuple_compare_default_value(&op);
+            let op = tuple_selection_op::<Scalar>(op);
+            for (lhs, rhs) in left.into_iter().zip(right.into_iter()) {
+                if let Some(result) = op(lhs, rhs) {
+                    ret = result;
+                    break;
+                }
+            }
+            ret
+        }
+        _ => unreachable!("Here is no Nullable(_) or Generic(_)"),
+    };
+
     select_boolean_scalar_adapt(
         result,
         true_selection,
