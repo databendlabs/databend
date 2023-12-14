@@ -44,7 +44,6 @@ use common_meta_app::app_error::UndropTableAlreadyExists;
 use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownCatalog;
-use common_meta_app::app_error::UnknownDatabase;
 use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownStreamId;
 use common_meta_app::app_error::UnknownTable;
@@ -2325,7 +2324,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut tb_count = 0;
         let mut tb_count_seq;
         let tbid = TableId { table_id };
-        let tenant = &req.name_ident.tenant;
+        let tenant = &req.tenant;
         let mut retry = 0;
 
         while retry < TXN_MAX_RETRY_TIMES {
@@ -2347,31 +2346,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let dbid_tbname = if let Some(db_id_table_name) = table_name_opt {
                 db_id_table_name
             } else {
-                let name_key = DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: req.name_ident.db_name.clone(),
+                let dbid_tbname = DBIdTableName {
+                    db_id: req.db_id,
+                    table_name: req.table_name.clone(),
                 };
                 warn!(
                     "drop_table_by_id cannot find {:?}, use {:?} instead",
-                    table_id_to_name, name_key
+                    table_id_to_name, dbid_tbname
                 );
-                match get_u64_value(self, &name_key).await {
-                    Ok((_db_id_seq, db_id)) => DBIdTableName {
-                        db_id,
-                        table_name: req.name_ident.table_name.clone(),
-                    },
-                    Err(_) => {
-                        return Err(KVAppError::AppError(AppError::UnknownDatabase(
-                            UnknownDatabase::new(
-                                &req.name_ident.db_name,
-                                format!(
-                                    "drop_table_by_id cannot find db {:?}",
-                                    req.name_ident.db_name
-                                ),
-                            ),
-                        )));
-                    }
-                }
+
+                dbid_tbname
             };
 
             let db_id = dbid_tbname.db_id;

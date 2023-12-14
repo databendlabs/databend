@@ -1428,7 +1428,8 @@ impl SchemaApiTestSuite {
             },
         };
 
-        let _res = mt.create_database(create_db_req.clone()).await?;
+        let res = mt.create_database(create_db_req.clone()).await?;
+        let db_id = res.db_id;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -1466,7 +1467,9 @@ impl SchemaApiTestSuite {
 
         mt.drop_table_by_id(DropTableByIdReq {
             if_exists: false,
-            name_ident: req.name_ident.clone(),
+            tenant: tenant.to_string(),
+            db_id,
+            table_name: table_name.to_string(),
             tb_id: table_id,
         })
         .await?;
@@ -1640,7 +1643,7 @@ impl SchemaApiTestSuite {
         }
 
         info!("--- prepare db");
-        {
+        let db_id = {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -1657,7 +1660,8 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
-        }
+            res.db_id
+        };
 
         // check table count
         info!("--- check table count of tenant1");
@@ -1812,11 +1816,9 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: false,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: db_name.to_string(),
-                        table_name: tbl_name.to_string(),
-                    },
+                    tenant: tenant.to_string(),
+                    db_id,
+                    table_name: tbl_name.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -1843,11 +1845,9 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: false,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: db_name.to_string(),
-                        table_name: tbl_name.to_string(),
-                    },
+                    tenant: tenant.to_string(),
+                    db_id,
+                    table_name: tbl_name.to_string(),
                     tb_id,
                 };
                 let res = mt.drop_table_by_id(plan).await;
@@ -1864,11 +1864,9 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: true,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: db_name.to_string(),
-                        table_name: tbl_name.to_string(),
-                    },
+                    tenant: tenant.to_string(),
+                    db_id,
+                    table_name: tbl_name.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -3735,7 +3733,9 @@ impl SchemaApiTestSuite {
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    name_ident: req.name_ident.clone(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3757,7 +3757,9 @@ impl SchemaApiTestSuite {
                 let resp = mt.create_table(req.clone()).await?;
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    name_ident: req.name_ident.clone(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3833,7 +3835,9 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    name_ident: req.name_ident.clone(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3856,7 +3860,9 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb2".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    name_ident: req.name_ident.clone(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -4031,7 +4037,9 @@ impl SchemaApiTestSuite {
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    name_ident: req.name_ident.clone(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -4286,11 +4294,9 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
+                tenant: tbl_name_ident.tenant.clone(),
+                db_id: old_db.ident.db_id,
+                table_name: tbl_name_ident.table_name.clone(),
                 tb_id,
             })
             .await?;
@@ -4345,11 +4351,9 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
+                tenant: tenant.to_string(),
+                db_id: old_db.ident.db_id,
+                table_name: tbl_name.to_string(),
                 tb_id,
             })
             .await?;
@@ -4407,11 +4411,9 @@ impl SchemaApiTestSuite {
             let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
+                tenant: tenant.to_string(),
+                db_id: old_db.ident.db_id,
+                table_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
             })
             .await?;
@@ -4513,11 +4515,9 @@ impl SchemaApiTestSuite {
             // then drop table2
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: new_tbl_name.to_string(),
-                },
+                tenant: tenant.to_string(),
+                db_id: cur_db.ident.db_id,
+                table_name: tbl_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
             };
 
@@ -6437,12 +6437,10 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 
     async fn drop_table_by_id(&mut self) -> anyhow::Result<()> {
         let req = DropTableByIdReq {
+            tenant: self.tenant(),
+            table_name: self.tbl_name(),
             if_exists: false,
-            name_ident: TableNameIdent {
-                tenant: self.tenant(),
-                db_name: self.db_name(),
-                table_name: self.tbl_name(),
-            },
+            db_id: self.db_id,
             tb_id: self.table_id,
         };
         self.mt.drop_table_by_id(req.clone()).await?;

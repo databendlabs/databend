@@ -213,15 +213,14 @@ async fn test_catalogs_table() -> Result<()> {
     // Drop.
     {
         let tbl = catalog.get_table(tenant, "default", "test_table").await?;
+        let db = catalog.get_database(tenant, "default").await?;
         let res = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: "default".to_string(),
-                    table_name: "test_table".to_string(),
-                },
+                tenant: tenant.to_string(),
+                table_name: "test_table".to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
+                db_id: db.get_db_info().ident.db_id,
             })
             .await;
         assert!(res.is_ok());

@@ -173,15 +173,15 @@ impl StreamHandler for RealStreamHandler {
                 )));
             }
 
+            let db = catalog.get_database(&tenant, &db_name).await?;
+
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: plan.if_exists,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.clone(),
-                        db_name: plan.database.clone(),
-                        table_name: stream_name.clone(),
-                    },
+                    tenant: tenant.clone(),
+                    table_name: stream_name.clone(),
                     tb_id: table.get_id(),
+                    db_id: db.get_db_info().ident.db_id,
                 })
                 .await
         } else if plan.if_exists {

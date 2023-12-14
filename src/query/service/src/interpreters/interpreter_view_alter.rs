@@ -55,15 +55,16 @@ impl Interpreter for AlterViewInterpreter {
             .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
             .await
         {
+            let db = catalog
+                .get_database(&self.plan.tenant, &self.plan.database)
+                .await?;
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: true,
-                    name_ident: TableNameIdent {
-                        tenant: self.plan.tenant.clone(),
-                        db_name: self.plan.database.clone(),
-                        table_name: self.plan.view_name.clone(),
-                    },
+                    tenant: self.plan.tenant.clone(),
+                    table_name: self.plan.view_name.clone(),
                     tb_id: tbl.get_id(),
+                    db_id: db.get_db_info().ident.db_id,
                 })
                 .await?;
 
