@@ -48,6 +48,7 @@ impl Operator for DummyTableScan {
             output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
+            orderings: vec![],
         }))
     }
 

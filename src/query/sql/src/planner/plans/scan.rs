@@ -169,6 +169,7 @@ impl Operator for Scan {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns: self.used_columns(),
+            orderings: vec![],
         }))
     }
 
