@@ -17,15 +17,39 @@ use common_settings::Settings;
 #[test]
 fn test_set_settings() {
     let settings = Settings::create("test".to_string());
-    // Ok.
+    // Number range.
     {
         settings.set_max_threads(2).unwrap();
-    }
 
-    // Number out of range.
-    {
         let result = settings.set_max_threads(1025);
         let expect = "BadArguments. Code: 1006, Text = max_threads: Value 1025 is not within the range [1, 1024].";
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+    }
+
+    // Number range.
+    {
+        // Ok
+        settings
+            .set_setting("enable_table_lock".to_string(), "1".to_string())
+            .unwrap();
+        // Ok
+        settings
+            .set_setting("enable_table_lock".to_string(), "0".to_string())
+            .unwrap();
+
+        // Error
+        let result = settings.set_setting("enable_table_lock".to_string(), "1.0".to_string());
+        let expect = "BadArguments. Code: 1006, Text = 1.0 is not a valid integer value.";
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+
+        // Error
+        let result = settings.set_setting("enable_table_lock".to_string(), "3".to_string());
+        let expect = "BadArguments. Code: 1006, Text = Value 3 is not within the range [0, 1].";
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+
+        // Error
+        let result = settings.set_setting("enable_table_lock".to_string(), "xx".to_string());
+        let expect = "BadArguments. Code: 1006, Text = xx is not a valid integer value.";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
 
