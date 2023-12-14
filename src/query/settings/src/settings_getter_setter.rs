@@ -119,6 +119,9 @@ impl Settings {
         )))
     }
 
+    pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
+    }
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
@@ -530,5 +533,13 @@ impl Settings {
             "ZSTD" => Ok(Some(FlightCompression::Zstd)),
             _ => unreachable!("check possible_values in set variable"),
         }
+    }
+
+    pub fn get_enable_refresh_virtual_column_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_virtual_column_after_write")? != 0)
+    }
+
+    pub fn set_enable_refresh_virtual_column_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_refresh_virtual_column_after_write", u64::from(val))
     }
 }

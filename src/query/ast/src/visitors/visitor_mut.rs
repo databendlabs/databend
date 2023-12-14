@@ -419,6 +419,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_indexes(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
+    fn visit_show_locks(&mut self, _show_locks: &mut ShowLocksStmt) {}
+
     fn visit_show_table_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}

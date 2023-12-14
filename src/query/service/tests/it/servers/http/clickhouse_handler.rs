@@ -393,7 +393,7 @@ impl QueryBuilder {
         }
         let uri = uri.finish();
 
-        let uri = "/?".to_string() + &uri;
+        let uri = "/?enable_clickhouse_handler=1&".to_string() + &uri;
         let uri = uri.parse::<Uri>().unwrap();
         let (method, body) = match self.body {
             None => (Method::GET, Body::empty()),

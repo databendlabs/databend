@@ -648,6 +648,10 @@ pub enum TokenKind {
     LATERAL,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
+    #[token("LOCKS", ignore(ascii_case))]
+    LOCKS,
+    #[token("ACCOUNT", ignore(ascii_case))]
+    ACCOUNT,
     #[token("SECONDARY", ignore(ascii_case))]
     SECONDARY,
     #[token("ROLES", ignore(ascii_case))]

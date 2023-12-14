@@ -31,7 +31,7 @@ test_format() {
 	insert_data
 	rm -f /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
 
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.txt
 
 	cat /tmp/test_load_unload.txt
@@ -42,7 +42,7 @@ test_format() {
 	-F "upload=@/tmp/test_load_unload.txt" \
 	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq -r '.state, .error'
 
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.txt
 
 	diff /tmp/test_load_unload2.txt /tmp/test_load_unload.txt

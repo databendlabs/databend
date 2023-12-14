@@ -79,7 +79,7 @@ async fn do_hook_compact(
             let compact_start_at = Instant::now();
             if err.is_ok() {
                 info!("execute {op_name} finished successfully. running table optimization job.");
-                match  GlobalIORuntime::instance().block_on({
+                match GlobalIORuntime::instance().block_on({
                     compact_table(ctx, compact_target, need_lock)
                 }) {
                     Ok(_) => {
@@ -135,6 +135,8 @@ async fn compact_table(
 
         let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
+        // Clears previously generated segment locations to avoid duplicate data in the refresh phase
+        ctx.clear_segment_locations()?;
         ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
     }

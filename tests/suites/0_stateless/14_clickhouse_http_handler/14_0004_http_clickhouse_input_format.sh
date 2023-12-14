@@ -62,21 +62,21 @@ for i in `seq 1 10000`;do
 	echo '{"a": 0, "b": "3", "c": 0}' >>  /tmp/databend_test_ndjson.txt
 done
 
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "drop table if exists a"
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "create table a ( a int not null, b varchar not null, c double not null)"
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" -d "drop table if exists a"
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" -d "create table a ( a int not null, b varchar not null, c double not null)"
 
 
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_csv.txt
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_csv_names.txt
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_csv_names_and_types.txt
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_tsv_names_and_types.txt
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" --data-binary @/tmp/databend_test_csv.txt
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" --data-binary @/tmp/databend_test_csv_names.txt
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" --data-binary @/tmp/databend_test_csv_names_and_types.txt
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" --data-binary @/tmp/databend_test_tsv_names_and_types.txt
 
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_values.txt
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_ndjson.txt
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" --data-binary @/tmp/databend_test_values.txt
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" --data-binary @/tmp/databend_test_ndjson.txt
 
 # Flaky test: wait for https://github.com/datafuselabs/databend/issues/7657
-#curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "SELECT count(), sum(a), min(b), sum(c) from a"
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "SELECT count(), sum(a), min(b) from a"
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "drop table a"
+#curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" -d "SELECT count(), sum(a), min(b), sum(c) from a"
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" -d "SELECT count(), sum(a), min(b) from a"
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" -d "drop table a"
 
 rm /tmp/databend_test*.txt

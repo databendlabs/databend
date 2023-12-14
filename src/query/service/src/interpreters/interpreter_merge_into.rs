@@ -57,8 +57,10 @@ use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::hook_compact;
+use crate::interpreters::common::hook_refresh;
 use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::common::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -121,6 +123,18 @@ impl Interpreter for MergeIntoInterpreter {
                 true,
             )
             .await;
+        }
+
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
+        {
+            let refresh_desc = RefreshDesc {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
         }
 
         Ok(build_res)

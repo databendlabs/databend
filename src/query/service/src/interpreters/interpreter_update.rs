@@ -45,8 +45,8 @@ use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::create_push_down_filters;
-use crate::interpreters::common::hook_refresh_agg_index;
-use crate::interpreters::common::RefreshAggIndexDesc;
+use crate::interpreters::common::hook_refresh;
+use crate::interpreters::common::RefreshDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;
@@ -239,19 +239,15 @@ impl Interpreter for UpdateInterpreter {
                     .await?;
 
             // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+            // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
             {
-                let refresh_agg_index_desc = RefreshAggIndexDesc {
+                let refresh_desc = RefreshDesc {
                     catalog: catalog_name.to_string(),
                     database: db_name.to_string(),
                     table: tbl_name.to_string(),
                 };
 
-                hook_refresh_agg_index(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    refresh_agg_index_desc,
-                )
-                .await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
             }
         }
 
