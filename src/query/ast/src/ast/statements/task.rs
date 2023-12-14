@@ -15,16 +15,18 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::ShowLimit;
+use crate::ast::{Expr, ShowLimit};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTaskStmt {
     pub if_not_exists: bool,
     pub name: String,
     pub warehouse_opts: WarehouseOptions,
-    pub schedule_opts: ScheduleOptions,
+    pub schedule_opts: Option<ScheduleOptions>,
     pub suspend_task_after_num_failures: Option<u64>,
     pub comments: String,
+    pub after: Vec<String>,
+    pub when_condition: Option<String>,
     pub sql: String,
 }
 
@@ -37,8 +39,9 @@ impl Display for CreateTaskStmt {
         write!(f, " {}", self.name)?;
 
         write!(f, "{}", self.warehouse_opts)?;
-
-        write!(f, "{}", self.schedule_opts)?;
+        if let Some(schedule_opt) = self.schedule_opts.as_ref() {
+            write!(f, "{}", schedule_opt)?;
+        }
 
         if let Some(num) = self.suspend_task_after_num_failures {
             write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;
@@ -46,6 +49,14 @@ impl Display for CreateTaskStmt {
 
         if !self.comments.is_empty() {
             write!(f, " COMMENTS = '{}'", self.comments)?;
+        }
+        
+        if !self.after.is_empty() {
+            write!(f, "AFTER = '{:?}'", self.after)?;
+        }
+        
+        if self.when_condition.is_some() {
+            write!(f, "WHEN = '{:?}'", self.when_condition)?;
         }
 
         write!(f, " AS {}", self.sql)?;

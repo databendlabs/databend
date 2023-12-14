@@ -36,15 +36,19 @@ use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
-fn verify_scheduler_option(schedule_opts: &ScheduleOptions) -> Result<()> {
+fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
+    if schedule_opts.is_none() {
+        return Ok(())
+    }
+    let schedule_opts = schedule_opts.clone().unwrap();
     if let common_ast::ast::ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
-        if cron::Schedule::from_str(cron_expr).is_err() {
+        if cron::Schedule::from_str(&cron_expr).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid cron expression {}",
                 cron_expr
             )));
         }
-        if let Some(time_zone) = time_zone && !time_zone.is_empty() && chrono_tz::Tz::from_str(time_zone).is_err() {
+        if let Some(time_zone) = time_zone && !time_zone.is_empty() && chrono_tz::Tz::from_str(&time_zone).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid time zone {}",
                 time_zone
@@ -67,9 +71,11 @@ impl Binder {
             schedule_opts,
             suspend_task_after_num_failures,
             comments,
-            sql,
+            after,
+            when_condition,
+            sql, 
         } = stmt;
-
+        // TODO( build expression EXPR)
         verify_scheduler_option(schedule_opts)?;
 
         let tenant = self.ctx.get_tenant();
@@ -114,7 +120,7 @@ impl Binder {
                 ));
             }
             if let Some(schedule) = schedule {
-                verify_scheduler_option(schedule)?;
+                // verify_scheduler_option(schedule)?;
             }
         }
 

@@ -13839,13 +13839,17 @@ CreateTask(
                 "MyWarehouse",
             ),
         },
-        schedule_opts: IntervalMinutes(
-            15,
+        schedule_opts: Some(
+            IntervalMinutes(
+                15,
+            ),
         ),
         suspend_task_after_num_failures: Some(
             3,
         ),
         comments: "This is test task 1",
+        after: [],
+        when_condition: None,
         sql: "SELECT *\nFROM\n    MyTable1",
     },
 )
@@ -13866,14 +13870,18 @@ CreateTask(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        schedule_opts: CronExpression(
-            "0 6 * * *",
-            Some(
-                "America/Los_Angeles",
+        schedule_opts: Some(
+            CronExpression(
+                "0 6 * * *",
+                Some(
+                    "America/Los_Angeles",
+                ),
             ),
         ),
         suspend_task_after_num_failures: None,
         comments: "serverless + cron",
+        after: [],
+        when_condition: None,
         sql: "INSERT INTO\n    t (c1, c2)\nVALUES\n    (1, 2), (3, 4)",
     },
 )
@@ -13891,12 +13899,43 @@ CreateTask(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        schedule_opts: CronExpression(
-            "0 12 * * *",
-            None,
+        schedule_opts: Some(
+            CronExpression(
+                "0 12 * * *",
+                None,
+            ),
         ),
         suspend_task_after_num_failures: None,
         comments: "",
+        after: [],
+        when_condition: None,
+        sql: "VACUUM TABLE t ",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1AFTER = '["task2", "task3"]'WHEN = 'Some("(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')")' AS VACUUM TABLE t 
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        suspend_task_after_num_failures: None,
+        comments: "",
+        after: [
+            "task2",
+            "task3",
+        ],
+        when_condition: Some(
+            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
+        ),
         sql: "VACUUM TABLE t ",
     },
 )

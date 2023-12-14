@@ -108,7 +108,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #task_warehouse_option
-            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
+            ~ (AFTER ~ #comma_separated_list0(literal_string))?
+            ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ AS ~ #statement
@@ -119,9 +121,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_if_not_exists,
             task,
             warehouse_opts,
-            _,
-            _,
             schedule_opts,
+            after_tasks,
+            when_conditions,
             suspend_opt,
             comment_opt,
             _,
@@ -134,9 +136,21 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
                 warehouse_opts,
-                schedule_opts,
+                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                after: match after_tasks { 
+                    Some((_,  tasks)) => {
+                        tasks
+                    }
+                    None => Vec::new()
+                },
+                when_condition: match when_conditions {
+                    Some((_, cond)) => {
+                        Some(cond.to_string())
+                    }
+                    None => None
+                },
                 sql,
             })
         },
@@ -1799,6 +1813,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
   [ { WAREHOUSE = <string> }
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ AFTER <string>, <string>...]
+  [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
   [ COMMENT = '<string_literal>' ]
 AS
