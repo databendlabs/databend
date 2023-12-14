@@ -15,7 +15,6 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -30,6 +29,7 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 
+use super::sort::utils::get_ordered_rows;
 use super::sort::Cursor;
 use super::sort::RowConverter;
 use super::sort::Rows;
@@ -134,16 +134,7 @@ where
 
     fn transform(&mut self, mut block: DataBlock) -> Result<Vec<DataBlock>> {
         let rows = if self.order_col_generated {
-            let order_col = block
-                .columns()
-                .last()
-                .unwrap()
-                .value
-                .as_column()
-                .unwrap()
-                .clone();
-            let rows = R::from_column(order_col, &self.sort_desc)
-                .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
+            let rows = get_ordered_rows(&block, &self.sort_desc)?;
             if !self.output_order_col {
                 // The next processor could be a sort spill processor which need order column.
                 // And the order column will be removed in that processor.
@@ -283,14 +274,17 @@ impl TransformSortMergeBuilder {
                             SimpleRows<NumberType<NUM_TYPE>>,
                             SimpleRowConverter<NumberType<NUM_TYPE>>,
                         >::try_create(
-                            schema,
-                            sort_desc,
+                            schema.clone(),
+                            sort_desc.clone(),
                             order_col_generated,
                             output_order_col,
                             TransformSortMerge::create(
+                                schema,
+                                sort_desc,
                                 block_size,
                                 max_memory_usage,
-                                spilling_bytes_threshold_per_core
+                                spilling_bytes_threshold_per_core,
+                                output_order_col
                             ),
                         )?,
                     ),
@@ -299,14 +293,17 @@ impl TransformSortMergeBuilder {
                     input,
                     output,
                     MergeSortDate::try_create(
-                        schema,
-                        sort_desc,
+                        schema.clone(),
+                        sort_desc.clone(),
                         order_col_generated,
                         output_order_col,
                         MergeSortDateImpl::create(
+                            schema,
+                            sort_desc,
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
+                            output_order_col,
                         ),
                     )?,
                 ),
@@ -314,14 +311,17 @@ impl TransformSortMergeBuilder {
                     input,
                     output,
                     MergeSortTimestamp::try_create(
-                        schema,
-                        sort_desc,
+                        schema.clone(),
+                        sort_desc.clone(),
                         order_col_generated,
                         output_order_col,
                         MergeSortTimestampImpl::create(
+                            schema,
+                            sort_desc,
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
+                            output_order_col,
                         ),
                     )?,
                 ),
@@ -329,14 +329,17 @@ impl TransformSortMergeBuilder {
                     input,
                     output,
                     MergeSortString::try_create(
-                        schema,
-                        sort_desc,
+                        schema.clone(),
+                        sort_desc.clone(),
                         order_col_generated,
                         output_order_col,
                         MergeSortStringImpl::create(
+                            schema,
+                            sort_desc,
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
+                            output_order_col,
                         ),
                     )?,
                 ),
@@ -344,14 +347,17 @@ impl TransformSortMergeBuilder {
                     input,
                     output,
                     MergeSortCommon::try_create(
-                        schema,
-                        sort_desc,
+                        schema.clone(),
+                        sort_desc.clone(),
                         order_col_generated,
                         output_order_col,
                         MergeSortCommonImpl::create(
+                            schema,
+                            sort_desc,
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
+                            output_order_col,
                         ),
                     )?,
                 ),
@@ -361,14 +367,17 @@ impl TransformSortMergeBuilder {
                 input,
                 output,
                 MergeSortCommon::try_create(
-                    schema,
-                    sort_desc,
+                    schema.clone(),
+                    sort_desc.clone(),
                     order_col_generated,
                     output_order_col,
                     MergeSortCommonImpl::create(
+                        schema,
+                        sort_desc,
                         block_size,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        output_order_col,
                     ),
                 )?,
             )

@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::ArgType;
+use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
@@ -93,7 +94,7 @@ where
 
 impl<T> Rows for SimpleRows<T>
 where
-    T: ValueType,
+    T: ArgType,
     T::Scalar: Ord,
 {
     type Item<'a> = SimpleRow<T>;
@@ -120,6 +121,10 @@ where
             inner,
             desc: !desc[0].asc,
         })
+    }
+
+    fn data_type() -> DataType {
+        T::data_type()
     }
 }
 

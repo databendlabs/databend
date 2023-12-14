@@ -126,7 +126,7 @@ fn create_test_merger(input: Vec<Vec<DataBlock>>) -> TestMerger {
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::create(schema, streams, sort_desc, 4)
+    TestMerger::create(schema, streams, sort_desc, 4, true)
 }
 
 fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {

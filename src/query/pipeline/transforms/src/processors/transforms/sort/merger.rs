@@ -17,7 +17,6 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -26,6 +25,7 @@ use common_expression::SortColumnDescription;
 use super::utils::find_bigger_child_of_root;
 use super::Cursor;
 use super::Rows;
+use crate::processors::sort::utils::get_ordered_rows;
 
 #[async_trait::async_trait]
 pub trait SortedStream {
@@ -56,6 +56,7 @@ where
     buffer: Vec<DataBlock>,
     pending_stream: VecDeque<usize>,
     batch_size: usize,
+    output_order_col: bool,
 
     temp_sorted_num_rows: usize,
     temp_output_indices: Vec<(usize, usize, usize)>,
@@ -72,9 +73,12 @@ where
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_size: usize,
+        output_order_col: bool,
     ) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1);
+        debug_assert!(schema.num_fields() > 0);
+        debug_assert_eq!(schema.fields.last().unwrap().name(), "_order_col");
         let heap = BinaryHeap::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let pending_stream = (0..streams.len()).collect();
@@ -85,6 +89,7 @@ where
             heap,
             buffer,
             batch_size,
+            output_order_col,
             sort_desc,
             pending_stream,
             temp_sorted_num_rows: 0,
@@ -103,10 +108,11 @@ where
                 continue_pendings.push(i);
                 continue;
             }
-            if let Some(block) = block {
-                let order_col = block.columns().last().unwrap().value.as_column().unwrap();
-                let rows = R::from_column(order_col.clone(), &self.sort_desc)
-                    .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
+            if let Some(mut block) = block {
+                let rows = get_ordered_rows(&block, &self.sort_desc)?;
+                if !self.output_order_col {
+                    block.pop_columns(1);
+                }
                 let cursor = Cursor::new(i, rows);
                 self.heap.push(Reverse(cursor));
                 self.buffer[i] = block;
@@ -126,10 +132,11 @@ where
                 continue_pendings.push(i);
                 continue;
             }
-            if let Some(block) = block {
-                let order_col = block.columns().last().unwrap().value.as_column().unwrap();
-                let rows = R::from_column(order_col.clone(), &self.sort_desc)
-                    .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
+            if let Some(mut block) = block {
+                let rows = get_ordered_rows(&block, &self.sort_desc)?;
+                if !self.output_order_col {
+                    block.pop_columns(1);
+                }
                 let cursor = Cursor::new(i, rows);
                 self.heap.push(Reverse(cursor));
                 self.buffer[i] = block;

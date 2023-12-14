@@ -14,6 +14,13 @@
 
 use std::collections::BinaryHeap;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::SortColumnDescription;
+
+use super::Rows;
+
 /// Find the bigger child of the root of the heap.
 #[inline(always)]
 pub fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
@@ -24,4 +31,16 @@ pub fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
     } else {
         (&slice[1]).max(&slice[2])
     }
+}
+
+#[inline(always)]
+pub fn get_ordered_rows<R: Rows>(block: &DataBlock, desc: &[SortColumnDescription]) -> Result<R> {
+    let order_col = block.columns().last().unwrap().value.as_column().unwrap();
+    R::from_column(order_col.clone(), desc).ok_or_else(|| {
+        let expected_ty = R::data_type();
+        let ty = order_col.data_type();
+        ErrorCode::BadDataValueType(format!(
+            "Order column type mismatched. Expecetd {expected_ty} but got {ty}"
+        ))
+    })
 }

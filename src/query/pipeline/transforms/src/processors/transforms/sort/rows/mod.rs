@@ -17,6 +17,7 @@ mod simple;
 
 pub use common::*;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataSchemaRef;
@@ -45,6 +46,8 @@ where Self: Sized + Clone
     fn row(&self, index: usize) -> Self::Item<'_>;
     fn to_column(&self) -> Column;
     fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self>;
+
+    fn data_type() -> DataType;
 
     fn is_empty(&self) -> bool {
         self.len() == 0

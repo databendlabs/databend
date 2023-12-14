@@ -51,6 +51,10 @@ impl Rows for StringColumn {
     fn from_column(col: Column, _: &[SortColumnDescription]) -> Option<Self> {
         col.as_string().cloned()
     }
+
+    fn data_type() -> DataType {
+        DataType::String
+    }
 }
 
 impl RowConverter<StringColumn> for CommonRowConverter {

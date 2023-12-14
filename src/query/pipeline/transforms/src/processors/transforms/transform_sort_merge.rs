@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::intrinsics::unlikely;
+use std::marker::PhantomData;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -23,17 +22,20 @@ use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::row::RowConverter as CommonConverter;
+use common_expression::BlockEntry;
 use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_expression::Value;
 
-use super::sort::utils::find_bigger_child_of_root;
 use super::sort::CommonRows;
 use super::sort::Cursor;
 use super::sort::DateConverter;
 use super::sort::DateRows;
+use super::sort::HeapMerger;
 use super::sort::Rows;
+use super::sort::SortedStream;
 use super::sort::StringConverter;
 use super::sort::StringRows;
 use super::sort::TimestampConverter;
@@ -52,9 +54,11 @@ const SPILL_BATCH_BYTES_SIZE: usize = 8 * 1024 * 1024;
 ///
 /// For merge sort with limit, see [`super::transform_sort_merge_limit`]
 pub struct TransformSortMerge<R: Rows> {
+    schema: DataSchemaRef,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+
     block_size: usize,
-    heap: BinaryHeap<Reverse<Cursor<R>>>,
-    buffer: Vec<DataBlock>,
+    buffer: Vec<Option<DataBlock>>,
 
     aborting: Arc<AtomicBool>,
     // The following fields are used for spilling.
@@ -71,18 +75,26 @@ pub struct TransformSortMerge<R: Rows> {
     spill_batch_size: usize,
     /// The number of spilled blocks in each merge of the spill processor.
     spill_num_merge: usize,
+
+    output_order_col: bool,
+
+    _r: PhantomData<R>,
 }
 
 impl<R: Rows> TransformSortMerge<R> {
     pub fn create(
+        schema: DataSchemaRef,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
         block_size: usize,
         max_memory_usage: usize,
         spilling_bytes_threshold: usize,
+        output_order_col: bool,
     ) -> Self {
         let may_spill = max_memory_usage != 0 && spilling_bytes_threshold != 0;
         TransformSortMerge {
+            schema,
+            sort_desc,
             block_size,
-            heap: BinaryHeap::new(),
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
             may_spill,
@@ -92,6 +104,8 @@ impl<R: Rows> TransformSortMerge<R> {
             num_rows: 0,
             spill_batch_size: 0,
             spill_num_merge: 0,
+            output_order_col,
+            _r: PhantomData,
         }
     }
 }
@@ -99,7 +113,7 @@ impl<R: Rows> TransformSortMerge<R> {
 impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
-    fn add_block(&mut self, block: DataBlock, init_cursor: Cursor<R>) -> Result<Status> {
+    fn add_block(&mut self, mut block: DataBlock, init_cursor: Cursor<R>) -> Result<Status> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
@@ -110,10 +124,19 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
             return Ok(Status::Continue);
         }
 
+        // If `self.output_order_col` is true, the order column will be removed outside the processor.
+        // In order to reuse codes, we add the order column back to the block.
+        // TODO: find a more elegant way to do this.
+        if !self.output_order_col {
+            let order_col = init_cursor.to_column();
+            block.add_column(BlockEntry {
+                data_type: order_col.data_type(),
+                value: Value::Column(order_col),
+            });
+        }
         self.num_bytes += block.memory_size();
         self.num_rows += block.num_rows();
-        self.buffer.push(block);
-        self.heap.push(Reverse(init_cursor));
+        self.buffer.push(Some(block));
 
         if self.may_spill
             && (self.num_bytes >= self.spilling_bytes_threshold
@@ -130,9 +153,9 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
         if self.spill_num_merge > 0 {
             debug_assert!(self.spill_batch_size > 0);
             // Make the last block as a big memory block.
-            self.drain_heap(usize::MAX)
+            self.merge_sort(usize::MAX)
         } else {
-            self.drain_heap(self.block_size)
+            self.merge_sort(self.block_size)
         }
     }
 
@@ -159,7 +182,7 @@ impl<R: Rows> TransformSortMerge<R> {
             debug_assert!(self.spill_num_merge > 0);
         }
 
-        let mut blocks = self.drain_heap(self.spill_batch_size)?;
+        let mut blocks = self.merge_sort(self.spill_batch_size)?;
         if let Some(b) = blocks.first_mut() {
             b.replace_meta(spill_meta);
         }
@@ -167,7 +190,6 @@ impl<R: Rows> TransformSortMerge<R> {
             b.replace_meta(Box::new(SortSpillMeta {}));
         }
 
-        debug_assert!(self.heap.is_empty());
         self.num_rows = 0;
         self.num_bytes = 0;
         self.buffer.clear();
@@ -175,96 +197,35 @@ impl<R: Rows> TransformSortMerge<R> {
         Ok(blocks)
     }
 
-    fn drain_heap(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
-        // TODO: the codes is highly duplicated with the codes in `transform_sort_spill.rs`,
-        // need to refactor and merge them later.
-        if self.num_rows == 0 {
-            return Ok(vec![]);
-        }
-
-        let output_block_num = self.num_rows.div_ceil(batch_size);
-        let mut output_blocks = Vec::with_capacity(output_block_num);
-        let mut output_indices = Vec::with_capacity(output_block_num);
-
-        // 1. Drain the heap
-        let mut temp_num_rows = 0;
-        let mut temp_indices = Vec::new();
-        while let Some(Reverse(cursor)) = self.heap.peek() {
+    fn merge_sort(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
+        let size_hint = self.num_rows.div_ceil(batch_size);
+        let streams = self.buffer.drain(..).collect::<Vec<_>>();
+        let mut merger = HeapMerger::<R, BlockStream>::create(
+            self.schema.clone(),
+            streams,
+            self.sort_desc.clone(),
+            batch_size,
+            self.output_order_col,
+        );
+        let mut result = Vec::with_capacity(size_hint);
+        while let (Some(block), _) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
             }
 
-            let mut cursor = cursor.clone();
-            if self.heap.len() == 1 {
-                let start = cursor.row_index;
-                let count = (cursor.num_rows() - start).min(batch_size - temp_num_rows);
-                temp_num_rows += count;
-                cursor.row_index += count;
-                temp_indices.push((cursor.input_index, start, count));
-            } else {
-                let next_cursor = &find_bigger_child_of_root(&self.heap).0;
-                if cursor.last().le(&next_cursor.current()) {
-                    // Short Path:
-                    // If the last row of current block is smaller than the next cursor,
-                    // we can drain the whole block.
-                    let start = cursor.row_index;
-                    let count = (cursor.num_rows() - start).min(batch_size - temp_num_rows);
-                    temp_num_rows += count;
-                    cursor.row_index += count;
-                    temp_indices.push((cursor.input_index, start, count));
-                } else {
-                    // We copy current cursor for advancing,
-                    // and we will use this copied cursor to update the top of the heap at last
-                    // (let heap adjust itself without popping and pushing any element).
-                    let start = cursor.row_index;
-                    while !cursor.is_finished()
-                        && cursor.le(next_cursor)
-                        && temp_num_rows < batch_size
-                    {
-                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                        temp_num_rows += 1;
-                        cursor.advance();
-                    }
-                    temp_indices.push((cursor.input_index, start, cursor.row_index - start));
-                }
-            }
-
-            if !cursor.is_finished() {
-                // Update the top of the heap.
-                // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
-                // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-                self.heap.peek_mut().unwrap().0 = cursor;
-            } else {
-                // Pop the current `cursor`.
-                self.heap.pop();
-            }
-
-            if temp_num_rows == batch_size {
-                output_indices.push(temp_indices.clone());
-                temp_indices.clear();
-                temp_num_rows = 0;
-            }
+            result.push(block);
         }
+        Ok(result)
+    }
+}
 
-        if !temp_indices.is_empty() {
-            output_indices.push(temp_indices);
-        }
+type BlockStream = Option<DataBlock>;
 
-        // 2. Build final blocks from `output_indices`.
-        for indices in output_indices {
-            if unlikely(self.aborting.load(Ordering::Relaxed)) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            let block = DataBlock::take_by_slices_limit_from_blocks(&self.buffer, &indices, None);
-            output_blocks.push(block);
-        }
-
-        Ok(output_blocks)
+impl SortedStream for BlockStream {
+    fn next(&mut self) -> Result<(Option<DataBlock>, bool)> {
+        Ok((self.take(), false))
     }
 }
 
@@ -284,17 +245,18 @@ pub(super) type MergeSortCommon =
     TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
 
 pub fn sort_merge(
-    data_schema: DataSchemaRef,
+    schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: Vec<DataBlock>,
 ) -> Result<Vec<DataBlock>> {
+    let sort_desc = Arc::new(sort_desc);
     let mut processor = MergeSortCommon::try_create(
-        data_schema,
-        Arc::new(sort_desc),
+        schema.clone(),
+        sort_desc.clone(),
         false,
         false,
-        MergeSortCommonImpl::create(block_size, 0, 0),
+        MergeSortCommonImpl::create(schema, sort_desc, block_size, 0, 0, false),
     )?;
     for block in data_blocks {
         processor.transform(block)?;

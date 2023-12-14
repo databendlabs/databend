@@ -42,6 +42,7 @@ use common_pipeline_core::Pipeline;
 use common_profile::SharedProcessorProfiles;
 
 use super::sort::utils::find_bigger_child_of_root;
+use super::sort::utils::get_ordered_rows;
 use super::sort::Cursor;
 use super::sort::Rows;
 use super::sort::SimpleRows;
@@ -512,17 +513,7 @@ where R: Rows + Send + 'static
                         continue;
                     }
                     let mut block = block.convert_to_full();
-                    let order_col = block
-                        .columns()
-                        .last()
-                        .unwrap()
-                        .value
-                        .as_column()
-                        .unwrap()
-                        .clone();
-                    let rows = R::from_column(order_col, &self.sort_desc).ok_or_else(|| {
-                        ErrorCode::BadDataValueType("Order column type mismatched.")
-                    })?;
+                    let rows = get_ordered_rows(&block, &self.sort_desc)?;
                     // Remove the order column
                     if self.remove_order_col {
                         block.pop_columns(1);
