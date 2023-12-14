@@ -22,7 +22,7 @@ use common_expression::types::DataType;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::heuristic::subquery_rewriter::FlattenInfo;
+use crate::optimizer::decorrelate::subquery_rewriter::FlattenInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;

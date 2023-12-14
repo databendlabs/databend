@@ -16,5 +16,8 @@
 mod decorrelate;
 mod flatten_plan;
 mod flatten_scalar;
+mod subquery_rewriter;
 
 pub use decorrelate::decorrelate_subquery;
+pub use subquery_rewriter::FlattenInfo;
+pub use subquery_rewriter::SubqueryRewriter;
