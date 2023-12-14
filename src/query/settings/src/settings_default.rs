@@ -631,6 +631,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh virtual column after new data written",
+                    possible_values: None,
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

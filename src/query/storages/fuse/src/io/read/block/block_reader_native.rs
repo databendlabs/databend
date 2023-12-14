@@ -19,6 +19,8 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::native::read::reader::infer_schema;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
@@ -238,5 +240,11 @@ impl BlockReader {
             }
         }
         Ok(DataBlock::new(entries, nums_rows))
+    }
+
+    pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
+        let mut reader = self.operator.blocking().reader(loc).ok()?;
+        let schema = infer_schema(&mut reader).ok()?;
+        Some(schema)
     }
 }

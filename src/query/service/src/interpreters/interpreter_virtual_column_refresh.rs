@@ -70,6 +70,7 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
             tenant,
             table_id: Some(table.get_id()),
         };
+
         let handler = get_virtual_column_handler();
         let res = handler
             .do_list_virtual_columns(catalog, list_virtual_columns_req)
@@ -80,9 +81,10 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         }
         let virtual_columns = res[0].virtual_columns.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let segment_locs = self.plan.segment_locs.clone();
 
         let _ = handler
-            .do_refresh_virtual_column(fuse_table, self.ctx.clone(), virtual_columns)
+            .do_refresh_virtual_column(fuse_table, self.ctx.clone(), virtual_columns, segment_locs)
             .await?;
 
         Ok(PipelineBuildResult::create())

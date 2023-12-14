@@ -36,15 +36,18 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::ReadSettings;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
+use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::Location;
 
 #[async_backtrace::framed]
 pub async fn do_refresh_virtual_column(
     fuse_table: &FuseTable,
     ctx: Arc<dyn TableContext>,
     virtual_exprs: Vec<String>,
+    segment_locs: Option<Vec<Location>>,
 ) -> Result<()> {
     if virtual_exprs.is_empty() {
         return Ok(());
@@ -92,13 +95,20 @@ pub async fn do_refresh_virtual_column(
 
     let operator = fuse_table.get_operator_ref();
 
+    // If no segment locations are specified, iterates through all segments
+    let segment_locs = if let Some(segment_locs) = segment_locs {
+        segment_locs
+    } else {
+        snapshot.segments.clone()
+    };
+
     // Read source variant columns and extract inner fields as virtual columns.
-    for (location, ver) in &snapshot.segments {
+    for (location, ver) in segment_locs {
         let segment_info = segment_reader
             .read(&LoadParams {
                 location: location.to_string(),
                 len_hint: None,
-                ver: *ver,
+                ver,
                 put_cache: false,
             })
             .await?;
@@ -110,6 +120,23 @@ pub async fn do_refresh_virtual_column(
                 .await?;
             let virtual_loc =
                 TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
+
+            let schema = match storage_format {
+                FuseStorageFormat::Parquet => block_reader.sync_read_schema(&virtual_loc),
+                FuseStorageFormat::Native => block_reader.sync_read_native_schema(&virtual_loc),
+            };
+
+            // if all virtual columns has be generated, we can ignore this block
+            let all_generated = if let Some(schema) = schema {
+                virtual_exprs
+                    .iter()
+                    .all(|virtual_name| schema.fields.iter().any(|f| &f.name == virtual_name))
+            } else {
+                false
+            };
+            if all_generated {
+                continue;
+            }
 
             materialize_virtual_columns(
                 ctx.clone(),
