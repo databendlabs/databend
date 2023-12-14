@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
@@ -79,6 +80,7 @@ impl AsyncSystemTable for StagesTable {
         let mut comment: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut number_of_files: Vec<Option<u64>> = Vec::with_capacity(stages.len());
         let mut creator: Vec<Option<Vec<u8>>> = Vec::with_capacity(stages.len());
+        let mut created_on = Vec::with_capacity(stages.len());
         for stage in stages.into_iter() {
             name.push(stage.stage_name.clone().into_bytes());
             stage_type.push(stage.stage_type.clone().to_string().into_bytes());
@@ -95,6 +97,7 @@ impl AsyncSystemTable for StagesTable {
                 }
             };
             creator.push(stage.creator.map(|c| c.to_string().into_bytes().to_vec()));
+            created_on.push(stage.created_on.timestamp_micros());
             comment.push(stage.comment.clone().into_bytes());
         }
 
@@ -106,6 +109,7 @@ impl AsyncSystemTable for StagesTable {
             StringType::from_data(file_format_options),
             UInt64Type::from_opt_data(number_of_files),
             StringType::from_opt_data(creator),
+            TimestampType::from_data(created_on),
             StringType::from_data(comment),
         ]))
     }
@@ -128,6 +132,7 @@ impl StagesTable {
                 "creator",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
+            TableField::new("created_on", TableDataType::Timestamp),
             TableField::new("comment", TableDataType::String),
         ]);
         let table_info = TableInfo {

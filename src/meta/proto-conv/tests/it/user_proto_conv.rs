@@ -103,6 +103,7 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
             username: "databend".to_string(),
             hostname: "databend.rs".to_string(),
         }),
+        created_on: Utc::now(),
     }
 }
 
