@@ -66,16 +66,15 @@ impl SettingRange {
     }
 
     /// Checks if a string value is within the string range.
-    pub fn is_within_string_range(&self, value: &str) -> Result<()> {
+    pub fn is_within_string_range(&self, value: &str) -> Result<String> {
         match self {
             SettingRange::String(values) => {
-                if values.iter().any(|s| s.eq_ignore_ascii_case(value)) {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::BadArguments(format!(
+                match values.iter().find(|&s| s.eq_ignore_ascii_case(value)) {
+                    Some(s) => Ok(s.to_string()),
+                    None => Err(ErrorCode::BadArguments(format!(
                         "Value {} is not within the allowed values {:?}",
                         value, values
-                    )))
+                    ))),
                 }
             }
             _ => Err(ErrorCode::BadArguments("Expected string range".to_string())),
@@ -723,11 +722,10 @@ impl DefaultSettings {
                     }
                     // String range.
                     SettingRange::String(_) => {
-                        // Convert the value to lowercase for case-insensitive comparison
-                        let val_lower = v.to_lowercase();
-                        range.is_within_string_range(&val_lower)?;
+                        // value is the standard value of the setting.
+                        let value = range.is_within_string_range(&v)?;
 
-                        Ok((k, UserSettingValue::String(v)))
+                        Ok((k, UserSettingValue::String(value)))
                     }
                 }
             }

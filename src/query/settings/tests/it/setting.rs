@@ -36,10 +36,23 @@ fn test_set_settings() {
             .set_setting("query_flight_compression".to_string(), "LZ4".to_string())
             .unwrap();
 
+        // Ok
+        settings
+            .set_setting("query_flight_compression".to_string(), "lz4".to_string())
+            .unwrap();
+
         // Error
         let result = settings.set_setting("query_flight_compression".to_string(), "xx".to_string());
         let expect = "BadArguments. Code: 1006, Text = Value xx is not within the allowed values [\"None\", \"LZ4\", \"ZSTD\"].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
+    }
+
+    // String without range.
+    {
+        // Ok
+        settings
+            .set_setting("sandbox_tenant".to_string(), "xx".to_string())
+            .unwrap();
     }
 }
 
