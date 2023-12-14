@@ -532,9 +532,7 @@ impl StateMachine {
     ) -> Result<(), MetaStorageError> {
         let (expired, prev, result) = Self::txn_upsert_kv(
             txn_tree,
-            &UpsertKV::update(&put.key, &put.value).with(KVMeta {
-                expire_at: put.expire_at,
-            }),
+            &UpsertKV::update(&put.key, &put.value).with(KVMeta::new(put.expire_at)),
             log_time_ms,
         )?;
 
@@ -860,8 +858,8 @@ impl StateMachine {
 
         if let Some(sv) = &expired {
             if let Some(m) = &sv.meta {
-                if let Some(exp) = m.expire_at {
-                    expires.remove(&ExpireKey::new(exp * 1000, sv.seq))?;
+                if let Some(exp_ms) = m.get_expire_at_ms() {
+                    expires.remove(&ExpireKey::new(exp_ms, sv.seq))?;
                 }
             }
         }
@@ -875,16 +873,16 @@ impl StateMachine {
 
         if let Some(sv) = &prev {
             if let Some(m) = &sv.meta {
-                if let Some(exp) = m.expire_at {
-                    expires.remove(&ExpireKey::new(exp * 1000, sv.seq))?;
+                if let Some(exp_ms) = m.get_expire_at_ms() {
+                    expires.remove(&ExpireKey::new(exp_ms, sv.seq))?;
                 }
             }
         }
 
         if let Some(sv) = &res {
             if let Some(m) = &sv.meta {
-                if let Some(exp) = m.expire_at {
-                    let k = ExpireKey::new(exp * 1000, sv.seq);
+                if let Some(exp_ms) = m.get_expire_at_ms() {
+                    let k = ExpireKey::new(exp_ms, sv.seq);
                     let v = ExpireValue::new(&upsert_kv.key, 0);
                     expires.insert(&k, &v)?;
                 }
@@ -1024,7 +1022,7 @@ impl StateMachine {
         log_time_ms: u64,
     ) -> (Option<SeqV<V>>, Option<SeqV<V>>) {
         if let Some(s) = &seq_value {
-            if s.get_expire_at() < log_time_ms {
+            if s.eval_expire_at_ms() < log_time_ms {
                 (seq_value, None)
             } else {
                 (None, seq_value)
@@ -1079,35 +1077,16 @@ mod tests {
         assert_eq!((None, Some(sv())), expire_seq_v(Some(sv()), 10_000));
 
         assert_eq!(
-            (None, Some(sv().set_meta(Some(KVMeta { expire_at: None })))),
-            expire_seq_v(
-                Some(sv().set_meta(Some(KVMeta { expire_at: None }))),
-                10_000
-            )
+            (None, Some(sv().set_meta(Some(KVMeta::new(None))))),
+            expire_seq_v(Some(sv().set_meta(Some(KVMeta::new(None)))), 10_000)
         );
         assert_eq!(
-            (
-                None,
-                Some(sv().set_meta(Some(KVMeta {
-                    expire_at: Some(20)
-                })))
-            ),
-            expire_seq_v(
-                Some(sv().set_meta(Some(KVMeta {
-                    expire_at: Some(20)
-                }))),
-                10_000
-            )
+            (None, Some(sv().set_meta(Some(KVMeta::new_expire(20))))),
+            expire_seq_v(Some(sv().set_meta(Some(KVMeta::new_expire(20)))), 10_000)
         );
         assert_eq!(
-            (
-                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
-                None
-            ),
-            expire_seq_v(
-                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
-                10_000
-            )
+            (Some(sv().set_meta(Some(KVMeta::new_expire(5)))), None),
+            expire_seq_v(Some(sv().set_meta(Some(KVMeta::new_expire(5)))), 10_000)
         );
 
         Ok(())

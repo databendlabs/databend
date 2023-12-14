@@ -72,9 +72,7 @@ impl ClusterMgr {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        KVMeta {
-            expire_at: Some(expire_at.as_secs()),
-        }
+        KVMeta::new_expire(expire_at.as_secs())
     }
 }
 
