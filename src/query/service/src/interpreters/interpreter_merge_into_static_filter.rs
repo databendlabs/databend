@@ -486,11 +486,11 @@ impl MergeIntoInterpreter {
         {
             SExpr::create_unary(
                 Arc::new(eval_source_side_join_expr_op.into()),
-                SExpr::create_unary(
+                Arc::new(SExpr::create_unary(
                     // there is another row_number operator here
-                    RelOperator::Exchange(common_sql::plans::Exchange::Merge),
+                    Arc::new(RelOperator::Exchange(common_sql::plans::Exchange::Merge)),
                     Arc::new(source_plan.child(0)?.child(0)?.clone()),
-                ),
+                )),
             )
         } else {
             SExpr::create_unary(
