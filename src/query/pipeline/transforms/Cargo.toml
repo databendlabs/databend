@@ -22,5 +22,8 @@ match-template = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 
+[dev-dependencies]
+rand = { workspace = true }
+
 [package.metadata.cargo-machete]
 ignored = ["match-template"]
