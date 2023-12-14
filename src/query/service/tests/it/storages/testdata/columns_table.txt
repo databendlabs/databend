@@ -66,6 +66,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'created_on'                      | 'system'             | 'background_tasks'    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'indexes'             | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'locks'               | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                      | 'system'             | 'stages'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'streams'             | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tables'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tables_with_history' | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
