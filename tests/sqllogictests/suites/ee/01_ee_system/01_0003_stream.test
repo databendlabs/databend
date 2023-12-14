@@ -67,10 +67,10 @@ select * from s
 2
 3
 
-query I
-select * from s1
+query ITB
+select a, change$action, change$is_update from s1
 ----
-3
+3 INSERT 0
 
 statement ok
 create stream s2 on table t at (stream => s) comment='this is a stream'

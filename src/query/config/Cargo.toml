@@ -28,10 +28,9 @@ common-users = { path = "../users" }
 clap = { workspace = true }
 hex = "0.4.3"
 log = { workspace = true }
-once_cell = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
-serfig = "0.1.0"
+serfig = { workspace = true }
 strum = "0.24.1"
 
 [dev-dependencies]

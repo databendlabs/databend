@@ -68,6 +68,7 @@ common-settings = { path = "../settings" }
 common-sharing = { path = "../sharing" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
+common-storages-delta = { path = "../storages/delta" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive" }
@@ -89,7 +90,6 @@ storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 storages-common-index = { path = "../storages/common/index" }
-storages-common-locks = { path = "../storages/common/locks" }
 storages-common-table-meta = { path = "../storages/common/table_meta" }
 stream-handler = { path = "../ee_features/stream_handler" }
 vacuum-handler = { path = "../ee_features/vacuum_handler" }
@@ -105,19 +105,19 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
+backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 base64 = "0.21.0"
-bincode = "1.3.3"
 bumpalo = { workspace = true }
 byte-unit = "4.0.19"
-byteorder = "1.4.3"
+byteorder = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
 ctor = "0.1.26"
-dashmap = "5.4"
+dashmap = { workspace = true }
 ethnum = { workspace = true }
-futures = "0.3.24"
+futures = { workspace = true }
 futures-util = { workspace = true }
 h2 = "0.3.17"
 headers = "0.3.8"
@@ -125,27 +125,26 @@ highway = "1.1"
 http = "0.2.8"
 humantime = "2.1.0"
 indicatif = "0.17.5"
-itertools = "0.10.5"
+itertools = { workspace = true }
 jwt-simple = "0.11.0"
-lazy_static = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
-match-template = "0.0.1"
+match-template = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.5.0", features = ["tls"] }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
 petgraph = "0.6.2"
 pin-project-lite = "0.2.9"
-poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
+poem = { workspace = true }
 prost = { workspace = true }
-rand = "0.8.5"
-regex = "1.8.1"
+rand = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = "0.21.6"
 rustls-pemfile = "1.0.2"
@@ -157,13 +156,14 @@ socket2 = "0.5.3"
 strength_reduce = "0.2.4"
 tempfile = "3.4.0"
 time = "0.3.14"
-tokio-stream = { version = "0.1.10", features = ["net"] }
+tokio = { workspace = true }
+tokio-stream = { workspace = true, features = ["net"] }
 toml = { version = "0.7.3", default-features = false }
 tonic = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
-walkdir = "2.3.2"
+uuid = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
@@ -186,7 +186,6 @@ temp-env = "0.3.0"
 tempfile = "3.4.0"
 tower = "0.4.13"
 url = "2.3.1"
-walkdir = "2.3.2"
 wiremock = "0.5.14"
 
 [build-dependencies]

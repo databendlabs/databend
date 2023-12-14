@@ -19,27 +19,21 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::row::RowConverter as CommonConverter;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::with_number_mapped_type;
+use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
 
+use super::sort::utils::find_bigger_child_of_root;
 use super::sort::CommonRows;
 use super::sort::Cursor;
 use super::sort::DateConverter;
 use super::sort::DateRows;
 use super::sort::Rows;
-use super::sort::SimpleRowConverter;
-use super::sort::SimpleRows;
 use super::sort::StringConverter;
 use super::sort::StringRows;
 use super::sort::TimestampConverter;
@@ -48,7 +42,11 @@ use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::Status;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
-use super::AccumulatingTransformer;
+use crate::processors::sort::SortSpillMeta;
+use crate::processors::sort::SortSpillMetaWithParams;
+
+/// A spilled block file is at most 8MB.
+const SPILL_BATCH_BYTES_SIZE: usize = 8 * 1024 * 1024;
 
 /// Merge sort blocks without limit.
 ///
@@ -59,15 +57,41 @@ pub struct TransformSortMerge<R: Rows> {
     buffer: Vec<DataBlock>,
 
     aborting: Arc<AtomicBool>,
+    // The following fields are used for spilling.
+    may_spill: bool,
+    max_memory_usage: usize,
+    spilling_bytes_threshold: usize,
+    /// Record current memory usage.
+    num_bytes: usize,
+    num_rows: usize,
+
+    // The following two fields will be passed to the spill processor.
+    // If these two fields are not zero, it means we need to spill.
+    /// The number of rows of each spilled block.
+    spill_batch_size: usize,
+    /// The number of spilled blocks in each merge of the spill processor.
+    spill_num_merge: usize,
 }
 
 impl<R: Rows> TransformSortMerge<R> {
-    pub fn create(block_size: usize) -> Self {
+    pub fn create(
+        block_size: usize,
+        max_memory_usage: usize,
+        spilling_bytes_threshold: usize,
+    ) -> Self {
+        let may_spill = max_memory_usage != 0 && spilling_bytes_threshold != 0;
         TransformSortMerge {
             block_size,
             heap: BinaryHeap::new(),
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
+            may_spill,
+            max_memory_usage,
+            spilling_bytes_threshold,
+            num_bytes: 0,
+            num_rows: 0,
+            spill_batch_size: 0,
+            spill_num_merge: 0,
         }
     }
 }
@@ -86,83 +110,30 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
             return Ok(Status::Continue);
         }
 
+        self.num_bytes += block.memory_size();
+        self.num_rows += block.num_rows();
         self.buffer.push(block);
         self.heap.push(Reverse(init_cursor));
+
+        if self.may_spill
+            && (self.num_bytes >= self.spilling_bytes_threshold
+                || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.max_memory_usage)
+        {
+            let blocks = self.prepare_spill()?;
+            return Ok(Status::Spill(blocks));
+        }
+
         Ok(Status::Continue)
     }
 
     fn on_finish(&mut self) -> Result<Vec<DataBlock>> {
-        let output_size = self.buffer.iter().map(|b| b.num_rows()).sum::<usize>();
-        if output_size == 0 {
-            return Ok(vec![]);
+        if self.spill_num_merge > 0 {
+            debug_assert!(self.spill_batch_size > 0);
+            // Make the last block as a big memory block.
+            self.drain_heap(usize::MAX)
+        } else {
+            self.drain_heap(self.block_size)
         }
-
-        let output_block_num = output_size.div_ceil(self.block_size);
-        let mut output_blocks = Vec::with_capacity(output_block_num);
-        let mut output_indices = Vec::with_capacity(output_size);
-
-        // 1. Drain the heap
-        while let Some(Reverse(mut cursor)) = self.heap.pop() {
-            if unlikely(self.aborting.load(Ordering::Relaxed)) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            let block_idx = cursor.input_index;
-            if self.heap.is_empty() {
-                // If there is no other block in the heap, we can drain the whole block.
-                while !cursor.is_finished() {
-                    output_indices.push((block_idx, cursor.advance()));
-                }
-            } else {
-                let next_cursor = &self.heap.peek().unwrap().0;
-                // If the last row of current block is smaller than the next cursor,
-                // we can drain the whole block.
-                if cursor.last().le(&next_cursor.current()) {
-                    while !cursor.is_finished() {
-                        output_indices.push((block_idx, cursor.advance()));
-                    }
-                } else {
-                    while !cursor.is_finished() && cursor.le(next_cursor) {
-                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                        output_indices.push((block_idx, cursor.advance()));
-                    }
-                    if !cursor.is_finished() {
-                        self.heap.push(Reverse(cursor));
-                    }
-                }
-            }
-        }
-
-        // 2. Build final blocks from `output_indices`.
-        for i in 0..output_block_num {
-            if unlikely(self.aborting.load(Ordering::Relaxed)) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            let start = i * self.block_size;
-            let end = (start + self.block_size).min(output_indices.len());
-            // Convert indices to merge slice.
-            let mut merge_slices = Vec::with_capacity(output_indices.len());
-            let (block_idx, row_idx) = output_indices[start];
-            merge_slices.push((block_idx, row_idx, 1));
-            for (block_idx, row_idx) in output_indices.iter().take(end).skip(start + 1) {
-                if *block_idx == merge_slices.last().unwrap().0 {
-                    // If the block index is the same as the last one, we can merge them.
-                    merge_slices.last_mut().unwrap().2 += 1;
-                } else {
-                    merge_slices.push((*block_idx, *row_idx, 1));
-                }
-            }
-            let block =
-                DataBlock::take_by_slices_limit_from_blocks(&self.buffer, &merge_slices, None);
-            output_blocks.push(block);
-        }
-
-        Ok(output_blocks)
     }
 
     fn interrupt(&self) {
@@ -170,109 +141,147 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     }
 }
 
-type MergeSortDateImpl = TransformSortMerge<DateRows>;
-type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
+impl<R: Rows> TransformSortMerge<R> {
+    fn prepare_spill(&mut self) -> Result<Vec<DataBlock>> {
+        let mut spill_meta = Box::new(SortSpillMeta {}) as Box<dyn BlockMetaInfo>;
+        if self.spill_batch_size == 0 {
+            debug_assert_eq!(self.spill_num_merge, 0);
+            // We use the first memory calculation to estimate the batch size and the number of merge.
+            self.spill_num_merge = self.num_bytes.div_ceil(SPILL_BATCH_BYTES_SIZE).max(2);
+            self.spill_batch_size = self.num_rows.div_ceil(self.spill_num_merge);
+            // The first block to spill will contain the parameters of spilling.
+            // Later blocks just contain a empty struct `SortSpillMeta` to save memory.
+            spill_meta = Box::new(SortSpillMetaWithParams {
+                batch_size: self.spill_batch_size,
+                num_merge: self.spill_num_merge,
+            }) as Box<dyn BlockMetaInfo>;
+        } else {
+            debug_assert!(self.spill_num_merge > 0);
+        }
 
-type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
-type MergeSortTimestamp =
+        let mut blocks = self.drain_heap(self.spill_batch_size)?;
+        if let Some(b) = blocks.first_mut() {
+            b.replace_meta(spill_meta);
+        }
+        for b in blocks.iter_mut().skip(1) {
+            b.replace_meta(Box::new(SortSpillMeta {}));
+        }
+
+        debug_assert!(self.heap.is_empty());
+        self.num_rows = 0;
+        self.num_bytes = 0;
+        self.buffer.clear();
+
+        Ok(blocks)
+    }
+
+    fn drain_heap(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
+        // TODO: the codes is highly duplicated with the codes in `transform_sort_spill.rs`,
+        // need to refactor and merge them later.
+        if self.num_rows == 0 {
+            return Ok(vec![]);
+        }
+
+        let output_block_num = self.num_rows.div_ceil(batch_size);
+        let mut output_blocks = Vec::with_capacity(output_block_num);
+        let mut output_indices = Vec::with_capacity(output_block_num);
+
+        // 1. Drain the heap
+        let mut temp_num_rows = 0;
+        let mut temp_indices = Vec::new();
+        while let Some(Reverse(cursor)) = self.heap.peek() {
+            if unlikely(self.aborting.load(Ordering::Relaxed)) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
+            let mut cursor = cursor.clone();
+            if self.heap.len() == 1 {
+                let start = cursor.row_index;
+                let count = (cursor.num_rows() - start).min(batch_size - temp_num_rows);
+                temp_num_rows += count;
+                cursor.row_index += count;
+                temp_indices.push((cursor.input_index, start, count));
+            } else {
+                let next_cursor = &find_bigger_child_of_root(&self.heap).0;
+                if cursor.last().le(&next_cursor.current()) {
+                    // Short Path:
+                    // If the last row of current block is smaller than the next cursor,
+                    // we can drain the whole block.
+                    let start = cursor.row_index;
+                    let count = (cursor.num_rows() - start).min(batch_size - temp_num_rows);
+                    temp_num_rows += count;
+                    cursor.row_index += count;
+                    temp_indices.push((cursor.input_index, start, count));
+                } else {
+                    // We copy current cursor for advancing,
+                    // and we will use this copied cursor to update the top of the heap at last
+                    // (let heap adjust itself without popping and pushing any element).
+                    let start = cursor.row_index;
+                    while !cursor.is_finished()
+                        && cursor.le(next_cursor)
+                        && temp_num_rows < batch_size
+                    {
+                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
+                        temp_num_rows += 1;
+                        cursor.advance();
+                    }
+                    temp_indices.push((cursor.input_index, start, cursor.row_index - start));
+                }
+            }
+
+            if !cursor.is_finished() {
+                // Update the top of the heap.
+                // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
+                // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
+                self.heap.peek_mut().unwrap().0 = cursor;
+            } else {
+                // Pop the current `cursor`.
+                self.heap.pop();
+            }
+
+            if temp_num_rows == batch_size {
+                output_indices.push(temp_indices.clone());
+                temp_indices.clear();
+                temp_num_rows = 0;
+            }
+        }
+
+        if !temp_indices.is_empty() {
+            output_indices.push(temp_indices);
+        }
+
+        // 2. Build final blocks from `output_indices`.
+        for indices in output_indices {
+            if unlikely(self.aborting.load(Ordering::Relaxed)) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
+            let block = DataBlock::take_by_slices_limit_from_blocks(&self.buffer, &indices, None);
+            output_blocks.push(block);
+        }
+
+        Ok(output_blocks)
+    }
+}
+
+pub(super) type MergeSortDateImpl = TransformSortMerge<DateRows>;
+pub(super) type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
+
+pub(super) type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
+pub(super) type MergeSortTimestamp =
     TransformSortMergeBase<MergeSortTimestampImpl, TimestampRows, TimestampConverter>;
 
-type MergeSortStringImpl = TransformSortMerge<StringRows>;
-type MergeSortString = TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
+pub(super) type MergeSortStringImpl = TransformSortMerge<StringRows>;
+pub(super) type MergeSortString =
+    TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
 
-type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
-type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
-
-pub fn try_create_transform_sort_merge(
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    schema: DataSchemaRef,
-    block_size: usize,
-    sort_desc: Vec<SortColumnDescription>,
-    order_col_generated: bool,
-    output_order_col: bool,
-) -> Result<Box<dyn Processor>> {
-    let processor = if sort_desc.len() == 1 {
-        let sort_type = schema.field(sort_desc[0].offset).data_type();
-        match sort_type {
-            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    TransformSortMergeBase::<
-                        TransformSortMerge<SimpleRows<NumberType<NUM_TYPE>>>,
-                        SimpleRows<NumberType<NUM_TYPE>>,
-                        SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >::try_create(
-                        schema,
-                        sort_desc,
-                        order_col_generated,
-                        output_order_col,
-                        TransformSortMerge::create(block_size),
-                    )?,
-                ),
-            }),
-            DataType::Date => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortDate::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortDateImpl::create(block_size),
-                )?,
-            ),
-            DataType::Timestamp => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortTimestamp::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortTimestampImpl::create(block_size),
-                )?,
-            ),
-            DataType::String => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortString::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortStringImpl::create(block_size),
-                )?,
-            ),
-            _ => AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortCommon::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    MergeSortCommonImpl::create(block_size),
-                )?,
-            ),
-        }
-    } else {
-        AccumulatingTransformer::create(
-            input,
-            output,
-            MergeSortCommon::try_create(
-                schema,
-                sort_desc,
-                order_col_generated,
-                output_order_col,
-                MergeSortCommonImpl::create(block_size),
-            )?,
-        )
-    };
-
-    Ok(processor)
-}
+pub(super) type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
+pub(super) type MergeSortCommon =
+    TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
 
 pub fn sort_merge(
     data_schema: DataSchemaRef,
@@ -282,10 +291,10 @@ pub fn sort_merge(
 ) -> Result<Vec<DataBlock>> {
     let mut processor = MergeSortCommon::try_create(
         data_schema,
-        sort_desc,
+        Arc::new(sort_desc),
         false,
         false,
-        MergeSortCommonImpl::create(block_size),
+        MergeSortCommonImpl::create(block_size, 0, 0),
     )?;
     for block in data_blocks {
         processor.transform(block)?;

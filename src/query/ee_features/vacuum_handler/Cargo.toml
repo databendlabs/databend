@@ -19,7 +19,7 @@ common-exception = { path = "../../../common/exception" }
 common-storages-fuse = { path = "../../storages/fuse" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
 
 [build-dependencies]

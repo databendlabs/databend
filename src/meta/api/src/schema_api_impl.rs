@@ -44,6 +44,7 @@ use common_meta_app::app_error::UndropTableAlreadyExists;
 use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownCatalog;
+use common_meta_app::app_error::UnknownDatabaseId;
 use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownStreamId;
 use common_meta_app::app_error::UnknownTable;
@@ -122,8 +123,10 @@ use common_meta_app::schema::ListDroppedTableResp;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -184,6 +187,7 @@ use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
+use futures::TryStreamExt;
 use log::as_debug;
 use log::as_display;
 use log::debug;
@@ -2315,6 +2319,48 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError> {
+        debug!(req = as_debug!(&table_id); "SchemaApi: {}", func_name!());
+
+        let table_id_to_name_key = TableIdToName { table_id };
+
+        let (tb_meta_seq, table_name): (_, Option<DBIdTableName>) =
+            get_pb_value(self, &table_id_to_name_key).await?;
+
+        debug!(ident = as_display!(&table_id_to_name_key); "get_table_name_by_id");
+
+        if tb_meta_seq == 0 || table_name.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, "get_table_name_by_id"),
+            )));
+        }
+
+        Ok(table_name.unwrap().table_name)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn get_db_name_by_id(&self, db_id: u64) -> Result<String, KVAppError> {
+        debug!(req = as_debug!(&db_id); "SchemaApi: {}", func_name!());
+
+        let db_id_to_name_key = DatabaseIdToName { db_id };
+
+        let (meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
+            get_pb_value(self, &db_id_to_name_key).await?;
+
+        debug!(ident = as_display!(&db_id_to_name_key); "get_db_name_by_id");
+
+        if meta_seq == 0 || db_name.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
+                UnknownDatabaseId::new(db_id, "get_db_name_by_id"),
+            )));
+        }
+
+        Ok(db_name.unwrap().db_name)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError> {
         let table_id = req.tb_id;
         debug!(req = as_debug!(&table_id); "SchemaApi: {}", func_name!());
@@ -3474,6 +3520,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
+        let mut reply = vec![];
+        for prefix in &req.prefixes {
+            let mut stream = self.list_kv(prefix).await?;
+            while let Some(list) = stream.try_next().await? {
+                let k = list.key;
+                let seq = SeqV::from(list.value.unwrap());
+                let meta: LockMeta = deserialize_struct(&seq.data)?;
+                let lock_type = &meta.lock_type;
+                let key = lock_type.key_from_str(&k).map_err(|e| {
+                    let inv = InvalidReply::new("list_locks", &e);
+                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
+                    MetaError::NetworkError(meta_net_err)
+                })?;
+                let revision = lock_type.revision_from_str(&k).map_err(|e| {
+                    let inv = InvalidReply::new("list_locks", &e);
+                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
+                    MetaError::NetworkError(meta_net_err)
+                })?;
+
+                reply.push(LockInfo {
+                    key,
+                    revision,
+                    meta,
+                });
+            }
+        }
+        Ok(reply)
     }
 
     #[logcall::logcall("debug")]

@@ -28,12 +28,15 @@ use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserDefinedConnection;
 use common_meta_app::principal::UserInfo;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::MergeStatus;
@@ -105,6 +108,10 @@ pub struct QueryContextShared {
     pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
     /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
+
+    pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+
+    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, Vec<Expr<String>>>>>,
 }
 
 impl QueryContextShared {
@@ -147,6 +154,8 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            query_profiles: Arc::new(RwLock::new(HashMap::new())),
+            runtime_filters: Default::default(),
         }))
     }
 

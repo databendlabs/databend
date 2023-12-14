@@ -23,9 +23,10 @@ common-proto-conv = { path = "../proto-conv" }
 common-protos = { path = "../protos" }
 
 anyhow = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
-enumflags2 = { version = "0.7.7", features = ["serde"] }
+enumflags2 = { workspace = true }
+futures = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"

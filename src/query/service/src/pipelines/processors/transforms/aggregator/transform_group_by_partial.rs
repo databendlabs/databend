@@ -68,7 +68,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
-        let mut memory_ratio = settings.get_spilling_memory_ratio()? as f64 / 100_f64;
+        let mut memory_ratio = settings.get_aggregate_spilling_memory_ratio()? as f64 / 100_f64;
 
         if memory_ratio > 1_f64 {
             memory_ratio = 1_f64;
@@ -86,7 +86,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
             max_memory_usage,
             convert_threshold,
             spilling_bytes_threshold_per_proc: match settings
-                .get_spilling_bytes_threshold_per_proc()?
+                .get_aggregate_spilling_bytes_threshold_per_proc()?
             {
                 0 => max_memory_usage / max_threads,
                 spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,

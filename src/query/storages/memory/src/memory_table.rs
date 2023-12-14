@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -49,7 +50,6 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use common_storage::StorageMetrics;
-use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::SnapshotId;
@@ -61,8 +61,8 @@ use crate::memory_part::MemoryPartInfo;
 /// Indexed by table id etc.
 pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
-static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
-    Lazy::new(|| Arc::new(Default::default()));
+static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
+    LazyLock::new(|| Arc::new(Default::default()));
 
 #[derive(Clone)]
 pub struct MemoryTable {

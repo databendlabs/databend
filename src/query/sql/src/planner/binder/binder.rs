@@ -148,7 +148,6 @@ impl<'a> Binder {
             self.metadata.clone(),
             &[],
             false,
-            false,
         )?;
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
@@ -262,6 +261,7 @@ impl<'a> Binder {
             Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
             Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
             Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
+            Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,

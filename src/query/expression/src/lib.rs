@@ -36,6 +36,7 @@
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
 #![feature(trait_upcasting)]
+#![feature(lazy_cell)]
 
 #[allow(dead_code)]
 mod block;

@@ -16,13 +16,14 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
-futures = "0.3.24"
+async-trait = { workspace = true }
+futures = { workspace = true }
 minitrace = { workspace = true }
 petgraph = "0.6.2"
+serde = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }

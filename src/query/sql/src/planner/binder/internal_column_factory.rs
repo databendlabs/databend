@@ -17,7 +17,11 @@ use std::collections::BTreeMap;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
 use common_expression::BASE_BLOCK_IDS_COL_NAME;
+use common_expression::BASE_ROW_ID_COL_NAME;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_expression::CHANGE_ACTION_COL_NAME;
+use common_expression::CHANGE_IS_UPDATE_COL_NAME;
+use common_expression::CHANGE_ROW_ID_COL_NAME;
 use common_expression::ROW_ID_COL_NAME;
 use common_expression::SEGMENT_NAME_COL_NAME;
 use common_expression::SNAPSHOT_NAME_COL_NAME;
@@ -55,8 +59,31 @@ impl InternalColumnFactory {
         );
 
         internal_columns.insert(
+            BASE_ROW_ID_COL_NAME.to_string(),
+            InternalColumn::new(BASE_ROW_ID_COL_NAME, InternalColumnType::BaseRowId),
+        );
+
+        internal_columns.insert(
             BASE_BLOCK_IDS_COL_NAME.to_string(),
             InternalColumn::new(BASE_BLOCK_IDS_COL_NAME, InternalColumnType::BaseBlockIds),
+        );
+
+        internal_columns.insert(
+            CHANGE_ACTION_COL_NAME.to_string(),
+            InternalColumn::new(CHANGE_ACTION_COL_NAME, InternalColumnType::ChangeAction),
+        );
+
+        internal_columns.insert(
+            CHANGE_IS_UPDATE_COL_NAME.to_string(),
+            InternalColumn::new(
+                CHANGE_IS_UPDATE_COL_NAME,
+                InternalColumnType::ChangeIsUpdate,
+            ),
+        );
+
+        internal_columns.insert(
+            CHANGE_ROW_ID_COL_NAME.to_string(),
+            InternalColumn::new(CHANGE_ROW_ID_COL_NAME, InternalColumnType::ChangeRowId),
         );
 
         InternalColumnFactory { internal_columns }

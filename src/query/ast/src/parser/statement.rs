@@ -370,6 +370,17 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(_, _, show_options)| Statement::ShowIndexes { show_options },
     );
+    let show_locks = map(
+        rule! {
+            SHOW ~ LOCKS ~ ( IN ~ ^ACCOUNT )? ~ #limit_where?
+        },
+        |(_, _, opt_in_account, limit)| {
+            Statement::ShowLocks(ShowLocksStmt {
+                in_account: opt_in_account.is_some(),
+                limit,
+            })
+        },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -1677,6 +1688,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #show_indexes : "`SHOW INDEXES`"
+            | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
@@ -2876,20 +2888,23 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
-pub fn show_limit(i: Input) -> IResult<ShowLimit> {
-    let limit_like = map(
-        rule! {
-            LIKE ~ #literal_string
-        },
-        |(_, pattern)| ShowLimit::Like { pattern },
-    );
-    let limit_where = map(
+pub fn limit_where(i: Input) -> IResult<ShowLimit> {
+    map(
         rule! {
             WHERE ~ #expr
         },
         |(_, selection)| ShowLimit::Where {
             selection: Box::new(selection),
         },
+    )(i)
+}
+
+pub fn show_limit(i: Input) -> IResult<ShowLimit> {
+    let limit_like = map(
+        rule! {
+            LIKE ~ #literal_string
+        },
+        |(_, pattern)| ShowLimit::Like { pattern },
     );
 
     rule!(
@@ -2957,6 +2972,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
+        value(Engine::Delta, rule! { DELTA }),
     ));
 
     map(

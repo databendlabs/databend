@@ -59,7 +59,9 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -350,6 +352,19 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in HIVE catalog",
+        ))
+    }
+
+    async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get db name by id in HIVE catalog",
+        ))
+    }
+
     // Get one table by db and table name.
     #[minitrace::trace]
     #[async_backtrace::framed]
@@ -534,6 +549,11 @@ impl Catalog for HiveCatalog {
 
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
         unimplemented!()
     }
 

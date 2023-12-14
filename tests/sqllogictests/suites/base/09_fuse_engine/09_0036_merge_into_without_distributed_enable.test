@@ -1024,5 +1024,43 @@ select id,c1,to_date(c2),c3 from tb_01;
 ----
 1 abc 2023-11-29 {"a":1}
 
+## test #issue13932
+statement ok
+create table null_target(a int not null,b text);
+
+statement ok
+create table null_source(a int not null,b text);
+
+statement ok
+insert into null_target values(1,'a1');
+
+statement ok
+insert into null_target values(2,'a2');
+
+statement ok
+insert into null_source values(1,'a3');
+
+statement ok
+insert into null_source values(3,'a4');
+
+statement error 1006
+merge into null_target using null_source on null_target.a = null_source.a when matched then update *
+when not matched then insert (b) values(null_source.b);
+
+statement ok
+delete from null_source where a = 3;
+
+query TT
+merge into null_target using null_source on null_target.a = null_source.a when matched then update *
+when not matched then insert (b) values(null_source.b);
+----
+0 1
+
+query TT
+select * from null_target order by a,b;
+----
+1 a3
+2 a2
+
 statement ok
 set enable_experimental_merge_into = 0;

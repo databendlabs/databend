@@ -411,6 +411,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_indexes(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
+    fn visit_show_locks(&mut self, _stmt: &'ast ShowLocksStmt) {}
+
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
     fn visit_set_variable(

@@ -131,7 +131,7 @@ impl FuseTable {
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
-            let sort_descs: Vec<SortColumnDescription> = cluster_keys
+            let sort_desc: Vec<SortColumnDescription> = cluster_keys
                 .iter()
                 .map(|index| SortColumnDescription {
                     offset: *index,
@@ -140,6 +140,7 @@ impl FuseTable {
                     is_nullable: false, // This information is not needed here.
                 })
                 .collect();
+            let sort_desc = Arc::new(sort_desc);
 
             let mut builder = pipeline.add_transform_with_specified_len(
                 |transform_input_port, transform_output_port| {
@@ -147,7 +148,7 @@ impl FuseTable {
                         transform_input_port,
                         transform_output_port,
                         None,
-                        sort_descs.clone(),
+                        sort_desc.clone(),
                     )?))
                 },
                 specified_mid_len,
@@ -187,7 +188,7 @@ impl FuseTable {
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
-            let sort_descs: Vec<SortColumnDescription> = cluster_keys
+            let sort_desc: Vec<SortColumnDescription> = cluster_keys
                 .iter()
                 .map(|index| SortColumnDescription {
                     offset: *index,
@@ -196,13 +197,13 @@ impl FuseTable {
                     is_nullable: false, // This information is not needed here.
                 })
                 .collect();
-
+            let sort_desc = Arc::new(sort_desc);
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                     transform_input_port,
                     transform_output_port,
                     None,
-                    sort_descs.clone(),
+                    sort_desc.clone(),
                 )?))
             })?;
         }

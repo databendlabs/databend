@@ -22,4 +22,4 @@ storages-common-table-meta = { path = "../table_meta" }
 log = { workspace = true }
 serde = { workspace = true }
 
-typetag = "0.2.3"
+typetag = { workspace = true }

@@ -79,3 +79,31 @@ unset max_memory_usage
 
 statement ok
 unset max_threads
+
+statement ok
+set query_flight_compression = 'Lz4';
+
+query TT
+select value from system.settings where name = 'query_flight_compression'
+----
+LZ4
+
+statement ok
+set query_flight_compression = 'lz4';
+
+query TT
+select value from system.settings where name = 'query_flight_compression'
+----
+LZ4
+
+statement ok
+set max_storage_io_requests = 1000
+
+statement error
+set max_storage_io_requests = 1025
+
+statement ok
+set max_threads = 1000
+
+statement error
+set max_threads = 1025

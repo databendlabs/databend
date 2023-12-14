@@ -44,7 +44,7 @@ impl ExchangeTransform {
                 via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
             ExchangeParams::ShuffleExchange(params) => {
-                exchange_shuffle(params, pipeline)?;
+                exchange_shuffle(ctx, params, pipeline)?;
 
                 // exchange writer sink and resize and exchange reader
                 let len = params.destination_ids.len();

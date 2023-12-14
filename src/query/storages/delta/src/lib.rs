@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod lock_holder;
-mod lock_manager;
-mod lock_metrics;
-mod table_lock;
-mod utils;
+#![feature(lazy_cell)]
+#![feature(impl_trait_in_assoc_type)]
+#![allow(clippy::diverging_sub_expression)]
 
-pub use lock_holder::LockHolder;
-pub use lock_manager::LockManager;
-pub use lock_metrics::*;
-pub use table_lock::TableLock;
-pub use utils::set_backoff;
+mod dal;
+mod partition;
+mod table;
+mod table_source;
+
+pub use table::DeltaTable;

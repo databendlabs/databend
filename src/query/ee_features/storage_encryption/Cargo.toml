@@ -15,7 +15,6 @@ test = false
 common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
 
-# Github dependencies
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 
 [build-dependencies]

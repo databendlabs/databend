@@ -158,7 +158,7 @@ impl ShowCreateTableInterpreter {
             .get_hide_options_in_show_create_table()
             .unwrap_or(false);
 
-        if !hide_options_in_show_create_table || engine == "ICEBERG" {
+        if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
             table_create_sql.push_str({
                 let mut opts = table_info.options().iter().collect::<Vec<_>>();
                 opts.sort_by_key(|(k, _)| *k);

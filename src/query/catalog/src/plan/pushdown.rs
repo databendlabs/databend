@@ -34,7 +34,7 @@ pub struct VirtualColumnInfo {
     /// Virtual column name
     pub name: String,
     /// Paths to generate virtual column from source column
-    pub paths: Vec<Scalar>,
+    pub key_paths: Scalar,
     /// Virtual column data type
     pub data_type: Box<TableDataType>,
 }

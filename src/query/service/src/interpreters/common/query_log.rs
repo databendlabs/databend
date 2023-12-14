@@ -59,7 +59,7 @@ impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
         // log the query log in JSON format
-        info!(target: "query", "{}", event_str);
+        info!(target: "databend::log::query", "{}", event_str);
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
         QueryLogQueue::instance()?.append_data(event)
@@ -185,10 +185,16 @@ impl InterpreterQueryLog {
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),
+            has_profiles: false,
         })
     }
 
-    pub fn log_finish(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+    pub fn log_finish(
+        ctx: &QueryContext,
+        now: SystemTime,
+        err: Option<ErrorCode>,
+        has_profiles: bool,
+    ) -> Result<()> {
         ctx.set_finish_time(now);
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
@@ -316,6 +322,7 @@ impl InterpreterQueryLog {
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),
+            has_profiles,
         })
     }
 }

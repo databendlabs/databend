@@ -70,7 +70,6 @@ pub struct TableScan {
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
-    // Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -113,28 +112,12 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        // add virtual columns to scan
-        let mut virtual_columns = ColumnSet::new();
-        for column in self
-            .metadata
-            .read()
-            .virtual_columns_by_table_index(scan.table_index)
-            .iter()
-        {
-            match column {
-                ColumnEntry::VirtualColumn(virtual_column) => {
-                    virtual_columns.insert(virtual_column.column_index);
-                }
-                _ => unreachable!(),
-            }
-        }
-
         // Some table may not have any column,
         // e.g. `system.sync_crash_me`
-        let scan = if scan.columns.is_empty() && virtual_columns.is_empty() {
+        let scan = if scan.columns.is_empty() {
             scan.clone()
         } else {
-            let columns = scan.columns.union(&virtual_columns).cloned().collect();
+            let columns = scan.columns.clone();
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
             if let Some(ref mut pw) = prewhere {
@@ -162,17 +145,21 @@ impl PhysicalPlanBuilder {
                 continue;
             }
             let column = metadata.column(*index);
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) = column {
-                if path_indices.is_some() {
-                    has_inner_column = true;
+            match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) => {
+                    if path_indices.is_some() {
+                        has_inner_column = true;
+                    }
                 }
-            } else if let ColumnEntry::InternalColumn(TableInternalColumn {
-                internal_column, ..
-            }) = column
-            {
-                project_internal_columns.insert(*index, internal_column.to_owned());
-            } else if let ColumnEntry::VirtualColumn(_) = column {
-                has_virtual_column = true;
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => {
+                    project_internal_columns.insert(*index, internal_column.to_owned());
+                }
+                ColumnEntry::VirtualColumn(_) => {
+                    has_virtual_column = true;
+                }
+                _ => {}
             }
 
             if let Some(prewhere) = &scan.prewhere {
@@ -241,7 +228,7 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
-
+        source.table_index = scan.table_index;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
@@ -500,25 +487,31 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    fn build_virtual_columns(&self, columns: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
-        let mut virtual_column_infos = Vec::new();
-        for index in columns.iter() {
+    fn build_virtual_columns(&self, indices: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
+        let mut column_and_indices = Vec::new();
+        for index in indices.iter() {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
                 let virtual_column_info = VirtualColumnInfo {
                     source_name: virtual_column.source_column_name.clone(),
                     name: virtual_column.column_name.clone(),
-                    paths: virtual_column.paths.clone(),
+                    key_paths: virtual_column.key_paths.clone(),
                     data_type: Box::new(virtual_column.data_type.clone()),
                 };
-                virtual_column_infos.push(virtual_column_info);
+                column_and_indices.push((virtual_column_info, *index));
             }
         }
-        if virtual_column_infos.is_empty() {
-            None
-        } else {
-            Some(virtual_column_infos)
+        if column_and_indices.is_empty() {
+            return None;
         }
+        // Make the order of virtual columns the same as their indexes.
+        column_and_indices.sort_by_key(|(_, index)| *index);
+
+        let virtual_column_infos = column_and_indices
+            .into_iter()
+            .map(|(column, _)| column)
+            .collect::<Vec<_>>();
+        Some(virtual_column_infos)
     }
 
     pub(crate) fn build_agg_index(

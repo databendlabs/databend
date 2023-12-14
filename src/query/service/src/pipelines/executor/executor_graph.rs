@@ -58,7 +58,7 @@ enum State {
     Finished,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct EdgeInfo {
     input_index: usize,
     output_index: usize,

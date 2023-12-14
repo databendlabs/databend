@@ -35,6 +35,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -73,7 +74,9 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -100,9 +103,11 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
+use common_pipeline_core::processors::profile::PlanProfile;
 use common_pipeline_core::processors::profile::Profile;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
@@ -645,6 +650,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn clear_segment_locations(&self) -> Result<()> {
+        todo!()
+    }
+
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
@@ -670,6 +679,21 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        todo!()
+    }
+
+    fn add_query_profiles(&self, _: &[PlanProfile]) {
+        todo!()
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        todo!()
+    }
+    fn set_runtime_filter(&self, _filters: (IndexType, Vec<Expr<String>>)) {
+        todo!()
+    }
+
+    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Vec<Expr<String>> {
         todo!()
     }
 }
@@ -720,6 +744,14 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         self.cat.get_table_meta_by_id(table_id).await
+    }
+
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
+        self.cat.get_table_name_by_id(table_id).await
+    }
+
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
+        self.cat.get_db_name_by_id(db_id).await
     }
 
     async fn get_table(
@@ -883,18 +915,22 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        todo!()
+        unimplemented!()
     }
 
     async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        todo!()
+        unimplemented!()
     }
 
     async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
-        todo!()
+        unimplemented!()
     }
 
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
-        todo!()
+        unimplemented!()
+    }
+
+    async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        unimplemented!()
     }
 }
