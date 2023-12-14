@@ -416,6 +416,13 @@ impl SExpr {
 
         add_internal_column_index_into_child(expr, column_index, table_index)
     }
+
+    pub fn is_distributed_plan(&self) -> bool {
+        self.children()
+            .iter()
+            .any(|child| child.is_distributed_plan())
+            || matches!(self.plan.as_ref(), RelOperator::Exchange(_))
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {

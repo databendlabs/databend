@@ -182,20 +182,21 @@ impl MergeIntoInterpreter {
         let table_name = table_name.clone();
         let input = input.clone();
 
-        let input = if let RelOperator::Exchange(_) = input.plan() {
+        let mut input = if let RelOperator::Exchange(_) = input.plan() {
             Box::new(input.child(0)?.clone())
         } else {
             input
         };
 
-        let optimized_input =
-            Self::build_static_filter(&input, meta_data, self.ctx.clone(), check_table).await?;
+        if !input.is_distributed_plan() {
+            input =
+                Self::build_static_filter(&input, meta_data, self.ctx.clone(), check_table).await?;
+        }
+
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
         // build source for MergeInto
-        let join_input = builder
-            .build(&optimized_input, *columns_set.clone())
-            .await?;
+        let join_input = builder.build(&input, *columns_set.clone()).await?;
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
