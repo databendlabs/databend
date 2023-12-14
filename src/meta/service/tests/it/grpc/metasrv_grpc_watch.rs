@@ -269,6 +269,7 @@ async fn test_watch() -> anyhow::Result<()> {
                     value: txn_val.clone(),
                     prev_value: true,
                     expire_at: None,
+                    ttl_ms: None,
                 })),
             },
             TxnOp {

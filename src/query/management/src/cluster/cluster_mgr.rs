@@ -24,8 +24,8 @@ use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_store::MetaStore;
-use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaSpec;
 use common_meta_types::NodeInfo;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
@@ -65,14 +65,14 @@ impl ClusterMgr {
         })
     }
 
-    fn new_lift_time(&self) -> KVMeta {
+    fn new_lift_time(&self) -> MetaSpec {
         let now = std::time::SystemTime::now();
         let expire_at = now
             .add(self.lift_time)
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        KVMeta::new_expire(expire_at.as_secs())
+        MetaSpec::new_expire(expire_at.as_secs())
     }
 }
 

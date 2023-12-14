@@ -332,6 +332,7 @@ pub fn txn_op_put(key: &impl kvapi::Key, value: Vec<u8>) -> TxnOp {
             value,
             prev_value: true,
             expire_at: None,
+            ttl_ms: None,
         })),
     }
 }
@@ -344,6 +345,7 @@ pub fn txn_op_put_with_expire(key: &impl kvapi::Key, value: Vec<u8>, expire_at: 
             value,
             prev_value: true,
             expire_at: Some(expire_at),
+            ttl_ms: None,
         })),
     }
 }

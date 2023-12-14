@@ -13,17 +13,23 @@
 // limitations under the License.
 
 use std::fmt;
+use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::with::With;
-use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::NodeId;
 use crate::Operation;
 use crate::TxnRequest;
+
+mod cmd_context;
+mod meta_spec;
+
+pub use cmd_context::CmdContext;
+pub use meta_spec::MetaSpec;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -63,7 +69,7 @@ pub struct UpsertKV {
     pub value: Operation<Vec<u8>>,
 
     /// Meta data of a value.
-    pub value_meta: Option<KVMeta>,
+    pub value_meta: Option<MetaSpec>,
 }
 
 impl fmt::Display for Cmd {
@@ -108,7 +114,7 @@ impl UpsertKV {
         key: &str,
         seq: MatchSeq,
         value: Operation<Vec<u8>>,
-        value_meta: Option<KVMeta>,
+        value_meta: Option<MetaSpec>,
     ) -> Self {
         Self {
             key: key.to_string(),
@@ -146,17 +152,13 @@ impl UpsertKV {
     }
 
     pub fn with_expire_sec(self, expire_at_sec: u64) -> Self {
-        self.with(KVMeta {
-            expire_at: Some(expire_at_sec),
-        })
+        self.with(MetaSpec::new_expire(expire_at_sec))
     }
 
-    pub fn get_expire_at_ms(&self) -> Option<u64> {
-        if let Some(meta) = &self.value_meta {
-            meta.get_expire_at_ms()
-        } else {
-            None
-        }
+    /// Set the time to last for the value.
+    /// When the ttl is passed, the value is deleted.
+    pub fn with_ttl(self, ttl: Duration) -> Self {
+        self.with(MetaSpec::new_ttl(ttl))
     }
 }
 
@@ -167,8 +169,8 @@ impl With<MatchSeq> for UpsertKV {
     }
 }
 
-impl With<KVMeta> for UpsertKV {
-    fn with(mut self, meta: KVMeta) -> Self {
+impl With<MetaSpec> for UpsertKV {
+    fn with(mut self, meta: MetaSpec) -> Self {
         self.value_meta = Some(meta);
         self
     }
