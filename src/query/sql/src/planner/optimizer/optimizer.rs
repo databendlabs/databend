@@ -248,9 +248,7 @@ pub fn optimize_query(
     if unsafe { ctx.get_settings().get_disable_join_reorder()? } {
         return heuristic.optimize_expression(&result, &[RuleID::EliminateEvalScalar]);
     }
-    println!("result: {:?}\n", result);
     let result = heuristic.optimize_expression(&result, &RESIDUAL_RULES)?;
-    println!("result2: {:?}\n", result);
     Ok(result)
 }
 
