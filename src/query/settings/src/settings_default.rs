@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -43,6 +44,15 @@ pub enum SettingRange {
     String(Vec<&'static str>),
 }
 
+impl Display for SettingRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SettingRange::Numeric(range) => write!(f, "[{}, {}]", range.start(), range.end()),
+            SettingRange::String(values) => write!(f, "{:?}", values),
+        }
+    }
+}
+
 impl SettingRange {
     /// Checks if an integer value is within the numeric range.
     pub fn is_within_numeric_range(&self, value: u64) -> Result<()> {
@@ -51,11 +61,9 @@ impl SettingRange {
                 if range.contains(&value) {
                     Ok(())
                 } else {
-                    Err(ErrorCode::BadArguments(format!(
-                        "Value {} is not within the range [{}, {}]",
-                        value,
-                        range.start(),
-                        range.end()
+                    Err(ErrorCode::WrongValueForVariable(format!(
+                        "Value {} is not within the range {}",
+                        value, self
                     )))
                 }
             }
@@ -71,9 +79,9 @@ impl SettingRange {
             SettingRange::String(values) => {
                 match values.iter().find(|&s| s.eq_ignore_ascii_case(value)) {
                     Some(s) => Ok(s.to_string()),
-                    None => Err(ErrorCode::BadArguments(format!(
-                        "Value {} is not within the allowed values {:?}",
-                        value, values
+                    None => Err(ErrorCode::WrongValueForVariable(format!(
+                        "Value {} is not within the allowed values {:}",
+                        value, self
                     ))),
                 }
             }
@@ -697,10 +705,7 @@ impl DefaultSettings {
                 match setting_value.value {
                     // Numeric value.
                     UserSettingValue::UInt64(_) => {
-                        let u64_val = v.parse::<u64>().map_err(|_| {
-                            ErrorCode::BadArguments(format!("{} is not a valid integer value", v))
-                        })?;
-
+                        let u64_val = Self::parse_to_u64(&v)?;
                         Ok((k, UserSettingValue::UInt64(u64_val)))
                     }
                     // String value.
@@ -711,9 +716,7 @@ impl DefaultSettings {
                 match range {
                     // Numeric range.
                     SettingRange::Numeric(_) => {
-                        let u64_val = v.parse::<u64>().map_err(|_| {
-                            ErrorCode::BadArguments(format!("{} is not a valid integer value", v))
-                        })?;
+                        let u64_val = Self::parse_to_u64(&v)?;
                         range.is_within_numeric_range(u64_val)?;
 
                         Ok((k, UserSettingValue::UInt64(u64_val)))
@@ -725,6 +728,26 @@ impl DefaultSettings {
 
                         Ok((k, UserSettingValue::String(value)))
                     }
+                }
+            }
+        }
+    }
+
+    /// Parses a string value to u64.
+    /// If the value is not a valid u64, it will be parsed as f64.
+    /// Used for:
+    /// set max_memory_usage = 1024*1024*1024*1.5;
+    fn parse_to_u64(v: &str) -> Result<u64> {
+        match v.parse::<u64>() {
+            Ok(val) => Ok(val), // If it's a valid u64, use it
+            Err(_) => {
+                // If not a valid u64, try parsing as f64
+                match v.parse::<f64>() {
+                    Ok(f) if f.fract() == 0.0 && f >= 0.0 => Ok(f.trunc() as u64), /* Convert to u64 if no fractional part and non-negative */
+                    _ => Err(ErrorCode::WrongValueForVariable(format!(
+                        "{} is not a valid integer value",
+                        v
+                    ))),
                 }
             }
         }

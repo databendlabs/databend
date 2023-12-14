@@ -22,7 +22,7 @@ fn test_set_settings() {
         settings.set_max_threads(2).unwrap();
 
         let result = settings.set_max_threads(1025);
-        let expect = "BadArguments. Code: 1006, Text = max_threads: Value 1025 is not within the range [1, 1024].";
+        let expect = "WrongValueForVariable. Code: 2803, Text = max_threads: Value 1025 is not within the range [1, 1024].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
 
@@ -37,19 +37,25 @@ fn test_set_settings() {
             .set_setting("enable_table_lock".to_string(), "0".to_string())
             .unwrap();
 
-        // Error
-        let result = settings.set_setting("enable_table_lock".to_string(), "1.0".to_string());
-        let expect = "BadArguments. Code: 1006, Text = 1.0 is not a valid integer value.";
-        assert_eq!(expect, format!("{}", result.unwrap_err()));
+        // Ok with float.
+        settings
+            .set_setting("max_memory_usage".to_string(), "1610612736.0".to_string())
+            .unwrap();
+
+        // Ok with float.
+        settings
+            .set_setting("enable_table_lock".to_string(), "1.0".to_string())
+            .unwrap();
 
         // Error
         let result = settings.set_setting("enable_table_lock".to_string(), "3".to_string());
-        let expect = "BadArguments. Code: 1006, Text = Value 3 is not within the range [0, 1].";
+        let expect =
+            "WrongValueForVariable. Code: 2803, Text = Value 3 is not within the range [0, 1].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
 
         // Error
         let result = settings.set_setting("enable_table_lock".to_string(), "xx".to_string());
-        let expect = "BadArguments. Code: 1006, Text = xx is not a valid integer value.";
+        let expect = "WrongValueForVariable. Code: 2803, Text = xx is not a valid integer value.";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
 
@@ -67,7 +73,7 @@ fn test_set_settings() {
 
         // Error
         let result = settings.set_setting("query_flight_compression".to_string(), "xx".to_string());
-        let expect = "BadArguments. Code: 1006, Text = Value xx is not within the allowed values [\"None\", \"LZ4\", \"ZSTD\"].";
+        let expect = "WrongValueForVariable. Code: 2803, Text = Value xx is not within the allowed values [\"None\", \"LZ4\", \"ZSTD\"].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
 
