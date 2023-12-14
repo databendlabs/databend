@@ -16,6 +16,8 @@ use std::io;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_meta_types::cmd::CmdContext;
+use common_meta_types::cmd::MetaSpec;
 use common_meta_types::protobuf as pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
@@ -26,7 +28,6 @@ use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
 use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
-use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Node;
 use common_meta_types::SeqV;
@@ -61,6 +62,9 @@ use crate::sm_v002::SMV002;
 pub struct Applier<'a> {
     sm: &'a mut SMV002,
 
+    /// The context of the current applying log.
+    cmd_ctx: CmdContext,
+
     /// The changes has been made by the applying one log entry
     changes: Vec<Change<Vec<u8>, String>>,
 }
@@ -69,6 +73,7 @@ impl<'a> Applier<'a> {
     pub fn new(sm: &'a mut SMV002) -> Self {
         Self {
             sm,
+            cmd_ctx: CmdContext::from_millis(0),
             changes: Vec::new(),
         }
     }
@@ -82,6 +87,8 @@ impl<'a> Applier<'a> {
 
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
+
+        self.cmd_ctx = CmdContext::from_millis(log_time_ms);
 
         self.clean_expired_kvs(log_time_ms).await?;
 
@@ -208,7 +215,10 @@ impl<'a> Applier<'a> {
     ) -> Result<(Option<SeqV>, Option<SeqV>), io::Error> {
         debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
 
-        let (prev, result) = self.sm.upsert_kv_primary_index(upsert_kv).await?;
+        let (prev, result) = self
+            .sm
+            .upsert_kv_primary_index(upsert_kv, &self.cmd_ctx)
+            .await?;
 
         self.sm
             .update_expire_index(&upsert_kv.key, &prev, &result)
@@ -381,7 +391,7 @@ impl<'a> Applier<'a> {
         put: &TxnPutRequest,
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
-        let upsert = UpsertKV::update(&put.key, &put.value).with(KVMeta::new(put.expire_at));
+        let upsert = UpsertKV::update(&put.key, &put.value).with(MetaSpec::new(put.expire_at));
 
         let (prev, _result) = self.upsert_kv(&upsert).await?;
 

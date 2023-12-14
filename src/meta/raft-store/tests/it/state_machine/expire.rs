@@ -20,11 +20,11 @@ use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::ExpireKey;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::AsKeySpace;
+use common_meta_types::cmd::MetaSpec;
 use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
 use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
-use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
@@ -154,7 +154,7 @@ fn ent(index: u64, key: &str, expire: Option<u64>, time_ms: Option<u64>) -> Entr
         payload: EntryPayload::Normal(LogEntry {
             txid: None,
             time_ms,
-            cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes()).with(KVMeta::new(expire))),
+            cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes()).with(MetaSpec::new(expire))),
         }),
     }
 }

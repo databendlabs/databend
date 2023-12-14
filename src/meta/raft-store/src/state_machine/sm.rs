@@ -27,6 +27,8 @@ use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::cmd::CmdContext;
+use common_meta_types::cmd::MetaSpec;
 use common_meta_types::protobuf as pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
@@ -37,7 +39,6 @@ use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
 use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
-use common_meta_types::KVMeta;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
@@ -45,6 +46,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::SeqValue;
 use common_meta_types::StoredMembership;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteByPrefixRequest;
@@ -532,7 +534,7 @@ impl StateMachine {
     ) -> Result<(), MetaStorageError> {
         let (expired, prev, result) = Self::txn_upsert_kv(
             txn_tree,
-            &UpsertKV::update(&put.key, &put.value).with(KVMeta::new(put.expire_at)),
+            &UpsertKV::update(&put.key, &put.value).with(MetaSpec::new(put.expire_at)),
             log_time_ms,
         )?;
 
@@ -903,6 +905,8 @@ impl StateMachine {
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
     ) -> Result<(Option<SeqV>, Option<SeqV>, Option<SeqV>), MetaStorageError> {
+        let cmd_ctx = CmdContext::from_millis(log_time_ms);
+
         let kvs = txn_tree.key_space::<GenericKV>();
 
         let prev = kvs.get(&upsert_kv.key)?;
@@ -915,16 +919,26 @@ impl StateMachine {
         }
 
         let mut new_seq_v = match &upsert_kv.value {
-            Operation::Update(v) => SeqV::with_meta(0, upsert_kv.value_meta.clone(), v.clone()),
+            Operation::Update(v) => SeqV::with_meta(
+                0,
+                upsert_kv
+                    .value_meta
+                    .as_ref()
+                    .map(|x| x.to_kv_meta(&cmd_ctx)),
+                v.clone(),
+            ),
             Operation::Delete => {
                 kvs.remove(&upsert_kv.key)?;
                 return Ok((expired, prev, None));
             }
             Operation::AsIs => match prev {
                 None => return Ok((expired, prev, None)),
-                Some(ref prev_kv_value) => {
-                    prev_kv_value.clone().set_meta(upsert_kv.value_meta.clone())
-                }
+                Some(ref prev_kv_value) => prev_kv_value.clone().set_meta(
+                    upsert_kv
+                        .value_meta
+                        .as_ref()
+                        .map(|m| m.to_kv_meta(&cmd_ctx)),
+                ),
             },
         };
 

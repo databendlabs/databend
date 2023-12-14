@@ -21,10 +21,11 @@
 mod applied_state;
 mod change;
 mod cluster;
-mod cmd;
+pub mod cmd;
 pub mod config;
 mod endpoint;
 pub mod errors;
+mod eval_expire_time;
 mod grpc_config;
 mod log_entry;
 mod match_seq;
@@ -36,6 +37,7 @@ mod raft_types;
 mod seq_errors;
 mod seq_num;
 mod seq_value;
+mod time;
 mod with;
 
 mod proto_display;
@@ -74,6 +76,7 @@ pub use errors::meta_network_errors::MetaNetworkError;
 pub use errors::meta_network_errors::MetaNetworkResult;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
+pub use eval_expire_time::EvalExpireTime;
 pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
@@ -104,6 +107,8 @@ pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
 pub use seq_value::SeqValue;
+pub use time::Interval;
+pub use time::Time;
 pub use with::With;
 
 pub use crate::raft_snapshot_data::SnapshotData;

@@ -41,9 +41,9 @@ use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
+use common_meta_types::cmd::MetaSpec;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::InvalidReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeq::Any;
 use common_meta_types::MetaError;
@@ -243,7 +243,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(KVMeta::new_expire(req.expire_at)),
+                Some(MetaSpec::new_expire(req.expire_at)),
             ))
             .await?;
         // confirm a successful update
