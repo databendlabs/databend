@@ -1935,6 +1935,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-format", value_name = "VALUE", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
+
+    /// Log file max
+    #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
+    #[serde(rename = "limit")]
+    pub file_limit: usize,
 }
 
 impl Default for FileLogConfig {
@@ -1952,6 +1957,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
+            limit: self.file_limit,
         })
     }
 }
@@ -1963,6 +1969,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_level: inner.level,
             file_dir: inner.dir,
             file_format: inner.format,
+            file_limit: inner.limit,
         }
     }
 }
