@@ -565,7 +565,7 @@ statement ok
 insert into target_test values(1,'a'),(2,'b'),(3,'c');
 
 statement ok
-create table source_test(a int,b string,delete_flag bool) cluster by(a,b);;
+create table source_test(a int,b string,delete_flag bool) cluster by(a,b);
 
 statement ok
 insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
