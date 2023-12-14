@@ -13,14 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -40,14 +37,14 @@ use common_pipeline_core::processors::Event;
 use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::sort::utils::find_bigger_child_of_root;
 use common_pipeline_transforms::processors::sort::CommonRows;
-use common_pipeline_transforms::processors::sort::Cursor;
 use common_pipeline_transforms::processors::sort::DateRows;
+use common_pipeline_transforms::processors::sort::HeapMerger;
 use common_pipeline_transforms::processors::sort::Rows;
 use common_pipeline_transforms::processors::sort::SimpleRows;
 use common_pipeline_transforms::processors::sort::SortSpillMeta;
 use common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
+use common_pipeline_transforms::processors::sort::SortedStream;
 use common_pipeline_transforms::processors::sort::StringRows;
 use common_pipeline_transforms::processors::sort::TimestampRows;
 
@@ -326,7 +323,7 @@ where R: Rows + Sync + Send + 'static
             streams.push(stream);
         }
 
-        let mut merger = Merger::<R>::create(
+        let mut merger = HeapMerger::<R, BlockStream>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
@@ -334,7 +331,7 @@ where R: Rows + Sync + Send + 'static
         );
 
         let mut spilled = VecDeque::new();
-        while let Some(block) = merger.next().await? {
+        while let (Some(block), _) = merger.async_next_block().await? {
             let ins = Instant::now();
             let (location, bytes) = self.spiller.spill_block(block).await?;
 
@@ -358,8 +355,9 @@ enum BlockStream {
     Block(Option<DataBlock>),
 }
 
-impl BlockStream {
-    async fn next(&mut self) -> Result<Option<DataBlock>> {
+#[async_trait::async_trait]
+impl SortedStream for BlockStream {
+    async fn async_next(&mut self) -> Result<(Option<DataBlock>, bool)> {
         let block = match self {
             BlockStream::Block(block) => block.take(),
             BlockStream::Spilled((files, spiller)) => {
@@ -380,149 +378,7 @@ impl BlockStream {
                 }
             }
         };
-        Ok(block)
-    }
-}
-
-/// A merge sort operator to merge multiple sorted streams.
-///
-/// TODO: reuse this operator in other places such as `TransformMultiSortMerge` and `TransformSortMerge`.
-struct Merger<R: Rows> {
-    schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
-    unsorted_streams: Vec<BlockStream>,
-    heap: BinaryHeap<Reverse<Cursor<R>>>,
-    buffer: Vec<DataBlock>,
-    pending_stream: VecDeque<usize>,
-    batch_size: usize,
-}
-
-impl<R: Rows> Merger<R> {
-    fn create(
-        schema: DataSchemaRef,
-        streams: Vec<BlockStream>,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
-        batch_size: usize,
-    ) -> Self {
-        // We only create a merger when there are at least two streams.
-        debug_assert!(streams.len() > 1);
-        let heap = BinaryHeap::with_capacity(streams.len());
-        let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
-        let pending_stream = (0..streams.len()).collect();
-
-        Self {
-            schema,
-            unsorted_streams: streams,
-            heap,
-            buffer,
-            batch_size,
-            sort_desc,
-            pending_stream,
-        }
-    }
-
-    // This method can only be called when there is no data of the stream in the heap.
-    async fn poll_pending_stream(&mut self) -> Result<()> {
-        while let Some(i) = self.pending_stream.pop_front() {
-            debug_assert!(self.buffer[i].is_empty());
-            if let Some(block) = self.unsorted_streams[i].next().await? {
-                let order_col = block.columns().last().unwrap().value.as_column().unwrap();
-                let rows = R::from_column(order_col.clone(), &self.sort_desc)
-                    .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
-                let cursor = Cursor::new(i, rows);
-                self.heap.push(Reverse(cursor));
-                self.buffer[i] = block;
-            }
-        }
-        Ok(())
-    }
-
-    async fn next(&mut self) -> Result<Option<DataBlock>> {
-        if !self.pending_stream.is_empty() {
-            self.poll_pending_stream().await?;
-        }
-
-        if self.heap.is_empty() {
-            return Ok(None);
-        }
-
-        let mut num_rows = 0;
-
-        // (input_index, row_start, count)
-        let mut output_indices = Vec::new();
-        let mut temp_sorted_blocks = Vec::new();
-
-        while let Some(Reverse(cursor)) = self.heap.peek() {
-            let mut cursor = cursor.clone();
-            if self.heap.len() == 1 {
-                let start = cursor.row_index;
-                let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
-                num_rows += count;
-                cursor.row_index += count;
-                output_indices.push((cursor.input_index, start, count));
-            } else {
-                let next_cursor = &find_bigger_child_of_root(&self.heap).0;
-                if cursor.last().le(&next_cursor.current()) {
-                    // Short Path:
-                    // If the last row of current block is smaller than the next cursor,
-                    // we can drain the whole block.
-                    let start = cursor.row_index;
-                    let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
-                    num_rows += count;
-                    cursor.row_index += count;
-                    output_indices.push((cursor.input_index, start, count));
-                } else {
-                    // We copy current cursor for advancing,
-                    // and we will use this copied cursor to update the top of the heap at last
-                    // (let heap adjust itself without popping and pushing any element).
-                    let start = cursor.row_index;
-                    while !cursor.is_finished()
-                        && cursor.le(next_cursor)
-                        && num_rows < self.batch_size
-                    {
-                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                        num_rows += 1;
-                        cursor.advance();
-                    }
-                    output_indices.push((cursor.input_index, start, cursor.row_index - start));
-                }
-            }
-
-            if !cursor.is_finished() {
-                // Update the top of the heap.
-                // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
-                // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-                self.heap.peek_mut().unwrap().0 = cursor;
-            } else {
-                // Pop the current `cursor`.
-                self.heap.pop();
-                // We have read all rows of this block, need to release the old memory and read a new one.
-                let temp_block = DataBlock::take_by_slices_limit_from_blocks(
-                    &self.buffer,
-                    &output_indices,
-                    None,
-                );
-                self.buffer[cursor.input_index] = DataBlock::empty_with_schema(self.schema.clone());
-                temp_sorted_blocks.push(temp_block);
-                output_indices.clear();
-                self.pending_stream.push_back(cursor.input_index);
-                self.poll_pending_stream().await?;
-            }
-
-            if num_rows == self.batch_size {
-                break;
-            }
-        }
-
-        if !output_indices.is_empty() {
-            let block =
-                DataBlock::take_by_slices_limit_from_blocks(&self.buffer, &output_indices, None);
-            temp_sorted_blocks.push(block);
-        }
-
-        let block = DataBlock::concat(&temp_sorted_blocks)?;
-        debug_assert!(block.num_rows() <= self.batch_size);
-        Ok(Some(block))
+        Ok((block, false))
     }
 }
 
@@ -612,6 +468,7 @@ mod tests {
     use common_pipeline_core::processors::InputPort;
     use common_pipeline_core::processors::OutputPort;
     use common_pipeline_transforms::processors::sort::SimpleRows;
+    use common_pipeline_transforms::processors::sort::SortedStream;
     use common_storage::DataOperator;
     use itertools::Itertools;
     use rand::rngs::ThreadRng;
@@ -737,8 +594,13 @@ mod tests {
         ));
 
         let mut result = Vec::new();
-        while let Some(block) = block_stream.next().await? {
-            result.push(block);
+
+        loop {
+            let (block, _) = block_stream.async_next().await?;
+            if block.is_none() {
+                break;
+            }
+            result.push(block.unwrap());
         }
 
         let result = pretty_format_blocks(&result).unwrap();
