@@ -89,6 +89,7 @@ async fn main() {
             level: config.log_level.clone(),
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
+            limit: 48,
         },
         stderr: StderrConfig {
             on: true,
