@@ -737,13 +737,15 @@ impl DefaultSettings {
     /// If the value is not a valid u64, it will be parsed as f64.
     /// Used for:
     /// set max_memory_usage = 1024*1024*1024*1.5;
-    fn parse_to_u64(v: &str) -> Result<u64> {
+    fn parse_to_u64(v: &str) -> Result<u64, ErrorCode> {
         match v.parse::<u64>() {
-            Ok(val) => Ok(val), // If it's a valid u64, use it
+            Ok(val) => Ok(val),
             Err(_) => {
                 // If not a valid u64, try parsing as f64
                 match v.parse::<f64>() {
-                    Ok(f) if f.fract() == 0.0 && f >= 0.0 => Ok(f.trunc() as u64), /* Convert to u64 if no fractional part and non-negative */
+                    Ok(f) if f.fract() == 0.0 && f >= 0.0 && f <= u64::MAX as f64 => {
+                        Ok(f.trunc() as u64) /* Convert to u64 if no fractional part, non-negative, and within u64 range */
+                    }
                     _ => Err(ErrorCode::WrongValueForVariable(format!(
                         "{} is not a valid integer value",
                         v
