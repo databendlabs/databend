@@ -2667,6 +2667,7 @@ dependencies = [
  "once_cell",
  "serde",
  "sys-info",
+ "tokio",
 ]
 
 [[package]]
