@@ -220,7 +220,7 @@ pub fn init_logging(
     if cfg.profile.on {
         if !cfg.profile.dir.is_empty() {
             let (profile_log_file, flush_guard) =
-                new_file_log_writer(&cfg.profile.dir, name, cfg.file.limit);
+                new_file_log_writer(&cfg.profile.dir, log_name, cfg.file.limit);
             guards.push(Box::new(flush_guard));
             profile_logger =
                 profile_logger.chain(Box::new(profile_log_file) as Box<dyn Write + Send>);
