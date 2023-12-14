@@ -88,7 +88,7 @@ impl OptimizerContext {
 /// A recursive optimizer that will apply the given rules recursively.
 /// It will keep applying the rules on the substituted expression
 /// until no more rules can be applied.
-struct RecursiveOptimizer<'a> {
+pub struct RecursiveOptimizer<'a> {
     ctx: &'a OptimizerContext,
     rules: &'static [RuleID],
 }

@@ -39,6 +39,7 @@ pub use memo::Memo;
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer::OptimizerContext;
+pub use optimizer::RecursiveOptimizer;
 pub use pattern_extractor::PatternExtractor;
 pub use property::*;
 pub use rule::agg_index;
