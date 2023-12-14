@@ -645,7 +645,7 @@ select count(*) from tt1;
 
 ## test issue #13367
 statement ok
-create table tt2(a bool, b variant, c map(string, string)) cluster by(a,b);
+create table tt2(a bool, b variant, c map(string, string)) cluster by(a,c);
 
 statement ok
 insert into tt2 values (true, '10', {'k1':'v1'}), (false, '20', {'k2':'v2'})
