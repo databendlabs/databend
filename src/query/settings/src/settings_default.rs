@@ -636,6 +636,7 @@ impl DefaultSettings {
                     desc: "Refresh virtual column after new data written",
                     possible_values: None,
                     mode: SettingMode::Both,
+                    range: None,
                 }),
             ]);
 
