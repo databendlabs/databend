@@ -374,6 +374,7 @@ impl PipelineBuilder {
             segments,
             distributed,
             merge_type,
+            change_join_order,
             ..
         } = merge_into;
 
@@ -458,7 +459,10 @@ impl PipelineBuilder {
             }
 
             if need_unmatch {
-                if !*distributed {
+                // distributed: false, standalone mode, we need to add insert processor
+                // (distirbuted,change join order):(true,true) target is build side, we
+                // need to support insert in local node.
+                if !*distributed || *distributed && *change_join_order {
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
                         input.output_schema()?,
@@ -545,6 +549,7 @@ impl PipelineBuilder {
                 self.resize_row_id(2)?;
             }
         } else {
+            // I. if change_join_order is false, it means source is build side.
             // the complete pipeline(with matched and unmatched) below:
             // shuffle outputs and resize row_id
             // ----------------------------------------------------------------------
@@ -559,6 +564,22 @@ impl PipelineBuilder {
             // ......                           .....
             // ----------------------------------------------------------------------
             // 1.for matched only, there is no row_number
+            // 2.for unmatched only/insert only, there is no row_id and matched data.
+            // II. if change_join_order is true, it means target is build side.
+            // the complete pipeline(with matched and unmatched) below:
+            // shuffle outputs and resize row_id
+            // ----------------------------------------------------------------------
+            // row_id port0_1              row_id port0_1              row_id port
+            // matched data port0_2        row_id port1_1            matched data port0_2
+            // unmatched port0_3           matched data port0_2      matched data port1_2
+            // row_id port1_1              matched data port1_2          ......
+            // matched data port1_2  ===>       .....           ====>    ......
+            // unmatched port1_3                .....                    ......
+            //                            unmatched port0_3          unmatched port
+            // ......                     unmatched port1_3
+            // ......                           .....
+            // ----------------------------------------------------------------------
+            // 1.for matched only, there is no unmatched port
             // 2.for unmatched only/insert only, there is no row_id and matched data.
             // do shuffle
             let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
@@ -580,7 +601,7 @@ impl PipelineBuilder {
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
             } else if !need_match && need_unmatch {
-                // insert-only, there are only row_numbers
+                // insert-only, there are only row_numbers/unmatched ports
                 self.main_pipeline.try_resize(1)?;
             }
         }
@@ -594,13 +615,23 @@ impl PipelineBuilder {
             }
         } else if need_match && need_unmatch {
             // remove first row_id port and last row_number_port
-            self.main_pipeline.output_len() - 2
+            if !*change_join_order {
+                self.main_pipeline.output_len() - 2
+            } else {
+                // remove first row_id port
+                self.main_pipeline.output_len() - 1
+            }
         } else if need_match && !need_unmatch {
             // remove first row_id port
             self.main_pipeline.output_len() - 1
         } else {
-            // there are only row_number ports
-            0
+            // there are only row_number
+            if !*change_join_order {
+                0
+            } else {
+                // unmatched prot
+                1
+            }
         };
 
         // fill default columns
@@ -628,7 +659,7 @@ impl PipelineBuilder {
                     // receive row_id
                     builder.add_items_prepend(vec![create_dummy_item()]);
                 }
-                if need_unmatch {
+                if need_unmatch && !*change_join_order {
                     // receive row_number
                     builder.add_items(vec![create_dummy_item()]);
                 }
@@ -683,11 +714,21 @@ impl PipelineBuilder {
             mid_len
         } else {
             let (mid_len, last_len) = if need_match && need_unmatch {
-                // with row_id and row_number
-                (output_lens - 2, 1)
+                if !*change_join_order {
+                    // with row_id and row_number
+                    (output_lens - 2, 1)
+                } else {
+                    // with row_id
+                    (output_lens - 1, 0)
+                }
             } else {
-                // (with row_id and without row_number) or (without row_id and with row_number)
-                (output_lens - 1, 0)
+                if *change_join_order && !need_match && need_unmatch {
+                    // insert only
+                    (output_lens, 0)
+                } else {
+                    // (with row_id and without row_number/unmatched) or (without row_id and with row_number/unmatched)
+                    (output_lens - 1, 0)
+                }
             };
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
@@ -701,12 +742,17 @@ impl PipelineBuilder {
         pipe_items.clear();
 
         if need_match {
-            pipe_items.push(table.rowid_aggregate_mutator(
-                self.ctx.clone(),
-                block_builder,
-                io_request_semaphore,
-                segments.clone(),
-            )?);
+            // rowid should be accumulated in main node.
+            if *change_join_order && *distributed {
+                pipe_items.push(create_dummy_item())
+            } else {
+                pipe_items.push(table.rowid_aggregate_mutator(
+                    self.ctx.clone(),
+                    block_builder,
+                    io_request_semaphore,
+                    segments.clone(),
+                )?);
+            }
         }
 
         for _ in 0..serialize_len {
@@ -722,7 +768,7 @@ impl PipelineBuilder {
         }
 
         // receive row_number
-        if *distributed && need_unmatch {
+        if *distributed && need_unmatch && !*change_join_order {
             pipe_items.push(create_dummy_item());
         }
 
@@ -732,6 +778,7 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
+        // complete pipeline(if change_join_order is true, there is no row_number_port):
         // resize block ports
         // aggregate_mutator port/dummy_item port               aggregate_mutator port/ dummy_item (this depends on apply_row_id)
         // serialize_block port0                    ======>
@@ -757,7 +804,7 @@ impl PipelineBuilder {
         }
 
         // with row_number
-        if *distributed && need_unmatch {
+        if *distributed && need_unmatch && !change_join_order {
             ranges.push(vec![self.main_pipeline.output_len() - 1]);
         }
 
@@ -781,13 +828,14 @@ impl PipelineBuilder {
                 vec.push(serialize_segment_transform.into_pipe_item());
             }
 
-            if need_unmatch {
+            if need_unmatch && !*change_join_order {
                 vec.push(create_dummy_item())
             }
             vec
         };
 
         // the complete pipeline(with matched and unmatched) below:
+        // I. change_join_order: false
         // distributed: false
         //      output_port0: MutationLogs
         //      output_port1: MutationLogs
@@ -797,7 +845,16 @@ impl PipelineBuilder {
         //      output_port1: MutationLogs
         //      output_port2: row_numbers
         // 1.for matched only, there are no row_numbers
-        // 2.for insert only, there is no output_port0.
+        // 2.for insert only, there is no output_port0,output_port1.
+        // II. change_join_order: true
+        // distributed: false
+        //      output_port0: MutationLogs
+        //      output_port1: MutationLogs
+        //
+        // distributed: true
+        //      output_port0: rowid
+        //      output_port1: MutationLogs
+        // 1.for insert only, there is no output_port0.
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
@@ -805,7 +862,7 @@ impl PipelineBuilder {
         ));
 
         // accumulate row_number
-        if *distributed && need_unmatch {
+        if *distributed && need_unmatch && !*change_join_order {
             let pipe_items = if need_match {
                 vec![
                     create_dummy_item(),
