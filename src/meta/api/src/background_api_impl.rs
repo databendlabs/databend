@@ -243,9 +243,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(KVMeta {
-                    expire_at: Some(req.expire_at),
-                }),
+                Some(KVMeta::new_expire(req.expire_at)),
             ))
             .await?;
         // confirm a successful update
