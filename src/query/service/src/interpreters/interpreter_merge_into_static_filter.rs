@@ -486,11 +486,8 @@ impl MergeIntoInterpreter {
         {
             SExpr::create_unary(
                 Arc::new(eval_source_side_join_expr_op.into()),
-                Arc::new(SExpr::create_unary(
-                    // there is another row_number operator here
-                    Arc::new(RelOperator::Exchange(common_sql::plans::Exchange::Merge)),
-                    Arc::new(source_plan.child(0)?.child(0)?.clone()),
-                )),
+                // there is another row_number operator here
+                Arc::new(source_plan.child(0)?.child(0)?.clone()),
             )
         } else {
             SExpr::create_unary(
@@ -522,8 +519,13 @@ impl MergeIntoInterpreter {
             limit: None,
             grouping_sets: None,
         };
-        let agg_final_sexpr =
-            SExpr::create_unary(Arc::new(agg_final_op.into()), Arc::new(agg_partial_sexpr));
+        let agg_final_sexpr = SExpr::create_unary(
+            Arc::new(agg_final_op.into()),
+            Arc::new(SExpr::create_unary(
+                Arc::new(RelOperator::Exchange(common_sql::plans::Exchange::Merge)),
+                Arc::new(agg_partial_sexpr),
+            )),
+        );
         Ok(Plan::Query {
             s_expr: Box::new(agg_final_sexpr),
             metadata: metadata.clone(),
