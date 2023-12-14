@@ -109,7 +109,6 @@ impl DefaultSettings {
                 ("enable_clickhouse_handler", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables clickhouse handler.",
-                    possible_values: None,
                     mode: SettingMode::Both,
                     range: None,
                 }),
