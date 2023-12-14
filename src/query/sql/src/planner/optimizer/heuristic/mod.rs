@@ -17,6 +17,7 @@ mod decorrelate;
 mod heuristic;
 mod subquery_rewriter;
 
+pub use decorrelate::decorrelate_subquery;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;
 pub use heuristic::RESIDUAL_RULES;
