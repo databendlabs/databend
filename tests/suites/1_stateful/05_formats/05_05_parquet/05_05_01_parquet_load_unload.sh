@@ -28,7 +28,7 @@ test_format() {
 	insert_data
 
 	# unload clickhouse
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.parquet
 
 	echo "truncate table test_load_unload" | $BENDSQL_CLIENT_CONNECT
@@ -39,7 +39,7 @@ test_format() {
 	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 
 	# unload clickhouse again
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.parquet
 
 	echo "truncate table test_load_unload" | $BENDSQL_CLIENT_CONNECT
@@ -48,7 +48,7 @@ test_format() {
 	echo "copy into test_load_unload from 'fs:///tmp/test_load_unload.parquet' file_format = (type = ${1});" | $BENDSQL_CLIENT_CONNECT
 
 	# unload clickhouse again
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload3.parquet
 
 	# copy into stage
@@ -58,7 +58,7 @@ test_format() {
 	echo "copy into @data_fs from test_load_unload file_format = (type = ${1});" | $BENDSQL_CLIENT_CONNECT
 
 	# unload clickhouse again from stage
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_clickhouse_handler=1" \
 	-d "select * from @data_fs FORMAT ${1}" > /tmp/test_load_unload4.parquet
 
 	diff /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet

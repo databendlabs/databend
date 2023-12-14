@@ -106,6 +106,13 @@ impl DefaultSettings {
             let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
+                ("enable_clickhouse_handler", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables clickhouse handler.",
+                    possible_values: None,
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
