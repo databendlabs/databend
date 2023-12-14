@@ -52,8 +52,10 @@ impl SettingRange {
                     Ok(())
                 } else {
                     Err(ErrorCode::BadArguments(format!(
-                        "Value {} is not within the range {:?}",
-                        value, range
+                        "Value {} is not within the range [{}, {}]",
+                        value,
+                        range.start(),
+                        range.end()
                     )))
                 }
             }
@@ -222,13 +224,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables dphyp join order algorithm.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_cbo", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables cost-based optimization.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -248,7 +250,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -309,7 +311,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables generating a bushy join plan with the optimizer.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -340,7 +342,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("hive_parquet_chunk_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16384),
@@ -409,7 +411,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables table lock if necessary (enabled by default).",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
@@ -433,19 +435,19 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of copy into.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable experimental merge into.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed merge into.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("merge_into_static_filter_partition_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1500),
@@ -457,43 +459,43 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of replace into.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table compaction.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable scanning aggregating index data while querying.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables re-clustering after write(copy/replace-into).",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_replace_into_partitioning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_replace_into_bloom_pruning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables bloom pruning for replace-into statement.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
@@ -518,7 +520,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Refresh aggregating index after new data written",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -530,7 +532,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables recording query profile",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("recluster_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(recluster_block_size),
@@ -542,13 +544,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table recluster.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_parquet_page_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet page index",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("enable_parquet_rowgroup_pruning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -572,7 +574,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
@@ -584,7 +586,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting disables stage and udf privilege check(disable by default).",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
                 ("create_query_flight_client_with_current_rt", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -602,7 +604,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Refresh virtual column after new data written",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: None,
                 }),
             ]);
 

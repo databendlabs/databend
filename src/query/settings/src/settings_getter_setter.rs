@@ -87,7 +87,7 @@ impl Settings {
                         if let Some(range) = &default_val.range {
                             // Check if the value falls within the numeric range
                             range.is_within_numeric_range(val).map_err(|err| {
-                                ErrorCode::BadArguments(format!("{}: {}", key, err))
+                                ErrorCode::BadArguments(format!("{}: {}", key, err.message()))
                             })?;
                         }
 

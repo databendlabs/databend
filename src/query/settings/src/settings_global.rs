@@ -25,7 +25,6 @@ use log::warn;
 use crate::settings::ChangeValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
-use crate::settings_default::SettingRange;
 use crate::ScopeLevel;
 
 impl Settings {
@@ -96,49 +95,16 @@ impl Settings {
                         warn!("Ignore deprecated global setting {} = {}", name, val);
                         continue;
                     }
-                    Some(default_setting_value) => {
-                        // Check if the setting value is valid based on the defined range
-                        let validation_result = match &default_setting_value.range {
-                            Some(SettingRange::Numeric(_)) => match val.parse::<u64>() {
-                                Ok(num) => default_setting_value
-                                    .range
-                                    .as_ref()
-                                    .ok_or_else(|| "Range not set correctly".to_string())
-                                    .and_then(|range| {
-                                        range
-                                            .is_within_numeric_range(num)
-                                            .map_err(|err| err.to_string())
-                                    }),
-                                Err(_) => Err("Value is not a valid u64".to_string()),
-                            },
-                            Some(SettingRange::String(_)) => default_setting_value
-                                .range
-                                .as_ref()
-                                .ok_or_else(|| "Range not set correctly".to_string())
-                                .and_then(|range| {
-                                    range
-                                        .is_within_string_range(&val)
-                                        .map_err(|err| err.to_string())
-                                }),
-                            None => Ok(()),
-                        };
-
-                        if let Err(err) = validation_result {
-                            warn!("Ignore invalid global setting {} = {}: {}", name, val, err);
-                            continue;
-                        }
-
-                        match &default_setting_value.value {
-                            UserSettingValue::UInt64(_) => ChangeValue {
-                                level: ScopeLevel::Global,
-                                value: UserSettingValue::UInt64(val.parse::<u64>()?),
-                            },
-                            UserSettingValue::String(_) => ChangeValue {
-                                level: ScopeLevel::Global,
-                                value: UserSettingValue::String(val.clone()),
-                            },
-                        }
-                    }
+                    Some(default_setting_value) => match &default_setting_value.value {
+                        UserSettingValue::UInt64(_) => ChangeValue {
+                            level: ScopeLevel::Global,
+                            value: UserSettingValue::UInt64(val.parse::<u64>()?),
+                        },
+                        UserSettingValue::String(_) => ChangeValue {
+                            level: ScopeLevel::Global,
+                            value: UserSettingValue::String(val.clone()),
+                        },
+                    },
                 });
         }
 
