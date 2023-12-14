@@ -79,11 +79,16 @@ impl Interpreter for DropViewInterpreter {
             }
 
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let db = catalog
+                .get_database(&self.plan.tenant, &self.plan.database)
+                .await?;
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
                     tenant: self.plan.tenant.clone(),
+                    table_name: self.plan.view_name.clone(),
                     tb_id: table.get_id(),
+                    db_id: db.get_db_info().ident.db_id,
                 })
                 .await?;
         };

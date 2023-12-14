@@ -40,9 +40,7 @@ impl KvApiCommand {
                 let req = UpsertKVReq::update(config.key[0].as_str(), config.value.as_bytes());
 
                 let req = if let Some(expire_after) = config.expire_after {
-                    req.with(KVMeta {
-                        expire_at: Some(SeqV::<()>::now_ms() / 1000 + expire_after),
-                    })
+                    req.with(KVMeta::new_expire(SeqV::<()>::now_sec() + expire_after))
                 } else {
                     req
                 };

@@ -491,6 +491,10 @@ pub struct DropTableByIdReq {
     pub tenant: String,
 
     pub tb_id: MetaId,
+
+    pub table_name: String,
+
+    pub db_id: MetaId,
 }
 
 impl DropTableByIdReq {

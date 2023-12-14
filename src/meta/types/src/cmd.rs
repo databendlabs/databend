@@ -153,7 +153,7 @@ impl UpsertKV {
 
     pub fn get_expire_at_ms(&self) -> Option<u64> {
         if let Some(meta) = &self.value_meta {
-            meta.expire_at.map(|x| x * 1000)
+            meta.get_expire_at_ms()
         } else {
             None
         }
