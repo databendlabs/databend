@@ -70,7 +70,21 @@ impl Operator for Sort {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        rel_expr.derive_relational_prop_child(0)
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        let output_columns = input_prop.output_columns.clone();
+        let outer_columns = input_prop.outer_columns.clone();
+        let used_columns = input_prop.used_columns.clone();
+
+        // Derive orderings
+        let orderings = self.items.clone();
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+            orderings,
+        }))
     }
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
