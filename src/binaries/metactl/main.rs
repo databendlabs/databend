@@ -118,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
             level: config.log_level.clone(),
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
+            limit: 48,
         },
         ..Default::default()
     };
