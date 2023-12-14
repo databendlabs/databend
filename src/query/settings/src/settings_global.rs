@@ -58,23 +58,16 @@ impl Settings {
 
     #[async_backtrace::framed]
     pub async fn set_global_setting(&self, k: String, v: String) -> Result<()> {
-        if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
-            self.changes.insert(key.clone(), ChangeValue {
-                value: value.clone(),
-                level: ScopeLevel::Global,
-            });
+        let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
+        self.changes.insert(key.clone(), ChangeValue {
+            value: value.clone(),
+            level: ScopeLevel::Global,
+        });
 
-            UserApiProvider::instance()
-                .set_setting(&self.tenant, UserSetting { name: key, value })
-                .await?;
-
-            return Ok(());
-        }
-
-        Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            k
-        )))
+        UserApiProvider::instance()
+            .set_setting(&self.tenant, UserSetting { name: key, value })
+            .await?;
+        Ok(())
     }
 
     #[async_backtrace::framed]

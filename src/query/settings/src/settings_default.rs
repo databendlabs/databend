@@ -686,53 +686,48 @@ impl DefaultSettings {
     }
 
     /// Converts and validates a setting value based on its key.
-    ///
-    /// # Arguments
-    /// * `k` - The key of the setting.
-    /// * `v` - The value of the setting to be validated and converted.
-    ///
-    /// # Returns
-    /// * A result containing a tuple of the key and an optional `UserSettingValue` if valid, or an error.
-    pub fn convert_value(k: String, v: String) -> Result<(String, Option<UserSettingValue>)> {
+    pub fn convert_value(k: String, v: String) -> Result<(String, UserSettingValue)> {
         // Retrieve the default settings instance
         let default_settings = DefaultSettings::instance()?;
 
-        // Match the setting key with the settings definition
-        match default_settings.settings.get(&k) {
-            // Return None for keys that are not found in the settings
-            None => Ok((k, None)),
+        let setting_value = default_settings
+            .settings
+            .get(&k)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", k)))?;
 
-            // Process the setting value for found keys
-            Some(setting_value) => {
-                match &setting_value.range {
-                    None => Ok((k, None)),
-                    Some(range) => {
-                        match range {
-                            // Numeric range.
-                            SettingRange::Numeric(_) => {
-                                // Attempt to parse the value as an unsigned 64-bit integer
-                                let u64_val = v.parse::<u64>().map_err(|_| {
-                                    ErrorCode::BadArguments(format!(
-                                        "{} is not a valid u64 value",
-                                        v
-                                    ))
-                                })?;
-                                range.is_within_numeric_range(u64_val)?;
+        match &setting_value.range {
+            None => {
+                match setting_value.value {
+                    // Numeric value.
+                    UserSettingValue::UInt64(_) => {
+                        let u64_val = v.parse::<u64>().map_err(|_| {
+                            ErrorCode::BadArguments(format!("{} is not a valid u64 value", v))
+                        })?;
 
-                                // Return the key and value if valid
-                                Ok((k, Some(UserSettingValue::UInt64(u64_val))))
-                            }
-                            // String range.
-                            SettingRange::String(_) => {
-                                // Convert the value to lowercase for case-insensitive comparison
-                                let val_lower = v.to_lowercase();
+                        Ok((k, UserSettingValue::UInt64(u64_val)))
+                    }
+                    // String value.
+                    UserSettingValue::String(_) => Ok((k, UserSettingValue::String(v))),
+                }
+            }
+            Some(range) => {
+                match range {
+                    // Numeric range.
+                    SettingRange::Numeric(_) => {
+                        let u64_val = v.parse::<u64>().map_err(|_| {
+                            ErrorCode::BadArguments(format!("{} is not a valid u64 value", v))
+                        })?;
+                        range.is_within_numeric_range(u64_val)?;
 
-                                range.is_within_string_range(&val_lower)?;
+                        Ok((k, UserSettingValue::UInt64(u64_val)))
+                    }
+                    // String range.
+                    SettingRange::String(_) => {
+                        // Convert the value to lowercase for case-insensitive comparison
+                        let val_lower = v.to_lowercase();
+                        range.is_within_string_range(&val_lower)?;
 
-                                // Return the key and value if valid
-                                Ok((k, Some(UserSettingValue::String(v))))
-                            }
-                        }
+                        Ok((k, UserSettingValue::String(v)))
                     }
                 }
             }
