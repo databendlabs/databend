@@ -25,6 +25,7 @@ use log::warn;
 use crate::settings::ChangeValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
+use crate::settings_default::SettingRange;
 use crate::ScopeLevel;
 
 impl Settings {
@@ -96,14 +97,34 @@ impl Settings {
                         continue;
                     }
                     Some(default_setting_value) => {
-                        if !default_setting_value
-                            .possible_values
-                            .as_ref()
-                            .map(|values| values.iter().any(|v| v.eq_ignore_ascii_case(&val)))
-                            .unwrap_or(true)
-                        {
-                            // the settings may be deprecated
-                            warn!("Ignore invalid global setting {} = {}", name, val);
+                        // Check if the setting value is valid based on the defined range
+                        let validation_result = match &default_setting_value.range {
+                            Some(SettingRange::Numeric(_)) => match val.parse::<u64>() {
+                                Ok(num) => default_setting_value
+                                    .range
+                                    .as_ref()
+                                    .ok_or_else(|| "Range not set correctly".to_string())
+                                    .and_then(|range| {
+                                        range
+                                            .is_within_numeric_range(num)
+                                            .map_err(|err| err.to_string())
+                                    }),
+                                Err(_) => Err("Value is not a valid u64".to_string()),
+                            },
+                            Some(SettingRange::String(_)) => default_setting_value
+                                .range
+                                .as_ref()
+                                .ok_or_else(|| "Range not set correctly".to_string())
+                                .and_then(|range| {
+                                    range
+                                        .is_within_string_range(&val)
+                                        .map_err(|err| err.to_string())
+                                }),
+                            None => Ok(()),
+                        };
+
+                        if let Err(err) = validation_result {
+                            warn!("Ignore invalid global setting {} = {}: {}", name, val, err);
                             continue;
                         }
 
