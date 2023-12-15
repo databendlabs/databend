@@ -213,6 +213,7 @@ impl<R: Rows> TransformSortMerge<R> {
             streams,
             self.sort_desc.clone(),
             batch_size,
+            None,
         );
 
         while let (Some(block), _) = merger.next_block()? {

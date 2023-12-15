@@ -329,6 +329,7 @@ where R: Rows + Sync + Send + 'static
             streams,
             self.sort_desc.clone(),
             self.batch_size,
+            None,
         );
 
         let mut spilled = VecDeque::new();

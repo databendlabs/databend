@@ -56,6 +56,7 @@ where
     buffer: Vec<DataBlock>,
     pending_stream: VecDeque<usize>,
     batch_size: usize,
+    limit: Option<usize>,
 
     temp_sorted_num_rows: usize,
     temp_output_indices: Vec<(usize, usize, usize)>,
@@ -72,6 +73,7 @@ where
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_size: usize,
+        limit: Option<usize>,
     ) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
@@ -86,6 +88,7 @@ where
             heap,
             buffer,
             batch_size,
+            limit,
             sort_desc,
             pending_stream,
             temp_sorted_num_rows: 0,
@@ -138,12 +141,14 @@ where
 
     /// To evaluate the current cursor, and update the top of the heap if necessary.
     /// This method can only be called when iterating the heap.
+    ///
+    /// Return `true` if the batch is full (need to output).
     #[inline(always)]
-    fn evaluate_cursor(&mut self, mut cursor: Cursor<R>) {
+    fn evaluate_cursor(&mut self, mut cursor: Cursor<R>) -> bool {
+        let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
         if self.heap.len() == 1 {
             let start = cursor.row_index;
-            let count =
-                (cursor.num_rows() - start).min(self.batch_size - self.temp_sorted_num_rows);
+            let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
             self.temp_sorted_num_rows += count;
             cursor.row_index += count;
             self.temp_output_indices
@@ -155,8 +160,7 @@ where
                 // If the last row of current block is smaller than the next cursor,
                 // we can drain the whole block.
                 let start = cursor.row_index;
-                let count =
-                    (cursor.num_rows() - start).min(self.batch_size - self.temp_sorted_num_rows);
+                let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
                 self.temp_sorted_num_rows += count;
                 cursor.row_index += count;
                 self.temp_output_indices
@@ -168,7 +172,7 @@ where
                 let start = cursor.row_index;
                 while !cursor.is_finished()
                     && cursor.le(next_cursor)
-                    && self.temp_sorted_num_rows < self.batch_size
+                    && self.temp_sorted_num_rows < max_rows
                 {
                     // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
                     self.temp_sorted_num_rows += 1;
@@ -202,7 +206,8 @@ where
             self.pending_stream.push_back(cursor.input_index);
         }
 
-        debug_assert!(self.temp_sorted_num_rows <= self.batch_size);
+        debug_assert!(self.temp_sorted_num_rows <= max_rows);
+        self.temp_sorted_num_rows == max_rows
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {
@@ -219,6 +224,7 @@ where
         debug_assert_eq!(block.num_rows(), self.temp_sorted_num_rows);
         debug_assert!(block.num_rows() <= self.batch_size);
 
+        self.limit = self.limit.map(|limit| limit - self.temp_sorted_num_rows);
         self.temp_sorted_blocks.clear();
         self.temp_output_indices.clear();
         self.temp_sorted_num_rows = 0;
@@ -231,6 +237,10 @@ where
     /// If the block is [None] and it's not pending, it means the stream is finished.
     /// If the block is [None] but it's pending, it means the stream is not finished yet.
     pub fn next_block(&mut self) -> Result<(Option<DataBlock>, bool)> {
+        if let Some(limit) = self.limit && limit == 0 {
+            return Ok((None, false));
+        }
+
         if !self.pending_stream.is_empty() {
             self.poll_pending_stream()?;
             if !self.pending_stream.is_empty() {
@@ -245,8 +255,7 @@ where
             return Ok((None, false));
         }
         while let Some(Reverse(cursor)) = self.heap.peek() {
-            self.evaluate_cursor(cursor.clone());
-            if self.temp_sorted_num_rows == self.batch_size {
+            if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
             if !self.pending_stream.is_empty() {
@@ -263,6 +272,10 @@ where
 
     /// The async version of `next_block`.
     pub async fn async_next_block(&mut self) -> Result<(Option<DataBlock>, bool)> {
+        if let Some(limit) = self.limit && limit == 0 {
+            return Ok((None, false));
+        }
+
         if !self.pending_stream.is_empty() {
             self.async_poll_pending_stream().await?;
             if !self.pending_stream.is_empty() {
@@ -277,8 +290,7 @@ where
             return Ok((None, false));
         }
         while let Some(Reverse(cursor)) = self.heap.peek() {
-            self.evaluate_cursor(cursor.clone());
-            if self.temp_sorted_num_rows == self.batch_size {
+            if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
             if !self.pending_stream.is_empty() {

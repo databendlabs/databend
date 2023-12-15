@@ -30,6 +30,7 @@ use common_expression::SortColumnDescription;
 use common_pipeline_transforms::processors::sort::HeapMerger;
 use common_pipeline_transforms::processors::sort::SimpleRows;
 use common_pipeline_transforms::processors::sort::SortedStream;
+use itertools::Itertools;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
@@ -69,7 +70,10 @@ impl SortedStream for TestStream {
 
 type TestMerger = HeapMerger<SimpleRows<Int32Type>, TestStream>;
 
-fn prepare_input_and_result(data: Vec<Vec<Vec<i32>>>) -> (Vec<Vec<DataBlock>>, DataBlock) {
+fn prepare_input_and_result(
+    data: Vec<Vec<Vec<i32>>>,
+    limit: Option<usize>,
+) -> (Vec<Vec<DataBlock>>, DataBlock) {
     let input = data
         .clone()
         .into_iter()
@@ -79,26 +83,31 @@ fn prepare_input_and_result(data: Vec<Vec<Vec<i32>>>) -> (Vec<Vec<DataBlock>>, D
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let mut result = data.into_iter().flatten().flatten().collect::<Vec<_>>();
-    result.sort();
+    let result = data
+        .into_iter()
+        .flatten()
+        .flatten()
+        .sorted()
+        .take(limit.unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
     let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
 
     (input, result)
 }
 
 /// Returns (input, expected)
-fn basic_test_data() -> (Vec<Vec<DataBlock>>, DataBlock) {
+fn basic_test_data(limit: Option<usize>) -> (Vec<Vec<DataBlock>>, DataBlock) {
     let data = vec![
         vec![vec![1, 2, 3, 4], vec![4, 5, 6, 7]],
         vec![vec![1, 1, 1, 1], vec![1, 10, 100, 2000]],
         vec![vec![0, 2, 4, 5]],
     ];
 
-    prepare_input_and_result(data)
+    prepare_input_and_result(data, limit)
 }
 
 /// Returns (input, expected, batch_size, num_merge)
-fn random_test_data(rng: &mut ThreadRng) -> (Vec<Vec<DataBlock>>, DataBlock) {
+fn random_test_data(rng: &mut ThreadRng) -> (Vec<Vec<DataBlock>>, DataBlock, Option<usize>) {
     let random_batch_size = rng.gen_range(1..=10);
     let random_num_streams = rng.gen_range(5..=10);
 
@@ -115,10 +124,16 @@ fn random_test_data(rng: &mut ThreadRng) -> (Vec<Vec<DataBlock>>, DataBlock) {
         })
         .collect::<Vec<_>>();
 
-    prepare_input_and_result(random_data)
+    let num_rows = random_data
+        .iter()
+        .map(|v| v.iter().map(|v| v.len()).sum::<usize>())
+        .sum::<usize>();
+    let limit = rng.gen_range(0..=num_rows);
+    let (input, expected) = prepare_input_and_result(random_data, Some(limit));
+    (input, expected, Some(limit))
 }
 
-fn create_test_merger(input: Vec<Vec<DataBlock>>) -> TestMerger {
+fn create_test_merger(input: Vec<Vec<DataBlock>>, limit: Option<usize>) -> TestMerger {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "a",
         DataType::Number(NumberDataType::Int32),
@@ -134,17 +149,27 @@ fn create_test_merger(input: Vec<Vec<DataBlock>>) -> TestMerger {
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::create(schema, streams, sort_desc, 4)
+    TestMerger::create(schema, streams, sort_desc, 4, limit)
 }
 
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
+    if expected.is_empty() {
+        if !result.is_empty() && !DataBlock::concat(&result).unwrap().is_empty() {
+            panic!(
+                "\nexpected empty block, but got:\n {}",
+                pretty_format_blocks(&result).unwrap()
+            )
+        }
+        return;
+    }
+
     let result_rows = result.iter().map(|v| v.num_rows()).sum::<usize>();
     let result = pretty_format_blocks(&result).unwrap();
     let expected_rows = expected.num_rows();
     let expected = pretty_format_blocks(&[expected]).unwrap();
     assert_eq!(
         expected, result,
-        "expected (num_rows = {}):\n{}\nactual (num_rows = {}):\n{}",
+        "\nexpected (num_rows = {}):\n{}\nactual (num_rows = {}):\n{}",
         expected_rows, expected, result_rows, result
     );
 }
@@ -168,7 +193,7 @@ fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
     Ok(())
 }
 
-async fn test_async(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
+async fn async_test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
     let mut result = Vec::new();
 
     loop {
@@ -187,11 +212,38 @@ async fn test_async(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_basic() -> Result<()> {
-    let (input, expected) = basic_test_data();
-    let merger = create_test_merger(input);
+fn test_basic(limit: Option<usize>) -> Result<()> {
+    let (input, expected) = basic_test_data(limit);
+    let merger = create_test_merger(input, limit);
     test(merger, expected)
+}
+
+async fn async_test_basic(limit: Option<usize>) -> Result<()> {
+    let (input, expected) = basic_test_data(limit);
+    let merger = create_test_merger(input, limit);
+    async_test(merger, expected).await
+}
+
+#[test]
+fn test_basic_with_limit() -> Result<()> {
+    test_basic(None)?;
+    test_basic(Some(0))?;
+    test_basic(Some(1))?;
+    test_basic(Some(5))?;
+    test_basic(Some(20))?;
+    test_basic(Some(21))?;
+    test_basic(Some(1000000))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn async_test_basic_with_limit() -> Result<()> {
+    async_test_basic(None).await?;
+    async_test_basic(Some(0)).await?;
+    async_test_basic(Some(1)).await?;
+    async_test_basic(Some(5)).await?;
+    async_test_basic(Some(20)).await?;
+    async_test_basic(Some(21)).await?;
+    async_test_basic(Some(1000000)).await
 }
 
 #[test]
@@ -199,8 +251,8 @@ fn test_fuzz() -> Result<()> {
     let mut rng = rand::thread_rng();
 
     for _ in 0..10 {
-        let (input, expected) = random_test_data(&mut rng);
-        let merger = create_test_merger(input);
+        let (input, expected, limit) = random_test_data(&mut rng);
+        let merger = create_test_merger(input, limit);
         test(merger, expected)?;
     }
 
@@ -208,20 +260,13 @@ fn test_fuzz() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_basic_async() -> Result<()> {
-    let (input, expected) = basic_test_data();
-    let merger = create_test_merger(input);
-    test_async(merger, expected).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_fuzz_async() -> Result<()> {
     let mut rng = rand::thread_rng();
 
     for _ in 0..10 {
-        let (input, expected) = random_test_data(&mut rng);
-        let merger = create_test_merger(input);
-        test_async(merger, expected).await?;
+        let (input, expected, limit) = random_test_data(&mut rng);
+        let merger = create_test_merger(input, limit);
+        async_test(merger, expected).await?;
     }
 
     Ok(())
