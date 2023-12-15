@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageType;
@@ -78,6 +79,7 @@ impl Interpreter for CreateUserStageInterpreter {
 
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
+        user_stage.created_on = Utc::now();
         let _create_stage = user_mgr
             .add_stage(&plan.tenant, user_stage, plan.if_not_exists)
             .await?;

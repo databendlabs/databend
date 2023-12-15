@@ -220,6 +220,10 @@ impl FromToProto for mt::principal::StageInfo {
                 Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
                 None => None,
             },
+            created_on: match p.created_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
+            },
         })
     }
 
@@ -241,6 +245,7 @@ impl FromToProto for mt::principal::StageInfo {
                 Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
                 None => None,
             },
+            created_on: Some(self.created_on.to_pb()?),
         })
     }
 }
