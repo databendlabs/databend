@@ -199,7 +199,26 @@ impl<R: Rows> TransformSortMerge<R> {
 
     fn merge_sort(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
         let size_hint = self.num_rows.div_ceil(batch_size);
+
+        if self.buffer.len() == 1 {
+            // If there is only one block, we don't need to merge.
+            let block = self.buffer.pop().unwrap().unwrap();
+            let num_rows = block.num_rows();
+            if size_hint == 1 {
+                return Ok(vec![block]);
+            }
+            let mut result = Vec::with_capacity(size_hint);
+            for i in 0..size_hint {
+                let start = i * batch_size;
+                let end = ((i + 1) * batch_size).min(num_rows);
+                let mut block = block.slice(start..end);
+                result.push(block);
+            }
+            return Ok(result);
+        }
+
         let streams = self.buffer.drain(..).collect::<Vec<_>>();
+        let mut result = Vec::with_capacity(size_hint);
         let mut merger = HeapMerger::<R, BlockStream>::create(
             self.schema.clone(),
             streams,
@@ -207,7 +226,7 @@ impl<R: Rows> TransformSortMerge<R> {
             batch_size,
             self.output_order_col,
         );
-        let mut result = Vec::with_capacity(size_hint);
+
         while let (Some(block), _) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
                 return Err(ErrorCode::AbortedQuery(
