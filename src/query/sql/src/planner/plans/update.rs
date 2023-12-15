@@ -111,8 +111,7 @@ impl UpdatePlan {
                         }
                     }
 
-                    let mut right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-                    let right_data_type = right.data_type()?;
+                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
                     // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
                     // change into nullable, so we need to cast this. but we will do cast after all macthed clauses,please
