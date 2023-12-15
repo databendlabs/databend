@@ -15,21 +15,21 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;

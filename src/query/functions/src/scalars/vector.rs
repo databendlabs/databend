@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::buffer::Buffer;
-use common_expression::types::ArrayType;
-use common_expression::types::Float32Type;
-use common_expression::types::StringType;
-use common_expression::types::F32;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::FunctionDomain;
-use common_expression::FunctionRegistry;
-use common_openai::OpenAI;
-use common_vector::cosine_distance;
-use common_vector::l2_distance;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::F32;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_openai::OpenAI;
+use databend_common_vector::cosine_distance;
+use databend_common_vector::l2_distance;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cosine_distance

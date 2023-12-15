@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::Scalar;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use itertools::Itertools;
 
 use crate::binder::split_conjunctions;

@@ -23,8 +23,8 @@ mod message;
 
 use std::sync::LazyLock;
 
-pub use common_meta_api::reply::reply_to_api_result;
-pub use common_meta_api::reply::reply_to_meta_result;
+pub use databend_common_meta_api::reply::reply_to_api_result;
+pub use databend_common_meta_api::reply::reply_to_meta_result;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;

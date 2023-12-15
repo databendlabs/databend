@@ -16,15 +16,15 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::Utc;
-use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_storages_fuse::io::MetaWriter;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::test_kits::*;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::compact_segment;

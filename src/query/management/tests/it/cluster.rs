@@ -16,15 +16,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_management::*;
-use common_meta_embedded::MetaEmbedded;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_store::MetaStore;
-use common_meta_types::MatchSeq;
-use common_meta_types::NodeInfo;
-use common_meta_types::SeqV;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_management::*;
+use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_add_node() -> Result<()> {

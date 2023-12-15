@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::string::StringColumnBuilder;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_hashtable::HashtableLike;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_functions::aggregates::AggregateFunctionRef;
+use databend_common_hashtable::HashtableLike;
 
 #[inline]
 pub fn estimated_key_size<Table: HashtableLike>(table: &Table) -> usize {

@@ -24,7 +24,7 @@ mod pipeline_pulling_executor;
 mod pipeline_pushing_executor;
 mod processor_async_task;
 
-pub use common_base::base::WatchNotify;
+pub use databend_common_base::base::WatchNotify;
 pub use executor_condvar::WorkersCondvar;
 pub use executor_condvar::WorkersWaitingStatus;
 pub use executor_graph::RunningGraph;

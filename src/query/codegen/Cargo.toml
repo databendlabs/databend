@@ -1,5 +1,5 @@
 [package]
-name = "codegen"
+name = "databend-codegen"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -15,6 +15,6 @@ name = "codegen"
 path = "src/bin/codegen.rs"
 
 [dependencies]
-common-expression = { path = "../expression" }
+databend-common-expression = { path = "../expression" }
 
 itertools = { workspace = true }

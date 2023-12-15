@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::StageTableInfo;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::Scalar;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use common_storage::StageFileInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
 
 use crate::executor::physical_plan::PhysicalPlan;

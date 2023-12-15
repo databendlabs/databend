@@ -1,5 +1,5 @@
 [package]
-name = "sharing-endpoint"
+name = "databend-sharing-endpoint"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,12 +12,12 @@ doctest = false
 [dependencies]
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
-common-base = { path = "../../common/base" }
-common-config = { path = "../../query/config" }
-common-exception = { path = "../../common/exception" }
-common-meta-app = { path = "../../meta/app" }
-common-storage = { path = "../../common/storage" }
-common-storages-share = { path = "../storages/share" }
+databend-common-base = { path = "../../common/base" }
+databend-common-config = { path = "../../query/config" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-storage = { path = "../../common/storage" }
+databend-common-storages-share = { path = "../storages/share" }
 uuid = { workspace = true }
 
 time = { version = "0.3", features = ["serde"] }

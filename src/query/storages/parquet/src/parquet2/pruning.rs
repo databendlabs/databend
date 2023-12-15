@@ -18,36 +18,36 @@ use std::io::Read;
 use std::io::Seek;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::io::parquet::read::get_field_pages;
-use common_arrow::arrow::io::parquet::read::indexes::compute_page_row_intervals;
-use common_arrow::arrow::io::parquet::read::indexes::read_columns_indexes;
-use common_arrow::arrow::io::parquet::read::indexes::FieldPageStatistics;
-use common_arrow::parquet::indexes::Interval;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::parquet::read::read_metadata_with_size;
-use common_arrow::parquet::read::read_pages_locations;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::TopK;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::FunctionContext;
-use common_expression::TableSchemaRef;
-use common_storage::read_parquet_metas_in_parallel;
-use common_storage::ColumnNodes;
-use common_storage::CopyStatus;
-use common_storage::FileStatus;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::io::parquet::read::get_field_pages;
+use databend_common_arrow::arrow::io::parquet::read::indexes::compute_page_row_intervals;
+use databend_common_arrow::arrow::io::parquet::read::indexes::read_columns_indexes;
+use databend_common_arrow::arrow::io::parquet::read::indexes::FieldPageStatistics;
+use databend_common_arrow::parquet::indexes::Interval;
+use databend_common_arrow::parquet::metadata::FileMetaData;
+use databend_common_arrow::parquet::metadata::RowGroupMetaData;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_arrow::parquet::read::read_metadata_with_size;
+use databend_common_arrow::parquet::read::read_pages_locations;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::TopK;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchemaRef;
+use databend_common_storage::read_parquet_metas_in_parallel;
+use databend_common_storage::ColumnNodes;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::FileStatus;
+use databend_storages_common_pruner::RangePruner;
+use databend_storages_common_pruner::RangePrunerCreator;
 use log::info;
 use opendal::Operator;
-use storages_common_pruner::RangePruner;
-use storages_common_pruner::RangePrunerCreator;
 
 use super::partition::ColumnMeta;
 use super::Parquet2RowGroupPart;
@@ -451,47 +451,47 @@ fn is_in(probe: Interval, intervals: &[Interval]) -> Vec<Interval> {
 mod tests {
     use std::io::Cursor;
 
-    use common_arrow::parquet::compression::CompressionOptions;
-    use common_arrow::parquet::encoding::hybrid_rle::encode_bool;
-    use common_arrow::parquet::encoding::Encoding;
-    use common_arrow::parquet::indexes::Interval;
-    use common_arrow::parquet::metadata::Descriptor;
-    use common_arrow::parquet::metadata::SchemaDescriptor;
-    use common_arrow::parquet::page::DataPage;
-    use common_arrow::parquet::page::DataPageHeader;
-    use common_arrow::parquet::page::DataPageHeaderV1;
-    use common_arrow::parquet::page::Page;
-    use common_arrow::parquet::read::read_metadata;
-    use common_arrow::parquet::schema::types::ParquetType;
-    use common_arrow::parquet::schema::types::PhysicalType;
-    use common_arrow::parquet::statistics::serialize_statistics;
-    use common_arrow::parquet::statistics::PrimitiveStatistics;
-    use common_arrow::parquet::statistics::Statistics;
-    use common_arrow::parquet::types::NativeType;
-    use common_arrow::parquet::write::Compressor;
-    use common_arrow::parquet::write::DynIter;
-    use common_arrow::parquet::write::DynStreamingIterator;
-    use common_arrow::parquet::write::FileWriter;
-    use common_arrow::parquet::write::Version;
-    use common_arrow::parquet::write::WriteOptions;
-    use common_exception::Result;
-    use common_expression::types::DataType;
-    use common_expression::types::NumberDataType;
-    use common_expression::types::NumberScalar;
-    use common_expression::FunctionContext;
-    use common_expression::Scalar;
-    use common_expression::TableDataType;
-    use common_expression::TableField;
-    use common_expression::TableSchemaRef;
-    use common_expression::TableSchemaRefExt;
-    use common_sql::plans::BoundColumnRef;
-    use common_sql::plans::ConstantExpr;
-    use common_sql::plans::FunctionCall;
-    use common_sql::plans::ScalarExpr;
-    use common_sql::ColumnBindingBuilder;
-    use common_sql::Visibility;
-    use common_storage::ColumnNodes;
-    use storages_common_pruner::RangePrunerCreator;
+    use databend_common_arrow::parquet::compression::CompressionOptions;
+    use databend_common_arrow::parquet::encoding::hybrid_rle::encode_bool;
+    use databend_common_arrow::parquet::encoding::Encoding;
+    use databend_common_arrow::parquet::indexes::Interval;
+    use databend_common_arrow::parquet::metadata::Descriptor;
+    use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+    use databend_common_arrow::parquet::page::DataPage;
+    use databend_common_arrow::parquet::page::DataPageHeader;
+    use databend_common_arrow::parquet::page::DataPageHeaderV1;
+    use databend_common_arrow::parquet::page::Page;
+    use databend_common_arrow::parquet::read::read_metadata;
+    use databend_common_arrow::parquet::schema::types::ParquetType;
+    use databend_common_arrow::parquet::schema::types::PhysicalType;
+    use databend_common_arrow::parquet::statistics::serialize_statistics;
+    use databend_common_arrow::parquet::statistics::PrimitiveStatistics;
+    use databend_common_arrow::parquet::statistics::Statistics;
+    use databend_common_arrow::parquet::types::NativeType;
+    use databend_common_arrow::parquet::write::Compressor;
+    use databend_common_arrow::parquet::write::DynIter;
+    use databend_common_arrow::parquet::write::DynStreamingIterator;
+    use databend_common_arrow::parquet::write::FileWriter;
+    use databend_common_arrow::parquet::write::Version;
+    use databend_common_arrow::parquet::write::WriteOptions;
+    use databend_common_exception::Result;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchemaRef;
+    use databend_common_expression::TableSchemaRefExt;
+    use databend_common_sql::plans::BoundColumnRef;
+    use databend_common_sql::plans::ConstantExpr;
+    use databend_common_sql::plans::FunctionCall;
+    use databend_common_sql::plans::ScalarExpr;
+    use databend_common_sql::ColumnBindingBuilder;
+    use databend_common_sql::Visibility;
+    use databend_common_storage::ColumnNodes;
+    use databend_storages_common_pruner::RangePrunerCreator;
 
     use crate::parquet2::pruning::and_intervals;
     use crate::parquet2::pruning::build_column_page_pruners;
@@ -572,7 +572,7 @@ mod tests {
 
     fn unzip_option<T: NativeType>(
         array: &[Option<T>],
-    ) -> common_arrow::parquet::error::Result<(Vec<u8>, Vec<u8>)> {
+    ) -> databend_common_arrow::parquet::error::Result<(Vec<u8>, Vec<u8>)> {
         // leave the first 4 bytes announcing the length of the def level
         // this will be overwritten at the end, once the length is known.
         // This is unknown at this point because of the uleb128 encoding,
@@ -608,7 +608,7 @@ mod tests {
         array: &[Option<T>],
         options: &WriteOptions,
         descriptor: &Descriptor,
-    ) -> common_arrow::parquet::error::Result<Page> {
+    ) -> databend_common_arrow::parquet::error::Result<Page> {
         let (values, mut buffer) = unzip_option(array)?;
 
         buffer.extend_from_slice(&values);

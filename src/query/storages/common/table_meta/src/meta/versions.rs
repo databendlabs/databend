@@ -14,8 +14,8 @@
 
 use std::marker::PhantomData;
 
-use common_exception::ErrorCode;
-use common_expression::DataBlock;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataBlock;
 
 use super::v2;
 use crate::meta::v0;

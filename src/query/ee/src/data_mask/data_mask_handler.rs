@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_meta_api::DatamaskApi;
-use common_meta_app::data_mask::CreateDatamaskReq;
-use common_meta_app::data_mask::DatamaskMeta;
-use common_meta_app::data_mask::DatamaskNameIdent;
-use common_meta_app::data_mask::DropDatamaskReq;
-use common_meta_app::data_mask::GetDatamaskReq;
-use common_meta_store::MetaStore;
-use data_mask_feature::data_mask_handler::DatamaskHandler;
-use data_mask_feature::data_mask_handler::DatamaskHandlerWrapper;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskMeta;
+use databend_common_meta_app::data_mask::DatamaskNameIdent;
+use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::data_mask::GetDatamaskReq;
+use databend_common_meta_store::MetaStore;
+use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandler;
+use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandlerWrapper;
 
 pub struct RealDatamaskHandler {}
 

@@ -15,8 +15,8 @@
 use std::sync::Arc;
 use std::sync::LazyLock;
 
-use common_exception::Result;
-use common_expression::FunctionContext;
+use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::optimizer::rule::TransformResult;

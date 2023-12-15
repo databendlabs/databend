@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::schema as mt;
+use databend_common_meta_app::schema as mt;
 use maplit::btreemap;
 use minitrace::func_name;
 

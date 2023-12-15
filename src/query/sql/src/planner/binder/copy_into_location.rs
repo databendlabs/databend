@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::CopyIntoLocationSource;
-use common_ast::ast::CopyIntoLocationStmt;
-use common_ast::ast::Statement;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
+use databend_common_ast::ast::CopyIntoLocationSource;
+use databend_common_ast::ast::CopyIntoLocationStmt;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
 
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::Binder;

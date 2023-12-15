@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::Expr;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::physical_plans::HashJoin;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::Expr;
+use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::physical_plans::HashJoin;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;

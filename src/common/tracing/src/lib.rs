@@ -52,7 +52,7 @@ pub fn closure_name<F: std::any::Any>() -> &'static str {
 /// # #[macro_use] extern crate common_tracing;
 /// # fn main() {
 /// let _sentry = sentry::init(sentry::ClientOptions {
-///     release: common_tracing::databend_semver!(),
+///     release: databend_common_tracing::databend_semver!(),
 ///     ..Default::default()
 /// });
 /// # }

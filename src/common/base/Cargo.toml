@@ -1,5 +1,5 @@
 [package]
-name = "common-base"
+name = "databend-common-base"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -22,7 +22,7 @@ memory-profiling = [
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-exception = { path = "../exception" }
+databend-common-exception = { path = "../exception" }
 
 # GitHub dependencies
 

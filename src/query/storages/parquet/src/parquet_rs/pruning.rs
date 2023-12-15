@@ -15,20 +15,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::PushDownInfo;
-use common_exception::Result;
-use common_expression::FunctionContext;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_pruner::RangePruner;
+use databend_storages_common_pruner::RangePrunerCreator;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::format::PageLocation;
-use storages_common_pruner::RangePruner;
-use storages_common_pruner::RangePrunerCreator;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::statistics::collect_row_group_stats;
 use crate::parquet_rs::statistics::convert_index_to_column_statistics;

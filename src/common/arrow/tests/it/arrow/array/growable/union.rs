@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableUnion;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::*;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableUnion;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::*;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn sparse() -> Result<()> {

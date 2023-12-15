@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::payload::Payload;
 use super::payload_flush::PayloadFlushState;

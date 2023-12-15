@@ -15,8 +15,8 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
 pub struct DataBlockStream {
     current: usize,

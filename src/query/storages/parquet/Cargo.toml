@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-parquet"
+name = "databend-common-storages-parquet"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,20 +12,20 @@ doctest = false
 test = false
 
 [dependencies]
-common-arrow = { path = "../../../common/arrow" }
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-functions = { path = "../../functions" }
-common-meta-app = { path = "../../../meta/app" }
-common-metrics = { path = "../../../common/metrics" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-storage = { path = "../../../common/storage" }
-storages-common-index = { path = "../common/index" }
-storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table_meta" }
+databend-common-arrow = { path = "../../../common/arrow" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-functions = { path = "../../functions" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-metrics = { path = "../../../common/metrics" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-storage = { path = "../../../common/storage" }
+databend-storages-common-index = { path = "../common/index" }
+databend-storages-common-pruner = { path = "../common/pruner" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
@@ -45,5 +45,5 @@ thrift = "0.17.0"
 typetag = { workspace = true }
 
 [dev-dependencies]
-common-sql = { path = "../../sql" }
+databend-common-sql = { path = "../../sql" }
 tempfile = "3.4.0"

@@ -14,29 +14,29 @@
 
 use std::io::SeekFrom;
 
-use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_cache::DefaultHashBuilder;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
+use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_cache::InMemoryItemCacheReader;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Loader;
+use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_cache_manager::CompactSegmentInfoMeter;
+use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfoVersion;
+use databend_storages_common_table_meta::meta::SnapshotVersion;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+use databend_storages_common_table_meta::readers::VersionedReader;
 use futures::AsyncSeek;
 use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Operator;
 use opendal::Reader;
-use storages_common_cache::InMemoryItemCacheReader;
-use storages_common_cache::LoadParams;
-use storages_common_cache::Loader;
-use storages_common_cache_manager::CacheManager;
-use storages_common_cache_manager::CompactSegmentInfoMeter;
-use storages_common_index::BloomIndexMeta;
-use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoVersion;
-use storages_common_table_meta::meta::SnapshotVersion;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
-use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
-use storages_common_table_meta::readers::VersionedReader;
 
 use self::thrift_file_meta_read::read_thrift_file_metadata;
 
@@ -146,7 +146,7 @@ async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Resul
 }
 
 mod thrift_file_meta_read {
-    use common_arrow::parquet::error::Error;
+    use databend_common_arrow::parquet::error::Error;
     use parquet_format_safe::thrift::protocol::TCompactInputProtocol;
 
     use super::*;
@@ -187,7 +187,7 @@ mod thrift_file_meta_read {
         op: Operator,
         path: &str,
         len_hint: Option<u64>,
-    ) -> common_arrow::parquet::error::Result<ThriftFileMetaData> {
+    ) -> databend_common_arrow::parquet::error::Result<ThriftFileMetaData> {
         let file_size = if let Some(len) = len_hint {
             len
         } else {

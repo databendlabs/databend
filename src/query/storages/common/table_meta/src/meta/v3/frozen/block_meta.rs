@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use common_expression::ColumnId;
-use common_expression::Scalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -103,7 +103,7 @@ pub struct NativeColumnMeta {
     pub pages: Vec<PageMeta>,
 }
 
-impl From<NativeColumnMeta> for common_arrow::native::ColumnMeta {
+impl From<NativeColumnMeta> for databend_common_arrow::native::ColumnMeta {
     fn from(value: NativeColumnMeta) -> Self {
         Self {
             offset: value.offset,
@@ -112,7 +112,7 @@ impl From<NativeColumnMeta> for common_arrow::native::ColumnMeta {
     }
 }
 
-impl From<PageMeta> for common_arrow::native::PageMeta {
+impl From<PageMeta> for databend_common_arrow::native::PageMeta {
     fn from(value: PageMeta) -> Self {
         Self {
             length: value.length,

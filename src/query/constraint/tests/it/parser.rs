@@ -14,20 +14,20 @@
 
 use std::collections::HashMap;
 
-use common_ast::ast::BinaryOperator as ASTBinaryOperator;
-use common_ast::ast::ColumnID;
-use common_ast::ast::Expr as ASTExpr;
-use common_ast::ast::Identifier;
-use common_ast::ast::Literal;
-use common_ast::ast::UnaryOperator as ASTUnaryOperator;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_constraint::mir::MirBinaryOperator;
-use common_constraint::mir::MirConstant;
-use common_constraint::mir::MirDataType;
-use common_constraint::mir::MirExpr;
-use common_constraint::mir::MirUnaryOperator;
+use databend_common_ast::ast::BinaryOperator as ASTBinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::Expr as ASTExpr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::UnaryOperator as ASTUnaryOperator;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_constraint::mir::MirBinaryOperator;
+use databend_common_constraint::mir::MirConstant;
+use databend_common_constraint::mir::MirDataType;
+use databend_common_constraint::mir::MirExpr;
+use databend_common_constraint::mir::MirUnaryOperator;
 
 pub fn parse_mir_expr(text: &str, variables: &HashMap<String, MirDataType>) -> MirExpr {
     let tokens = tokenize_sql(text).unwrap();

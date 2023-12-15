@@ -15,8 +15,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use common_base::rangemap::RangeMerger;
-use common_exception::Result;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_exception::Result;
 
 struct Array(Vec<std::ops::Range<u64>>);
 impl fmt::Display for Array {

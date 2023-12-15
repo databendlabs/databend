@@ -15,8 +15,8 @@
 use std::net::TcpListener;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_query::servers::FlightSQLServer;
 use databend_query::test_kits::ConfigBuilder;
 

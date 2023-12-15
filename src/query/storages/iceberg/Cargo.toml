@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-iceberg"
+name = "databend-common-storages-iceberg"
 version = { workspace = true }
 edition = "2021"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -9,19 +9,19 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common-arrow = { path = "../../../common/arrow" }
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-functions = { path = "../../functions" }
-common-meta-app = { path = "../../../meta/app" }
-common-meta-types = { path = "../../../meta/types" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-storage = { path = "../../../common/storage" }
-common-storages-parquet = { path = "../parquet" }
-storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table_meta" }
+databend-common-arrow = { path = "../../../common/arrow" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-functions = { path = "../../functions" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-meta-types = { path = "../../../meta/types" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-storage = { path = "../../../common/storage" }
+databend-common-storages-parquet = { path = "../parquet" }
+databend-storages-common-pruner = { path = "../common/pruner" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
