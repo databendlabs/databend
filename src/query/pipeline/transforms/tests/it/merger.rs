@@ -177,15 +177,10 @@ fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
 fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
     let mut result = Vec::new();
 
-    loop {
-        let (block, pending) = merger.next_block()?;
-        if pending {
-            continue;
+    while !merger.is_finished() {
+        if let Some(block) = merger.next_block()? {
+            result.push(block);
         }
-        if block.is_none() {
-            break;
-        }
-        result.push(block.unwrap());
     }
 
     check_result(result, expected);
@@ -196,17 +191,11 @@ fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
 async fn async_test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
     let mut result = Vec::new();
 
-    loop {
-        let (block, pending) = merger.async_next_block().await?;
-        if pending {
-            continue;
+    while !merger.is_finished() {
+        if let Some(block) = merger.async_next_block().await? {
+            result.push(block);
         }
-        if block.is_none() {
-            break;
-        }
-        result.push(block.unwrap());
     }
-
     check_result(result, expected);
 
     Ok(())

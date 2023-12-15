@@ -333,18 +333,20 @@ where R: Rows + Sync + Send + 'static
         );
 
         let mut spilled = VecDeque::new();
-        while let (Some(block), _) = merger.async_next_block().await? {
-            let ins = Instant::now();
-            let (location, bytes) = self.spiller.spill_block(block).await?;
+        while !merger.is_finished() {
+            if let Some(block) = merger.async_next_block().await? {
+                let ins = Instant::now();
+                let (location, bytes) = self.spiller.spill_block(block).await?;
 
-            // perf
-            {
-                metrics_inc_sort_spill_write_count();
-                metrics_inc_sort_spill_write_bytes(bytes);
-                metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
+                // perf
+                {
+                    metrics_inc_sort_spill_write_count();
+                    metrics_inc_sort_spill_write_bytes(bytes);
+                    metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
+                }
+
+                spilled.push_back(location);
             }
-
-            spilled.push_back(location);
         }
         self.unmerged_blocks.push_back(spilled);
 

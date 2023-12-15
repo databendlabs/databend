@@ -54,7 +54,7 @@ where
     unsorted_streams: Vec<S>,
     heap: BinaryHeap<Reverse<Cursor<R>>>,
     buffer: Vec<DataBlock>,
-    pending_stream: VecDeque<usize>,
+    pending_streams: VecDeque<usize>,
     batch_size: usize,
     limit: Option<usize>,
 
@@ -90,17 +90,27 @@ where
             batch_size,
             limit,
             sort_desc,
-            pending_stream,
+            pending_streams: pending_stream,
             temp_sorted_num_rows: 0,
             temp_output_indices: vec![],
             temp_sorted_blocks: vec![],
         }
     }
 
+    #[inline(always)]
+    pub fn is_finished(&self) -> bool {
+        (self.heap.is_empty() && !self.has_pending_stream()) || self.limit == Some(0)
+    }
+
+    #[inline(always)]
+    pub fn has_pending_stream(&self) -> bool {
+        !self.pending_streams.is_empty()
+    }
+
     // This method can only be called when there is no data of the stream in the heap.
     async fn async_poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_stream.pop_front() {
+        while let Some(i) = self.pending_streams.pop_front() {
             debug_assert!(self.buffer[i].is_empty());
             let (input, pending) = self.unsorted_streams[i].async_next().await?;
             if pending {
@@ -114,14 +124,14 @@ where
                 self.buffer[i] = block;
             }
         }
-        self.pending_stream.extend(continue_pendings);
+        self.pending_streams.extend(continue_pendings);
         Ok(())
     }
 
     #[inline]
     fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_stream.pop_front() {
+        while let Some(i) = self.pending_streams.pop_front() {
             debug_assert!(self.buffer[i].is_empty());
             let (input, pending) = self.unsorted_streams[i].next()?;
             if pending {
@@ -135,7 +145,7 @@ where
                 self.buffer[i] = block;
             }
         }
-        self.pending_stream.extend(continue_pendings);
+        self.pending_streams.extend(continue_pendings);
         Ok(())
     }
 
@@ -203,7 +213,7 @@ where
             self.buffer[cursor.input_index] = DataBlock::empty_with_schema(self.schema.clone());
             self.temp_sorted_blocks.push(temp_block);
             self.temp_output_indices.clear();
-            self.pending_stream.push_back(cursor.input_index);
+            self.pending_streams.push_back(cursor.input_index);
         }
 
         debug_assert!(self.temp_sorted_num_rows <= max_rows);
@@ -236,72 +246,72 @@ where
     ///
     /// If the block is [None] and it's not pending, it means the stream is finished.
     /// If the block is [None] but it's pending, it means the stream is not finished yet.
-    pub fn next_block(&mut self) -> Result<(Option<DataBlock>, bool)> {
-        if let Some(limit) = self.limit && limit == 0 {
-            return Ok((None, false));
+    pub fn next_block(&mut self) -> Result<Option<DataBlock>> {
+        if self.is_finished() {
+            return Ok(None);
         }
 
-        if !self.pending_stream.is_empty() {
+        if self.has_pending_stream() {
             self.poll_pending_stream()?;
-            if !self.pending_stream.is_empty() {
-                return Ok((None, true));
+            if self.has_pending_stream() {
+                return Ok(None);
             }
         }
+
         if self.heap.is_empty() {
-            if self.temp_sorted_num_rows > 0 {
-                let block = self.build_output()?;
-                return Ok((Some(block), false));
-            }
-            return Ok((None, false));
+            debug_assert!(self.is_finished());
+            debug_assert_eq!(self.temp_sorted_num_rows, 0);
+            return Ok(None);
         }
+
         while let Some(Reverse(cursor)) = self.heap.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
-            if !self.pending_stream.is_empty() {
+            if self.has_pending_stream() {
                 self.poll_pending_stream()?;
-                if !self.pending_stream.is_empty() {
-                    return Ok((None, true));
+                if self.has_pending_stream() {
+                    return Ok(None);
                 }
             }
         }
 
         let block = self.build_output()?;
-        Ok((Some(block), false))
+        Ok(Some(block))
     }
 
     /// The async version of `next_block`.
-    pub async fn async_next_block(&mut self) -> Result<(Option<DataBlock>, bool)> {
-        if let Some(limit) = self.limit && limit == 0 {
-            return Ok((None, false));
+    pub async fn async_next_block(&mut self) -> Result<Option<DataBlock>> {
+        if self.is_finished() {
+            return Ok(None);
         }
 
-        if !self.pending_stream.is_empty() {
+        if self.has_pending_stream() {
             self.async_poll_pending_stream().await?;
-            if !self.pending_stream.is_empty() {
-                return Ok((None, true));
+            if self.has_pending_stream() {
+                return Ok(None);
             }
         }
+
         if self.heap.is_empty() {
-            if self.temp_sorted_num_rows > 0 {
-                let block = self.build_output()?;
-                return Ok((Some(block), false));
-            }
-            return Ok((None, false));
+            debug_assert!(self.is_finished());
+            debug_assert_eq!(self.temp_sorted_num_rows, 0);
+            return Ok(None);
         }
+
         while let Some(Reverse(cursor)) = self.heap.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
-            if !self.pending_stream.is_empty() {
+            if self.has_pending_stream() {
                 self.async_poll_pending_stream().await?;
-                if !self.pending_stream.is_empty() {
-                    return Ok((None, true));
+                if self.has_pending_stream() {
+                    return Ok(None);
                 }
             }
         }
 
         let block = self.build_output()?;
-        Ok((Some(block), false))
+        Ok(Some(block))
     }
 }

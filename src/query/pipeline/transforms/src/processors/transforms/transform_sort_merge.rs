@@ -216,15 +216,17 @@ impl<R: Rows> TransformSortMerge<R> {
             None,
         );
 
-        while let (Some(block), _) = merger.next_block()? {
+        while !merger.is_finished() {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
             }
-
-            result.push(block);
+            if let Some(block) = merger.next_block()? {
+                result.push(block);
+            }
         }
+
         Ok(result)
     }
 }
