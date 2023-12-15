@@ -56,6 +56,7 @@ use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
+#[allow(dead_code)]
 struct MergeStyleJoin<'a> {
     build_conditions: &'a [ScalarExpr],
     probe_conditions: &'a [ScalarExpr],
@@ -63,6 +64,7 @@ struct MergeStyleJoin<'a> {
     probe_sexpr: &'a SExpr,
 }
 
+#[allow(dead_code)]
 impl MergeStyleJoin<'_> {
     pub fn new(join: &SExpr) -> MergeStyleJoin {
         let join_op = match join.plan() {
@@ -103,6 +105,7 @@ impl MergeStyleJoin<'_> {
     }
 }
 
+#[allow(dead_code)]
 impl MergeIntoInterpreter {
     pub async fn build_static_filter(
         join: &SExpr,
