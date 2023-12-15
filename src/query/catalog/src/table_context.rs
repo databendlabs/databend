@@ -218,6 +218,8 @@ pub trait TableContext: Send + Sync {
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
 
+    fn clear_segment_locations(&self) -> Result<()>;
+
     fn get_segment_locations(&self) -> Result<Vec<Location>>;
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;

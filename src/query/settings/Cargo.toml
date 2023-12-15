@@ -24,3 +24,6 @@ log = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
 sys-info = "0.9"
+
+[dev-dependencies]
+tokio = { workspace = true }

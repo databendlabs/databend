@@ -67,6 +67,7 @@ pub enum Statement {
     ShowIndexes {
         show_options: Option<ShowOptions>,
     },
+    ShowLocks(ShowLocksStmt),
 
     KillStmt {
         kill_target: KillTarget,
@@ -383,6 +384,7 @@ impl Display for Statement {
                     write!(f, " {show_options}")?;
                 }
             }
+            Statement::ShowLocks(stmt) => write!(f, "{stmt}")?,
             Statement::KillStmt {
                 kill_target,
                 object_id,

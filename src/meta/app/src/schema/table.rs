@@ -491,6 +491,10 @@ pub struct DropTableByIdReq {
     pub tenant: String,
 
     pub tb_id: MetaId,
+
+    pub table_name: String,
+
+    pub db_id: MetaId,
 }
 
 impl DropTableByIdReq {
@@ -796,6 +800,12 @@ pub struct CountTablesReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {
     pub table_id: u64,
+}
+
+impl Display for TableIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "TableIdToName{{{}}}", self.table_id)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

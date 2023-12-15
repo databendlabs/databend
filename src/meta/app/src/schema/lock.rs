@@ -50,6 +50,17 @@ impl LockType {
             }
         }
     }
+
+    pub fn key_from_str(&self, s: &str) -> Result<LockKey, KeyError> {
+        match self {
+            LockType::TABLE => {
+                let key = TableLockKey::from_str_key(s)?;
+                Ok(LockKey::Table {
+                    table_id: key.table_id,
+                })
+            }
+        }
+    }
 }
 
 impl Display for LockType {
@@ -98,6 +109,33 @@ impl LockKey {
                 revision,
             },
         }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct LockInfo {
+    pub key: LockKey,
+    pub revision: u64,
+    pub meta: LockMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListLocksReq {
+    pub prefixes: Vec<String>,
+}
+
+impl ListLocksReq {
+    pub fn create() -> Self {
+        let prefixes = vec![TableLockKey::PREFIX.to_string()];
+        Self { prefixes }
+    }
+
+    pub fn create_with_table_ids(table_ids: Vec<u64>) -> Self {
+        let mut prefixes = Vec::new();
+        for table_id in table_ids {
+            prefixes.push(format!("{}/{}", TableLockKey::PREFIX, table_id));
+        }
+        Self { prefixes }
     }
 }
 

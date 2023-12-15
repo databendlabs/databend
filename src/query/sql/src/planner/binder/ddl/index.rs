@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::DropIndexStmt;
 use common_ast::ast::ExplainKind;
@@ -38,7 +36,6 @@ use storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
@@ -289,10 +286,8 @@ impl Binder {
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
-            }));
-            Ok(optimize(self.ctx.clone(), opt_ctx, select_plan)?)
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            Ok(optimize(opt_ctx, select_plan)?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };

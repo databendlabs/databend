@@ -24,46 +24,41 @@ insert_data() {
 }
 
 test_format() {
+	rm -rf /tmp/test_load_unload
+	mkdir /tmp/test_load_unload
+	echo "drop stage if exists s1" | $BENDSQL_CLIENT_CONNECT
+	echo "create stage s1 url='fs:///tmp/test_load_unload/'" | $BENDSQL_CLIENT_CONNECT
+	echo "truncate table test_load_unload" | $BENDSQL_CLIENT_CONNECT
+
 	# insert data
 	insert_data
 
-	# unload clickhouse
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.parquet
+	# unload1
+	echo "copy into @s1/unload1/ from test_load_unload" | $BENDSQL_CLIENT_CONNECT
+	mv `ls /tmp/test_load_unload/unload1/*` /tmp/test_load_unload/unload1.parquet
 
 	echo "truncate table test_load_unload" | $BENDSQL_CLIENT_CONNECT
 
 	# load streaming
 	curl -sH "insert_sql:insert into test_load_unload file_format = (type = ${1})" \
-	-F "upload=@/tmp/test_load_unload.parquet" \
+	-F "upload=@/tmp/test_load_unload/unload1.parquet" \
 	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 
-	# unload clickhouse again
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.parquet
+	# unload2
+	echo "copy into @s1/unload2/ from test_load_unload" | $BENDSQL_CLIENT_CONNECT
+	mv `ls /tmp/test_load_unload/unload2/*` /tmp/test_load_unload/unload2.parquet
 
 	echo "truncate table test_load_unload" | $BENDSQL_CLIENT_CONNECT
 
-	# copy into table
-	echo "copy into test_load_unload from 'fs:///tmp/test_load_unload.parquet' file_format = (type = ${1});" | $BENDSQL_CLIENT_CONNECT
+	# load with copy into table
+	echo "copy into test_load_unload from @s1/unload1.parquet force=true;" | $BENDSQL_CLIENT_CONNECT
 
-	# unload clickhouse again
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload3.parquet
+	# unload3
+	echo "copy into @s1/unload3/ from test_load_unload" | $BENDSQL_CLIENT_CONNECT
+	mv `ls /tmp/test_load_unload/unload3/*` /tmp/test_load_unload/unload3.parquet
 
-	# copy into stage
-	rm -rf /tmp/test_load_unload_fs
-	echo "drop stage if exists data_fs;" | $BENDSQL_CLIENT_CONNECT
-	echo "create stage data_fs url = 'fs:///tmp/test_load_unload_fs/' FILE_FORMAT = (type = ${1});"  | $BENDSQL_CLIENT_CONNECT
-	echo "copy into @data_fs from test_load_unload file_format = (type = ${1});" | $BENDSQL_CLIENT_CONNECT
-
-	# unload clickhouse again from stage
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from @data_fs FORMAT ${1}" > /tmp/test_load_unload4.parquet
-
-	diff /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
-	diff /tmp/test_load_unload3.parquet /tmp/test_load_unload.parquet
-	diff /tmp/test_load_unload4.parquet /tmp/test_load_unload.parquet
+	diff /tmp/test_load_unload/unload2.parquet /tmp/test_load_unload/unload1.parquet
+	diff /tmp/test_load_unload/unload3.parquet /tmp/test_load_unload/unload1.parquet
 	echo "truncate table test_load_unload" | $BENDSQL_CLIENT_CONNECT
 }
 

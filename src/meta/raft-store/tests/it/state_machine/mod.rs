@@ -139,7 +139,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
     ) -> T {
-        let m = meta.map(|x| KVMeta { expire_at: Some(x) });
+        let m = meta.map(KVMeta::new_expire);
         T {
             key: name.to_string(),
             seq,
@@ -241,7 +241,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None => None,
             Some(ref w) => {
                 // trick: in this test all expired timestamps are all 0
-                if w.get_expire_at() < now { None } else { want }
+                if w.eval_expire_at_ms() < now {
+                    None
+                } else {
+                    want
+                }
             }
         };
 
@@ -277,9 +281,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(KVMeta {
-                        expire_at: Some(now + 10),
-                    }),
+                    value_meta: Some(KVMeta::new_expire(now + 10)),
                 }),
                 &mut t,
                 None,
@@ -304,9 +306,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::Update(b"value_meta_bar".to_vec()),
-                    value_meta: Some(KVMeta {
-                        expire_at: Some(now + 10),
-                    }),
+                    value_meta: Some(KVMeta::new_expire(now + 10)),
                 }),
                 &mut t,
                 None,
@@ -323,9 +323,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(KVMeta {
-                        expire_at: Some(now + 20),
-                    }),
+                    value_meta: Some(KVMeta::new_expire(now + 20)),
                 }),
                 &mut t,
                 None,
@@ -342,9 +340,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     assert_eq!(
         SeqV {
             seq: got.seq,
-            meta: Some(KVMeta {
-                expire_at: Some(now + 20)
-            }),
+            meta: Some(KVMeta::new_expire(now + 20)),
             data: b"value_meta_bar".to_vec()
         },
         got,

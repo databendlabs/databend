@@ -152,24 +152,24 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-
         if let Some(catalog) = catalog {
             let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
             select_builder.with_filter(format!("catalog = '{catalog}'"));
         }
+        if let Some(limit) = limit {
+            match limit {
+                ShowLimit::Like { pattern } => {
+                    select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                }
+                ShowLimit::Where { selection } => {
+                    select_builder.with_filter(format!("({selection})"));
+                }
+            }
+        }
 
-        let query = match limit {
-            None => select_builder.build(),
-            Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
-                select_builder.build()
-            }
-            Some(ShowLimit::Where { selection }) => {
-                select_builder.with_filter(format!("({selection})"));
-                select_builder.build()
-            }
-        };
+        let query = select_builder.build();
         debug!("show streams rewrite to: {:?}", query);
+
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),

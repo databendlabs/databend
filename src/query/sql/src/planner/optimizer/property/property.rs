@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 use super::column_stat::ColumnStatSet;
 use crate::plans::ScalarExpr;
+use crate::plans::SortItem;
 use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
@@ -59,6 +60,15 @@ pub struct RelationalProperty {
 
     /// Used columns of a relational expression
     pub used_columns: ColumnSet,
+
+    /// Ordering information of a relational expression
+    /// The sequence of sort items is important.
+    /// No ordering information is ensured if empty.
+    ///
+    /// TODO(leiysky): it's better to place ordering property
+    /// to the physical property, but at that time, we will have
+    /// to enforce the ordering property manually.
+    pub orderings: Vec<SortItem>,
 }
 
 #[derive(Default, Clone)]

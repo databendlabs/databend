@@ -938,6 +938,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_show_options(show_options, "ShowIndexes".to_string());
     }
 
+    fn visit_show_locks(&mut self, stmt: &'ast ShowLocksStmt) {
+        let mut children = Vec::new();
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "ShowLocks".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_show_options(&mut self, show_options: &'ast Option<ShowOptions>, name: String) {
         let mut children = Vec::new();
         if let Some(show_options) = show_options {

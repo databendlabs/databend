@@ -45,10 +45,7 @@ use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
 use common_tracing::init_logging;
 use common_tracing::FileConfig;
-use common_tracing::OTLPConfig;
-use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig;
-use common_tracing::TracingConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -92,15 +89,14 @@ async fn main() {
             level: config.log_level.clone(),
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
+            limit: 48,
         },
         stderr: StderrConfig {
             on: true,
             level: "WARN".to_string(),
             format: "text".to_string(),
         },
-        otlp: OTLPConfig::default(),
-        query: QueryLogConfig::default(),
-        tracing: TracingConfig::default(),
+        ..Default::default()
     };
 
     let _guards = init_logging("databend-metabench", &log_config, BTreeMap::new());
@@ -208,6 +204,10 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
         .await;
 
     print_res(i, "create_db", &res);
+    let db_id = match res {
+        Ok(res) => res.db_id,
+        Err(_) => 0,
+    };
 
     let res = client
         .create_table(CreateTableReq {
@@ -241,6 +241,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
         .drop_table_by_id(DropTableByIdReq {
             if_exists: false,
             tenant: tenant(),
+            db_id,
+            table_name: table_name(),
             tb_id: t.ident.table_id,
         })
         .await;

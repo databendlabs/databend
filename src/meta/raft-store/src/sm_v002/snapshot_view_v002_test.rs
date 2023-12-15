@@ -98,27 +98,15 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             s("a"),
-            Marked::new_with_meta(
-                4,
-                b("a1"),
-                Some(KVMeta {
-                    expire_at: Some(15)
-                })
-            )
+            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expire(15)))
         ),
         (
             s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expire(5)))
         ),
         (
             s("c"),
-            Marked::new_with_meta(
-                3,
-                b("c0"),
-                Some(KVMeta {
-                    expire_at: Some(20)
-                })
-            )
+            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expire(20)))
         ),
     ]);
 

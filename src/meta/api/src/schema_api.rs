@@ -61,8 +61,10 @@ use common_meta_app::schema::ListDroppedTableResp;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -206,6 +208,10 @@ pub trait SchemaApi: Send + Sync {
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError>;
 
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError>;
+
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
+
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -254,6 +260,8 @@ pub trait SchemaApi: Send + Sync {
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError>;
 
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError>;
+
+    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError>;
 
     async fn create_catalog(&self, req: CreateCatalogReq)
     -> Result<CreateCatalogReply, KVAppError>;

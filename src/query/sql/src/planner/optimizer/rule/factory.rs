@@ -28,6 +28,7 @@ use super::rewrite::RulePushDownLimitExpression;
 use super::rewrite::RulePushDownPrewhere;
 use super::rewrite::RuleTryApplyAggIndex;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
+use crate::optimizer::rule::rewrite::RuleEliminateSort;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::optimizer::rule::rewrite::RuleNormalizeAggregate;
@@ -87,6 +88,7 @@ impl RuleFactory {
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
+            RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
         }
     }
 }

@@ -52,7 +52,9 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::ListLocksReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockInfo;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -186,6 +188,27 @@ impl Catalog for ImmutableCatalog {
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
         let ti = table.get_table_info();
         Ok((ti.ident, Arc::new(ti.meta.clone())))
+    }
+
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
+        let table = self
+            .sys_db_meta
+            .get_by_id(&table_id)
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
+        Ok(table.name().to_string())
+    }
+
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> common_exception::Result<String> {
+        if self.sys_db.get_db_info().ident.db_id == db_id {
+            Ok("system".to_string())
+        } else if self.info_schema_db.get_db_info().ident.db_id == db_id {
+            Ok("information_schema".to_string())
+        } else {
+            Err(ErrorCode::UnknownDatabaseId(format!(
+                "Unknown database id {}",
+                db_id
+            )))
+        }
     }
 
     #[async_backtrace::framed]
@@ -342,6 +365,13 @@ impl Catalog for ImmutableCatalog {
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "delete_lock_revision not allowed for system database",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "list_locks not allowed for system database",
         ))
     }
 

@@ -12,9 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod decorrelate;
-mod flatten_plan;
-mod flatten_scalar;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-pub use decorrelate::decorrelate_subquery;
+use crate::ast::ShowLimit;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowLocksStmt {
+    pub in_account: bool,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowLocksStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW LOCKS")?;
+        if self.in_account {
+            write!(f, " IN ACCOUNT")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {}", limit)?
+        }
+
+        Ok(())
+    }
+}

@@ -36,6 +36,7 @@ use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures::StreamExt;
 use http::HeaderMap;
+use http::StatusCode;
 use log::debug;
 use log::info;
 use log::warn;
@@ -231,7 +232,6 @@ pub async fn clickhouse_handler_get(
     headers: &HeaderMap,
 ) -> PoemResult<WithContentType<Body>> {
     let root = Span::root(full_name!(), SpanContext::random());
-
     async {
         let session = ctx.upgrade_session(SessionType::ClickHouseHttpHandler)?;
         if let Some(db) = &params.database {
@@ -246,6 +246,16 @@ pub async fn clickhouse_handler_get(
         settings
             .set_batch_settings(&params.settings)
             .map_err(BadRequest)?;
+
+        if !settings
+            .get_enable_clickhouse_handler()
+            .map_err(InternalServerError)?
+        {
+            return Err(poem::Error::from_string(
+                "default settings: enable_clickhouse_handler is 0".to_string(),
+                StatusCode::METHOD_NOT_ALLOWED,
+            ));
+        }
 
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let sql = params.query();
@@ -300,6 +310,16 @@ pub async fn clickhouse_handler_post(
         settings
             .set_batch_settings(&params.settings)
             .map_err(BadRequest)?;
+
+        if !settings
+            .get_enable_clickhouse_handler()
+            .map_err(InternalServerError)?
+        {
+            return Err(poem::Error::from_string(
+                "default settings: enable_clickhouse_handler is 0".to_string(),
+                StatusCode::METHOD_NOT_ALLOWED,
+            ));
+        }
 
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let mut sql = params.query();

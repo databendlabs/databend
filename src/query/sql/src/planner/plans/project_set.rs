@@ -77,10 +77,14 @@ impl Operator for ProjectSet {
             );
         }
 
+        // Derive orderings
+        let orderings = vec![];
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 

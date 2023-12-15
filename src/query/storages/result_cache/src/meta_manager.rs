@@ -50,9 +50,7 @@ impl ResultCacheMetaManager {
                 key,
                 seq,
                 value: Operation::Update(value),
-                value_meta: Some(KVMeta {
-                    expire_at: Some(expire_at),
-                }),
+                value_meta: Some(KVMeta::new_expire(expire_at)),
             })
             .await?;
         Ok(())
