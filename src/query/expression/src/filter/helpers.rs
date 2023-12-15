@@ -67,7 +67,7 @@ where T: std::cmp::PartialOrd {
     }
 }
 
-pub fn boolean_selection_op(op: &SelectOp) -> fn(bool, bool) -> bool {
+pub fn selection_op_boolean(op: &SelectOp) -> fn(bool, bool) -> bool {
     match op {
         SelectOp::Equal => boolean_equal,
         SelectOp::NotEqual => boolean_not_equal,
@@ -78,7 +78,7 @@ pub fn boolean_selection_op(op: &SelectOp) -> fn(bool, bool) -> bool {
     }
 }
 
-pub fn string_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
+pub fn selection_op_string(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
     match op {
         SelectOp::Equal => string_equal,
         SelectOp::NotEqual => string_not_equal,
@@ -89,7 +89,7 @@ pub fn string_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
     }
 }
 
-pub fn variant_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
+pub fn selection_op_variant(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
     match op {
         SelectOp::Equal => variant_equal,
         SelectOp::NotEqual => variant_not_equal,
@@ -100,7 +100,7 @@ pub fn variant_selection_op(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
     }
 }
 
-pub fn tuple_selection_op<T>(op: &SelectOp) -> fn(T, T) -> Option<bool>
+pub fn selection_op_tuple<T>(op: &SelectOp) -> fn(T, T) -> Option<bool>
 where T: std::cmp::PartialOrd {
     match op {
         SelectOp::Equal => tuple_equal::<T>,
