@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app as mt;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::storage::StorageFsConfig;
@@ -70,6 +72,7 @@ fn test_decode_v35_user_stage() -> anyhow::Result<()> {
             username: "databend".to_string(),
             hostname: "databend.rs".to_string(),
         }),
+        created_on: DateTime::<Utc>::default(),
     };
     common::test_load_old(func_name!(), stage_info_v35.as_slice(), 35, want())?;
     common::test_pb_from_to(func_name!(), want())?;
