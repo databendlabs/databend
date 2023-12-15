@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
 
@@ -272,7 +273,7 @@ impl<'a> Selector<'a> {
         let right_data_type = self
             .evaluator
             .remove_generics_data_type(generics, &right_data_type);
-        let count = self.select_values(
+        self.select_values(
             select_op,
             left_value,
             right_value,
@@ -284,8 +285,7 @@ impl<'a> Selector<'a> {
             false_idx,
             select_strategy,
             count,
-        );
-        Ok(count)
+        )
     }
 
     // Process SelectExpr::Others.
@@ -301,7 +301,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let count = match expr {
+        match expr {
             Expr::FunctionCall {
                 function,
                 args,
@@ -425,9 +425,12 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
-            _ => unreachable!("expr: {expr}"),
-        };
-        Ok(count)
+            _ => {
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "Unsupported filter expression getting {expr}",
+                )));
+            }
+        }
     }
 
     // Process SelectExpr::BooleanColumn.
@@ -444,7 +447,7 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> Result<usize> {
         let column = self.evaluator.data_block().get_by_offset(id).value.clone();
-        let count = self.select_value(
+        self.select_value(
             column,
             data_type,
             true_selection,
@@ -453,8 +456,7 @@ impl<'a> Selector<'a> {
             false_idx,
             select_strategy,
             count,
-        );
-        Ok(count)
+        )
     }
 
     // Process SelectExpr::BooleanScalar.
@@ -470,7 +472,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let count = self.select_value(
+        self.select_value(
             Value::Scalar(constant),
             data_type,
             true_selection,
@@ -479,7 +481,6 @@ impl<'a> Selector<'a> {
             false_idx,
             select_strategy,
             count,
-        );
-        Ok(count)
+        )
     }
 }

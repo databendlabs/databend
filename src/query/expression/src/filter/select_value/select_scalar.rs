@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
-use crate::filter::boolean_selection_op;
 use crate::filter::empty_array_compare_value;
 use crate::filter::selection_op;
-use crate::filter::string_selection_op;
+use crate::filter::selection_op_boolean;
+use crate::filter::selection_op_string;
+use crate::filter::selection_op_tuple;
+use crate::filter::selection_op_variant;
 use crate::filter::tuple_compare_default_value;
-use crate::filter::tuple_selection_op;
-use crate::filter::variant_selection_op;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
@@ -42,19 +44,19 @@ impl<'a> Selector<'a> {
         false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
-    ) -> usize {
+    ) -> Result<usize> {
         if left == Scalar::Null || right == Scalar::Null {
             if false_selection.1 {
-                return self.select_null(
+                return Ok(self.select_null(
                     true_selection,
                     false_selection.0,
                     true_idx,
                     false_idx,
                     select_strategy,
                     count,
-                );
+                ));
             } else {
-                return 0;
+                return Ok(0);
             }
         }
 
@@ -69,23 +71,23 @@ impl<'a> Selector<'a> {
             DataType::Boolean => {
                 let left = left.into_boolean().unwrap();
                 let right = right.into_boolean().unwrap();
-                boolean_selection_op(op)(left, right)
+                selection_op_boolean(op)(left, right)
             }
             DataType::String => {
                 let left = left.into_string().unwrap();
                 let right = right.into_string().unwrap();
-                string_selection_op(op)(&left, &right)
+                selection_op_string(op)(&left, &right)
             }
             DataType::Variant => {
                 let left = left.into_variant().unwrap();
                 let right = right.into_variant().unwrap();
-                variant_selection_op(op)(&left, &right)
+                selection_op_variant(op)(&left, &right)
             }
             DataType::Tuple(_) => {
                 let left = left.into_tuple().unwrap();
                 let right = right.into_tuple().unwrap();
                 let mut ret = tuple_compare_default_value(op);
-                let op = tuple_selection_op::<Scalar>(op);
+                let op = selection_op_tuple::<Scalar>(op);
                 for (lhs, rhs) in left.into_iter().zip(right.into_iter()) {
                     if let Some(result) = op(lhs, rhs) {
                         ret = result;
@@ -94,10 +96,17 @@ impl<'a> Selector<'a> {
                 }
                 ret
             }
-            _ => unreachable!("Here is no Nullable(_) or Generic(_)"),
+            _ => {
+                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
+                // Generic has been converted to a specific DataType.
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "{:?} is not supported for comparison",
+                    &data_type
+                )));
+            }
         };
 
-        self.select_boolean_scalar_adapt(
+        let count = self.select_boolean_scalar_adapt(
             result,
             true_selection,
             false_selection,
@@ -105,7 +114,8 @@ impl<'a> Selector<'a> {
             false_idx,
             select_strategy,
             count,
-        )
+        );
+        Ok(count)
     }
 
     pub fn select_null(

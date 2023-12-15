@@ -14,14 +14,16 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::arrow::and_validities;
-use crate::filter::boolean_selection_op;
 use crate::filter::selection_op;
-use crate::filter::string_selection_op;
+use crate::filter::selection_op_boolean;
+use crate::filter::selection_op_string;
+use crate::filter::selection_op_tuple;
+use crate::filter::selection_op_variant;
 use crate::filter::tuple_compare_default_value;
-use crate::filter::tuple_selection_op;
-use crate::filter::variant_selection_op;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
@@ -50,8 +52,8 @@ impl<'a> Selector<'a> {
         false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
-    ) -> usize {
-        // Remove Nullable(_) and get the inner column and validity.
+    ) -> Result<usize> {
+        // Remove NullableColumn and get the inner column and validity.
         let mut validity = None;
         if let DataType::Nullable(_) = left_data_type {
             let nullable_left = left.into_nullable().unwrap();
@@ -64,7 +66,7 @@ impl<'a> Selector<'a> {
             validity = and_validities(Some(nullable_right.validity), validity);
         }
 
-        match left_data_type.remove_nullable() {
+        let count = match left_data_type.remove_nullable() {
             DataType::Null | DataType::EmptyMap => 0,
             DataType::EmptyArray => self.select_empty_array_adapt(
                 op,
@@ -366,22 +368,6 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
-            DataType::Map(_) => {
-                let left = left.into_map().unwrap();
-                let right = right.into_map().unwrap();
-                self.select_array_adapt(
-                    op,
-                    *left,
-                    *right,
-                    validity,
-                    true_selection,
-                    false_selection,
-                    true_idx,
-                    false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
             DataType::Tuple(_) => {
                 let left = left.into_tuple().unwrap();
                 let right = right.into_tuple().unwrap();
@@ -398,8 +384,16 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
-            _ => unreachable!("Here is no Nullable(_) or Generic(_)"),
-        }
+            _ => {
+                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
+                // Generic has been converted to a specific DataType.
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "{:?} is not supported for comparison",
+                    &left_data_type
+                )));
+            }
+        };
+        Ok(count)
     }
 
     pub fn select_boolean_column_adapt(
@@ -912,9 +906,9 @@ impl<'a> Selector<'a> {
         is_variant: bool,
     ) -> usize {
         let op = if is_variant {
-            variant_selection_op(op)
+            selection_op_variant(op)
         } else {
-            string_selection_op(op)
+            selection_op_string(op)
         };
         let mut true_idx = *true_start_idx;
         let mut false_idx = *false_start_idx;
@@ -1064,7 +1058,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let op = boolean_selection_op(op);
+        let op = selection_op_boolean(op);
         let mut true_idx = *true_start_idx;
         let mut false_idx = *false_start_idx;
         match select_strategy {
@@ -1363,7 +1357,7 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> usize {
         let default = tuple_compare_default_value(op);
-        let op = tuple_selection_op::<ScalarRef>(op);
+        let op = selection_op_tuple::<ScalarRef>(op);
         let mut true_idx = *true_start_idx;
         let mut false_idx = *false_start_idx;
         match select_strategy {

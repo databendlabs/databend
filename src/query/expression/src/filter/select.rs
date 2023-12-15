@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::types::nullable::NullableColumn;
@@ -38,7 +41,7 @@ impl<'a> Selector<'a> {
         false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
-    ) -> usize {
+    ) -> Result<usize> {
         match (left, right) {
             // Select indices by comparing two scalars.
             (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars(
@@ -108,12 +111,12 @@ impl<'a> Selector<'a> {
         false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
-    ) -> usize {
+    ) -> Result<usize> {
         debug_assert!(
             matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
         );
 
-        match data_type {
+        let count = match data_type {
             DataType::Boolean => {
                 let value = value.try_downcast::<BooleanType>().unwrap();
                 match value {
@@ -172,7 +175,15 @@ impl<'a> Selector<'a> {
                     }
                 }
             }
-            _ => unreachable!("update_selection_by_boolean_value: {:?}", data_type),
-        }
+            _ => {
+                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
+                // Generic has been converted to a specific DataType.
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "Filtering by single Value only supports Boolean or Nullable(Boolean), but getting {:?}",
+                    &data_type
+                )));
+            }
+        };
+        Ok(count)
     }
 }

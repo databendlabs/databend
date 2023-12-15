@@ -14,13 +14,15 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
-use crate::filter::boolean_selection_op;
 use crate::filter::selection_op;
-use crate::filter::string_selection_op;
+use crate::filter::selection_op_boolean;
+use crate::filter::selection_op_string;
+use crate::filter::selection_op_tuple;
+use crate::filter::selection_op_variant;
 use crate::filter::tuple_compare_default_value;
-use crate::filter::tuple_selection_op;
-use crate::filter::variant_selection_op;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
@@ -49,23 +51,23 @@ impl<'a> Selector<'a> {
         false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
-    ) -> usize {
+    ) -> Result<usize> {
         if let Scalar::Null = scalar {
             if false_selection.1 {
-                return self.select_null(
+                return Ok(self.select_null(
                     true_selection,
                     false_selection.0,
                     true_idx,
                     false_idx,
                     select_strategy,
                     count,
-                );
+                ));
             } else {
-                return 0;
+                return Ok(0);
             }
         }
 
-        // Remove Nullable(_) and get the inner column and validity.
+        // Remove NullableColumn and get the inner column and validity.
         let validity = if let DataType::Nullable(_) = column_data_type {
             let nullable_column = column.into_nullable().unwrap();
             column = nullable_column.column;
@@ -74,7 +76,7 @@ impl<'a> Selector<'a> {
             None
         };
 
-        match column_data_type.remove_nullable() {
+        let count = match column_data_type.remove_nullable() {
             DataType::Null | DataType::EmptyMap => 0,
             DataType::EmptyArray => self.select_empty_array_adapt(
                 op,
@@ -376,22 +378,6 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
-            DataType::Map(_) => {
-                let scalar = scalar.into_map().unwrap();
-                let column = column.into_map().unwrap();
-                self.select_array_scalar_and_column_adapt(
-                    op,
-                    &scalar,
-                    *column,
-                    validity,
-                    true_selection,
-                    false_selection,
-                    true_idx,
-                    false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
             DataType::Tuple(_) => {
                 let scalar = scalar.into_tuple().unwrap();
                 let column = column.into_tuple().unwrap();
@@ -408,8 +394,16 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
-            _ => unreachable!("Here is no Nullable(_) or Generic(_)"),
-        }
+            _ => {
+                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
+                // Generic has been converted to a specific DataType.
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "{:?} is not supported for comparison",
+                    &column_data_type
+                )));
+            }
+        };
+        Ok(count)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -859,9 +853,9 @@ impl<'a> Selector<'a> {
         is_variant: bool,
     ) -> usize {
         let op = if is_variant {
-            variant_selection_op(op)
+            selection_op_variant(op)
         } else {
-            string_selection_op(op)
+            selection_op_string(op)
         };
         let mut true_idx = *true_start_idx;
         let mut false_idx = *false_start_idx;
@@ -993,7 +987,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let op = boolean_selection_op(op);
+        let op = selection_op_boolean(op);
         let mut true_idx = *true_start_idx;
         let mut false_idx = *false_start_idx;
         match select_strategy {
@@ -1256,7 +1250,7 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> usize {
         let default = tuple_compare_default_value(op);
-        let op = tuple_selection_op::<ScalarRef>(op);
+        let op = selection_op_tuple::<ScalarRef>(op);
         let mut true_idx = *true_start_idx;
         let mut false_idx = *false_start_idx;
         let scalar = scalar
