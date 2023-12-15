@@ -57,7 +57,10 @@ impl MergeSourceOptimizer {
         // target is build side
         let new_join_children = if change_join_order {
             vec![
-                Arc::new(left_exchange_input.clone()),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(RelOperator::Exchange(Random)),
+                    Arc::new(left_exchange_input.clone()),
+                ))
                 Arc::new(SExpr::create_unary(
                     Arc::new(RelOperator::Exchange(Broadcast)),
                     Arc::new(right_exchange_input.clone()),
