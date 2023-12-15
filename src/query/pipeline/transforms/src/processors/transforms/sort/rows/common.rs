@@ -48,7 +48,7 @@ impl Rows for StringColumn {
         Column::String(self.clone())
     }
 
-    fn from_column(col: Column, _: &[SortColumnDescription]) -> Option<Self> {
+    fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
         col.as_string().cloned()
     }
 

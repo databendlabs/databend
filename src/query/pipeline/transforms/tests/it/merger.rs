@@ -15,11 +15,13 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::tokio;
 use common_exception::Result;
 use common_expression::block_debug::pretty_format_blocks;
 use common_expression::types::DataType;
 use common_expression::types::Int32Type;
 use common_expression::types::NumberDataType;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -48,13 +50,19 @@ impl TestStream {
 }
 
 impl SortedStream for TestStream {
-    fn next(&mut self) -> Result<(Option<DataBlock>, bool)> {
+    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         // To simulate the real scenario, we randomly decide whether the stream is pending or not.
         let pending = self.rng.gen_bool(0.5);
         if pending {
             Ok((None, true))
         } else {
-            Ok((self.data.pop_front(), false))
+            Ok((
+                self.data.pop_front().map(|b| {
+                    let col = b.get_last_column().clone();
+                    (b, col)
+                }),
+                false,
+            ))
         }
     }
 }
@@ -126,19 +134,10 @@ fn create_test_merger(input: Vec<Vec<DataBlock>>) -> TestMerger {
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::create(schema, streams, sort_desc, 4, true)
+    TestMerger::create(schema, streams, sort_desc, 4)
 }
 
-fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
-    let mut result = Vec::new();
-
-    while let (Some(block), pending) = merger.next_block()? {
-        if pending {
-            continue;
-        }
-        result.push(block);
-    }
-
+fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
     let result_rows = result.iter().map(|v| v.num_rows()).sum::<usize>();
     let result = pretty_format_blocks(&result).unwrap();
     let expected_rows = expected.num_rows();
@@ -148,6 +147,42 @@ fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
         "expected (num_rows = {}):\n{}\nactual (num_rows = {}):\n{}",
         expected_rows, expected, result_rows, result
     );
+}
+
+fn test(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
+    let mut result = Vec::new();
+
+    loop {
+        let (block, pending) = merger.next_block()?;
+        if pending {
+            continue;
+        }
+        if block.is_none() {
+            break;
+        }
+        result.push(block.unwrap());
+    }
+
+    check_result(result, expected);
+
+    Ok(())
+}
+
+async fn test_async(mut merger: TestMerger, expected: DataBlock) -> Result<()> {
+    let mut result = Vec::new();
+
+    loop {
+        let (block, pending) = merger.async_next_block().await?;
+        if pending {
+            continue;
+        }
+        if block.is_none() {
+            break;
+        }
+        result.push(block.unwrap());
+    }
+
+    check_result(result, expected);
 
     Ok(())
 }
@@ -167,6 +202,26 @@ fn test_fuzz() -> Result<()> {
         let (input, expected) = random_test_data(&mut rng);
         let merger = create_test_merger(input);
         test(merger, expected)?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_basic_async() -> Result<()> {
+    let (input, expected) = basic_test_data();
+    let merger = create_test_merger(input);
+    test_async(merger, expected).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuzz_async() -> Result<()> {
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..10 {
+        let (input, expected) = random_test_data(&mut rng);
+        let merger = create_test_merger(input);
+        test_async(merger, expected).await?;
     }
 
     Ok(())

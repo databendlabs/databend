@@ -115,8 +115,8 @@ where
         T::upcast_column(self.inner.clone())
     }
 
-    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self> {
-        let inner = T::try_downcast_column(&col)?;
+    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
+        let inner = T::try_downcast_column(col)?;
         Some(Self {
             inner,
             desc: !desc[0].asc,

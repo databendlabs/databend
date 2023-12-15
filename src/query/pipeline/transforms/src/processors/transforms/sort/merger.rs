@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
@@ -25,20 +26,19 @@ use common_expression::SortColumnDescription;
 use super::utils::find_bigger_child_of_root;
 use super::Cursor;
 use super::Rows;
-use crate::processors::sort::utils::get_ordered_rows;
 
 #[async_trait::async_trait]
 pub trait SortedStream {
-    /// Returns the next block and if it is pending.
+    /// Returns the next block with the order column and if it is pending.
     ///
     /// If the block is [None] and it's not pending, it means the stream is finished.
     /// If the block is [None] but it's pending, it means the stream is not finished yet.
-    fn next(&mut self) -> Result<(Option<DataBlock>, bool)> {
+    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         Ok((None, false))
     }
 
     /// The async version of `next`.
-    async fn async_next(&mut self) -> Result<(Option<DataBlock>, bool)> {
+    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         self.next()
     }
 }
@@ -56,7 +56,6 @@ where
     buffer: Vec<DataBlock>,
     pending_stream: VecDeque<usize>,
     batch_size: usize,
-    output_order_col: bool,
 
     temp_sorted_num_rows: usize,
     temp_output_indices: Vec<(usize, usize, usize)>,
@@ -73,12 +72,10 @@ where
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_size: usize,
-        output_order_col: bool,
     ) -> Self {
         // We only create a merger when there are at least two streams.
-        debug_assert!(streams.len() > 1);
-        debug_assert!(schema.num_fields() > 0);
-        debug_assert_eq!(schema.fields.last().unwrap().name(), "_order_col");
+        debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
+
         let heap = BinaryHeap::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let pending_stream = (0..streams.len()).collect();
@@ -89,7 +86,6 @@ where
             heap,
             buffer,
             batch_size,
-            output_order_col,
             sort_desc,
             pending_stream,
             temp_sorted_num_rows: 0,
@@ -103,16 +99,13 @@ where
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_stream.pop_front() {
             debug_assert!(self.buffer[i].is_empty());
-            let (block, pending) = self.unsorted_streams[i].async_next().await?;
+            let (input, pending) = self.unsorted_streams[i].async_next().await?;
             if pending {
                 continue_pendings.push(i);
                 continue;
             }
-            if let Some(mut block) = block {
-                let rows = get_ordered_rows(&block, &self.sort_desc)?;
-                if !self.output_order_col {
-                    block.pop_columns(1);
-                }
+            if let Some((block, col)) = input {
+                let rows = R::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
                 self.heap.push(Reverse(cursor));
                 self.buffer[i] = block;
@@ -127,16 +120,13 @@ where
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_stream.pop_front() {
             debug_assert!(self.buffer[i].is_empty());
-            let (block, pending) = self.unsorted_streams[i].next()?;
+            let (input, pending) = self.unsorted_streams[i].next()?;
             if pending {
                 continue_pendings.push(i);
                 continue;
             }
-            if let Some(mut block) = block {
-                let rows = get_ordered_rows(&block, &self.sort_desc)?;
-                if !self.output_order_col {
-                    block.pop_columns(1);
-                }
+            if let Some((block, col)) = input {
+                let rows = R::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
                 self.heap.push(Reverse(cursor));
                 self.buffer[i] = block;

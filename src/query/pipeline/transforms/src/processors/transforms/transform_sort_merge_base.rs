@@ -29,7 +29,6 @@ use common_pipeline_core::processors::InputPort;
 use common_pipeline_core::processors::OutputPort;
 use common_pipeline_core::processors::Processor;
 
-use super::sort::utils::get_ordered_rows;
 use super::sort::Cursor;
 use super::sort::RowConverter;
 use super::sort::Rows;
@@ -134,7 +133,7 @@ where
 
     fn transform(&mut self, mut block: DataBlock) -> Result<Vec<DataBlock>> {
         let rows = if self.order_col_generated {
-            let rows = get_ordered_rows(&block, &self.sort_desc)?;
+            let rows = R::from_column(block.get_last_column(), &self.sort_desc)?;
             if !self.output_order_col {
                 // The next processor could be a sort spill processor which need order column.
                 // And the order column will be removed in that processor.
@@ -284,7 +283,6 @@ impl TransformSortMergeBuilder {
                                 block_size,
                                 max_memory_usage,
                                 spilling_bytes_threshold_per_core,
-                                output_order_col
                             ),
                         )?,
                     ),
@@ -303,7 +301,6 @@ impl TransformSortMergeBuilder {
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
-                            output_order_col,
                         ),
                     )?,
                 ),
@@ -321,7 +318,6 @@ impl TransformSortMergeBuilder {
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
-                            output_order_col,
                         ),
                     )?,
                 ),
@@ -339,7 +335,6 @@ impl TransformSortMergeBuilder {
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
-                            output_order_col,
                         ),
                     )?,
                 ),
@@ -357,7 +352,6 @@ impl TransformSortMergeBuilder {
                             block_size,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
-                            output_order_col,
                         ),
                     )?,
                 ),
@@ -377,7 +371,6 @@ impl TransformSortMergeBuilder {
                         block_size,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
-                        output_order_col,
                     ),
                 )?,
             )

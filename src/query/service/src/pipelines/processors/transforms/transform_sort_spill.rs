@@ -24,6 +24,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::with_number_mapped_type;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
@@ -328,7 +329,6 @@ where R: Rows + Sync + Send + 'static
             streams,
             self.sort_desc.clone(),
             self.batch_size,
-            true,
         );
 
         let mut spilled = VecDeque::new();
@@ -358,7 +358,7 @@ enum BlockStream {
 
 #[async_trait::async_trait]
 impl SortedStream for BlockStream {
-    async fn async_next(&mut self) -> Result<(Option<DataBlock>, bool)> {
+    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         let block = match self {
             BlockStream::Block(block) => block.take(),
             BlockStream::Spilled((files, spiller)) => {
@@ -379,7 +379,13 @@ impl SortedStream for BlockStream {
                 }
             }
         };
-        Ok((block, false))
+        Ok((
+            block.map(|b| {
+                let col = b.get_last_column().clone();
+                (b, col)
+            }),
+            false,
+        ))
     }
 }
 
@@ -596,12 +602,8 @@ mod tests {
 
         let mut result = Vec::new();
 
-        loop {
-            let (block, _) = block_stream.async_next().await?;
-            if block.is_none() {
-                break;
-            }
-            result.push(block.unwrap());
+        while let (Some((block, _)), _) = block_stream.async_next().await? {
+            result.push(block);
         }
 
         let result = pretty_format_blocks(&result).unwrap();

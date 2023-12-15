@@ -14,12 +14,14 @@
 
 use std::collections::BinaryHeap;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 
-use super::Rows;
+pub const ORDER_COL_NAME: &str = "_order_col";
 
 /// Find the bigger child of the root of the heap.
 #[inline(always)]
@@ -34,13 +36,30 @@ pub fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
 }
 
 #[inline(always)]
-pub fn get_ordered_rows<R: Rows>(block: &DataBlock, desc: &[SortColumnDescription]) -> Result<R> {
-    let order_col = block.columns().last().unwrap().value.as_column().unwrap();
-    R::from_column(order_col.clone(), desc).ok_or_else(|| {
-        let expected_ty = R::data_type();
-        let ty = order_col.data_type();
-        ErrorCode::BadDataValueType(format!(
-            "Order column type mismatched. Expecetd {expected_ty} but got {ty}"
-        ))
-    })
+fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> DataType {
+    debug_assert!(!desc.is_empty());
+    if desc.len() == 1 {
+        let order_by_field = schema.field(desc[0].offset);
+        if matches!(
+            order_by_field.data_type(),
+            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+        ) {
+            return order_by_field.data_type().clone();
+        }
+    }
+    DataType::String
+}
+
+#[inline(always)]
+pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) -> DataSchemaRef {
+    if let Some(f) = schema.fields.last() && f.name() == ORDER_COL_NAME {
+        schema
+    } else {
+        let mut fields = schema.fields().clone();
+        fields.push(DataField::new(
+            ORDER_COL_NAME,
+            order_field_type(&schema, desc),
+        ));
+        DataSchemaRefExt::create(fields)
+    }
 }

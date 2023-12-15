@@ -22,12 +22,11 @@ use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::row::RowConverter as CommonConverter;
-use common_expression::BlockEntry;
 use common_expression::BlockMetaInfo;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
-use common_expression::Value;
 
 use super::sort::CommonRows;
 use super::sort::Cursor;
@@ -58,7 +57,7 @@ pub struct TransformSortMerge<R: Rows> {
     sort_desc: Arc<Vec<SortColumnDescription>>,
 
     block_size: usize,
-    buffer: Vec<Option<DataBlock>>,
+    buffer: Vec<Option<(DataBlock, Column)>>,
 
     aborting: Arc<AtomicBool>,
     // The following fields are used for spilling.
@@ -76,8 +75,6 @@ pub struct TransformSortMerge<R: Rows> {
     /// The number of spilled blocks in each merge of the spill processor.
     spill_num_merge: usize,
 
-    output_order_col: bool,
-
     _r: PhantomData<R>,
 }
 
@@ -88,7 +85,6 @@ impl<R: Rows> TransformSortMerge<R> {
         block_size: usize,
         max_memory_usage: usize,
         spilling_bytes_threshold: usize,
-        output_order_col: bool,
     ) -> Self {
         let may_spill = max_memory_usage != 0 && spilling_bytes_threshold != 0;
         TransformSortMerge {
@@ -104,7 +100,6 @@ impl<R: Rows> TransformSortMerge<R> {
             num_rows: 0,
             spill_batch_size: 0,
             spill_num_merge: 0,
-            output_order_col,
             _r: PhantomData,
         }
     }
@@ -113,7 +108,7 @@ impl<R: Rows> TransformSortMerge<R> {
 impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
-    fn add_block(&mut self, mut block: DataBlock, init_cursor: Cursor<R>) -> Result<Status> {
+    fn add_block(&mut self, block: DataBlock, init_cursor: Cursor<R>) -> Result<Status> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
@@ -124,19 +119,9 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
             return Ok(Status::Continue);
         }
 
-        // If `self.output_order_col` is true, the order column will be removed outside the processor.
-        // In order to reuse codes, we add the order column back to the block.
-        // TODO: find a more elegant way to do this.
-        if !self.output_order_col {
-            let order_col = init_cursor.to_column();
-            block.add_column(BlockEntry {
-                data_type: order_col.data_type(),
-                value: Value::Column(order_col),
-            });
-        }
         self.num_bytes += block.memory_size();
         self.num_rows += block.num_rows();
-        self.buffer.push(Some(block));
+        self.buffer.push(Some((block, init_cursor.to_column())));
 
         if self.may_spill
             && (self.num_bytes >= self.spilling_bytes_threshold
@@ -198,11 +183,15 @@ impl<R: Rows> TransformSortMerge<R> {
     }
 
     fn merge_sort(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
+        if self.buffer.is_empty() {
+            return Ok(vec![]);
+        }
+
         let size_hint = self.num_rows.div_ceil(batch_size);
 
         if self.buffer.len() == 1 {
             // If there is only one block, we don't need to merge.
-            let block = self.buffer.pop().unwrap().unwrap();
+            let (block, _) = self.buffer.pop().unwrap().unwrap();
             let num_rows = block.num_rows();
             if size_hint == 1 {
                 return Ok(vec![block]);
@@ -211,7 +200,7 @@ impl<R: Rows> TransformSortMerge<R> {
             for i in 0..size_hint {
                 let start = i * batch_size;
                 let end = ((i + 1) * batch_size).min(num_rows);
-                let mut block = block.slice(start..end);
+                let block = block.slice(start..end);
                 result.push(block);
             }
             return Ok(result);
@@ -224,7 +213,6 @@ impl<R: Rows> TransformSortMerge<R> {
             streams,
             self.sort_desc.clone(),
             batch_size,
-            self.output_order_col,
         );
 
         while let (Some(block), _) = merger.next_block()? {
@@ -240,10 +228,10 @@ impl<R: Rows> TransformSortMerge<R> {
     }
 }
 
-type BlockStream = Option<DataBlock>;
+type BlockStream = Option<(DataBlock, Column)>;
 
 impl SortedStream for BlockStream {
-    fn next(&mut self) -> Result<(Option<DataBlock>, bool)> {
+    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         Ok((self.take(), false))
     }
 }
@@ -275,7 +263,7 @@ pub fn sort_merge(
         sort_desc.clone(),
         false,
         false,
-        MergeSortCommonImpl::create(schema, sort_desc, block_size, 0, 0, false),
+        MergeSortCommonImpl::create(schema, sort_desc, block_size, 0, 0),
     )?;
     for block in data_blocks {
         processor.transform(block)?;
