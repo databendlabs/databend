@@ -19,6 +19,7 @@ use common_exception::Result;
 use crate::optimizer::SExpr;
 use crate::plans::AddRowNumber;
 use crate::plans::Exchange::Broadcast;
+use crate::plans::Exchange::Random;
 use crate::plans::Join;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -60,7 +61,7 @@ impl MergeSourceOptimizer {
                 Arc::new(SExpr::create_unary(
                     Arc::new(RelOperator::Exchange(Random)),
                     Arc::new(left_exchange_input.clone()),
-                ))
+                )),
                 Arc::new(SExpr::create_unary(
                     Arc::new(RelOperator::Exchange(Broadcast)),
                     Arc::new(right_exchange_input.clone()),
@@ -104,9 +105,11 @@ impl MergeSourceOptimizer {
         //         Join
         //         /  \
         //        /    \
-        //       *     Exchange(Broadcast)
-        //                  |
-        //                AddRowNumber
+        // Exchange    Exchange(Broadcast)
+        // (Random)           |
+        //    |          AddRowNumber
+        //    |               |
+        //    *               *
         // if target is build we will get below:
         // Output:
         //       Exchange

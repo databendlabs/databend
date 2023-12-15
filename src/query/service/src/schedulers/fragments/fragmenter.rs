@@ -155,7 +155,7 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        if !*plan.change_join_order {
+        if !plan.change_join_order {
             self.state = State::SelectLeaf;
         }
         Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
