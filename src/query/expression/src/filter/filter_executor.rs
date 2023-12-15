@@ -24,6 +24,7 @@ use crate::Evaluator;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
 
+// FilterExecutor is used to filter `DataBlock` by `SelectExpr`.
 pub struct FilterExecutor {
     select_expr: SelectExpr,
     func_ctx: FunctionContext,
@@ -67,12 +68,14 @@ impl FilterExecutor {
         }
     }
 
+    // Filter a DataBlock, return the filtered DataBlock.
     pub fn filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let origin_count = data_block.num_rows();
         let result_count = self.select(&data_block)?;
         self.take(data_block, origin_count, result_count)
     }
 
+    // Store the filtered indices of data_block in `true_selection` and return the number of filtered indices.
     pub fn select(&mut self, data_block: &DataBlock) -> Result<usize> {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
         let selector = Selector::new(evaluator, data_block.num_rows());
@@ -83,6 +86,7 @@ impl FilterExecutor {
         )
     }
 
+    // Generate a new DataBlock from the filtered indices stored in `true_selection`.
     pub fn take(
         &mut self,
         data_block: DataBlock,
@@ -95,6 +99,15 @@ impl FilterExecutor {
             data_block
         };
 
+        // Optimization:
+        // (1) If all indices are filtered, return the original `DataBlock` directly.
+        // (2) If the number of filtered indices is greater than 80% of the number of DataBlock rows,
+        //     it is more efficient to use `take_range` to copy continuous memory, but we need to
+        //     construct a `selection_range` before calling `take_range`, so we need to consider whether
+        //     it is worth doing it, after testing, the results show that it is more efficient to
+        //     construct `selection_range` and then use `take_range` only when the number of columns
+        //     is greater than 1.
+        // (3) Otherwise, use `take` to generate a new `DataBlock`.
         if result_count == origin_count {
             Ok(data_block)
         } else if result_count as f64 > data_block.num_rows() as f64 * 0.8
@@ -103,6 +116,8 @@ impl FilterExecutor {
             let range_count = self.build_selection_range(result_count);
             data_block.take_ranges(&self.selection_range[0..range_count], result_count)
         } else {
+            // If has_or is true, the order of indices may be changed, so sorting is required only
+            // when has_or is true.
             if self.keep_order && self.has_or {
                 self.true_selection[0..result_count].sort();
             }
@@ -115,7 +130,9 @@ impl FilterExecutor {
         if self.selection_range.is_empty() {
             self.selection_range = vec![0..0; self.max_block_size];
         }
-        if self.has_or || self.keep_order {
+        // If has_or is true, the order of indices may be changed and the order is not kept, so
+        // sorting is required only when has_or is true.
+        if self.has_or {
             self.true_selection[0..count].sort();
         }
         let selection = &self.true_selection[0..count];
