@@ -349,7 +349,7 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
+            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
                     format!(", pattern => '{pattern}'")
