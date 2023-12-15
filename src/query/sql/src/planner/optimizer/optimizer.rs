@@ -248,8 +248,7 @@ pub fn optimize_query(
     if unsafe { ctx.get_settings().get_disable_join_reorder()? } {
         return heuristic.optimize_expression(&result, &[RuleID::EliminateEvalScalar]);
     }
-    let result = heuristic.optimize_expression(&result, &RESIDUAL_RULES)?;
-    Ok(result)
+    RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
