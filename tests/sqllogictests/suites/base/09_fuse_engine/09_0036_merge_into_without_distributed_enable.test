@@ -1064,13 +1064,13 @@ select * from null_target order by a,b;
 
 ## issue#13972
 statement ok
-create table tt1(a bool not null, b int not null, c int not null);
+create table tt1_(a bool not null, b int not null, c int not null);
 
 statement ok
-insert into tt1 values(true, 10, 11),(false, 20, 21);
+insert into tt1_ values(true, 10, 11),(false, 20, 21);
 
 query TT
-MERGE INTO tt1 USING
+MERGE INTO tt1_ USING
      (SELECT
          657 AS cc0,
          658 AS cc1
@@ -1085,7 +1085,7 @@ MERGE INTO tt1 USING
 0 0 1
 
 query TTT
-select * from tt1;
+select * from tt1_;
 ----
 0 20 21
 
