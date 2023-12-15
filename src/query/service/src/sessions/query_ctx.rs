@@ -384,6 +384,14 @@ impl TableContext for QueryContext {
         self.shared.result_progress.as_ref().get_values()
     }
 
+    fn get_runtime_filter_prune_process(&self) -> Arc<Progress> {
+        self.shared.runtime_filter_progress.clone()
+    }
+
+    fn get_runtime_filter_prune_process_value(&self) -> ProgressValues {
+        self.shared.runtime_filter_progress.as_ref().get_values()
+    }
+
     fn get_status_info(&self) -> String {
         let status = self.shared.status.read();
         status.clone()

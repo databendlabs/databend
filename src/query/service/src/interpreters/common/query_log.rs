@@ -113,6 +113,7 @@ impl InterpreterQueryLog {
         let agg_spilled_bytes = 0u64;
         let group_by_spilled_rows = 0u64;
         let group_by_spilled_bytes = 0u64;
+        let runtime_filter_prune_rows = 0u64;
 
         // Client.
         let client_address = match ctx.get_client_address() {
@@ -175,6 +176,7 @@ impl InterpreterQueryLog {
             agg_spilled_rows,
             group_by_spilled_bytes,
             group_by_spilled_rows,
+            runtime_filter_prune_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -241,6 +243,8 @@ impl InterpreterQueryLog {
 
         let group_by_spilled_rows = ctx.get_group_by_spill_progress_value().rows as u64;
         let group_by_spilled_bytes = ctx.get_group_by_spill_progress_value().bytes as u64;
+
+        let runtime_filter_prune_rows = ctx.get_runtime_filter_prune_process_value().rows as u64;
 
         // Result.
         let result_rows = ctx.get_result_progress_value().rows as u64;
@@ -311,6 +315,7 @@ impl InterpreterQueryLog {
             agg_spilled_rows,
             group_by_spilled_bytes,
             group_by_spilled_rows,
+            runtime_filter_prune_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,

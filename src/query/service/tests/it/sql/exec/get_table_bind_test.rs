@@ -448,6 +448,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_runtime_filter_prune_process(&self) -> Arc<Progress> {
+        todo!()
+    }
+
+    fn get_runtime_filter_prune_process_value(&self) -> ProgressValues {
+        todo!()
+    }
+
     fn get_status_info(&self) -> String {
         "".to_string()
     }
