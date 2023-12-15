@@ -34,7 +34,6 @@ use common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::optimizer::s_expr::SExpr;
 use crate::plans::Limit;
@@ -553,10 +552,9 @@ impl Dataframe {
             ignore_result: false,
             formatted_ast: None,
         };
-        let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-            enable_distributed_optimization,
-        }));
-        optimize(self.query_ctx, opt_ctx, plan)
+        let opt_ctx = OptimizerContext::new(self.query_ctx.clone(), self.binder.metadata.clone())
+            .with_enable_distributed_optimization(enable_distributed_optimization);
+        optimize(opt_ctx, plan)
     }
 }
 

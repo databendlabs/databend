@@ -812,6 +812,12 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
+    fn clear_segment_locations(&self) -> Result<()> {
+        let mut segment_locations = self.inserted_segment_locs.write();
+        segment_locations.clear();
+        Ok(())
+    }
+
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
         Ok(self
             .inserted_segment_locs

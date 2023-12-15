@@ -27,6 +27,7 @@ use common_meta_app::schema::UpdateVirtualColumnReply;
 use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_storages_fuse::FuseTable;
+use storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
 pub trait VirtualColumnHandler: Sync + Send {
@@ -59,6 +60,7 @@ pub trait VirtualColumnHandler: Sync + Send {
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         virtual_columns: Vec<String>,
+        segment_locs: Option<Vec<Location>>,
     ) -> Result<()>;
 }
 
@@ -113,9 +115,10 @@ impl VirtualColumnHandlerWrapper {
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         virtual_columns: Vec<String>,
+        segment_locs: Option<Vec<Location>>,
     ) -> Result<()> {
         self.handler
-            .do_refresh_virtual_column(fuse_table, ctx, virtual_columns)
+            .do_refresh_virtual_column(fuse_table, ctx, virtual_columns, segment_locs)
             .await
     }
 }

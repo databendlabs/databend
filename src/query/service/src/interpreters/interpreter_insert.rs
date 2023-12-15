@@ -32,8 +32,8 @@ use common_sql::NameResolutionContext;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_refresh_agg_index;
-use crate::interpreters::common::RefreshAggIndexDesc;
+use crate::interpreters::common::hook_refresh;
+use crate::interpreters::common::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
@@ -247,18 +247,13 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
-                let refresh_agg_index_desc = RefreshAggIndexDesc {
+                let refresh_desc = RefreshDesc {
                     catalog: self.plan.catalog.clone(),
                     database: self.plan.database.clone(),
                     table: self.plan.table.clone(),
                 };
 
-                hook_refresh_agg_index(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    refresh_agg_index_desc,
-                )
-                .await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
 
                 return Ok(build_res);
             }
@@ -281,18 +276,13 @@ impl Interpreter for InsertInterpreter {
             append_mode,
         )?;
 
-        let refresh_agg_index_desc = RefreshAggIndexDesc {
+        let refresh_desc = RefreshDesc {
             catalog: self.plan.catalog.clone(),
             database: self.plan.database.clone(),
             table: self.plan.table.clone(),
         };
 
-        hook_refresh_agg_index(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            refresh_agg_index_desc,
-        )
-        .await?;
+        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
 
         Ok(build_res)
     }

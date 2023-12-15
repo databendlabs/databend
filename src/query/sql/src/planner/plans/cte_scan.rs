@@ -72,6 +72,7 @@ impl Operator for CteScan {
             output_columns: self.used_columns()?,
             outer_columns: ColumnSet::new(),
             used_columns: self.used_columns()?,
+            orderings: vec![],
         }))
     }
 

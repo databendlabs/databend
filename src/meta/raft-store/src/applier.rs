@@ -381,9 +381,7 @@ impl<'a> Applier<'a> {
         put: &TxnPutRequest,
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
-        let upsert = UpsertKV::update(&put.key, &put.value).with(KVMeta {
-            expire_at: put.expire_at,
-        });
+        let upsert = UpsertKV::update(&put.key, &put.value).with(KVMeta::new(put.expire_at));
 
         let (prev, _result) = self.upsert_kv(&upsert).await?;
 

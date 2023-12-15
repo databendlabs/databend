@@ -154,9 +154,7 @@ fn ent(index: u64, key: &str, expire: Option<u64>, time_ms: Option<u64>) -> Entr
         payload: EntryPayload::Normal(LogEntry {
             txid: None,
             time_ms,
-            cmd: Cmd::UpsertKV(
-                UpsertKV::update(key, key.as_bytes()).with(KVMeta { expire_at: expire }),
-            ),
+            cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes()).with(KVMeta::new(expire))),
         }),
     }
 }

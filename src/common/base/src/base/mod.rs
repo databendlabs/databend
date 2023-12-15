@@ -24,6 +24,7 @@ mod stoppable;
 mod string;
 mod take_mut;
 mod uniq_id;
+mod watch_notify;
 
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
@@ -52,3 +53,4 @@ pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;
 pub use uuid;
+pub use watch_notify::WatchNotify;

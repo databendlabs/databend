@@ -183,6 +183,7 @@ impl Operator for Aggregate {
             output_columns,
             outer_columns,
             used_columns,
+            orderings: vec![],
         }))
     }
 

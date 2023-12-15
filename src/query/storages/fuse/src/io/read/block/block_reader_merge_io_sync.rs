@@ -15,11 +15,14 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::parquet::read::read_metadata;
 use common_base::rangemap::RangeMerger;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
+use common_storage::infer_schema_with_extension;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
@@ -141,5 +144,13 @@ impl BlockReader {
     ) -> Result<(usize, Vec<u8>)> {
         let chunk = op.blocking().read_with(path).range(start..end).call()?;
         Ok((index, chunk))
+    }
+
+    pub fn sync_read_schema(&self, loc: &str) -> Option<ArrowSchema> {
+        let mut reader = self.operator.blocking().reader(loc).ok()?;
+        let metadata = read_metadata(&mut reader).ok()?;
+        debug_assert_eq!(metadata.row_groups.len(), 1);
+        let schema = infer_schema_with_extension(&metadata).ok()?;
+        Some(schema)
     }
 }

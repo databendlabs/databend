@@ -447,13 +447,13 @@ impl SMV002 {
 
         // Remove previous expiration index, add a new one.
 
-        if let Some(exp_ms) = removed.expire_at_ms() {
+        if let Some(exp_ms) = removed.get_expire_at_ms() {
             self.levels
                 .set(ExpireKey::new(exp_ms, removed.internal_seq().seq()), None)
                 .await?;
         }
 
-        if let Some(exp_ms) = added.expire_at_ms() {
+        if let Some(exp_ms) = added.get_expire_at_ms() {
             let k = ExpireKey::new(exp_ms, added.internal_seq().seq());
             let v = key.to_string();
             self.levels.set(k, Some((v, None))).await?;

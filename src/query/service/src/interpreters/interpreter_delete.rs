@@ -35,12 +35,9 @@ use common_sql::executor::physical_plans::Exchange;
 use common_sql::executor::physical_plans::FragmentKind;
 use common_sql::executor::physical_plans::MutationKind;
 use common_sql::executor::PhysicalPlan;
-use common_sql::optimizer::CascadesOptimizer;
-use common_sql::optimizer::DPhpy;
-use common_sql::optimizer::HeuristicOptimizer;
+use common_sql::optimizer::optimize_query;
+use common_sql::optimizer::OptimizerContext;
 use common_sql::optimizer::SExpr;
-use common_sql::optimizer::DEFAULT_REWRITE_RULES;
-use common_sql::optimizer::RESIDUAL_RULES;
 use common_sql::plans::BoundColumnRef;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
@@ -298,7 +295,7 @@ pub async fn subquery_filter(
     // Select `_row_id` column
     let input_expr = subquery_desc.input_expr.clone();
 
-    let expr = SExpr::create_unary(
+    let mut s_expr = SExpr::create_unary(
         Arc::new(RelOperator::EvalScalar(EvalScalar {
             items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -314,26 +311,18 @@ pub async fn subquery_filter(
     let mut bind_context = Box::new(BindContext::new());
     bind_context.add_column_binding(row_id_column_binding.clone());
 
-    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
-    let mut expr = heuristic.optimize(expr, &DEFAULT_REWRITE_RULES)?;
-    let mut dphyp_optimized = false;
-    if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(expr.clone()))?;
-        if optimized {
-            expr = (*dp_res).clone();
-            dphyp_optimized = true;
-        }
-    }
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone(), dphyp_optimized)?;
-    expr = cascades.optimize(expr)?;
-    expr = heuristic.optimize(expr, &RESIDUAL_RULES)?;
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
+        .with_enable_distributed_optimization(false)
+        .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
+        .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
+
+    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
         ctx.clone(),
         *bind_context,
-        expr,
+        s_expr,
         metadata.clone(),
         None,
         false,
