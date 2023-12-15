@@ -20,13 +20,13 @@ mod select_value;
 mod selector;
 
 pub use filter_executor::FilterExecutor;
-pub use helpers::boolean_selection_op;
 pub use helpers::empty_array_compare_value;
 pub use helpers::selection_op;
-pub use helpers::string_selection_op;
+pub use helpers::selection_op_boolean;
+pub use helpers::selection_op_string;
+pub use helpers::selection_op_tuple;
+pub use helpers::selection_op_variant;
 pub use helpers::tuple_compare_default_value;
-pub use helpers::tuple_selection_op;
-pub use helpers::variant_selection_op;
 pub use helpers::SelectOp;
 pub use select_expr::build_select_expr;
 pub use select_expr::SelectExpr;
