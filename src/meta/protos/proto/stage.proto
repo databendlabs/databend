@@ -74,6 +74,8 @@ message StageInfo {
   optional UserIdentity creator = 8;
 
   FileFormatParams file_format_params = 9;
+
+  optional string created_on = 10;
 }
 
 message StageFile {
@@ -87,4 +89,3 @@ message StageFile {
   optional UserIdentity creator = 5;
   optional string etag = 6;
 }
-

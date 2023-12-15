@@ -569,6 +569,7 @@ pub struct StageInfo {
     /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub number_of_files: u64,
     pub creator: Option<UserIdentity>,
+    pub created_on: DateTime<Utc>,
 }
 
 impl StageInfo {

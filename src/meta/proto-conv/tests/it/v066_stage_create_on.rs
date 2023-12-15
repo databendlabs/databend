@@ -16,8 +16,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app as mt;
 use common_meta_app::principal::UserIdentity;
-use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
 use minitrace::func_name;
 
 use crate::common;
@@ -30,55 +30,54 @@ use crate::common;
 // * only be added when a new version is added,                *
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
-//
-// The message bytes are built from the output of `test_user_stage_fs_latest()`
 #[test]
-fn test_decode_v25_user_stage() -> anyhow::Result<()> {
-    let stage_info_v25 = vec![
-        10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
-        25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
-        160, 6, 25, 168, 6, 24, 34, 37, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 50, 1,
-        92, 58, 3, 114, 111, 119, 66, 3, 78, 97, 78, 74, 2, 39, 39, 160, 6, 25, 168, 6, 24, 42, 9,
-        10, 2, 48, 2, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 56, 100, 66, 29, 10, 8, 100,
-        97, 116, 97, 98, 101, 110, 100, 18, 11, 100, 97, 116, 97, 98, 101, 110, 100, 46, 114, 115,
-        160, 6, 25, 168, 6, 24, 160, 6, 25, 168, 6, 24,
+fn test_decode_v66_stage() -> anyhow::Result<()> {
+    let stage_info_v66 = vec![
+        10, 10, 115, 116, 97, 103, 101, 95, 110, 97, 109, 101, 16, 2, 26, 50, 10, 48, 10, 46, 10,
+        4, 116, 101, 115, 116, 18, 24, 104, 116, 116, 112, 115, 58, 47, 47, 115, 51, 46, 97, 109,
+        97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109, 42, 4, 116, 101, 115, 116, 104, 1, 160,
+        6, 66, 168, 6, 24, 42, 11, 10, 2, 48, 2, 16, 231, 7, 24, 1, 56, 1, 50, 3, 99, 99, 99, 56,
+        100, 66, 19, 10, 8, 100, 97, 116, 97, 98, 101, 110, 100, 18, 1, 37, 160, 6, 66, 168, 6, 24,
+        74, 8, 10, 6, 160, 6, 66, 168, 6, 24, 82, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32,
+        48, 49, 58, 50, 54, 58, 48, 57, 32, 85, 84, 67, 160, 6, 66, 168, 6, 24,
     ];
 
     let want = || mt::principal::StageInfo {
-        stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_name: "stage_name".to_string(),
+        stage_type: mt::principal::StageType::Internal,
         stage_params: mt::principal::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
-                root: "/dir/to/files".to_string(),
+            storage: StorageParams::S3(StorageS3Config {
+                bucket: "test".to_string(),
+                region: "test".to_string(),
+                allow_anonymous: true,
+                ..Default::default()
             }),
         },
         is_temporary: false,
-        file_format_params: mt::principal::FileFormatParams::Json(
-            mt::principal::JsonFileFormatParams {
-                compression: mt::principal::StageFileCompression::Bz2,
-            },
+        file_format_params: mt::principal::FileFormatParams::Parquet(
+            mt::principal::ParquetFileFormatParams {},
         ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::AbortNum(2),
-            size_limit: 1038,
+            size_limit: 999,
             max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_variant_check: false,
+            disable_variant_check: true,
             return_failed_only: false,
         },
-        comment: "test".to_string(),
+        comment: "ccc".to_string(),
         number_of_files: 100,
         creator: Some(UserIdentity {
             username: "databend".to_string(),
-            hostname: "databend.rs".to_string(),
+            hostname: "%".to_string(),
         }),
-        created_on: DateTime::<Utc>::default(),
+        created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };
-    common::test_load_old(func_name!(), stage_info_v25.as_slice(), 25, want())?;
     common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), stage_info_v66.as_slice(), 66, want())?;
 
     Ok(())
 }
