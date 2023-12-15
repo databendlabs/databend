@@ -135,10 +135,15 @@ async fn compact_table(
 
         let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
+        // keep the original progress value
+        let progress_value = ctx.get_write_progress_value();
         // Clears previously generated segment locations to avoid duplicate data in the refresh phase
         ctx.clear_segment_locations()?;
         ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
+
+        // reset the progress value
+        ctx.get_write_progress().set(&progress_value);
     }
     Ok(())
 }
