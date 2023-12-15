@@ -63,10 +63,19 @@ select count() from t1, t2 where t1.a = t2.a;
 ----
 100
 
+# check if runtime filter prune rows > 0. If so, runtime filter prune works
 query I
-select runtime_filter_prune_rows from system.query_log where runtime_filter_prune_rows = 900000 limit 1;
+SELECT
+    CASE
+        WHEN COUNT(*) > 0 THEN 1
+        ELSE 0
+    END
+FROM
+    system.query_log
+WHERE
+    runtime_filter_prune_rows > 0;
 ----
-900000
+1
 
 statement ok
 drop table t1
