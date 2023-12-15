@@ -43,7 +43,7 @@ async fn test_successfully_add_node() -> Result<()> {
             meta,
             data: value,
         }) => {
-            assert!(meta.unwrap().expire_at.unwrap() - current_time >= 60);
+            assert!(meta.unwrap().get_expire_at_sec().unwrap() - current_time >= 60);
             assert_eq!(value, serde_json::to_vec(&node_info)?);
         }
         catch => panic!("GetKVActionReply{:?}", catch),
@@ -126,7 +126,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
         .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
-    assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
+    assert!(value.unwrap().meta.unwrap().get_expire_at_sec().unwrap() - current_time >= 60);
 
     let current_time = current_seconds_time();
     cluster_api.heartbeat(&node_info, MatchSeq::GE(1)).await?;
@@ -135,7 +135,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
         .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
-    assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
+    assert!(value.unwrap().meta.unwrap().get_expire_at_sec().unwrap() - current_time >= 60);
     Ok(())
 }
 

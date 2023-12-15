@@ -12,24 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod factory;
-mod rewrite;
 #[allow(clippy::module_inception)]
-mod rule;
-mod rule_set;
-mod transform;
-mod transform_result;
-mod utils;
+mod decorrelate;
+mod flatten_plan;
+mod flatten_scalar;
+mod subquery_rewriter;
 
-pub use factory::RuleFactory;
-pub use rewrite::agg_index;
-pub use rewrite::try_push_down_filter_join;
-pub use rule::Rule;
-pub use rule::RuleID;
-pub use rule::RulePtr;
-pub use rule::DEFAULT_REWRITE_RULES;
-pub use rule::RESIDUAL_RULES;
-pub use rule_set::AppliedRules;
-pub use rule_set::RuleSet;
-pub use transform_result::TransformResult;
-pub use utils::constant;
+pub use decorrelate::decorrelate_subquery;
+pub use subquery_rewriter::FlattenInfo;
+pub use subquery_rewriter::SubqueryRewriter;

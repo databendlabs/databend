@@ -89,6 +89,7 @@ async fn main() {
             level: config.log_level.clone(),
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
+            limit: 48,
         },
         stderr: StderrConfig {
             on: true,
@@ -203,6 +204,10 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
         .await;
 
     print_res(i, "create_db", &res);
+    let db_id = match res {
+        Ok(res) => res.db_id,
+        Err(_) => 0,
+    };
 
     let res = client
         .create_table(CreateTableReq {
@@ -236,6 +241,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
         .drop_table_by_id(DropTableByIdReq {
             if_exists: false,
             tenant: tenant(),
+            db_id,
+            table_name: table_name(),
             tb_id: t.ident.table_id,
         })
         .await;

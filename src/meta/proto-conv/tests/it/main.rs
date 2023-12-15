@@ -69,3 +69,4 @@ mod v062_table_lock_meta;
 mod v063_connection;
 mod v064_ndjson_format_params;
 mod v065_least_visible_time;
+mod v066_stage_create_on;

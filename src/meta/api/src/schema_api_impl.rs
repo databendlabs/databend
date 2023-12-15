@@ -192,6 +192,7 @@ use log::as_debug;
 use log::as_display;
 use log::debug;
 use log::error;
+use log::warn;
 use minitrace::func_name;
 use ConditionResult::Eq;
 
@@ -2388,12 +2389,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (_, table_name_opt): (_, Option<DBIdTableName>) =
                 get_pb_value(self, &table_id_to_name).await?;
 
-            let dbid_tbname = table_name_opt.ok_or_else(|| {
-                KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
-                    table_id,
-                    "drop_table_by_id failed to find db_id",
-                )))
-            })?;
+            let dbid_tbname = if let Some(db_id_table_name) = table_name_opt {
+                db_id_table_name
+            } else {
+                let dbid_tbname = DBIdTableName {
+                    db_id: req.db_id,
+                    table_name: req.table_name.clone(),
+                };
+                warn!(
+                    "drop_table_by_id cannot find {:?}, use {:?} instead",
+                    table_id_to_name, dbid_tbname
+                );
+
+                dbid_tbname
+            };
 
             let db_id = dbid_tbname.db_id;
             let tbname = dbid_tbname.table_name.clone();

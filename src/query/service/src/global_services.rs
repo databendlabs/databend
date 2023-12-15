@@ -56,15 +56,7 @@ impl GlobalServices {
     #[async_backtrace::framed]
     pub async fn init_with(config: &InnerConfig) -> Result<()> {
         // app name format: node_id[0..7]@cluster_id
-        let app_name_shuffle = format!(
-            "databend-query-{}@{}",
-            if config.query.node_id.len() >= 7 {
-                &config.query.node_id[0..7]
-            } else {
-                &config.query.node_id
-            },
-            config.query.cluster_id
-        );
+        let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
 
         // The order of initialization is very important
         // 1. global config init.
