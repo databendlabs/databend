@@ -27,6 +27,7 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::PipeItem;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
+use crate::operations::merge_into::processors::RowIdKind;
 
 pub struct RowNumberAndLogSplitProcessor {
     input_port: Arc<InputPort>,
@@ -133,19 +134,18 @@ impl Processor for RowNumberAndLogSplitProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            // all matched or logs
-            // if it's rowid, the meta will be none
             if data_block.get_meta().is_some() {
                 if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
+                    // distributed mode: source as build side
+                    self.output_data_row_number = Some(data_block)
+                } else if RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
+                    // distributed mode: target as build side
                     self.output_data_row_number = Some(data_block)
                 } else {
                     // mutation logs
                     self.output_data_log = Some(data_block);
                 }
             } else {
-                // when we use source as probe side and do distributed
-                // execution,it could be rowid but we use output_data_row_number.
-                // it doesn't matter.
                 self.output_data_row_number = Some(data_block)
             }
         }

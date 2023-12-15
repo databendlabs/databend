@@ -23,12 +23,14 @@ use common_exception::Result;
 use common_expression::types::UInt32Type;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::FromData;
 use common_expression::RemoteExpr;
 use common_expression::SendableDataBlockStream;
+use common_expression::ROW_ID_COL_NAME;
 use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
@@ -227,7 +229,7 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if *distributed {
+        if *distributed && !*change_join_order {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
@@ -238,7 +240,7 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        if *distributed && row_number_idx.is_none() {
+        if *distributed && row_number_idx.is_none() && !*change_join_order {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
@@ -412,9 +414,17 @@ impl MergeIntoInterpreter {
                 row_id_idx,
                 segments: segments.clone(),
                 distributed: true,
-                output_schema: DataSchemaRef::new(DataSchema::new(vec![
-                    join_output_schema.fields[row_number_idx.unwrap()].clone(),
-                ])),
+                output_schema: match *change_join_order {
+                    false => DataSchemaRef::new(DataSchema::new(vec![
+                        join_output_schema.fields[row_number_idx.unwrap()].clone(),
+                    ])),
+                    true => DataSchemaRef::new(DataSchema::new(vec![DataField::new(
+                        ROW_ID_COL_NAME,
+                        common_expression::types::DataType::Number(
+                            common_expression::types::NumberDataType::UInt64,
+                        ),
+                    )])),
+                },
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
             }));

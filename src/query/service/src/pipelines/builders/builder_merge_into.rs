@@ -44,6 +44,8 @@ use common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::RowNumberAndLogSplitProcessor;
 use common_storages_fuse::operations::TransformAddRowNumberColumnProcessor;
+use common_storages_fuse::operations::TransformDistributedMergeIntoBlockDeserialize;
+use common_storages_fuse::operations::TransformDistributedMergeIntoBlockSerialize;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 
@@ -116,6 +118,17 @@ impl PipelineBuilder {
         //  2.3 insert only: MutationLogs
         self.build_pipeline(input)?;
         self.main_pipeline.try_resize(1)?;
+
+        // deserialize MixRowIdKindAndLog
+        if *change_join_order {
+            self.main_pipeline
+                .add_transform(|transform_input_port, transform_output_port| {
+                    Ok(TransformDistributedMergeIntoBlockDeserialize::create(
+                        transform_input_port,
+                        transform_output_port,
+                    ))
+                })?;
+        }
 
         let tbl = self
             .ctx
@@ -878,6 +891,17 @@ impl PipelineBuilder {
             ));
         }
 
+        // add distributed_merge_into_block_serialize
+        // we will wrap rowid and log as MixRowIdKindAndLog
+        if *distributed && *change_join_order {
+            self.main_pipeline
+                .add_transform(|transform_input_port, transform_output_port| {
+                    Ok(TransformDistributedMergeIntoBlockSerialize::create(
+                        transform_input_port,
+                        transform_output_port,
+                    ))
+                })?;
+        }
         Ok(())
     }
 }
