@@ -125,6 +125,7 @@ pub struct QueryLogElement {
     pub agg_spilled_rows: u64,
     pub group_by_spilled_bytes: u64,
     pub group_by_spilled_rows: u64,
+    pub runtime_filter_prune_rows: u64,
 
     // Client.
     pub client_info: String,
@@ -248,6 +249,10 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("cpu_usage", TableDataType::Number(NumberDataType::UInt32)),
             TableField::new(
                 "memory_usage",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "runtime_filter_prune_rows",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             // Client.
@@ -437,6 +442,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::UInt64(self.memory_usage)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.runtime_filter_prune_rows)).as_ref());
         // Client.
         columns
             .next()

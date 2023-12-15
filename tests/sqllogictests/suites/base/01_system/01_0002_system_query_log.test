@@ -45,3 +45,31 @@ select count(*) from tbl_01_0002 where a > 1
 statement ok
 drop table tbl_01_0002
 
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+# runtiem filter prune query log
+statement ok
+create table t1(a int) as select number from numbers(100);
+
+statement ok
+create table t2(a int) as select number from numbers(1000000);
+
+query I
+select count() from t1, t2 where t1.a = t2.a;
+----
+100
+
+query I
+select runtime_filter_prune_rows from system.query_log order by runtime_filter_prune_rows desc limit 1;
+----
+900000
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2

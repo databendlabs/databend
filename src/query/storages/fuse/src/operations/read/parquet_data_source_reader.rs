@@ -119,12 +119,10 @@ impl SyncSource for ReadParquetDataSource<true> {
             None => Ok(None),
             Some(part) => {
                 if runtime_filter_pruner(
+                    self.partitions.ctx.clone(),
+                    self.table_index,
                     self.table_schema.clone(),
                     &part,
-                    &self
-                        .partitions
-                        .ctx
-                        .get_runtime_filter_with_id(self.table_index),
                     &self.func_ctx,
                 )? {
                     return Ok(Some(DataBlock::empty()));
@@ -224,15 +222,20 @@ impl Processor for ReadParquetDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
-            let filters = self
-                .partitions
-                .ctx
-                .get_runtime_filter_with_id(self.table_index);
-            for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
-                {
+            let mut remain_parts = Vec::with_capacity(parts.len());
+            for part in parts {
+                if runtime_filter_pruner(
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    self.table_schema.clone(),
+                    &part,
+                    &self.func_ctx,
+                )? {
                     continue;
                 }
+                remain_parts.push(part);
+            }
+            for part in &remain_parts {
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
@@ -293,7 +296,7 @@ impl Processor for ReadParquetDataSource<false> {
                 });
             }
 
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
+            self.output_data = Some((remain_parts, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }
 

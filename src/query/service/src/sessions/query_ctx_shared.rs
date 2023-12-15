@@ -71,6 +71,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been pruned by runtime filter
+    pub(in crate::sessions) runtime_filter_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
     pub(in crate::sessions) session: Arc<Session>,
@@ -156,6 +158,7 @@ impl QueryContextShared {
             group_by_spill_progress: Arc::new(Progress::create()),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
+            runtime_filter_progress: Arc::new(Progress::create()),
         }))
     }
 

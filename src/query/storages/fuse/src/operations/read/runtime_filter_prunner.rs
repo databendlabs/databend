@@ -15,7 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::Expr;
@@ -23,17 +25,19 @@ use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
-use log::info;
+use common_sql::IndexType;
 use storages_common_index::statistics_to_domain;
 
 use crate::FusePartInfo;
 
 pub fn runtime_filter_pruner(
+    ctx: Arc<dyn TableContext>,
+    table_index: IndexType,
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
-    filters: &Vec<Expr<String>>,
     func_ctx: &FunctionContext,
 ) -> Result<bool> {
+    let filters = ctx.get_runtime_filter_with_id(table_index);
     if filters.is_empty() {
         return Ok(false);
     }
@@ -73,10 +77,13 @@ pub fn runtime_filter_pruner(
     });
 
     if pruned {
-        info!(
-            "Pruned partition with {:?} rows by runtime filter",
-            part.nums_rows
-        );
+        // Only collect how many rows are pruned.(bytes is dummy value, its difficult to calculate)
+        let progress_val = ProgressValues {
+            rows: part.nums_rows,
+            // Dummy value
+            bytes: 0,
+        };
+        ctx.get_runtime_filter_prune_process().incr(&progress_val);
         return Ok(true);
     }
 
