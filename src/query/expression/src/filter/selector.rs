@@ -425,11 +425,9 @@ impl<'a> Selector<'a> {
                     count,
                 )
             }
-            _ => {
-                return Err(ErrorCode::UnsupportedDataType(format!(
-                    "Unsupported filter expression getting {expr}",
-                )));
-            }
+            _ => Err(ErrorCode::UnsupportedDataType(format!(
+                "Unsupported filter expression getting {expr}",
+            ))),
         }
     }
 
