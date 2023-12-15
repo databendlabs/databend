@@ -45,11 +45,13 @@ impl Operator for MaterializedCte {
         let output_columns = right_prop.output_columns.clone();
         let outer_columns = right_prop.outer_columns.clone();
         let used_columns = right_prop.used_columns.clone();
+        let orderings = right_prop.orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
