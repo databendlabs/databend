@@ -241,12 +241,15 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             let mut state = TransformResult::new();
             // we will reorder the join order according to the cardinality of target and source.
             rule.apply(&join_sexpr, &mut state)?;
-            assert_eq!(state.results().len(), 1);
+            assert!(state.results().len() <= 1);
             // we need to check whether we do swap left and right.
-            let old_left = join_sexpr.child(0)?;
-            let new_left = state.results()[0].child(0)?;
-            let change_join_order = old_left == new_left;
-            join_sexpr = Box::new(state.results()[0].clone());
+            let change_join_order = if state.results().len() == 1 {
+                join_sexpr = Box::new(state.results()[0].clone());
+                true
+            } else {
+                false
+            };
+
             // try to optimize distributed join
             if opt_ctx.enable_distributed_optimization
                 && opt_ctx
