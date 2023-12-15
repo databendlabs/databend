@@ -135,11 +135,11 @@ impl Processor for RowNumberAndLogSplitProcessor {
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.get_meta().is_some() {
-                if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
-                    // distributed mode: source as build side
-                    self.output_data_row_number = Some(data_block)
-                } else if RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
+                // distributed mode: source as build side
+                if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some()
                     // distributed mode: target as build side
+                    || RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).is_some()
+                {
                     self.output_data_row_number = Some(data_block)
                 } else {
                     // mutation logs
