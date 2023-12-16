@@ -35,9 +35,11 @@ use num_traits::Float;
 use num_traits::Pow;
 use ordered_float::OrderedFloat;
 
-use crate::scalars::decimal::register_decimal_round_truncate;
+use crate::scalars::decimal::register_decimal_math;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    register_decimal_math(registry);
+
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "sin",
         |_, _| {
@@ -245,8 +247,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
     );
-
-    register_decimal_round_truncate(registry);
 
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {

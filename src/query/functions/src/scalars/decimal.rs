@@ -1641,13 +1641,9 @@ fn decimal_to_int<T: Number>(
 }
 
 // round, truncate
-pub fn register_decimal_round_truncate(registry: &mut FunctionRegistry) {
-    let factory = |is_round: bool, params: &[usize], args_type: &[DataType]| {
+pub fn register_decimal_math(registry: &mut FunctionRegistry) {
+    let factory = |params: &[usize], args_type: &[DataType], round_mode: RoundMode| {
         if args_type.is_empty() {
-            return None;
-        }
-
-        if params.len() != 1 {
             return None;
         }
 
@@ -1658,7 +1654,11 @@ pub fn register_decimal_round_truncate(registry: &mut FunctionRegistry) {
 
         let from_decimal_type = from_type.as_decimal().unwrap();
 
-        let scale = params[0] as i64 - 76;
+        let scale = if params.is_empty() {
+            0
+        } else {
+            params[0] as i64 - 76
+        };
 
         let decimal_size = DecimalSize {
             precision: from_decimal_type.precision(),
@@ -1666,23 +1666,23 @@ pub fn register_decimal_round_truncate(registry: &mut FunctionRegistry) {
         };
 
         let dest_decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
-        let name = if is_round { "round" } else { "truncate" };
+        let name = format!("{:?}", round_mode).to_lowercase();
 
         Some(Function {
             signature: FunctionSignature {
-                name: name.to_owned(),
-                args_type: vec![from_type.clone(), Int64Type::data_type()],
+                name,
+                args_type: args_type.to_owned(),
                 return_type: DataType::Decimal(dest_decimal_type),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
                 eval: Box::new(move |args, _ctx| {
                     decimal_round_truncate(
-                        is_round,
                         &args[0],
                         from_type.clone(),
                         dest_decimal_type,
                         scale,
+                        round_mode,
                     )
                 }),
             },
@@ -1690,92 +1690,170 @@ pub fn register_decimal_round_truncate(registry: &mut FunctionRegistry) {
     };
 
     registry.register_function_factory("round", move |params, args_type| {
-        Some(Arc::new(factory(true, params, args_type)?))
+        Some(Arc::new(factory(params, args_type, RoundMode::Round)?))
     });
 
     registry.register_function_factory("round", move |params, args_type| {
-        let f = factory(true, params, args_type)?;
+        let f = factory(params, args_type, RoundMode::Round)?;
         Some(Arc::new(f.passthrough_nullable()))
     });
 
     registry.register_function_factory("truncate", move |params, args_type| {
-        Some(Arc::new(factory(false, params, args_type)?))
+        Some(Arc::new(factory(params, args_type, RoundMode::Truncate)?))
     });
 
     registry.register_function_factory("truncate", move |params, args_type| {
-        let f = factory(false, params, args_type)?;
+        let f = factory(params, args_type, RoundMode::Truncate)?;
+        Some(Arc::new(f.passthrough_nullable()))
+    });
+
+    registry.register_function_factory("ceil", move |params, args_type| {
+        Some(Arc::new(factory(params, args_type, RoundMode::Ceil)?))
+    });
+
+    registry.register_function_factory("ceil", move |params, args_type| {
+        let f = factory(params, args_type, RoundMode::Ceil)?;
+        Some(Arc::new(f.passthrough_nullable()))
+    });
+
+    registry.register_function_factory("floor", move |params, args_type| {
+        Some(Arc::new(factory(params, args_type, RoundMode::Floor)?))
+    });
+
+    registry.register_function_factory("floor", move |params, args_type| {
+        let f = factory(params, args_type, RoundMode::Floor)?;
         Some(Arc::new(f.passthrough_nullable()))
     });
 }
 
-macro_rules! decimal_round_positive_macro {
-    ($T:ty, $values: expr, $source_scale:expr, $target_scale:expr) => {{
-        let power_of_ten = <$T>::e(($source_scale - $target_scale) as u32);
-        let addition = power_of_ten / <$T>::from(2);
-
-        let results: Vec<$T> = $values
-            .iter()
-            .map(|input| {
-                let input = if input < &0 {
-                    input - addition
-                } else {
-                    input + addition
-                };
-                input / power_of_ten
-            })
-            .collect();
-        results
-    }};
+#[derive(Copy, Clone, Debug)]
+enum RoundMode {
+    Round,
+    Truncate,
+    Floor,
+    Ceil,
 }
 
-macro_rules! decimal_round_negative_macro {
-    ($T:ty, $values: expr, $source_scale:expr, $target_scale:expr) => {{
-        let divide_power_of_ten = <$T>::e(($source_scale - $target_scale) as u32);
-        let addition = divide_power_of_ten / <$T>::from(2);
-        let multiply_power_of_ten = <$T>::e((-$target_scale) as u32);
+fn decimal_round_positive<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
+where T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T> {
+    let power_of_ten = T::e((source_scale - target_scale) as u32);
+    let addition = power_of_ten / T::from(2);
 
-        let results: Vec<$T> = $values
-            .iter()
-            .map(|input| {
-                let input = if input < &0 {
-                    input - addition
-                } else {
-                    input + addition
-                };
-                input / divide_power_of_ten * multiply_power_of_ten
-            })
-            .collect();
-        results
-    }};
+    values
+        .iter()
+        .map(|input| {
+            let input = if input < &T::zero() {
+                *input - addition
+            } else {
+                *input + addition
+            };
+            input / power_of_ten
+        })
+        .collect()
 }
 
-macro_rules! decimal_truncate_positive_macro {
-    ($T:ty, $values: expr, $source_scale:expr, $target_scale:expr) => {{
-        let power_of_ten = <$T>::e(($source_scale - $target_scale) as u32);
-        let results: Vec<$T> = $values.iter().map(|input| input / power_of_ten).collect();
-        results
-    }};
+fn decimal_round_negative<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
+where T: Decimal
+        + From<i8>
+        + DivAssign
+        + Div<Output = T>
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T> {
+    let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
+    let addition = divide_power_of_ten / T::from(2);
+    let multiply_power_of_ten = T::e((-target_scale) as u32);
+
+    values
+        .iter()
+        .map(|input| {
+            let input = if input < &T::zero() {
+                *input - addition
+            } else {
+                *input + addition
+            };
+            input / divide_power_of_ten * multiply_power_of_ten
+        })
+        .collect()
 }
 
-macro_rules! decimal_truncate_negative_macro {
-    ($T:ty, $values: expr, $source_scale:expr, $target_scale:expr) => {{
-        let divide_power_of_ten = <$T>::e(($source_scale - $target_scale) as u32);
-        let multiply_power_of_ten = <$T>::e((-$target_scale) as u32);
+// if round mode is ceil, truncate should add one value
+fn decimal_truncate_positive<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
+where T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T> {
+    let power_of_ten = T::e((source_scale - target_scale) as u32);
 
-        let results: Vec<$T> = $values
-            .iter()
-            .map(|input| input / divide_power_of_ten * multiply_power_of_ten)
-            .collect();
-        results
-    }};
+    values.iter().map(|input| *input / power_of_ten).collect()
+}
+
+fn decimal_truncate_negative<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
+where T: Decimal
+        + From<i8>
+        + DivAssign
+        + Div<Output = T>
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T> {
+    let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
+    let multiply_power_of_ten = T::e((-target_scale) as u32);
+
+    values
+        .iter()
+        .map(|input| *input / divide_power_of_ten * multiply_power_of_ten)
+        .collect()
+}
+
+fn decimal_floor<T>(values: &[T], source_scale: i64) -> Vec<T>
+where T: Decimal
+        + From<i8>
+        + DivAssign
+        + Div<Output = T>
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T> {
+    let power_of_ten = T::e(source_scale as u32);
+
+    values
+        .iter()
+        .map(|input| {
+            if input < &T::zero() {
+                // below 0 we ceil the number (e.g. -10.5 -> -11)
+                ((*input + T::one()) / power_of_ten) - T::one()
+            } else {
+                *input / power_of_ten
+            }
+        })
+        .collect()
+}
+
+fn decimal_ceil<T>(values: &[T], source_scale: i64) -> Vec<T>
+where T: Decimal
+        + From<i8>
+        + DivAssign
+        + Div<Output = T>
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T> {
+    let power_of_ten = T::e(source_scale as u32);
+
+    values
+        .iter()
+        .map(|input| {
+            match input.cmp(&T::zero()) {
+                // below 0 we floor the number (e.g. -10.5 -> -10)
+                std::cmp::Ordering::Less => *input / power_of_ten,
+                std::cmp::Ordering::Equal => T::zero(),
+                std::cmp::Ordering::Greater => ((*input - T::one()) / power_of_ten) + T::one(),
+            }
+        })
+        .collect()
 }
 
 fn decimal_round_truncate(
-    is_round: bool,
     arg: &ValueRef<AnyType>,
     from_type: DataType,
     dest_type: DecimalDataType,
     target_scale: i64,
+    mode: RoundMode,
 ) -> Value<AnyType> {
     let from_decimal_type = from_type.as_decimal().unwrap();
     let source_scale = from_decimal_type.scale() as i64;
@@ -1794,45 +1872,48 @@ fn decimal_round_truncate(
         }
     };
 
-    let positive = target_scale >= 0;
+    let none_negative = target_scale >= 0;
 
     let result = match from_decimal_type {
         DecimalDataType::Decimal128(_) => {
             let (buffer, _) = i128::try_downcast_column(&column).unwrap();
 
-            let result = match (positive, is_round) {
-                (true, true) => {
-                    decimal_round_positive_macro! {i128, buffer, source_scale, target_scale}
+            let result = match (none_negative, mode) {
+                (true, RoundMode::Round) => {
+                    decimal_round_positive::<_>(&buffer, source_scale, target_scale)
                 }
-                (false, true) => {
-                    decimal_round_negative_macro! {i128, buffer, source_scale, target_scale}
+                (true, RoundMode::Truncate) => {
+                    decimal_truncate_positive::<_>(&buffer, source_scale, target_scale)
                 }
-                (true, false) => {
-                    decimal_truncate_positive_macro! {i128, buffer, source_scale, target_scale}
+                (false, RoundMode::Round) => {
+                    decimal_round_negative::<_>(&buffer, source_scale, target_scale)
                 }
-                (false, false) => {
-                    decimal_truncate_negative_macro! {i128, buffer, source_scale, target_scale}
+                (false, RoundMode::Truncate) => {
+                    decimal_truncate_negative::<_>(&buffer, source_scale, target_scale)
                 }
+                (_, RoundMode::Floor) => decimal_floor::<_>(&buffer, source_scale),
+                (_, RoundMode::Ceil) => decimal_ceil::<_>(&buffer, source_scale),
             };
-
             i128::to_column(result, dest_type.size())
         }
 
         DecimalDataType::Decimal256(_) => {
             let (buffer, _) = i256::try_downcast_column(&column).unwrap();
-            let result = match (positive, is_round) {
-                (true, true) => {
-                    decimal_round_positive_macro! {i256, buffer, source_scale, target_scale}
+            let result = match (none_negative, mode) {
+                (true, RoundMode::Round) => {
+                    decimal_round_positive::<_>(&buffer, source_scale, target_scale)
                 }
-                (false, true) => {
-                    decimal_round_negative_macro! {i256, buffer, source_scale, target_scale}
+                (true, RoundMode::Truncate) => {
+                    decimal_truncate_positive::<_>(&buffer, source_scale, target_scale)
                 }
-                (true, false) => {
-                    decimal_truncate_positive_macro! {i256, buffer, source_scale, target_scale}
+                (false, RoundMode::Round) => {
+                    decimal_round_negative::<_>(&buffer, source_scale, target_scale)
                 }
-                (false, false) => {
-                    decimal_truncate_negative_macro! {i256, buffer, source_scale, target_scale}
+                (false, RoundMode::Truncate) => {
+                    decimal_truncate_negative::<_>(&buffer, source_scale, target_scale)
                 }
+                (_, RoundMode::Floor) => decimal_floor::<_>(&buffer, source_scale),
+                (_, RoundMode::Ceil) => decimal_ceil::<_>(&buffer, source_scale),
             };
             i256::to_column(result, dest_type.size())
         }
