@@ -32,8 +32,8 @@ use common_sql::NameResolutionContext;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_refresh;
-use crate::interpreters::common::RefreshDesc;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
