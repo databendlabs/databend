@@ -1667,7 +1667,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         let dest_decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
         let name = format!("{:?}", round_mode).to_lowercase();
 
-        Some(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name,
                 args_type: args_type.to_owned(),
@@ -1685,43 +1685,29 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
                     )
                 }),
             },
-        })
+        };
+
+        if args_type[0].is_nullable() {
+            Some(f.passthrough_nullable())
+        } else {
+            Some(f)
+        }
     };
 
     registry.register_function_factory("round", move |params, args_type| {
         Some(Arc::new(factory(params, args_type, RoundMode::Round)?))
     });
 
-    registry.register_function_factory("round", move |params, args_type| {
-        let f = factory(params, args_type, RoundMode::Round)?;
-        Some(Arc::new(f.passthrough_nullable()))
-    });
-
     registry.register_function_factory("truncate", move |params, args_type| {
         Some(Arc::new(factory(params, args_type, RoundMode::Truncate)?))
-    });
-
-    registry.register_function_factory("truncate", move |params, args_type| {
-        let f = factory(params, args_type, RoundMode::Truncate)?;
-        Some(Arc::new(f.passthrough_nullable()))
     });
 
     registry.register_function_factory("ceil", move |params, args_type| {
         Some(Arc::new(factory(params, args_type, RoundMode::Ceil)?))
     });
 
-    registry.register_function_factory("ceil", move |params, args_type| {
-        let f = factory(params, args_type, RoundMode::Ceil)?;
-        Some(Arc::new(f.passthrough_nullable()))
-    });
-
     registry.register_function_factory("floor", move |params, args_type| {
         Some(Arc::new(factory(params, args_type, RoundMode::Floor)?))
-    });
-
-    registry.register_function_factory("floor", move |params, args_type| {
-        let f = factory(params, args_type, RoundMode::Floor)?;
-        Some(Arc::new(f.passthrough_nullable()))
     });
 }
 
