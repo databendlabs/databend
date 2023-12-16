@@ -15,7 +15,7 @@
 use core::ops::Range;
 use std::collections::HashSet;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;

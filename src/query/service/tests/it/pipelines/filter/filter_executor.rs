@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::build_select_expr;
-use common_expression::filter::FilterExecutor;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::DecimalSize;
-use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_expression::build_select_expr;
+use databend_common_expression::filter::FilterExecutor;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 use rand::Rng;
 
@@ -31,7 +31,7 @@ use super::random_filter_expr;
 
 // Test the result of `FilterExecutor` is the same as `Evaluator`.
 #[test]
-pub fn test_filter_executor() -> common_exception::Result<()> {
+pub fn test_filter_executor() -> databend_common_exception::Result<()> {
     let mut rng = rand::thread_rng();
     // For EmptyMap, Map, Bitmap comparison, it is not supported by Evaluator.
     let data_types = get_filter_data_types();
