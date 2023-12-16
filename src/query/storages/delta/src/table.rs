@@ -18,8 +18,6 @@ use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
-use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
-use databend_common_arrow::arrow::datatypes::Schema as Arrow2Schema;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
@@ -34,6 +32,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -43,10 +42,13 @@ use databend_common_storages_parquet::ParquetFilesPart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
 use deltalake::logstore::default_logstore::DefaultLogStore;
 use deltalake::logstore::LogStoreConfig;
 use deltalake::DeltaTableConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::OnceCell;
 use url::Url;
 
@@ -57,20 +59,34 @@ use crate::table_source::DeltaTableSource;
 
 pub const DELTA_ENGINE: &str = "DELTA";
 
-/// accessor wrapper as a table
-///
-/// TODO: we should use icelake Table instead.
 pub struct DeltaTable {
     info: TableInfo,
     table: OnceCell<deltalake::table::DeltaTable>,
+    meta: DeltaTableMeta,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DeltaTableMeta {
+    partition_columns: Vec<String>,
 }
 
 impl DeltaTable {
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
+        let meta_string = info
+            .meta
+            .options
+            .get(OPT_KEY_ENGINE_META)
+            .ok_or_else(|| ErrorCode::Internal("missing table option OPT_KEY_ENGINE_META"))?;
+        let meta: DeltaTableMeta = serde_json::from_str(meta_string).map_err(|e| {
+            ErrorCode::Internal(format!(
+                "fail to deserialize DeltaTableMeta({meta_string}): {e:?}"
+            ))
+        })?;
         Ok(Box::new(Self {
             info,
             table: OnceCell::new(),
+            meta,
         }))
     }
 
@@ -91,8 +107,17 @@ impl DeltaTable {
         })
     }
 
+    #[allow(dead_code)]
+    fn get_partition_fields(&self) -> Result<Vec<&TableField>> {
+        self.meta
+            .partition_columns
+            .iter()
+            .map(|name| self.info.meta.schema.field_with_name(name))
+            .collect()
+    }
+
     #[async_backtrace::framed]
-    pub async fn get_schema(table: &deltalake::table::DeltaTable) -> Result<TableSchema> {
+    pub async fn get_meta(table: &deltalake::table::DeltaTable) -> Result<(TableSchema, String)> {
         let delta_meta = table.get_schema().map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
@@ -102,17 +127,21 @@ impl DeltaTable {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
 
-        // Build arrow2 schema from arrow schema.
-        let fields: Vec<Arrow2Field> = arrow_schema
-            .fields()
-            .into_iter()
-            .map(|f| f.into())
-            .collect();
-        let arrow2_schema = Arrow2Schema::from(fields);
+        let state = table.state.current_metadata().ok_or_else(|| {
+            ErrorCode::ReadTableDataError("bug: Delta table current_metadata is None.")
+        })?;
+        let meta = DeltaTableMeta {
+            partition_columns: state.partition_columns.clone(),
+        };
+        let meta = serde_json::to_string(&meta).map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("fail to serialize DeltaTableMeta: {e:?}"))
+        })?;
 
-        Ok(TableSchema::from(&arrow2_schema))
+        let schema = TableSchema::try_from(&arrow_schema)?;
+        Ok((schema, meta))
     }
 
+    #[async_backtrace::framed]
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
         let op = init_operator(sp)?;
         let opendal_store = Arc::new(OpendalStore::new(op));
