@@ -29,8 +29,12 @@ pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
 // Read only attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_READ_ONLY: &str = "read_only_attached";
 
+// the following are used in for delta and iceberg engine
 pub const OPT_KEY_LOCATION: &str = "location";
 pub const OPT_KEY_CONNECTION_NAME: &str = "connection_name";
+// TableMeta need to contain all info needed to create a Table, store them under this internal key as a JSON.
+// e.g. the partition columns of a Delta table
+pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 
 /// Legacy table snapshot location key
 ///
@@ -57,6 +61,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     let mut r = HashSet::new();
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_ENGINE_META);
     r
 });
 
