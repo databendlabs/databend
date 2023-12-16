@@ -48,6 +48,7 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
     }
 }
 
+/// create push down filters
 pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
     let filter = cast_expr_to_non_null_boolean(
         scalar

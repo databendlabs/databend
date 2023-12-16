@@ -47,6 +47,8 @@ pub struct RefreshDesc {
     pub table: String,
 }
 
+/// Hook refresh action with a on-finished callback.
+/// errors (if any) are ignored.
 pub async fn hook_refresh(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
@@ -68,7 +70,7 @@ pub async fn hook_refresh(
         pipeline.set_on_finished(move |err| {
             if err.is_ok() {
                 info!("execute pipeline finished successfully, starting run refresh job.");
-                match GlobalIORuntime::instance().block_on(refresh(
+                match GlobalIORuntime::instance().block_on(do_hook_refresh(
                     ctx,
                     desc,
                     refresh_agg_index,
@@ -82,6 +84,86 @@ pub async fn hook_refresh(
         });
     }
 
+    Ok(())
+}
+
+/// Hook refresh action with a on-finished callback.
+async fn do_hook_refresh(
+    ctx: Arc<QueryContext>,
+    desc: RefreshDesc,
+    refresh_agg_index: bool,
+    refresh_virtual_column: bool,
+) -> Result<()> {
+    let table_id = ctx
+        .get_table(&desc.catalog, &desc.database, &desc.table)
+        .await?
+        .get_id();
+
+    let mut plans = Vec::new();
+    if refresh_agg_index {
+        let agg_index_plans =
+            generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
+        plans.extend_from_slice(&agg_index_plans);
+    }
+    if refresh_virtual_column {
+        let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
+        plans.push(virtual_column_plan);
+    }
+
+    let mut tasks = Vec::with_capacity(std::cmp::min(
+        ctx.get_settings().get_max_threads()? as usize,
+        plans.len(),
+    ));
+
+    for plan in plans {
+        let ctx_cloned = ctx.clone();
+        tasks.push(async move {
+            match plan {
+                Plan::RefreshIndex(agg_index_plan) => {
+                    let refresh_agg_index_interpreter =
+                        RefreshIndexInterpreter::try_create(ctx_cloned.clone(), *agg_index_plan)?;
+                    let mut build_res = refresh_agg_index_interpreter.execute2().await?;
+                    if build_res.main_pipeline.is_empty() {
+                        return Ok(());
+                    }
+
+                    let settings = ctx_cloned.get_settings();
+                    let query_id = ctx_cloned.get_id();
+                    build_res.set_max_threads(settings.get_max_threads()? as usize);
+                    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+
+                    if build_res.main_pipeline.is_complete_pipeline()? {
+                        let mut pipelines = build_res.sources_pipelines;
+                        pipelines.push(build_res.main_pipeline);
+
+                        let complete_executor =
+                            PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                        ctx_cloned.set_executor(complete_executor.get_inner())?;
+                        complete_executor.execute()
+                    } else {
+                        Ok(())
+                    }
+                }
+                Plan::RefreshVirtualColumn(virtual_column_plan) => {
+                    let refresh_virtual_column_interpreter =
+                        RefreshVirtualColumnInterpreter::try_create(
+                            ctx_cloned.clone(),
+                            *virtual_column_plan,
+                        )?;
+                    let build_res = refresh_virtual_column_interpreter.execute2().await?;
+                    if !build_res.main_pipeline.is_empty() {
+                        return Err(ErrorCode::Internal(
+                            "Logical error, refresh virtual column is an empty pipeline.",
+                        ));
+                    }
+                    Ok(())
+                }
+                _ => unreachable!(),
+            }
+        });
+    }
+
+    let _ = futures::future::try_join_all(tasks).await?;
     Ok(())
 }
 
@@ -165,83 +247,4 @@ async fn generate_refresh_virtual_column_plan(
     };
 
     Ok(Plan::RefreshVirtualColumn(Box::new(plan)))
-}
-
-async fn refresh(
-    ctx: Arc<QueryContext>,
-    desc: RefreshDesc,
-    refresh_agg_index: bool,
-    refresh_virtual_column: bool,
-) -> Result<()> {
-    let table_id = ctx
-        .get_table(&desc.catalog, &desc.database, &desc.table)
-        .await?
-        .get_id();
-
-    let mut plans = Vec::new();
-    if refresh_agg_index {
-        let agg_index_plans =
-            generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
-        plans.extend_from_slice(&agg_index_plans);
-    }
-    if refresh_virtual_column {
-        let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
-        plans.push(virtual_column_plan);
-    }
-
-    let mut tasks = Vec::with_capacity(std::cmp::min(
-        ctx.get_settings().get_max_threads()? as usize,
-        plans.len(),
-    ));
-
-    for plan in plans {
-        let ctx_cloned = ctx.clone();
-        tasks.push(async move {
-            match plan {
-                Plan::RefreshIndex(agg_index_plan) => {
-                    let refresh_agg_index_interpreter =
-                        RefreshIndexInterpreter::try_create(ctx_cloned.clone(), *agg_index_plan)?;
-                    let mut build_res = refresh_agg_index_interpreter.execute2().await?;
-                    if build_res.main_pipeline.is_empty() {
-                        return Ok(());
-                    }
-
-                    let settings = ctx_cloned.get_settings();
-                    let query_id = ctx_cloned.get_id();
-                    build_res.set_max_threads(settings.get_max_threads()? as usize);
-                    let settings = ExecutorSettings::try_create(&settings, query_id)?;
-
-                    if build_res.main_pipeline.is_complete_pipeline()? {
-                        let mut pipelines = build_res.sources_pipelines;
-                        pipelines.push(build_res.main_pipeline);
-
-                        let complete_executor =
-                            PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-                        ctx_cloned.set_executor(complete_executor.get_inner())?;
-                        complete_executor.execute()
-                    } else {
-                        Ok(())
-                    }
-                }
-                Plan::RefreshVirtualColumn(virtual_column_plan) => {
-                    let refresh_virtual_column_interpreter =
-                        RefreshVirtualColumnInterpreter::try_create(
-                            ctx_cloned.clone(),
-                            *virtual_column_plan,
-                        )?;
-                    let build_res = refresh_virtual_column_interpreter.execute2().await?;
-                    if !build_res.main_pipeline.is_empty() {
-                        return Err(ErrorCode::Internal(
-                            "Logical error, refresh virtual column is an empty pipeline.",
-                        ));
-                    }
-                    Ok(())
-                }
-                _ => unreachable!(),
-            }
-        });
-    }
-
-    let _ = futures::future::try_join_all(tasks).await?;
-    Ok(())
 }
