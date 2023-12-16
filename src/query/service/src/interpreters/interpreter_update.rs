@@ -45,8 +45,8 @@ use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::create_push_down_filters;
-use crate::interpreters::common::hook_refresh;
-use crate::interpreters::common::RefreshDesc;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;

@@ -42,10 +42,9 @@ pub struct CompactHookTraceCtx {
     pub operation_name: String,
 }
 
-// only if target table have cluster keys defined, and auto-reclustering is enabled,
-// we will hook the compact action with a on-finished callback.
-//
-// errors (if any) are ignored
+/// Hook compact action with a on-finished callback.
+/// only if target table have cluster keys defined, and auto-reclustering is enabled,
+/// errors (if any) are ignored.
 pub async fn hook_compact(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
@@ -59,6 +58,9 @@ pub async fn hook_compact(
     }
 }
 
+/// hook the compact action with a on-finished callback.
+/// only if target table have cluster keys defined, and auto-reclustering is enabled,
+/// errors (if any) are ignored
 async fn do_hook_compact(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
@@ -96,6 +98,9 @@ async fn do_hook_compact(
     Ok(())
 }
 
+/// compact the target table
+/// only if target table have cluster keys defined, and auto-reclustering is enabled,
+/// errors (if any) are ignored
 async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
@@ -135,10 +140,15 @@ async fn compact_table(
 
         let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
+        // keep the original progress value
+        let progress_value = ctx.get_write_progress_value();
         // Clears previously generated segment locations to avoid duplicate data in the refresh phase
         ctx.clear_segment_locations()?;
         ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
+
+        // reset the progress value
+        ctx.get_write_progress().set(&progress_value);
     }
     Ok(())
 }
