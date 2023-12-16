@@ -1821,11 +1821,10 @@ where T: Decimal
     values
         .iter()
         .map(|input| {
-            match input.cmp(&T::zero()) {
-                // below 0 we floor the number (e.g. -10.5 -> -10)
-                std::cmp::Ordering::Less => *input / power_of_ten,
-                std::cmp::Ordering::Equal => T::zero(),
-                std::cmp::Ordering::Greater => ((*input - T::one()) / power_of_ten) + T::one(),
+            if input <= &T::zero() {
+                *input / power_of_ten
+            } else {
+                ((*input - T::one()) / power_of_ten) + T::one()
             }
         })
         .collect()
