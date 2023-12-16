@@ -76,17 +76,17 @@ impl ParquetRSFullReader {
         .with_projection(self.projection.clone())
         .with_batch_size(self.batch_size);
 
-        let mut full_match = false;
+        let mut all_pruned = false;
 
         let file_meta = builder.metadata().clone();
 
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
             let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
-            full_match = omits.iter().all(|x| *x);
+            all_pruned = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
-            if !full_match {
+            if !all_pruned {
                 let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
 
                 if let Some(row_selection) = row_selection {
@@ -98,7 +98,7 @@ impl ParquetRSFullReader {
             }
         }
 
-        if !full_match {
+        if !all_pruned {
             if let Some(predicate) = self.predicate.as_ref() {
                 let projection = predicate.projection().clone();
                 let predicate = predicate.clone();
