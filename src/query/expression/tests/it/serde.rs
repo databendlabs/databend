@@ -27,6 +27,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::borsh_deserialize_from_slice;
+use databend_common_io::prelude::borsh_serialize_into_buf;
 
 #[test]
 fn test_serde_column() -> Result<()> {

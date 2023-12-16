@@ -23,8 +23,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::bincode_deserialize_from_stream;
-use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::borsh_deserialize_from_stream;
+use databend_common_io::prelude::borsh_serialize_into_buf;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;

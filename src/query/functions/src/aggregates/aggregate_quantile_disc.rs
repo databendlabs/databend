@@ -288,4 +288,3 @@ pub fn try_create_aggregate_quantile_disc_function(
 pub fn aggregate_quantile_disc_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(try_create_aggregate_quantile_disc_function))
 }
->>>>>>> 8e9887ecd5 (using borsh instead of bincode for serde agg function state)
