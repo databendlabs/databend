@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfoPtr;
-use common_exception::Result;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_index::statistics_to_domain;
 use log::info;
-use storages_common_index::statistics_to_domain;
 
 use crate::FusePartInfo;
 

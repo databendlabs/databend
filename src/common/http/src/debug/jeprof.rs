@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::mem_allocator::dump_profile;
-use common_exception::ErrorCode;
+use databend_common_base::mem_allocator::dump_profile;
+use databend_common_exception::ErrorCode;
 use poem::error::InternalServerError;
 use poem::http::StatusCode;
 use poem::web::IntoResponse;

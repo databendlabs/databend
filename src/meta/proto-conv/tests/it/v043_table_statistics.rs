@@ -31,7 +31,7 @@ fn test_decode_v43_table_statistics() -> anyhow::Result<()> {
     let bytes_table_statistics_v43 = [
         8, 100, 16, 200, 1, 24, 15, 32, 20, 40, 1, 48, 2, 160, 6, 43, 168, 6, 24,
     ];
-    let want = || common_meta_app::schema::TableStatistics {
+    let want = || databend_common_meta_app::schema::TableStatistics {
         number_of_rows: 100,
         data_bytes: 200,
         compressed_data_bytes: 15,

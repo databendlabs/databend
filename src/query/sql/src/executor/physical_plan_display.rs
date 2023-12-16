@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::executor::physical_plan::PhysicalPlan;

@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_meta_types::Endpoint;
-use common_meta_types::KVMeta;
-use common_meta_types::Membership;
-use common_meta_types::Node;
-use common_meta_types::StoredMembership;
-use common_meta_types::UpsertKV;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::Membership;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use maplit::btreemap;
 use openraft::testing::log_id;
@@ -280,7 +280,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 ///
 ///    | kv             | expire
 ///    | ---            | ---
-/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
+/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
 async fn build_sm_with_expire() -> anyhow::Result<SMV002> {

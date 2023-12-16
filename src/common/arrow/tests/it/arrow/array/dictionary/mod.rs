@@ -15,8 +15,8 @@
 
 mod mutable;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::DataType;
 
 #[test]
 fn try_new_ok() {

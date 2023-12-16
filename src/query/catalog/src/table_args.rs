@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TableArgs {

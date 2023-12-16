@@ -16,22 +16,22 @@ use std::borrow::Borrow;
 use std::hash::BuildHasher;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
-use common_cache::Count;
-use common_cache::CountableMeter;
-use common_cache::DefaultHashBuilder;
-use common_cache::Meter;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache::InMemoryItemCacheHolder;
-use storages_common_cache::NamedCache;
-use storages_common_index::filters::Xor8Filter;
-use storages_common_index::BloomIndexMeta;
-use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_common_arrow::parquet::metadata::FileMetaData;
+use databend_common_cache::Count;
+use databend_common_cache::CountableMeter;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_cache::Meter;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::NamedCache;
+use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::cache_manager::CacheManager;
 
@@ -60,7 +60,7 @@ pub type ColumnArrayCache =
     NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
 pub type ArrayRawDataUncompressedSize = usize;
 pub type SizedColumnArray = (
-    Box<dyn common_arrow::arrow::array::Array>,
+    Box<dyn databend_common_arrow::arrow::array::Array>,
     ArrayRawDataUncompressedSize,
 );
 

@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use ethnum::I256;
 use parquet::data_type::AsBytes;
 use parquet::file::statistics::Statistics;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use super::utils::decode_decimal128_from_bytes;
 use super::utils::decode_decimal256_from_bytes;

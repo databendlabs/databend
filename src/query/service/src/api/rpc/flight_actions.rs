@@ -14,9 +14,9 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow_format::flight::data::Action;
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
+use databend_common_arrow::arrow_format::flight::data::Action;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::ToErrorCode;
 use tonic::Status;
 
 use crate::api::rpc::packets::KillQueryPacket;

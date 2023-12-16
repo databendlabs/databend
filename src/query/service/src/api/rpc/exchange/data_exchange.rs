@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::RemoteExpr;
+use databend_common_expression::RemoteExpr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {

@@ -19,8 +19,8 @@ use anyerror::AnyError;
 use cbordata::Cbor;
 use cbordata::FromCbor;
 use cbordata::IntoCbor;
-use common_exception::ErrorCode;
-use common_expression::types::DataType;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::types::DataType;
 use xorfilter::Xor8;
 
 use crate::filters::Filter;

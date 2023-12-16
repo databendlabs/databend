@@ -15,8 +15,8 @@
 use std::alloc::Layout;
 use std::ptr::NonNull;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::AggregateFunctionRef;
 

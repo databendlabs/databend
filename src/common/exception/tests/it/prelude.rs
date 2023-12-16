@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::*;
+use databend_common_exception::*;
 
 #[test]
 fn test_prelude() -> anyhow::Result<()> {
     let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
-    let y: common_exception::Result<()> = x.map_err_to_code(ErrorCode::UnknownException, || 123);
+    let y: databend_common_exception::Result<()> =
+        x.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
         "UnknownException. Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",

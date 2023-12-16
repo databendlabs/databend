@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 use crate::hive_table::HIVE_DEFAULT_PARTITION;

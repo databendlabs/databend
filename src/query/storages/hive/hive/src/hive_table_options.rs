@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 pub const PARTITION_KEYS: &str = "partition_keys";
 pub const LOCATION: &str = "location";

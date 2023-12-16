@@ -17,25 +17,25 @@ use std::iter::Iterator;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_base::base::tokio;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
-use common_storage::ColumnNode;
-use common_storage::ColumnNodes;
-use common_storages_fuse::FusePartInfo;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
+use databend_common_storage::ColumnNode;
+use databend_common_storage::ColumnNodes;
+use databend_common_storages_fuse::FusePartInfo;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::TryStreamExt;
-use storages_common_table_meta::meta;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 #[test]
 fn test_to_partitions() -> Result<()> {

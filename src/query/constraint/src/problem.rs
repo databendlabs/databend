@@ -33,8 +33,8 @@ use crate::mir::MirUnaryOperator;
 ///    ∀x. assertion(x) -> x is not null
 ///
 /// ```
-/// use common_constraint::mir::*;
-/// use common_constraint::problem::variable_must_not_null;
+/// use databend_common_constraint::mir::*;
+/// use databend_common_constraint::problem::variable_must_not_null;
 ///
 /// // a > 0
 /// let assertion = MirExpr::BinaryOperator {

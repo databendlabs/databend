@@ -18,8 +18,8 @@ use std::fmt::Write;
 use std::num::IntErrorKind;
 use std::num::ParseIntError;
 
-use common_exception::pretty_print_error;
-use common_exception::Range;
+use databend_common_exception::pretty_print_error;
+use databend_common_exception::Range;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 

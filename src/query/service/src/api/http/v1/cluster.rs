@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_types::NodeInfo;
+use databend_common_exception::Result;
+use databend_common_meta_types::NodeInfo;
 use poem::http::StatusCode;
 use poem::web::IntoResponse;
 use poem::web::Json;

@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct MemoryPartInfo {

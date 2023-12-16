@@ -14,8 +14,8 @@
 
 use core::fmt;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;

@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;

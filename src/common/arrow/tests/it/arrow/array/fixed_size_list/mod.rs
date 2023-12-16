@@ -15,10 +15,10 @@
 
 mod mutable;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
 
 fn data() -> FixedSizeListArray {
     let values = Int32Array::from_slice([10, 20, 0, 0]);

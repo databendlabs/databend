@@ -17,9 +17,9 @@ mod marked_test;
 
 mod internal_seq;
 
-use common_meta_types::KVMeta;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 pub(in crate::sm_v002) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
@@ -240,7 +240,7 @@ impl From<Marked<String>> for Option<ExpireValue> {
 
 #[cfg(test)]
 mod tests {
-    use common_meta_types::KVMeta;
+    use databend_common_meta_types::KVMeta;
 
     use crate::sm_v002::marked::Marked;
 

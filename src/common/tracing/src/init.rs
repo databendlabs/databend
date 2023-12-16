@@ -19,8 +19,8 @@ use std::io::Write;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
 use log::Log;
@@ -240,9 +240,7 @@ pub fn init_logging(
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
                 .filter(|meta| {
-                    if meta.target().starts_with("databend_")
-                        || meta.target().starts_with("common_")
-                    {
+                    if meta.target().starts_with("databend_") {
                         true
                     } else {
                         meta.level() <= LevelFilter::Error

@@ -16,9 +16,9 @@ use std::future;
 use std::io;
 use std::sync::Arc;
 
-use common_meta_types::SeqNum;
-use common_meta_types::SeqV;
-use common_meta_types::SnapshotMeta;
+use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SnapshotMeta;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 

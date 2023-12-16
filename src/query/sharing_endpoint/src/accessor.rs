@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_meta_app::storage::StorageParams;
-use common_storage::init_operator;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_storage::init_operator;
 use opendal::Operator;
 
 use crate::configs::Config;

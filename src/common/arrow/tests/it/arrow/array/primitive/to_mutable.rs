@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::PrimitiveArray;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
 use either::Either;
 
 #[test]

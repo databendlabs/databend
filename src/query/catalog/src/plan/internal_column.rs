@@ -14,34 +14,34 @@
 
 use std::path::Path;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::DecimalSize;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::ColumnId;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::Value;
-use common_expression::BASE_BLOCK_IDS_COLUMN_ID;
-use common_expression::BASE_ROW_ID_COLUMN_ID;
-use common_expression::BLOCK_NAME_COLUMN_ID;
-use common_expression::CHANGE_ACTION_COLUMN_ID;
-use common_expression::CHANGE_IS_UPDATE_COLUMN_ID;
-use common_expression::CHANGE_ROW_ID_COLUMN_ID;
-use common_expression::ROW_ID_COLUMN_ID;
-use common_expression::SEGMENT_NAME_COLUMN_ID;
-use common_expression::SNAPSHOT_NAME_COLUMN_ID;
-use storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::ColumnId;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::Value;
+use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
+use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::BLOCK_NAME_COLUMN_ID;
+use databend_common_expression::CHANGE_ACTION_COLUMN_ID;
+use databend_common_expression::CHANGE_IS_UPDATE_COLUMN_ID;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
+use databend_common_expression::ROW_ID_COLUMN_ID;
+use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
+use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Assumes that the max block count of a segment is 2 ^ NUM_BLOCK_ID_BITS

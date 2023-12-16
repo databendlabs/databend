@@ -16,9 +16,9 @@ use std::any::Any;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;

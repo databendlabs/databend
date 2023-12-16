@@ -14,8 +14,8 @@
 
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use pprof::protos::Message;
 
 pub struct Profiling {

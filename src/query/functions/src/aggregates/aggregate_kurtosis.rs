@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::*;
-use common_expression::types::*;
-use common_expression::with_number_mapped_type;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;

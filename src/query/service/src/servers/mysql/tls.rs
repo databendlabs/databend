@@ -15,8 +15,8 @@
 use std::fs::File;
 use std::io::BufReader;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use rustls::Certificate;
 use rustls::PrivateKey;
 use rustls::ServerConfig;

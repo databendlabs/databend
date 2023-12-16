@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::AccountMgrLevel;
-use common_ast::ast::AccountMgrSource;
-use common_ast::ast::AlterUserStmt;
-use common_ast::ast::CreateUserStmt;
-use common_ast::ast::GrantStmt;
-use common_ast::ast::RevokeStmt;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_users::UserApiProvider;
+use databend_common_ast::ast::AccountMgrLevel;
+use databend_common_ast::ast::AccountMgrSource;
+use databend_common_ast::ast::AlterUserStmt;
+use databend_common_ast::ast::CreateUserStmt;
+use databend_common_ast::ast::GrantStmt;
+use databend_common_ast::ast::RevokeStmt;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_users::UserApiProvider;
 
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;

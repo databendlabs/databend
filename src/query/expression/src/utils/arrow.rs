@@ -14,15 +14,15 @@
 
 use std::io::Cursor;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow::io::ipc::read::read_file_metadata;
-use common_arrow::arrow::io::ipc::read::FileReader;
-use common_arrow::arrow::io::ipc::write::FileWriter;
-use common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::datatypes::Schema;
+use databend_common_arrow::arrow::io::ipc::read::read_file_metadata;
+use databend_common_arrow::arrow::io::ipc::read::FileReader;
+use databend_common_arrow::arrow::io::ipc::write::FileWriter;
+use databend_common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
 
 use crate::BlockEntry;
 use crate::Column;
@@ -70,7 +70,7 @@ pub fn serialize_column(col: &Column) -> Vec<u8> {
     writer.start().unwrap();
     writer
         .write(
-            &common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
+            &databend_common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
             None,
         )
         .unwrap();
