@@ -43,10 +43,10 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
 use log::as_debug;
@@ -243,7 +243,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(KVMeta::new_expire(req.expire_at)),
+                Some(MetaSpec::new_expire(req.expire_at)),
             ))
             .await?;
         // confirm a successful update
