@@ -1667,10 +1667,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         let dest_decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
         let name = format!("{:?}", round_mode).to_lowercase();
 
+        let mut sig_args_type = args_type.to_owned();
+        sig_args_type[0] = from_type.clone();
         let f = Function {
             signature: FunctionSignature {
                 name,
-                args_type: args_type.to_owned(),
+                args_type: sig_args_type,
                 return_type: DataType::Decimal(dest_decimal_type),
             },
             eval: FunctionEval::Scalar {
