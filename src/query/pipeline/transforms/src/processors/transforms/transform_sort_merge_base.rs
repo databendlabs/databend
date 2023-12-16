@@ -54,6 +54,7 @@ use super::MergeSortTimestamp;
 use super::MergeSortTimestampImpl;
 use super::TransformSortMerge;
 use super::TransformSortMergeLimit;
+use crate::processors::sort::utils::ORDER_COL_NAME;
 
 pub enum Status {
     /// Continue to add blocks.
@@ -240,6 +241,12 @@ impl TransformSortMergeBuilder {
     }
 
     pub fn build(self) -> Result<Box<dyn Processor>> {
+        debug_assert!(if self.output_order_col {
+            self.schema.has_field(ORDER_COL_NAME)
+        } else {
+            !self.schema.has_field(ORDER_COL_NAME)
+        });
+
         if self.limit.is_some() {
             self.build_sort_merge_limit()
         } else {

@@ -108,7 +108,7 @@ where
     }
 
     // This method can only be called when there is no data of the stream in the heap.
-    async fn async_poll_pending_stream(&mut self) -> Result<()> {
+    pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
             debug_assert!(self.buffer[i].is_empty());
@@ -129,7 +129,7 @@ where
     }
 
     #[inline]
-    fn poll_pending_stream(&mut self) -> Result<()> {
+    pub fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
             debug_assert!(self.buffer[i].is_empty());
@@ -260,8 +260,11 @@ where
 
         if self.heap.is_empty() {
             debug_assert!(self.is_finished());
-            debug_assert_eq!(self.temp_sorted_num_rows, 0);
-            return Ok(None);
+            return if self.temp_sorted_num_rows > 0 {
+                Ok(Some(self.build_output()?))
+            } else {
+                Ok(None)
+            };
         }
 
         while let Some(Reverse(cursor)) = self.heap.peek() {
@@ -276,8 +279,7 @@ where
             }
         }
 
-        let block = self.build_output()?;
-        Ok(Some(block))
+        Ok(Some(self.build_output()?))
     }
 
     /// The async version of `next_block`.
@@ -295,8 +297,11 @@ where
 
         if self.heap.is_empty() {
             debug_assert!(self.is_finished());
-            debug_assert_eq!(self.temp_sorted_num_rows, 0);
-            return Ok(None);
+            return if self.temp_sorted_num_rows > 0 {
+                Ok(Some(self.build_output()?))
+            } else {
+                Ok(None)
+            };
         }
 
         while let Some(Reverse(cursor)) = self.heap.peek() {
@@ -311,7 +316,6 @@ where
             }
         }
 
-        let block = self.build_output()?;
-        Ok(Some(block))
+        Ok(Some(self.build_output()?))
     }
 }

@@ -73,24 +73,24 @@ impl PipelineBuilder {
             }
         }
 
-        let input_schema = sort.output_schema()?;
+        let plan_schema = sort.output_schema()?;
 
         let sort_desc = sort
             .order_by
             .iter()
             .map(|desc| {
-                let offset = input_schema.index_of(&desc.order_by.to_string())?;
+                let offset = plan_schema.index_of(&desc.order_by.to_string())?;
                 Ok(SortColumnDescription {
                     offset,
                     asc: desc.asc,
                     nulls_first: desc.nulls_first,
-                    is_nullable: input_schema.field(offset).is_nullable(),  // This information is not needed here.
+                    is_nullable: plan_schema.field(offset).is_nullable(),  // This information is not needed here.
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
         self.build_sort_pipeline(
-            input_schema,
+            plan_schema,
             sort_desc,
             sort.plan_id,
             sort.limit,
@@ -100,7 +100,7 @@ impl PipelineBuilder {
 
     pub(crate) fn build_sort_pipeline(
         &mut self,
-        input_schema: DataSchemaRef,
+        plan_schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
@@ -121,7 +121,7 @@ impl PipelineBuilder {
         };
 
         let mut builder =
-            SortPipelineBuilder::create(self.ctx.clone(), input_schema.clone(), sort_desc.clone())
+            SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
                 .with_partial_block_size(block_size)
                 .with_final_block_size(block_size)
                 .with_limit(limit)
@@ -136,7 +136,7 @@ impl PipelineBuilder {
                 if self.main_pipeline.output_len() > 1 {
                     try_add_multi_sort_merge(
                         &mut self.main_pipeline,
-                        input_schema,
+                        plan_schema,
                         block_size,
                         limit,
                         sort_desc,
@@ -353,7 +353,7 @@ impl SortPipelineBuilder {
             // Multi-pipelines merge sort
             try_add_multi_sort_merge(
                 pipeline,
-                sort_merge_output_schema,
+                self.schema.clone(),
                 self.final_block_size,
                 self.limit,
                 self.sort_desc,

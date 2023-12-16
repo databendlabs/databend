@@ -43,17 +43,24 @@ use super::sort::HeapMerger;
 use super::sort::Rows;
 use super::sort::SimpleRows;
 use super::sort::SortedStream;
+use crate::processors::sort::utils::ORDER_COL_NAME;
 use crate::processors::ProcessorProfileWrapper;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
-    input_schema: DataSchemaRef,
+    schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     prof_info: Option<(u32, SharedProcessorProfiles)>,
     remove_order_col: bool,
 ) -> Result<()> {
+    debug_assert!(if !remove_order_col {
+        schema.has_field(ORDER_COL_NAME)
+    } else {
+        !schema.has_field(ORDER_COL_NAME)
+    });
+
     if pipeline.is_empty() {
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
     }
@@ -70,7 +77,7 @@ pub fn try_add_multi_sort_merge(
             let processor = create_processor(
                 inputs_port.clone(),
                 output_port.clone(),
-                input_schema,
+                schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -101,14 +108,14 @@ pub fn try_add_multi_sort_merge(
 fn create_processor(
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    input_schema: DataSchemaRef,
+    schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     Ok(if sort_columns_descriptions.len() == 1 {
-        let sort_type = input_schema
+        let sort_type = schema
             .field(sort_columns_descriptions[0].offset)
             .data_type();
         match sort_type {
@@ -118,7 +125,7 @@ fn create_processor(
                 >::create(
                     inputs,
                     output,
-                    input_schema,
+                    schema,
                     block_size,
                     limit,
                     sort_columns_descriptions,
@@ -128,7 +135,7 @@ fn create_processor(
             DataType::Date => Box::new(MultiSortMergeProcessor::<SimpleRows<DateType>>::create(
                 inputs,
                 output,
-                input_schema,
+                schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -138,7 +145,7 @@ fn create_processor(
                 MultiSortMergeProcessor::<SimpleRows<TimestampType>>::create(
                     inputs,
                     output,
-                    input_schema,
+                    schema,
                     block_size,
                     limit,
                     sort_columns_descriptions,
@@ -149,7 +156,7 @@ fn create_processor(
                 Box::new(MultiSortMergeProcessor::<SimpleRows<StringType>>::create(
                     inputs,
                     output,
-                    input_schema,
+                    schema,
                     block_size,
                     limit,
                     sort_columns_descriptions,
@@ -159,7 +166,7 @@ fn create_processor(
             _ => Box::new(MultiSortMergeProcessor::<StringColumn>::create(
                 inputs,
                 output,
-                input_schema,
+                schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -170,7 +177,7 @@ fn create_processor(
         Box::new(MultiSortMergeProcessor::<StringColumn>::create(
             inputs,
             output,
-            input_schema,
+            schema,
             block_size,
             limit,
             sort_columns_descriptions,
@@ -290,11 +297,7 @@ where R: Rows + Send + 'static
             return Ok(Event::Finished);
         }
 
-        if self.inputs.iter().any(|i| i.has_data()) {
-            return Ok(Event::Sync);
-        }
-
-        Ok(Event::NeedData)
+        Ok(Event::Sync)
     }
 
     fn process(&mut self) -> Result<()> {
