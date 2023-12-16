@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -50,7 +50,7 @@ impl ResultCacheMetaManager {
                 key,
                 seq,
                 value: Operation::Update(value),
-                value_meta: Some(KVMeta::new_expire(expire_at)),
+                value_meta: Some(MetaSpec::new_expire(expire_at)),
             })
             .await?;
         Ok(())

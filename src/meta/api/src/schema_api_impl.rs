@@ -4182,6 +4182,7 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
             value: 1_i8.to_le_bytes().to_vec(),
             prev_value: false,
             expire_at,
+            ttl_ms: None,
         })),
     }
 }

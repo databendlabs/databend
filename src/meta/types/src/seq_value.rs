@@ -20,6 +20,8 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::EvalExpireTime;
+
 pub trait SeqValue<V = Vec<u8>> {
     fn seq(&self) -> u64;
     fn value(&self) -> Option<&V>;
@@ -36,11 +38,7 @@ pub trait SeqValue<V = Vec<u8>> {
 
     /// Evaluate and returns the absolute expire time in millisecond since 1970.
     fn eval_expire_at_ms(&self) -> u64 {
-        if let Some(meta) = self.meta() {
-            meta.eval_expire_at_ms()
-        } else {
-            u64::MAX
-        }
+        self.meta().eval_expire_at_ms()
     }
 
     /// Return true if the record is expired.
@@ -62,27 +60,21 @@ impl KVMeta {
         Self { expire_at }
     }
 
-    /// Create a new KVMeta with expiration time in second since 1970
+    /// Create a KVMeta with a absolute expiration time in second since 1970-01-01.
     pub fn new_expire(expire_at: u64) -> Self {
         Self {
             expire_at: Some(expire_at),
         }
     }
 
-    /// Returns expire time in second since 1970.
-    pub fn get_expire_at_sec(&self) -> Option<u64> {
-        self.expire_at
-    }
-
     /// Returns expire time in millisecond since 1970.
     pub fn get_expire_at_ms(&self) -> Option<u64> {
         self.expire_at.map(|t| t * 1000)
     }
+}
 
-    /// Evaluate and returns the absolute expire time in millisecond since 1970.
-    ///
-    /// If there is no expire time, return u64::MAX.
-    pub fn eval_expire_at_ms(&self) -> u64 {
+impl EvalExpireTime for KVMeta {
+    fn eval_expire_at_ms(&self) -> u64 {
         match self.expire_at {
             None => u64::MAX,
             Some(exp_at_sec) => exp_at_sec * 1000,
@@ -193,14 +185,6 @@ impl<T> SeqV<T> {
 
     pub fn with_meta(seq: u64, meta: Option<KVMeta>, data: T) -> Self {
         Self { seq, meta, data }
-    }
-
-    /// Returns millisecond since 1970-01-01
-    pub fn eval_expire_at_ms(&self) -> u64 {
-        match self.meta {
-            None => u64::MAX,
-            Some(ref m) => m.eval_expire_at_ms(),
-        }
     }
 
     #[must_use]

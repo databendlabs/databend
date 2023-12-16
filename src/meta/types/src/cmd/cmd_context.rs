@@ -12,14 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use bytes::BufMut;
-pub use bytes::BytesMut;
+use crate::Time;
 
-pub use crate::binary_read::BinaryRead;
-pub use crate::binary_write::put_uvarint;
-pub use crate::binary_write::BinaryWrite;
-pub use crate::bincode_serialization::*;
-pub use crate::borsh_serialization::*;
-pub use crate::format_settings::FormatSettings;
-pub use crate::position::*;
-pub use crate::stat_buffer::StatBuffer;
+/// A context used when executing a [`Cmd`], to provide additional environment information.
+///
+/// [`Cmd`]: crate::Cmd
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CmdContext {
+    time: Time,
+}
+
+impl CmdContext {
+    pub fn from_millis(millis: u64) -> Self {
+        Self::new(Time::from_millis(millis))
+    }
+
+    pub fn new(time: Time) -> Self {
+        CmdContext { time }
+    }
+
+    /// Returns the time since 1970-01-01 when this log is proposed by the leader.
+    pub fn time(&self) -> Time {
+        self.time
+    }
+}
