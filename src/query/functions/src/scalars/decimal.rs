@@ -1694,21 +1694,17 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         }
     };
 
-    registry.register_function_factory("round", move |params, args_type| {
-        Some(Arc::new(factory(params, args_type, RoundMode::Round)?))
-    });
-
-    registry.register_function_factory("truncate", move |params, args_type| {
-        Some(Arc::new(factory(params, args_type, RoundMode::Truncate)?))
-    });
-
-    registry.register_function_factory("ceil", move |params, args_type| {
-        Some(Arc::new(factory(params, args_type, RoundMode::Ceil)?))
-    });
-
-    registry.register_function_factory("floor", move |params, args_type| {
-        Some(Arc::new(factory(params, args_type, RoundMode::Floor)?))
-    });
+    for m in [
+        RoundMode::Round,
+        RoundMode::Truncate,
+        RoundMode::Ceil,
+        RoundMode::Floor,
+    ] {
+        let name = format!("{:?}", m).to_lowercase();
+        registry.register_function_factory(&name, move |params, args_type| {
+            Some(Arc::new(factory(params, args_type, m)?))
+        });
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
