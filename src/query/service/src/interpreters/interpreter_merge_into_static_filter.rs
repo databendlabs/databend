@@ -493,7 +493,9 @@ impl MergeIntoInterpreter {
                 Arc::new(eval_build_side_join_expr_op.into()),
                 Arc::new(SExpr::create_unary(
                     // merge data here
-                    Arc::new(RelOperator::Exchange(common_sql::plans::Exchange::Merge)),
+                    Arc::new(RelOperator::Exchange(
+                        databend_common_sql::plans::Exchange::Merge,
+                    )),
                     Arc::new(build_plan.child(0)?.child(0)?.clone()),
                 )),
             )

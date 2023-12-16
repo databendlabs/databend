@@ -420,8 +420,8 @@ impl MergeIntoInterpreter {
                     ])),
                     true => DataSchemaRef::new(DataSchema::new(vec![DataField::new(
                         ROW_ID_COL_NAME,
-                        common_expression::types::DataType::Number(
-                            common_expression::types::NumberDataType::UInt64,
+                        databend_common_expression::types::DataType::Number(
+                            databend_common_expression::types::NumberDataType::UInt64,
                         ),
                     )])),
                 },
