@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_storage::StorageConfig;
+use databend_common_exception::Result;
+use databend_common_storage::StorageConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 

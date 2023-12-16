@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::binder::Binder;
 use crate::optimizer::SExpr;

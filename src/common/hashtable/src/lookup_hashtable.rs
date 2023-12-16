@@ -17,7 +17,7 @@ use std::iter::TrustedLen;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::MmapAllocator;
 
 use crate::table0::Entry;
 use crate::HashtableLike;

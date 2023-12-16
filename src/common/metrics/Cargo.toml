@@ -1,5 +1,5 @@
 [package]
-name = "common-metrics"
+name = "databend-common-metrics"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -15,7 +15,7 @@ enable-histogram = ["metrics/enable-histogram"]
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../exception" }
+databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 metrics = { workspace = true }

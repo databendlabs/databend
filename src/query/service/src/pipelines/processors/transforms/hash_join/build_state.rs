@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::ColumnVec;
-use common_expression::DataBlock;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnVec;
+use databend_common_expression::DataBlock;
 
 pub struct BuildState {
     // The `generation_state` is used to generate build side `DataBlock`.

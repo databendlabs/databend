@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_pipeline_core::Pipeline;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_core::Pipeline;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;

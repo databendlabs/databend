@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_grpc::RpcClientConf;
-use common_meta_app::principal::UserDefinedFunction;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_grpc::RpcClientConf;
+use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

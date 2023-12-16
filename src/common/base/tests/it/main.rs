@@ -14,7 +14,7 @@
 
 #![feature(lazy_cell)]
 
-use common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::mem_allocator::GlobalAllocator;
 
 mod fixed_heap;
 mod pool;

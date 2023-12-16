@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::DatabaseInfo;
 use dashmap::DashMap;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::DatabaseInfo;
 
 use crate::databases::default::DefaultDatabase;
 use crate::databases::share::ShareDatabase;

@@ -23,13 +23,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use common_cache::Cache;
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
-use common_cache::FileSize;
-use common_cache::LruCache;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_cache::Cache;
+use databend_common_cache::Count;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_cache::FileSize;
+use databend_common_cache::LruCache;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use log::error;
 use log::warn;
 use parking_lot::RwLock;
@@ -259,7 +259,9 @@ pub mod result {
 
 use result::*;
 
-impl CacheAccessor<String, Bytes, common_cache::DefaultHashBuilder, Count> for LruDiskCacheHolder {
+impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Count>
+    for LruDiskCacheHolder
+{
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         let k = k.as_ref();
         {

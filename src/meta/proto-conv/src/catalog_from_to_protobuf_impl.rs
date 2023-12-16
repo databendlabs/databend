@@ -17,12 +17,12 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::schema as mt;
-use common_meta_app::schema::CatalogOption;
-use common_meta_app::schema::HiveCatalogOption;
-use common_meta_app::schema::IcebergCatalogOption;
-use common_meta_app::storage::StorageParams;
-use common_protos::pb;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::HiveCatalogOption;
+use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;

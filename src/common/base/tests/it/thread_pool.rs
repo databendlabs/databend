@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::runtime::ThreadPool;
-use common_exception::Result;
+use databend_common_base::runtime::ThreadPool;
+use databend_common_exception::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_thread_pool() -> Result<()> {

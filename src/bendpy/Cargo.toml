@@ -19,12 +19,12 @@ crate-type = ["cdylib"]
 arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
 
-common-config = { path = "../query/config" }
-common-exception = { path = "../common/exception" }
-common-expression = { path = "../query/expression" }
-common-license = { path = "../common/license" }
-common-meta-app = { path = "../meta/app" }
-common-meta-embedded = { path = "../meta/embedded" }
+databend-common-config = { path = "../query/config" }
+databend-common-exception = { path = "../common/exception" }
+databend-common-expression = { path = "../query/expression" }
+databend-common-license = { path = "../common/license" }
+databend-common-meta-app = { path = "../meta/app" }
+databend-common-meta-embedded = { path = "../meta/embedded" }
 databend-query = { path = "../query/service", features = [
     "simd",
     "disable_initial_exec_tls",

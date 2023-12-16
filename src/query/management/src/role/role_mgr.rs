@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::OwnershipInfo;
-use common_meta_app::principal::RoleInfo;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::IntoSeqV;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::ToErrorCode;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipInfo;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::IntoSeqV;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 
 use crate::role::role_api::RoleApi;
 
@@ -109,7 +109,7 @@ impl RoleMgr {
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_role(&self, role_info: RoleInfo) -> common_exception::Result<u64> {
+    async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = self.make_role_key(role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
@@ -197,7 +197,7 @@ impl RoleApi for RoleMgr {
         &self,
         object: &GrantObjectByID,
         role: &str,
-    ) -> common_exception::Result<()> {
+    ) -> databend_common_exception::Result<()> {
         let match_seq = MatchSeq::GE(0);
         let key = self.make_object_owner_key(object);
 
@@ -224,7 +224,7 @@ impl RoleApi for RoleMgr {
     async fn get_ownership(
         &self,
         object: &GrantObjectByID,
-    ) -> common_exception::Result<Option<OwnershipInfo>> {
+    ) -> databend_common_exception::Result<Option<OwnershipInfo>> {
         let key = self.make_object_owner_key(object);
         let res = self.kv_api.get_kv(&key).await?;
         let res_value = match res {
@@ -237,7 +237,10 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_ownership(&self, object: &GrantObjectByID) -> common_exception::Result<()> {
+    async fn drop_ownership(
+        &self,
+        object: &GrantObjectByID,
+    ) -> databend_common_exception::Result<()> {
         let seq = MatchSeq::Exact(0);
         let key = self.make_object_owner_key(object);
         let kv_api = self.kv_api.clone();

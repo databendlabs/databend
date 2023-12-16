@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::compute::sort::lexsort;
-use common_arrow::arrow::compute::sort::SortColumn;
-use common_arrow::arrow::compute::sort::SortOptions;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::compute::sort::lexsort;
+use databend_common_arrow::arrow::compute::sort::SortColumn;
+use databend_common_arrow::arrow::compute::sort::SortOptions;
 
 fn test_lex_sort_arrays(input: Vec<SortColumn>, expected: Vec<Box<dyn Array>>) {
     let sorted = lexsort::<i32>(&input, None).unwrap();

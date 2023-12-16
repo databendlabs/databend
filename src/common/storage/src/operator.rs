@@ -19,26 +19,27 @@ use std::io::Result;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::ErrorCode;
-use common_meta_app::storage::StorageAzblobConfig;
-use common_meta_app::storage::StorageCosConfig;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::StorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
 #[cfg(feature = "storage-hdfs")]
-use common_meta_app::storage::StorageHdfsConfig;
-use common_meta_app::storage::StorageHttpConfig;
-use common_meta_app::storage::StorageIpfsConfig;
-use common_meta_app::storage::StorageMokaConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
-use common_metrics::load_global_prometheus_registry;
+use databend_common_meta_app::storage::StorageHdfsConfig;
+use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageIpfsConfig;
+use databend_common_meta_app::storage::StorageMokaConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_metrics::load_global_prometheus_registry;
+use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
@@ -51,7 +52,6 @@ use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
-use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
@@ -395,14 +395,14 @@ impl DataOperator {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+    pub async fn init(conf: &StorageConfig) -> databend_common_exception::Result<()> {
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
     }
 
     /// Create a new data operator without check.
-    pub fn try_new(sp: &StorageParams) -> common_exception::Result<DataOperator> {
+    pub fn try_new(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 
         Ok(DataOperator {
@@ -412,7 +412,7 @@ impl DataOperator {
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
+    pub async fn try_create(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
         let sp = sp.clone();
 
         let operator = init_operator(&sp)?;
@@ -441,7 +441,7 @@ impl DataOperator {
     }
 
     /// Check license must be run after license manager setup.
-    pub async fn check_license(&self) -> common_exception::Result<()> {
+    pub async fn check_license(&self) -> databend_common_exception::Result<()> {
         if self.params.need_encryption_feature() {
             get_storage_encryption_handler().check_license().await?;
         }

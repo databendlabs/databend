@@ -14,9 +14,9 @@
 
 use std::ptr::NonNull;
 
-use common_exception::Result;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::FastHash;
+use databend_common_exception::Result;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::FastHash;
 
 use super::utils::serialize_group_columns;
 use crate::types::DataType;

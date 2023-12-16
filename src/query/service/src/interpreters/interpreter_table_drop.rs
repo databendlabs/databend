@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::schema::DropTableByIdReq;
-use common_sql::plans::DropTablePlan;
-use common_storages_fuse::FuseTable;
-use common_storages_share::save_share_spec;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use common_storages_view::view_table::VIEW_ENGINE;
-use common_users::UserApiProvider;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_sql::plans::DropTablePlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_share::save_share_spec;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

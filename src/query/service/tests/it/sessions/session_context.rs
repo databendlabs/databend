@@ -14,10 +14,10 @@
 
 use std::net::SocketAddr;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::principal::UserInfo;
-use common_settings::Settings;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
 

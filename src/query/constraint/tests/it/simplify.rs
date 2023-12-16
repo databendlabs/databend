@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::io::Write;
 
-use common_constraint::mir::MirDataType;
-use common_constraint::mir::MirExpr;
-use common_constraint::simplify::mir_to_z3_assertion;
-use common_constraint::simplify::simplify_z3_ast;
+use databend_common_constraint::mir::MirDataType;
+use databend_common_constraint::mir::MirExpr;
+use databend_common_constraint::simplify::mir_to_z3_assertion;
+use databend_common_constraint::simplify::simplify_z3_ast;
 use goldenfile::Mint;
 use z3::Config;
 use z3::Context;

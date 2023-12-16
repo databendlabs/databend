@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_storages_information_schema::ColumnsTable;
-use common_storages_information_schema::KeyColumnUsageTable;
-use common_storages_information_schema::KeywordsTable;
-use common_storages_information_schema::SchemataTable;
-use common_storages_information_schema::StatisticsTable;
-use common_storages_information_schema::TablesTable;
-use common_storages_information_schema::ViewsTable;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_storages_information_schema::ColumnsTable;
+use databend_common_storages_information_schema::KeyColumnUsageTable;
+use databend_common_storages_information_schema::KeywordsTable;
+use databend_common_storages_information_schema::SchemataTable;
+use databend_common_storages_information_schema::StatisticsTable;
+use databend_common_storages_information_schema::TablesTable;
+use databend_common_storages_information_schema::ViewsTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;

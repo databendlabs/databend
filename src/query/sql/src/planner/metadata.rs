@@ -19,15 +19,15 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use ahash::HashMap;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_catalog::plan::InternalColumn;
-use common_catalog::table::Table;
-use common_expression::types::DataType;
-use common_expression::ComputedExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::table::Table;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;

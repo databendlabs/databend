@@ -14,21 +14,21 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::Runtime;
-use common_catalog::plan::Projection;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_pipeline_sources::EmptySource;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::DeleteSource;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::gen_mutation_stream_operator;
-use common_storages_fuse::operations::MutationBlockPruningContext;
-use common_storages_fuse::operations::TransformSerializeBlock;
-use common_storages_fuse::FuseLazyPartInfo;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::SegmentLocation;
+use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::DeleteSource;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_storages_fuse::operations::MutationBlockPruningContext;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::FuseLazyPartInfo;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::SegmentLocation;
 use log::info;
 
 use crate::pipelines::processors::TransformAddStreamColumns;

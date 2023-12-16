@@ -17,31 +17,31 @@
 
 use std::sync::Arc;
 
-use common_expression::error_to_null;
-use common_expression::types::boolean::BooleanDomain;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableDomain;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::SimpleDomain;
-use common_expression::types::StringType;
-use common_expression::types::ALL_FLOAT_TYPES;
-use common_expression::types::ALL_INTEGER_TYPES;
-use common_expression::vectorize_2_arg;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::with_float_mapped_type;
-use common_expression::with_integer_mapped_type;
-use common_expression::EvalContext;
-use common_expression::Function;
-use common_expression::FunctionDomain;
-use common_expression::FunctionEval;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_expression::error_to_null;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::vectorize_2_arg;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::with_float_mapped_type;
+use databend_common_expression::with_integer_mapped_type;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use ordered_float::OrderedFloat;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -194,7 +194,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 None
             };
 
-             FunctionDomain::Domain(NullableDomain::<BooleanType> {
+            FunctionDomain::Domain(NullableDomain::<BooleanType> {
                     has_null,
                     value,
             })
@@ -206,7 +206,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 (_, Some(true))  => Some(true),
                 (Some(false), Some(false)) => Some(false),
                 _ => None
-             }
+            }
         }),
     );
 
@@ -225,7 +225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             | (ValueRef::Column(other), ValueRef::Scalar(true)) => Value::Column(!&other),
             (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
             (ValueRef::Column(a), ValueRef::Column(b)) => {
-                Value::Column(common_arrow::arrow::bitmap::xor(&a, &b))
+                Value::Column(databend_common_arrow::arrow::bitmap::xor(&a, &b))
             }
         },
     );

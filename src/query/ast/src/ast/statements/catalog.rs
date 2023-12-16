@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::schema::CatalogType;
+use databend_common_meta_app::schema::CatalogType;
 
 use super::ShowLimit;
 use crate::ast::write_comma_separated_map;

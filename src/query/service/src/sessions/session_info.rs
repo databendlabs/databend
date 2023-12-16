@@ -15,10 +15,10 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::base::ProgressValues;
-pub use common_catalog::table_context::ProcessInfo;
-use common_catalog::table_context::ProcessInfoState;
-use common_storage::StorageMetrics;
+use databend_common_base::base::ProgressValues;
+pub use databend_common_catalog::table_context::ProcessInfo;
+use databend_common_catalog::table_context::ProcessInfoState;
+use databend_common_storage::StorageMetrics;
 
 use crate::sessions::Session;
 use crate::sessions::SessionContext;

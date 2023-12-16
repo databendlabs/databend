@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVMeta;
-use common_meta_types::MetaError;
-use common_meta_types::SeqV;
-use common_meta_types::With;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::With;
 use databend_meta::configs::Config;
 
 pub enum KvApiCommand {

@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_catalog::lock::Lock;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::schema::LockKey;
-use common_meta_app::schema::LockType;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableLockKey;
-use common_meta_kvapi::kvapi::Key;
-use common_pipeline_core::LockGuard;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLockKey;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_pipeline_core::LockGuard;
 
 use crate::locks::LockManager;
 

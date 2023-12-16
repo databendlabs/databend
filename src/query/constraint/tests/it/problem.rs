@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_constraint::mir::MirDataType;
-use common_constraint::problem::variable_must_not_null;
+use databend_common_constraint::mir::MirDataType;
+use databend_common_constraint::problem::variable_must_not_null;
 
 use crate::parser::parse_mir_expr;
 

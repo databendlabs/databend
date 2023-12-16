@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::CreateStreamStmt;
-use common_ast::ast::DescribeStreamStmt;
-use common_ast::ast::DropStreamStmt;
-use common_ast::ast::ShowLimit;
-use common_ast::ast::ShowStreamsStmt;
-use common_ast::ast::StreamPoint;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
+use databend_common_ast::ast::CreateStreamStmt;
+use databend_common_ast::ast::DescribeStreamStmt;
+use databend_common_ast::ast::DropStreamStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowStreamsStmt;
+use databend_common_ast::ast::StreamPoint;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use log::debug;
 
 use crate::binder::Binder;

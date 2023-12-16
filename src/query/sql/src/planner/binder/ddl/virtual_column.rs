@@ -15,17 +15,17 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use common_ast::ast::AlterVirtualColumnStmt;
-use common_ast::ast::CreateVirtualColumnStmt;
-use common_ast::ast::DropVirtualColumnStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::RefreshVirtualColumnStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableDataType;
-use common_expression::TableSchemaRef;
+use databend_common_ast::ast::AlterVirtualColumnStmt;
+use databend_common_ast::ast::CreateVirtualColumnStmt;
+use databend_common_ast::ast::DropVirtualColumnStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::RefreshVirtualColumnStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRef;
 
 use crate::binder::Binder;
 use crate::plans::AlterVirtualColumnPlan;

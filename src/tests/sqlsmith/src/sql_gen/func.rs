@@ -14,24 +14,24 @@
 
 use std::mem;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::Lambda;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_ast::ast::Window;
-use common_ast::ast::WindowFrame;
-use common_ast::ast::WindowFrameBound;
-use common_ast::ast::WindowFrameUnits;
-use common_ast::ast::WindowRef;
-use common_ast::ast::WindowSpec;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType::Decimal128;
-use common_expression::types::DecimalDataType::Decimal256;
-use common_expression::types::DecimalSize;
-use common_expression::types::NumberDataType;
-use common_expression::types::ALL_FLOAT_TYPES;
-use common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowFrame;
+use databend_common_ast::ast::WindowFrameBound;
+use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::ast::WindowRef;
+use databend_common_ast::ast::WindowSpec;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType::Decimal128;
+use databend_common_expression::types::DecimalDataType::Decimal256;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
 use rand::Rng;
 
 use crate::sql_gen::Column;

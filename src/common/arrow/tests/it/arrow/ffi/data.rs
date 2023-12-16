@@ -15,13 +15,13 @@
 
 use std::collections::BTreeMap;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::error::Result;
-use common_arrow::arrow::ffi;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::TimeUnit;
+use databend_common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::ffi;
 
 fn _test_round_trip(array: Box<dyn Array>, expected: Box<dyn Array>) -> Result<()> {
     let field = Field::new("a", array.data_type().clone(), true);

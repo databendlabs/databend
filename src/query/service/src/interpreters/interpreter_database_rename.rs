@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_sql::plans::RenameDatabasePlan;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_sql::plans::RenameDatabasePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

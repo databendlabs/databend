@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_base::base::tokio;
+use databend_common_base::base::tokio;
 use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;

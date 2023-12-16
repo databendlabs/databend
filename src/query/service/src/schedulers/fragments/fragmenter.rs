@@ -14,23 +14,23 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_sql::executor::physical_plans::CompactSource;
-use common_sql::executor::physical_plans::CopyIntoTable;
-use common_sql::executor::physical_plans::CopyIntoTableSource;
-use common_sql::executor::physical_plans::DeleteSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::ExchangeSink;
-use common_sql::executor::physical_plans::ExchangeSource;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::HashJoin;
-use common_sql::executor::physical_plans::MergeInto;
-use common_sql::executor::physical_plans::QuerySource;
-use common_sql::executor::physical_plans::ReclusterSource;
-use common_sql::executor::physical_plans::ReplaceInto;
-use common_sql::executor::physical_plans::TableScan;
-use common_sql::executor::PhysicalPlanReplacer;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::CopyIntoTable;
+use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::DeleteSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::ExchangeSink;
+use databend_common_sql::executor::physical_plans::ExchangeSource;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MergeInto;
+use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::physical_plans::ReclusterSource;
+use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::PhysicalPlanReplacer;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;

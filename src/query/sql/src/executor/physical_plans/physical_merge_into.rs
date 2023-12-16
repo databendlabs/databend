@@ -14,12 +14,12 @@
 
 use std::collections::HashMap;
 
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::Location;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::binder::MergeIntoType;
 use crate::executor::physical_plan::PhysicalPlan;

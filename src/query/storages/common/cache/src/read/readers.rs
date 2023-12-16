@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
+use databend_common_cache::Count;
+use databend_common_cache::DefaultHashBuilder;
 
 use crate::read::cached_reader::CachedReader;
 use crate::InMemoryBytesCacheHolder;
