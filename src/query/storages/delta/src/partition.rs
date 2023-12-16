@@ -18,14 +18,14 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_storages_parquet::ParquetPart;
 
-/// # TODO
-///
-/// - we should support different format.
+/// only support parquet for now: https://github.com/delta-io/delta/issues/87
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub enum DeltaPartInfo {
-    Parquet(ParquetPart),
+pub struct DeltaPartInfo {
+    pub data: ParquetPart,
+    pub partition_values: Vec<Scalar>,
 }
 
 impl DeltaPartInfo {
@@ -49,8 +49,6 @@ impl PartInfo for DeltaPartInfo {
     }
 
     fn hash(&self) -> u64 {
-        match self {
-            DeltaPartInfo::Parquet(p) => p.hash(),
-        }
+        self.data.hash()
     }
 }

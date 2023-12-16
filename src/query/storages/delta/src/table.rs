@@ -261,12 +261,14 @@ impl DeltaTable {
                 read_rows += stats.num_records as usize;
                 read_bytes += add.size as usize;
                 Ok(Arc::new(
-                    Box::new(DeltaPartInfo::Parquet(ParquetPart::ParquetFiles(
-                        ParquetFilesPart {
+                    Box::new(DeltaPartInfo{
+                        partition_values: vec![],
+                        data: ParquetPart::ParquetFiles(
+                            ParquetFilesPart {
                             files: vec![(add.path.clone(), add.size as u64)],
                             estimated_uncompressed_size: add.size as u64, // This field is not used here.
                         },
-                    ))) as Box<dyn PartInfo>,
+                    )}) as Box<dyn PartInfo>
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
