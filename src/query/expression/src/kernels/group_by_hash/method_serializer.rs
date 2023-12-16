@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_hashtable::hash_join_fast_string_hash;
+use databend_common_exception::Result;
+use databend_common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
 use crate::types::string::StringIterator;

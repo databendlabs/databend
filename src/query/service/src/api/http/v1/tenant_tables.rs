@@ -14,9 +14,9 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_catalog::catalog::CatalogManager;
-use common_config::GlobalConfig;
-use common_exception::Result;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;

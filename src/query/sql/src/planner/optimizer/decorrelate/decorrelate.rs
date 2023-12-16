@@ -15,16 +15,16 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::types::DataType;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::types::DataType;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
-use crate::optimizer::heuristic::subquery_rewriter::FlattenInfo;
-use crate::optimizer::heuristic::subquery_rewriter::SubqueryRewriter;
-use crate::optimizer::heuristic::subquery_rewriter::UnnestResult;
+use crate::optimizer::decorrelate::subquery_rewriter::FlattenInfo;
+use crate::optimizer::decorrelate::subquery_rewriter::SubqueryRewriter;
+use crate::optimizer::decorrelate::subquery_rewriter::UnnestResult;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;

@@ -19,32 +19,32 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
-use common_catalog::lock::Lock;
-use common_catalog::table::Table;
-use common_catalog::table::TableExt;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::LockGuard;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::LockGuard;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
@@ -401,7 +401,7 @@ where F: SnapshotGenerator + Send + 'static
                                     name.as_str(),
                                     table_info.ident
                                 );
-                                common_base::base::tokio::time::sleep(d).await;
+                                databend_common_base::base::tokio::time::sleep(d).await;
                                 self.retries += 1;
                                 self.state = State::RefreshTable;
                             }

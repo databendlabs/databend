@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::TableIndexType;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::TableInfo;
-use common_meta_types::MetaId;
-use storages_common_table_meta::meta::Location;
+use databend_common_ast::ast::TableIndexType;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_types::MetaId;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::plans::Plan;
 

@@ -1,5 +1,5 @@
 [package]
-name = "common-io"
+name = "databend-common-io"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,7 +14,7 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../exception" }
+databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 bincode = { workspace = true }

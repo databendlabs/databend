@@ -17,18 +17,18 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::DataBlock;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::DataBlock;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -52,14 +52,14 @@ impl Debug for Parquet2SourceMeta {
 }
 
 impl serde::Serialize for Parquet2SourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> databend_common_exception::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize ParquetSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for Parquet2SourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> databend_common_exception::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ParquetSourceMeta")
     }

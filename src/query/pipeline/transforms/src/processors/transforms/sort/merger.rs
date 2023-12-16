@@ -17,11 +17,11 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
+use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
 
 use super::utils::find_bigger_child_of_root;
 use super::Cursor;

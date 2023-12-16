@@ -325,11 +325,12 @@ impl ErrorCode {
 /// Provides the `map_err_to_code` method for `Result`.
 ///
 /// ```
-/// use common_exception::ErrorCode;
-/// use common_exception::ToErrorCode;
+/// use databend_common_exception::ErrorCode;
+/// use databend_common_exception::ToErrorCode;
 ///
 /// let x: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
-/// let y: common_exception::Result<()> = x.map_err_to_code(ErrorCode::UnknownException, || 123);
+/// let y: databend_common_exception::Result<()> =
+///     x.map_err_to_code(ErrorCode::UnknownException, || 123);
 ///
 /// assert_eq!(
 ///     "Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",

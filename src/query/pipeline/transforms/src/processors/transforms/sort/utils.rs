@@ -14,12 +14,12 @@
 
 use std::collections::BinaryHeap;
 
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SortColumnDescription;
 
 pub const ORDER_COL_NAME: &str = "_order_col";
 

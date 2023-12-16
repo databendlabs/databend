@@ -14,35 +14,35 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr as AExpr;
-use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::tokenize_sql;
-use common_ast::walk_expr_mut;
-use common_base::base::tokio::runtime::Handle;
-use common_base::base::tokio::task::block_in_place;
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::plan::Filters;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::infer_table_schema;
-use common_expression::type_check::check_function;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableInfo;
-use common_settings::Settings;
+use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_expr_mut;
+use databend_common_base::base::tokio::runtime::Handle;
+use databend_common_base::base::tokio::task::block_in_place;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_settings::Settings;
 use parking_lot::RwLock;
 
 use crate::binder::ColumnBindingBuilder;
@@ -409,7 +409,7 @@ impl Table for DummyTable {
         self
     }
 
-    fn get_table_info(&self) -> &common_meta_app::schema::TableInfo {
+    fn get_table_info(&self) -> &databend_common_meta_app::schema::TableInfo {
         &self.info
     }
 }
@@ -439,8 +439,8 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
             let result = evaluator.run(&expr)?;
 
             match result {
-                common_expression::Value::Scalar(s) => Ok(s),
-                common_expression::Value::Column(c) if c.len() == 1 => {
+                databend_common_expression::Value::Scalar(s) => Ok(s),
+                databend_common_expression::Value::Column(c) if c.len() == 1 => {
                     let value = unsafe { c.index_unchecked(0) };
                     Ok(value.to_owned())
                 }

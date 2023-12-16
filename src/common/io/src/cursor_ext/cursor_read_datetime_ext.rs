@@ -24,9 +24,9 @@ use chrono::NaiveDate;
 use chrono::Offset;
 use chrono::TimeZone;
 use chrono_tz::Tz;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 

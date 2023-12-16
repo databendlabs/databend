@@ -14,13 +14,13 @@
 
 use std::time::Duration;
 
-use common_grpc::RpcClientTlsConfig;
-use common_meta_api::SchemaApi;
-use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::MetaClientError;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
+use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaNetworkError;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;

@@ -18,15 +18,15 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::row::RowConverter as CommonConverter;
-use common_expression::BlockMetaInfo;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::row::RowConverter as CommonConverter;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
 
 use super::sort::CommonRows;
 use super::sort::Cursor;

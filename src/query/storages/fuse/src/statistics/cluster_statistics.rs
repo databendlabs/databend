@@ -14,14 +14,14 @@
 
 use std::cmp::Ordering;
 
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_sql::evaluator::BlockOperator;
-use storages_common_table_meta::meta::ClusterStatistics;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::statistics::column_statistic::Trim;
 use crate::table_functions::cmp_with_null;

@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_expression::DataSchemaRef;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_meta_types::MetaId;
+use databend_common_ast::ast::Expr;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_types::MetaId;
 
 use crate::plans::InsertInputSource;
 

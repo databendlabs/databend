@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::io;
 
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::LogId;
-use common_meta_types::StoredMembership;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::StoredMembership;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;

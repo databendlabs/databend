@@ -18,10 +18,10 @@ use std::ops::Range;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use common_arrow::arrow::buffer::Buffer;
-use common_io::cursor_ext::BufferReadDateTimeExt;
-use common_io::cursor_ext::DateTimeResType;
-use common_io::cursor_ext::ReadBytesExt;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_io::cursor_ext::BufferReadDateTimeExt;
+use databend_common_io::cursor_ext::DateTimeResType;
+use databend_common_io::cursor_ext::ReadBytesExt;
 
 use super::number::SimpleDomain;
 use crate::property::Domain;

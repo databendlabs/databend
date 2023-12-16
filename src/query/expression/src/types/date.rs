@@ -18,9 +18,9 @@ use std::ops::Range;
 
 use chrono::NaiveDate;
 use chrono_tz::Tz;
-use common_arrow::arrow::buffer::Buffer;
-use common_io::cursor_ext::BufferReadDateTimeExt;
-use common_io::cursor_ext::ReadBytesExt;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_io::cursor_ext::BufferReadDateTimeExt;
+use databend_common_io::cursor_ext::ReadBytesExt;
 use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;

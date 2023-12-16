@@ -15,6 +15,6 @@
 #![allow(clippy::uninlined_format_args)]
 
 fn main() {
-    common_building::setup();
-    common_building::setup_commit_authors();
+    databend_common_building::setup();
+    databend_common_building::setup_commit_authors();
 }

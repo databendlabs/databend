@@ -14,12 +14,12 @@
 
 use std::collections::BTreeMap;
 
-use common_catalog::plan::Filters;
-use common_catalog::plan::Partitions;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Partitions;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UpdateSource {

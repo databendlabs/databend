@@ -17,23 +17,23 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_ast::ast::format_statement;
-use common_ast::ast::ExplainKind;
-use common_ast::ast::Hint;
-use common_ast::ast::Identifier;
-use common_ast::ast::Statement;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::StageFileFormatType;
+use databend_common_ast::ast::format_statement;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Hint;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
 
@@ -349,7 +349,7 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
+            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
                     format!(", pattern => '{pattern}'")

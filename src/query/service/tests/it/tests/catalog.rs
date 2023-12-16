@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use databend_query::catalogs::DatabaseCatalog;
 
 pub async fn create_catalog() -> Result<DatabaseCatalog> {

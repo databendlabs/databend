@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableNull;
-use common_arrow::arrow::array::NullArray;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableNull;
+use databend_common_arrow::arrow::array::NullArray;
+use databend_common_arrow::arrow::datatypes::DataType;
 
 #[test]
 fn null() {

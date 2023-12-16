@@ -15,29 +15,29 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_meta_types::protobuf as pb;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op;
-use common_meta_types::txn_op_response;
-use common_meta_types::ConditionResult;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteByPrefixRequest;
-use common_meta_types::TxnDeleteByPrefixResponse;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnDeleteResponse;
-use common_meta_types::TxnGetRequest;
-use common_meta_types::TxnGetResponse;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
-use common_meta_types::TxnPutResponse;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_meta_types::With;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_op;
+use databend_common_meta_types::txn_op_response;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnDeleteByPrefixRequest;
+use databend_common_meta_types::TxnDeleteByPrefixResponse;
+use databend_common_meta_types::TxnDeleteRequest;
+use databend_common_meta_types::TxnDeleteResponse;
+use databend_common_meta_types::TxnGetRequest;
+use databend_common_meta_types::TxnGetResponse;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnOpResponse;
+use databend_common_meta_types::TxnPutRequest;
+use databend_common_meta_types::TxnPutResponse;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::With;
 use log::debug;
 use log::info;
 use minitrace::func_name;
@@ -254,9 +254,7 @@ impl kvapi::TestSuite {
             .as_secs();
 
         let _res = kv
-            .upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta {
-                expire_at: Some(now + 2),
-            }))
+            .upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta::new_expire(now + 2)))
             .await?;
         // dbg!("upsert non expired k1", _res);
 
@@ -288,9 +286,7 @@ impl kvapi::TestSuite {
                 .upsert_kv(
                     UpsertKVReq::update("k1", b"v1")
                         .with(MatchSeq::Exact(0))
-                        .with(KVMeta {
-                            expire_at: Some(now - 1),
-                        }),
+                        .with(KVMeta::new_expire(now - 1)),
                 )
                 .await?;
             // dbg!("update expired k1", _res);
@@ -299,9 +295,7 @@ impl kvapi::TestSuite {
                 .upsert_kv(
                     UpsertKVReq::update("k2", b"v2")
                         .with(MatchSeq::Exact(0))
-                        .with(KVMeta {
-                            expire_at: Some(now + 10),
-                        }),
+                        .with(KVMeta::new_expire(now + 10)),
                 )
                 .await?;
             // dbg!("update non expired k2", _res);
@@ -312,9 +306,7 @@ impl kvapi::TestSuite {
                 None,
                 Some(SeqV::with_meta(
                     3,
-                    Some(KVMeta {
-                        expire_at: Some(now + 10)
-                    }),
+                    Some(KVMeta::new_expire(now + 10)),
                     b"v2".to_vec()
                 ))
             ]);
@@ -333,9 +325,7 @@ impl kvapi::TestSuite {
             kv.upsert_kv(
                 UpsertKVReq::update("k2", b"v2")
                     .with(MatchSeq::Exact(3))
-                    .with(KVMeta {
-                        expire_at: Some(now - 1),
-                    }),
+                    .with(KVMeta::new_expire(now - 1)),
             )
             .await?;
 
@@ -368,9 +358,7 @@ impl kvapi::TestSuite {
                 test_key,
                 MatchSeq::Exact(seq + 1),
                 Operation::AsIs,
-                Some(KVMeta {
-                    expire_at: Some(now + 20),
-                }),
+                Some(KVMeta::new_expire(now + 20)),
             ))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
@@ -383,18 +371,14 @@ impl kvapi::TestSuite {
                 test_key,
                 MatchSeq::Exact(seq),
                 Operation::AsIs,
-                Some(KVMeta {
-                    expire_at: Some(now + 20),
-                }),
+                Some(KVMeta::new_expire(now + 20)),
             ))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
         assert_eq!(
             Some(SeqV::with_meta(
                 2,
-                Some(KVMeta {
-                    expire_at: Some(now + 20)
-                }),
+                Some(KVMeta::new_expire(now + 20)),
                 b"v1".to_vec()
             )),
             r.result
@@ -404,13 +388,7 @@ impl kvapi::TestSuite {
         let key_value = kv.get_kv(test_key).await?;
         assert!(key_value.is_some());
         assert_eq!(
-            SeqV::with_meta(
-                seq + 1,
-                Some(KVMeta {
-                    expire_at: Some(now + 20)
-                }),
-                b"v1".to_vec()
-            ),
+            SeqV::with_meta(seq + 1, Some(KVMeta::new_expire(now + 20)), b"v1".to_vec()),
             key_value.unwrap(),
         );
 

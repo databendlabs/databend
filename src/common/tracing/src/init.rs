@@ -19,8 +19,8 @@ use std::io::Write;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
 use log::Log;
@@ -76,14 +76,26 @@ pub fn init_logging(
     mut labels: BTreeMap<String, String>,
 ) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
+    let log_name = name;
+    let trace_name = match labels.get("node_id") {
+        None => name.to_string(),
+        Some(node_id) => format!(
+            "{}@{}",
+            name,
+            if node_id.len() >= 7 {
+                &node_id[0..7]
+            } else {
+                &node_id
+            }
+        ),
+    };
     // use name as service name if not specified
     if !labels.contains_key("service") {
-        labels.insert("service".to_string(), name.to_string());
+        labels.insert("service".to_string(), trace_name.to_string());
     }
 
     // Initialize tracing reporter
     if cfg.tracing.on {
-        let name = name.to_string();
         let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
 
         let (reporter_rt, otlp_reporter) = std::thread::spawn(|| {
@@ -108,10 +120,10 @@ pub fn init_logging(
                     .expect("initialize otlp exporter"),
                     opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(opentelemetry::sdk::Resource::new([
-                        opentelemetry::KeyValue::new("service.name", name.clone()),
+                        opentelemetry::KeyValue::new("service.name", trace_name.clone()),
                     ])),
                     opentelemetry::InstrumentationLibrary::new(
-                        name,
+                        trace_name,
                         None::<&'static str>,
                         None::<&'static str>,
                         None,
@@ -140,7 +152,8 @@ pub fn init_logging(
 
     // File logger
     if cfg.file.on {
-        let (normal_log_file, flush_guard) = new_file_log_writer(&cfg.file.dir, name);
+        let (normal_log_file, flush_guard) =
+            new_file_log_writer(&cfg.file.dir, log_name, cfg.file.limit);
         guards.push(Box::new(flush_guard));
         let dispatch = fern::Dispatch::new()
             .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
@@ -189,7 +202,8 @@ pub fn init_logging(
     // Query logger
     if cfg.query.on {
         if !cfg.query.dir.is_empty() {
-            let (query_log_file, flush_guard) = new_file_log_writer(&cfg.query.dir, name);
+            let (query_log_file, flush_guard) =
+                new_file_log_writer(&cfg.query.dir, log_name, cfg.file.limit);
             guards.push(Box::new(flush_guard));
             query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
         }
@@ -205,7 +219,8 @@ pub fn init_logging(
     // Profile logger
     if cfg.profile.on {
         if !cfg.profile.dir.is_empty() {
-            let (profile_log_file, flush_guard) = new_file_log_writer(&cfg.profile.dir, name);
+            let (profile_log_file, flush_guard) =
+                new_file_log_writer(&cfg.profile.dir, log_name, cfg.file.limit);
             guards.push(Box::new(flush_guard));
             profile_logger =
                 profile_logger.chain(Box::new(profile_log_file) as Box<dyn Write + Send>);
@@ -225,9 +240,7 @@ pub fn init_logging(
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
                 .filter(|meta| {
-                    if meta.target().starts_with("databend_")
-                        || meta.target().starts_with("common_")
-                    {
+                    if meta.target().starts_with("databend_") {
                         true
                     } else {
                         meta.level() <= LevelFilter::Error

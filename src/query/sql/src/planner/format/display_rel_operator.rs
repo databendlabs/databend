@@ -14,7 +14,7 @@
 
 use std::fmt::Display;
 
-use common_ast::ast::FormatTreeNode;
+use databend_common_ast::ast::FormatTreeNode;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;

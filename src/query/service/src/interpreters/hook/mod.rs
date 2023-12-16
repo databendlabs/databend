@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod decorrelate;
-mod flatten_plan;
-mod flatten_scalar;
+mod compact_hook;
+mod refresh_hook;
 
-pub use decorrelate::decorrelate_subquery;
+pub use compact_hook::*;
+pub use refresh_hook::hook_refresh;
+pub use refresh_hook::RefreshDesc;

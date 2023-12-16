@@ -16,20 +16,20 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::share::*;
-use common_meta_kvapi::kvapi;
-use common_meta_types::MetaError;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::share::*;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_types::MetaError;
 use enumflags2::BitFlags;
 use log::info;
 
@@ -1705,7 +1705,9 @@ impl ShareApiTestSuite {
             let plan = DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                table_name: tbl_name.to_string(),
                 tb_id: table_id,
+                db_id,
             };
             let _res = mt.drop_table_by_id(plan).await;
 

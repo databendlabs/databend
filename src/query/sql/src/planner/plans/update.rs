@@ -16,19 +16,19 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ComputedExpr;
-use common_expression::ConstantFolder;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::PREDICATE_COLUMN_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::PREDICATE_COLUMN_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast_scalar;
 use crate::binder::ColumnBindingBuilder;
@@ -111,12 +111,11 @@ impl UpdatePlan {
                         }
                     }
 
-                    let mut right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-                    let right_data_type = right.data_type()?;
+                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
                     // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
-                    // change into nullable, so we need to cast this.
-                    right = wrap_cast_scalar(&right, &right_data_type, target_type)?;
+                    // change into nullable, so we need to cast this. but we will do cast after all macthed clauses,please
+                    // see `cast_data_type_for_merge()`.
 
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,

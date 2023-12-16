@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_api::ShareApi;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_meta_api::ShareApi;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

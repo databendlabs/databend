@@ -14,7 +14,7 @@
 
 use std::cmp::Ordering;
 
-use common_expression::Column;
+use databend_common_expression::Column;
 
 use super::rows::Rows;
 

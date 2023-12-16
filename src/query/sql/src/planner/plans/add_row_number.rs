@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContext;
 
 use super::Operator;
 use super::RelOp;
@@ -35,18 +35,21 @@ impl Operator for AddRowNumber {
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,
-    ) -> common_exception::Result<Arc<RelationalProperty>> {
+    ) -> databend_common_exception::Result<Arc<RelationalProperty>> {
         rel_expr.derive_relational_prop_child(0)
     }
 
     fn derive_physical_prop(
         &self,
         rel_expr: &RelExpr,
-    ) -> common_exception::Result<PhysicalProperty> {
+    ) -> databend_common_exception::Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
+    fn derive_cardinality(
+        &self,
+        rel_expr: &RelExpr,
+    ) -> databend_common_exception::Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 
@@ -56,7 +59,7 @@ impl Operator for AddRowNumber {
         _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
-    ) -> common_exception::Result<RequiredProperty> {
+    ) -> databend_common_exception::Result<RequiredProperty> {
         Ok(required.clone())
     }
 }

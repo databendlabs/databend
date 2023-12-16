@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::principal::CopyOptions;
-use common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::CopyOptions;
+use databend_common_meta_app::principal::OnErrorMode;
 use minitrace::func_name;
 
 use crate::common;

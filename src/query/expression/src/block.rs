@@ -17,11 +17,11 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::ArrayRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use databend_common_arrow::ArrayRef;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;

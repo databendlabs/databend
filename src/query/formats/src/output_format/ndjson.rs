@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
 
 use crate::field_encoder::FieldEncoderJSON;
 use crate::output_format::OutputFormat;

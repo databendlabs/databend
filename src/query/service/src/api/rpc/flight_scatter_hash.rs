@@ -15,25 +15,25 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::ValueType;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 
@@ -189,8 +189,10 @@ impl HashFlightScatter {
 fn get_hash_values(column: Value<AnyType>, rows: usize) -> Result<Buffer<u64>> {
     match column {
         Value::Scalar(c) => match c {
-            common_expression::Scalar::Null => Ok(vec![0; rows].into()),
-            common_expression::Scalar::Number(NumberScalar::UInt64(x)) => Ok(vec![x; rows].into()),
+            databend_common_expression::Scalar::Null => Ok(vec![0; rows].into()),
+            databend_common_expression::Scalar::Number(NumberScalar::UInt64(x)) => {
+                Ok(vec![x; rows].into())
+            }
             _ => unreachable!(),
         },
         Value::Column(c) => {

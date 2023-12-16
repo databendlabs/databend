@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutableUtf8Array;
-use common_arrow::arrow::array::TryExtendFromSelf;
-use common_arrow::arrow::array::Utf8Array;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::MutableArray;
+use databend_common_arrow::arrow::array::MutableUtf8Array;
+use databend_common_arrow::arrow::array::TryExtendFromSelf;
+use databend_common_arrow::arrow::array::Utf8Array;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
 
 #[test]
 fn capacities() {

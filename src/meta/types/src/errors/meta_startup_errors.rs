@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_meta_stoerr::MetaStorageError;
+use databend_common_meta_stoerr::MetaStorageError;
 
 use crate::raft_types::InitializeError;
 use crate::MetaNetworkError;

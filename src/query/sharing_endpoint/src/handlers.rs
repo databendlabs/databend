@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::share::TableInfoMap;
+use databend_common_meta_app::share::TableInfoMap;
 use models::Credentials;
 use models::RequestFile;
 use poem::error::BadRequest;

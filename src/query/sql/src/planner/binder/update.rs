@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use common_ast::ast::TableReference;
-use common_ast::ast::UpdateStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UpdateStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;

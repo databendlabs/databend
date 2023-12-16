@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::utils::BitChunks;
-use common_arrow::arrow::types::BitChunkIter;
+use databend_common_arrow::arrow::bitmap::utils::BitChunks;
+use databend_common_arrow::arrow::types::BitChunkIter;
 
 #[test]
 fn basics() {

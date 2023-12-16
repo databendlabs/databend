@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::serialize::read_decimal;
-use common_expression::serialize::read_decimal_with_size;
-use common_expression::type_check::common_super_type;
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
+use databend_common_exception::Result;
+use databend_common_expression::serialize::read_decimal;
+use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
 use pretty_assertions::assert_eq;
 
 #[test]
