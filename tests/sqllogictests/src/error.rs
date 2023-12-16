@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::io::Error as IOError;
 
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
 use mysql_async::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
 use serde::Deserialize;

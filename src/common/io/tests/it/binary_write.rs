@@ -14,7 +14,7 @@
 
 use bytes::BufMut;
 use bytes::BytesMut;
-use common_io::prelude::put_uvarint;
+use databend_common_io::prelude::put_uvarint;
 
 #[test]
 fn test_put_uvarint() {

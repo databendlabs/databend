@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::SledTree;
-use common_meta_sled_store::Store;
-use common_meta_types::Endpoint;
-use common_meta_types::Node;
+use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_sled_store::Store;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::Node;
 use test_harness::test;
 
 use crate::testing::fake_key_spaces::Nodes;

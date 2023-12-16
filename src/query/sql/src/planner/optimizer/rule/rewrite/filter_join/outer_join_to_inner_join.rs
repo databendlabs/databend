@@ -15,7 +15,7 @@
 #[cfg(feature = "z3-prove")]
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::SExpr;
 use crate::plans::Join;

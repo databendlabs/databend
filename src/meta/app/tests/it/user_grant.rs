@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
-use common_meta_app::principal::GrantEntry;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserPrivilegeType;
+use databend_common_exception::exception::Result;
+use databend_common_meta_app::principal::GrantEntry;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
 
 #[test]

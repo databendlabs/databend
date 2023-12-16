@@ -15,12 +15,12 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::runtime::GlobalIORuntime;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_pipeline_core::Pipeline;
-use common_sql::plans::OptimizeTableAction;
-use common_sql::plans::OptimizeTablePlan;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::plans::OptimizeTableAction;
+use databend_common_sql::plans::OptimizeTablePlan;
 use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;

@@ -15,20 +15,20 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::InternalColumnMeta;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::StealablePartitions;
-use common_catalog::plan::TopK;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::StealablePartitions;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
 use crate::fuse_part::FusePartInfo;

@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 license = "Apache-2.0"
-name = "common-arrow"
+name = "databend-common-arrow"
 publish = false
 version = "0.1.0"
 description = "Arrow implementation forked from arrow2 and native format implementation forked from strawboat."

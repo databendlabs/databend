@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::DropTableByIdReq;
-use common_sql::plans::DropViewPlan;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_sql::plans::DropViewPlan;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

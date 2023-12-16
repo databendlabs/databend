@@ -15,16 +15,16 @@
 use std::future::Future;
 use std::time::Duration;
 
-use common_ast::ast::CreateTableSource;
-use common_ast::ast::CreateTableStmt;
-use common_ast::ast::DropTableStmt;
-use common_ast::ast::NullableConstraint;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_sql::resolve_type_name;
 use databend_client::error::Error as ClientError;
+use databend_common_ast::ast::CreateTableSource;
+use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::NullableConstraint;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_sql::resolve_type_name;
 use databend_driver::Client;
 use databend_driver::Connection;
 use databend_driver::Error;

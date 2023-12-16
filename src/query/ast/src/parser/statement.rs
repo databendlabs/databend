@@ -15,15 +15,15 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use common_meta_app::principal::AuthType;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserPrivilegeType;
-use common_meta_app::schema::CatalogType;
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::CatalogType;
+use databend_common_meta_app::share::ShareGrantObjectName;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareNameIdent;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;

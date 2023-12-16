@@ -216,7 +216,7 @@ impl ListBackgroundTasksReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::background::background_task::BackgroundTaskIdent;
     const PREFIX_BACKGROUND: &str = "__fd_background_task_by_name";

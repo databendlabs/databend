@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_settings::Settings;
+use databend_common_settings::Settings;
 
 #[test]
 fn test_set_settings() {

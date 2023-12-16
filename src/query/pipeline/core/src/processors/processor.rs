@@ -17,8 +17,8 @@ use std::cell::UnsafeCell;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use minitrace::prelude::*;

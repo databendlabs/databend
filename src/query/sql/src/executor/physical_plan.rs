@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::plan::DataSourcePlan;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use enum_as_inner::EnumAsInner;
 
 use crate::executor::physical_plans::AggregateExpand;

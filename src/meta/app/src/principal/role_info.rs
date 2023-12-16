@@ -16,7 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 

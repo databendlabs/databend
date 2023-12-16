@@ -17,15 +17,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_catalog::database::Database;
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_storage::DataOperator;
+use databend_common_catalog::database::Database;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_storage::DataOperator;
 use futures::StreamExt;
 use opendal::EntryMode;
 use opendal::Metakey;

@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::schema::CreateTableReply;
-use common_meta_app::schema::DropTableReply;
-use common_sql::plans::CreateStreamPlan;
-use common_sql::plans::DropStreamPlan;
+use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::DropTableReply;
+use databend_common_sql::plans::CreateStreamPlan;
+use databend_common_sql::plans::DropStreamPlan;
 
 #[async_trait::async_trait]
 pub trait StreamHandler: Sync + Send {

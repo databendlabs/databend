@@ -14,25 +14,25 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexesByIdReq;
-use common_meta_types::MetaId;
-use common_pipeline_core::Pipeline;
-use common_sql::plans::Plan;
-use common_sql::plans::RefreshIndexPlan;
-use common_sql::plans::RefreshVirtualColumnPlan;
-use common_sql::BindContext;
-use common_sql::Binder;
-use common_sql::Metadata;
-use common_sql::NameResolutionContext;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RefreshIndexPlan;
+use databend_common_sql::plans::RefreshVirtualColumnPlan;
+use databend_common_sql::BindContext;
+use databend_common_sql::Binder;
+use databend_common_sql::Metadata;
+use databend_common_sql::NameResolutionContext;
+use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshIndexInterpreter;

@@ -14,11 +14,11 @@
 
 use std::cmp::Ordering;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::Number;
-use common_expression::Scalar;
-use common_sql::plans::WindowFuncFrameBound;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::Number;
+use databend_common_expression::Scalar;
+use databend_common_sql::plans::WindowFuncFrameBound;
 
 #[derive(Debug, PartialEq)]
 pub enum FrameBound<T: Number> {

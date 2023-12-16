@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
-use common_expression::types::number::*;
-use common_expression::types::BooleanType;
-use common_expression::types::StringType;
-use common_expression::FromData;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;

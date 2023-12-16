@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int64Type;
-use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 
 fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {

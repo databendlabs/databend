@@ -14,11 +14,11 @@
 
 use std::collections::HashSet;
 
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::BitFlags;
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a

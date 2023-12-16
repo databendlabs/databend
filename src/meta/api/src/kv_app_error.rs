@@ -14,14 +14,14 @@
 
 use std::any::type_name;
 
-use common_exception::ErrorCode;
-use common_meta_app::app_error::AppError;
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::InvalidReply;
-use common_meta_types::MetaAPIError;
-use common_meta_types::MetaClientError;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaNetworkError;
 use tonic::Status;
 
 /// Errors for a kvapi::KVApi based application, such SchemaApi, ShareApi.

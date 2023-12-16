@@ -17,7 +17,7 @@ use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;

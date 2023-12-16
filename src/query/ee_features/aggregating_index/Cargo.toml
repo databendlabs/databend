@@ -1,5 +1,5 @@
 [package]
-name = "aggregating-index"
+name = "databend-enterprise-aggregating-index"
 description = "aggregating index handler"
 version = { workspace = true }
 authors = { workspace = true }
@@ -13,10 +13,10 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_sql::plans::DropUDFPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_sql::plans::DropUDFPlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

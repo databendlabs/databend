@@ -16,7 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::LazyLock;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use num_derive::FromPrimitive;
 use num_derive::ToPrimitive;
 

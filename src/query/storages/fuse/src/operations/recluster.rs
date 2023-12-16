@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
-use common_sql::BloomIndexColumns;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
+use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use log::warn;
 use opendal::Operator;
-use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::operations::ReclusterMutator;
 use crate::pruning::create_segment_location_vector;

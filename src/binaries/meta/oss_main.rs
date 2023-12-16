@@ -15,7 +15,7 @@
 mod entry;
 mod kvapi;
 
-use common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_meta::configs::Config;
 
 #[global_allocator]

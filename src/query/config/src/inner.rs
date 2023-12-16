@@ -20,16 +20,16 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 use std::time::Duration;
 
-use common_base::base::mask_string;
-use common_base::base::GlobalUniqName;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_grpc::RpcClientConf;
-use common_grpc::RpcClientTlsConfig;
-use common_meta_app::tenant::TenantQuota;
-use common_storage::StorageConfig;
-use common_tracing::Config as LogConfig;
-use common_users::idm_config::IDMConfig;
+use databend_common_base::base::mask_string;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_grpc::RpcClientConf;
+use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::StorageConfig;
+use databend_common_tracing::Config as LogConfig;
+use databend_common_users::idm_config::IDMConfig;
 
 use super::config::Commands;
 use super::config::Config;

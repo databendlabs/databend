@@ -733,7 +733,7 @@ pub fn codegen_register() {
                         let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let nullable_column = func({func_arg} ctx).into_column().unwrap();
-                        let combine_validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+                        let combine_validity = databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
                         Value::Column(NullableColumn {{ column: nullable_column.column, validity: combine_validity }})
                     }}"
                 )

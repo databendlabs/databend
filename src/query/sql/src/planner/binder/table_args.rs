@@ -14,13 +14,13 @@
 
 use std::collections::HashMap;
 
-use common_ast::ast::Expr;
-use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ConstantFolder;
-use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::Expr;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::plans::ConstantExpr;
 use crate::ScalarBinder;
@@ -49,7 +49,7 @@ pub async fn bind_table_args(
             let (expr, _) =
                 ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
             match expr {
-                common_expression::Expr::Constant { scalar, .. } => Ok(scalar),
+                databend_common_expression::Expr::Constant { scalar, .. } => Ok(scalar),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported table argument type: {:?}",
                     scalar
