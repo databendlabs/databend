@@ -185,7 +185,6 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnPutRequest;
 use databend_common_meta_types::TxnRequest;
 use futures::TryStreamExt;
 use log::as_debug;
@@ -4176,15 +4175,7 @@ fn build_upsert_table_copied_file_info_conditions(
 
 fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     let expire_at = Some(SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60);
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: deduplicated_label,
-            value: 1_i8.to_le_bytes().to_vec(),
-            prev_value: false,
-            expire_at,
-            ttl_ms: None,
-        })),
-    }
+    TxnOp::put_with_expire(deduplicated_label, 1_i8.to_le_bytes().to_vec(), expire_at)
 }
 
 fn set_update_expire_operation(

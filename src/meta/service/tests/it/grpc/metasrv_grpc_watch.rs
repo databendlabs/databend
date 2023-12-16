@@ -37,9 +37,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
-use databend_common_meta_types::TxnDeleteRequest;
 use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnPutRequest;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
@@ -263,22 +261,8 @@ async fn test_watch() -> anyhow::Result<()> {
         }];
 
         let if_then: Vec<TxnOp> = vec![
-            TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: txn_key.clone(),
-                    value: txn_val.clone(),
-                    prev_value: true,
-                    expire_at: None,
-                    ttl_ms: None,
-                })),
-            },
-            TxnOp {
-                request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                    key: delete_key.to_string(),
-                    prev_value: true,
-                    match_seq: None,
-                })),
-            },
+            TxnOp::put(txn_key.clone(), txn_val.clone()),
+            TxnOp::delete(delete_key),
             TxnOp {
                 request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
                     prefix: watch_delete_by_prefix_key.to_string(),
