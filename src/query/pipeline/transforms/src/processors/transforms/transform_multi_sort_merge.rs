@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -230,8 +231,9 @@ where R: Rows
     /// There is a copy of this fields in `self.merger` and it will pull data from it.
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
+    need_data: bool,
 
-    output_data: Option<DataBlock>,
+    output_data: VecDeque<DataBlock>,
 }
 
 impl<R> MultiSortMergeProcessor<R>
@@ -255,7 +257,8 @@ where R: Rows
             merger,
             inputs,
             output,
-            output_data: None,
+            need_data: false,
+            output_data: VecDeque::new(),
         })
     }
 }
@@ -284,7 +287,7 @@ where R: Rows + Send + 'static
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(block) = self.output_data.take() {
+        if let Some(block) = self.output_data.pop_front() {
             self.output.push_data(Ok(block));
             return Ok(Event::NeedConsume);
         }
@@ -297,11 +300,19 @@ where R: Rows + Send + 'static
             return Ok(Event::Finished);
         }
 
-        Ok(Event::Sync)
+        if self.need_data {
+            self.need_data = false;
+            Ok(Event::NeedData)
+        } else {
+            Ok(Event::Sync)
+        }
     }
 
     fn process(&mut self) -> Result<()> {
-        self.output_data = self.merger.next_block()?;
+        while let Some(block) = self.merger.next_block()? {
+            self.output_data.push_back(block);
+        }
+        self.need_data = self.merger.has_pending_stream();
         Ok(())
     }
 }

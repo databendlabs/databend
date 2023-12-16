@@ -99,7 +99,8 @@ where
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.heap.is_empty() && !self.has_pending_stream()) || self.limit == Some(0)
+        (self.heap.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
+            || self.limit == Some(0)
     }
 
     #[inline(always)]
@@ -244,8 +245,7 @@ where
 
     /// Returns the next sorted block and if it is pending.
     ///
-    /// If the block is [None] and it's not pending, it means the stream is finished.
-    /// If the block is [None] but it's pending, it means the stream is not finished yet.
+    /// If the block is [None], it means the merger is finished or pending (has pending streams).
     pub fn next_block(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished() {
             return Ok(None);
@@ -258,8 +258,8 @@ where
             }
         }
 
+        // No pending streams now.
         if self.heap.is_empty() {
-            debug_assert!(self.is_finished());
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
@@ -295,8 +295,8 @@ where
             }
         }
 
+        // No pending streams now.
         if self.heap.is_empty() {
-            debug_assert!(self.is_finished());
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
