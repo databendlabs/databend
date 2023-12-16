@@ -35,6 +35,7 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_cache_manager::ParqueFileMetaData;
 
 use crate::hive_partition::HivePartInfo;
 use crate::HivePartitionFiller;
@@ -242,7 +243,12 @@ impl HiveBlockReader {
             put_cache: true,
         };
 
-        reader.read(&load_params).await
+        match reader.read(&load_params).await?.as_ref() {
+            ParqueFileMetaData::Parquet2MetaData(m) => Ok(Arc::new(m.clone())),
+            _ => Err(ErrorCode::Internal(
+                "hive meta file cache  must be produced by parquet2.",
+            )),
+        }
     }
 
     #[async_backtrace::framed]

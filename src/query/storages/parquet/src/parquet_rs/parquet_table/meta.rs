@@ -25,7 +25,10 @@ use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
+use storages_common_cache::LoadParams;
+use storages_common_cache_manager::ParqueFileMetaData;
 
+use crate::parquet_rs::parquet_reader::MetaDataReader;
 use crate::parquet_rs::statistics::collect_row_group_stats;
 
 #[async_backtrace::framed]
@@ -36,6 +39,7 @@ pub async fn read_metas_in_parallel(
     leaf_fields: Arc<Vec<TableField>>,
     num_threads: usize,
     max_memory_usage: u64,
+    is_remote_query: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     if file_infos.is_empty() {
         return Ok(vec![]);
@@ -63,6 +67,7 @@ pub async fn read_metas_in_parallel(
             leaf_fields,
             schema_from,
             max_memory_usage,
+            is_remote_query,
         ));
     }
 
@@ -105,15 +110,40 @@ async fn load_and_check_parquet_meta(
     op: Operator,
     expect: &SchemaDescriptor,
     schema_from: &str,
+    is_remote_query: bool,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata = common_storage::parquet_rs::read_metadata_async(file, &op, Some(size)).await?;
+    let metadata = read_meta_data(op, file, size, is_remote_query).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),
         file,
         schema_from,
     )?;
-    Ok(Arc::new(metadata))
+    Ok(metadata)
+}
+
+#[async_backtrace::framed]
+pub async fn read_meta_data(
+    dal: Operator,
+    location: &str,
+    filesize: u64,
+    is_remote_query: bool,
+) -> Result<Arc<ParquetMetaData>> {
+    let reader = MetaDataReader::meta_data_reader(dal);
+
+    let load_params = LoadParams {
+        location: location.to_owned(),
+        len_hint: Some(filesize),
+        ver: 0,
+        put_cache: is_remote_query,
+    };
+
+    match reader.read(&load_params).await?.as_ref() {
+        ParqueFileMetaData::ParquetRSMetaData(m) => Ok(Arc::new(m.clone())),
+        _ => Err(ErrorCode::Internal(
+            "parquet meta file cache  must be produced by parquet_rs.",
+        )),
+    }
 }
 
 pub async fn read_parquet_metas_batch(
@@ -123,11 +153,19 @@ pub async fn read_parquet_metas_batch(
     leaf_fields: Arc<Vec<TableField>>,
     schema_from: String,
     max_memory_usage: u64,
+    is_remote_query: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (location, size) in file_infos {
-        let meta =
-            load_and_check_parquet_meta(&location, size, op.clone(), &expect, &schema_from).await?;
+        let meta = load_and_check_parquet_meta(
+            &location,
+            size,
+            op.clone(),
+            &expect,
+            &schema_from,
+            is_remote_query,
+        )
+        .await?;
         if unlikely(meta.file_metadata().num_rows() == 0) {
             // Don't collect empty files
             continue;

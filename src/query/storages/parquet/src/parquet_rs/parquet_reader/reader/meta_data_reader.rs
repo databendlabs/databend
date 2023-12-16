@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::parquet::read::read_metadata_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::parquet_rs::read_metadata_async;
 use opendal::Operator;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
@@ -39,13 +39,8 @@ impl MetaDataReader {
 impl Loader<ParqueFileMetaData> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<ParqueFileMetaData> {
-        let mut reader = if let Some(len) = params.len_hint {
-            self.0.reader_with(&params.location).range(0..len).await?
-        } else {
-            self.0.reader(&params.location).await?
-        };
-        match read_metadata_async(&mut reader).await {
-            Ok(data) => Ok(ParqueFileMetaData::Parquet2MetaData(data)),
+        match read_metadata_async(&params.location, &self.0, params.len_hint).await {
+            Ok(data) => Ok(ParqueFileMetaData::ParquetRSMetaData(data)),
             Err(err) => Err(ErrorCode::Internal(format!(
                 "read file meta failed, {}, {:?}",
                 params.location, err
