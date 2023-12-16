@@ -14,12 +14,12 @@
 
 use std::collections::HashMap;
 
-use common_base::base::GlobalUniqName;
-use common_config::InnerConfig;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use common_users::idm_config::IDMConfig;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_config::InnerConfig;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_users::idm_config::IDMConfig;
 use tempfile::TempDir;
 
 pub struct ConfigBuilder {
@@ -30,7 +30,7 @@ impl ConfigBuilder {
     pub fn create() -> ConfigBuilder {
         let mut conf = InnerConfig::default();
         conf.query.tenant_id = "test".to_string();
-        conf.log = common_tracing::Config::new_testing();
+        conf.log = databend_common_tracing::Config::new_testing();
         // add idm users for test
         let mut users = HashMap::new();
         users.insert("root".to_string(), AuthInfo::None);

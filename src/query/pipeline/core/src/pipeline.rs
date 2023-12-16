@@ -18,8 +18,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;

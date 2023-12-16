@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::constant::false_constant;

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::ShowLimit;
-use common_ast::ast::ShowLocksStmt;
-use common_ast::ast::ShowOptions;
-use common_exception::Result;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowLocksStmt;
+use databend_common_ast::ast::ShowOptions;
+use databend_common_exception::Result;
 use log::debug;
 
 use crate::plans::Plan;

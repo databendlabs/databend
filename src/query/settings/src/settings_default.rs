@@ -17,10 +17,10 @@ use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSettingValue;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSettingValue;
 use once_cell::sync::OnceCell;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();

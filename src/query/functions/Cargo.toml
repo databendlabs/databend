@@ -1,5 +1,5 @@
 [package]
-name = "common-functions"
+name = "databend-common-functions"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,14 +11,14 @@ doctest = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
-common-hashtable = { path = "../../common/hashtable" }
-common-io = { path = "../../common/io" }
-common-openai = { path = "../../common/openai" }
-common-vector = { path = "../../common/vector" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-hashtable = { path = "../../common/hashtable" }
+databend-common-io = { path = "../../common/io" }
+databend-common-openai = { path = "../../common/openai" }
+databend-common-vector = { path = "../../common/vector" }
 jsonb = { workspace = true }
 
 # Crates.io dependencies
@@ -64,7 +64,7 @@ twox-hash = "1.6.3"
 
 [dev-dependencies]
 comfy-table = "6"
-common-ast = { path = "../ast" }
+databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 
 [[bench]]

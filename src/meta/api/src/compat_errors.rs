@@ -48,10 +48,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use common_meta_types::ForwardToLeader;
-    use common_meta_types::MembershipNode;
-    use common_meta_types::MetaAPIError;
-    use common_meta_types::MetaError;
+    use databend_common_meta_types::ForwardToLeader;
+    use databend_common_meta_types::MembershipNode;
+    use databend_common_meta_types::MetaAPIError;
+    use databend_common_meta_types::MetaError;
 
     use crate::compat_errors::Compatible;
     use crate::kv_app_error::KVAppError;

@@ -16,9 +16,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use ethnum::AsI256;

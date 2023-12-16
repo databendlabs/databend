@@ -14,13 +14,13 @@
 
 use std::marker::PhantomData;
 
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::HashMethodFixedKeys;
-use common_hashtable::DictionaryKeys;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::HashMethodFixedKeys;
+use databend_common_hashtable::DictionaryKeys;
 
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 

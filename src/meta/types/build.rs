@@ -19,7 +19,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    common_building::setup();
+    databend_common_building::setup();
     build_proto();
 }
 

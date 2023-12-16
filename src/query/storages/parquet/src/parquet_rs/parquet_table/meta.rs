@@ -15,12 +15,12 @@
 use std::intrinsics::unlikely;
 use std::sync::Arc;
 
-use common_base::runtime::execute_futures_in_parallel;
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_catalog::plan::FullParquetMeta;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableField;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::plan::FullParquetMeta;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableField;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
@@ -106,7 +106,8 @@ async fn load_and_check_parquet_meta(
     expect: &SchemaDescriptor,
     schema_from: &str,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata = common_storage::parquet_rs::read_metadata_async(file, &op, Some(size)).await?;
+    let metadata =
+        databend_common_storage::parquet_rs::read_metadata_async(file, &op, Some(size)).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),

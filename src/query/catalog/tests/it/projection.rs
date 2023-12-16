@@ -14,12 +14,12 @@
 
 use std::collections::BTreeMap;
 
-use common_catalog::plan::Projection;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use parquet_rs::arrow::arrow_to_parquet_schema;
 
 #[test]

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
+use databend_common_expression::types::DataType;
 
 pub trait Index {
     fn supported_type(data_type: &DataType) -> bool {

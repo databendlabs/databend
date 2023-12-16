@@ -15,9 +15,9 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataField;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataField;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;

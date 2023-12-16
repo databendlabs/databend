@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
 
 #[test]
 fn basics() {

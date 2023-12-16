@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_sql::plans::DescDatamaskPolicyPlan;
-use common_users::UserApiProvider;
-use data_mask_feature::get_datamask_handler;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_sql::plans::DescDatamaskPolicyPlan;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_data_mask_feature::get_datamask_handler;
 use log::warn;
 
 use crate::interpreters::Interpreter;

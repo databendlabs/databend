@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::Change;
-use common_meta_types::SeqV;
-use common_meta_types::UpsertKV;
+use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
 
 pub type UpsertKVReq = UpsertKV;
 

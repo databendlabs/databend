@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_base::runtime::Thread;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_base::runtime::Thread;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_node::JoinNode;
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;

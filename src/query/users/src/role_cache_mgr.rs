@@ -17,12 +17,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::RoleInfo;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::RoleInfo;
 use log::warn;
 use parking_lot::RwLock;
 

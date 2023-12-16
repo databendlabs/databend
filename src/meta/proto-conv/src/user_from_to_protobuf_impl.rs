@@ -20,8 +20,8 @@ use std::collections::HashSet;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app as mt;
-use common_protos::pb;
+use databend_common_meta_app as mt;
+use databend_common_protos::pb;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
 

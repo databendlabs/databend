@@ -26,10 +26,10 @@ mod struct_;
 mod union;
 mod utf8;
 
-use common_arrow::arrow::array::growable::make_growable;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::array::growable::make_growable;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
 
 #[test]
 fn test_make_growable() {

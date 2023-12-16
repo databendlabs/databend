@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableStruct;
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StructArray;
-use common_arrow::arrow::array::Utf8Array;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableStruct;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::PrimitiveArray;
+use databend_common_arrow::arrow::array::StructArray;
+use databend_common_arrow::arrow::array::Utf8Array;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
 
 fn some_values() -> (DataType, Vec<Box<dyn Array>>) {
     let strings: Box<dyn Array> = Box::new(Utf8Array::<i32>::from([

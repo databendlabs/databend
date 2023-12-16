@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::datatypes::TimeUnit;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;

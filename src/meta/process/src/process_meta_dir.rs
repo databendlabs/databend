@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_raft_store::key_spaces::RaftStoreEntry;
-use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::init_sled_db;
+use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::init_sled_db;
 
 use crate::examples::Config;
 

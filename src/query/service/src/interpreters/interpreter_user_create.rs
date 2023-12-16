@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserQuota;
-use common_meta_types::MatchSeq;
-use common_sql::plans::CreateUserPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserQuota;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::CreateUserPlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

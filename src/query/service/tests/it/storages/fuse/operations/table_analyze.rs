@@ -15,22 +15,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::Scalar;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
 use databend_query::test_kits::*;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {

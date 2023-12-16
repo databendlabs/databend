@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfo;
 
 /// Mark a partially sorted [`DataBlock`] as a block needs to be spilled.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

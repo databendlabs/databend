@@ -16,17 +16,17 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VirtualColumnInfo;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
-use storages_common_table_meta::table::TableCompression;
 
 use crate::io::BlockReader;
 

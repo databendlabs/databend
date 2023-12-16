@@ -18,25 +18,25 @@ use std::io::ErrorKind;
 use std::io::Result;
 
 use anyhow::anyhow;
-use common_ast::ast::Connection;
-use common_ast::ast::UriLocation;
-use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_meta_app::storage::StorageAzblobConfig;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig;
-use common_meta_app::storage::StorageHttpConfig;
-use common_meta_app::storage::StorageIpfsConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
-use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
-use common_storage::STDIN_FD;
+use databend_common_ast::ast::Connection;
+use databend_common_ast::ast::UriLocation;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::StorageAzblobConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
+use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageIpfsConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use databend_common_storage::STDIN_FD;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -341,7 +341,7 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
             ));
         }
     };
-    let sp = StorageParams::Hdfs(common_meta_app::storage::StorageHdfsConfig {
+    let sp = StorageParams::Hdfs(databend_common_meta_app::storage::StorageHdfsConfig {
         name_node,
         root: l.path.clone(),
     });
@@ -503,7 +503,7 @@ pub async fn parse_uri_location(
 pub async fn get_storage_params_from_options(
     ctx: &dyn TableContext,
     options: &BTreeMap<String, String>,
-) -> common_exception::Result<StorageParams> {
+) -> databend_common_exception::Result<StorageParams> {
     let location = options
         .get("location")
         .ok_or_else(|| ErrorCode::BadArguments("missing option 'location'".to_string()))?;

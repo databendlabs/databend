@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::StageType;
-use common_meta_types::MatchSeq;
-use common_sql::plans::CreateStagePlan;
-use common_users::UserApiProvider;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageType;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::CreateStagePlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

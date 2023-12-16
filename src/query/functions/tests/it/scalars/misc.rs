@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::*;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;

@@ -1,5 +1,5 @@
 [package]
-name = "common-pipeline-core"
+name = "databend-common-pipeline-core"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,8 +12,8 @@ doctest = false
 test = false
 
 [dependencies]
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_sql::plans::Plan;
-use common_sql::Planner;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::test_kits::*;

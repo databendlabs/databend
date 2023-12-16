@@ -15,14 +15,14 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_ast::ast::DataMaskPolicy;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_meta_app::data_mask::CreateDatamaskReq;
-use common_meta_app::data_mask::DatamaskNameIdent;
-use common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_ast::ast::DataMaskPolicy;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskNameIdent;
+use databend_common_meta_app::data_mask::DropDatamaskReq;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {

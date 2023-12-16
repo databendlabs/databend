@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::FieldIndex;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 
 pub trait BlockIterator: Iterator<Item = Result<DataBlock>> + Send {
     /// checking has_next() after next can avoid processor from entering SYNC for nothing.

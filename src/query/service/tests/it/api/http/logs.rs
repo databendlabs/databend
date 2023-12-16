@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_query::api::http::v1::logs::logs_handler;
 use databend_query::test_kits::*;
 use poem::get;

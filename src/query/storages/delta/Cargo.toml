@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-delta"
+name = "databend-common-storages-delta"
 version = { workspace = true }
 edition = "2021"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -9,15 +9,15 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common-arrow = { path = "../../../common/arrow" }
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-meta-app = { path = "../../../meta/app" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-storage = { path = "../../../common/storage" }
-common-storages-parquet = { path = "../parquet" }
+databend-common-arrow = { path = "../../../common/arrow" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-storage = { path = "../../../common/storage" }
+databend-common-storages-parquet = { path = "../parquet" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }

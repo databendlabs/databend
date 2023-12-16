@@ -14,11 +14,11 @@
 
 use core::default::Default;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::schema::TableStatistics;
-use enterprise_query::background_service::should_continue_compaction;
-use enterprise_query::background_service::CompactionJob;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_enterprise_query::background_service::should_continue_compaction;
+use databend_enterprise_query::background_service::CompactionJob;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_compaction_advice_sql() -> Result<()> {

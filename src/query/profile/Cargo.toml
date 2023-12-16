@@ -1,5 +1,5 @@
 [package]
-name = "common-profile"
+name = "databend-common-profile"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,6 +11,6 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../common/base" }
+databend-common-base = { path = "../../common/base" }
 
 dashmap = { workspace = true }

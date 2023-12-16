@@ -14,19 +14,19 @@
 
 use std::str;
 
-use common_config::GlobalConfig;
-use common_exception::Result;
-use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
-use common_expression::DataBlock;
-use common_expression::SendableDataBlockStream;
-use common_meta_app::storage::StorageParams;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
-use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
-use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
-use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::assert_blocks_sorted_eq_with_name;
+use databend_common_expression::DataBlock;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
+use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
+use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
+use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use futures::TryStreamExt;
 use walkdir::WalkDir;
 

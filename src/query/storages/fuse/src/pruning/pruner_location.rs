@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Location;
 
 #[derive(Debug, Clone)]
 pub struct SegmentLocation {

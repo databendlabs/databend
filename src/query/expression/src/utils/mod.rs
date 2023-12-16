@@ -25,9 +25,9 @@ pub mod serialize;
 pub mod udf_client;
 pub mod variant_transform;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use ethnum::i256;
 
 pub use self::column_from::*;

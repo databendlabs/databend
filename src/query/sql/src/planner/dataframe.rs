@@ -14,23 +14,23 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::ColumnID;
-use common_ast::ast::Expr;
-use common_ast::ast::GroupBy;
-use common_ast::ast::Identifier;
-use common_ast::ast::Join;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_ast::ast::OrderByExpr;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::TableReference;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::TableReference;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
 use crate::optimizer::optimize;

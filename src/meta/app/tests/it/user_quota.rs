@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
-use common_meta_app::principal::UserQuota;
+use databend_common_exception::exception::Result;
+use databend_common_meta_app::principal::UserQuota;
 
 #[test]
 fn test_user_quota() -> Result<()> {

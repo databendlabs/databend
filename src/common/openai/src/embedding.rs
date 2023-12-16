@@ -14,9 +14,9 @@
 
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_metrics::openai::*;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::openai::*;
 use openai_api_rust::embeddings::EmbeddingsApi;
 use openai_api_rust::embeddings::EmbeddingsBody;
 use openai_api_rust::Auth;
