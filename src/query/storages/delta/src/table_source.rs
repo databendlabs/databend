@@ -125,8 +125,9 @@ impl Processor for DeltaTableSource {
             // If `read_block` returns `None`, it means the stream is finished.
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
-            match DeltaPartInfo::from_part(&part)? {
-                DeltaPartInfo::Parquet(ParquetPart::ParquetFiles(files)) => {
+            let part = DeltaPartInfo::from_part(&part)?;
+            match &part.data {
+                ParquetPart::ParquetFiles(files) => {
                     assert_eq!(files.files.len(), 1);
                     let stream = self
                         .parquet_reader
