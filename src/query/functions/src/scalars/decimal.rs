@@ -1640,7 +1640,6 @@ fn decimal_to_int<T: Number>(
     }
 }
 
-// round, truncate
 pub fn register_decimal_math(registry: &mut FunctionRegistry) {
     let factory = |params: &[usize], args_type: &[DataType], round_mode: RoundMode| {
         if args_type.is_empty() {
