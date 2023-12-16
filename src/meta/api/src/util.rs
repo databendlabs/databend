@@ -53,7 +53,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::txn_condition::Target;
-use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::InvalidReply;
@@ -62,10 +61,8 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnCondition;
-use databend_common_meta_types::TxnDeleteRequest;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
-use databend_common_meta_types::TxnPutRequest;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
@@ -326,39 +323,17 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
 
 /// Build a txn operation that puts a record.
 pub fn txn_op_put(key: &impl kvapi::Key, value: Vec<u8>) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: key.to_string_key(),
-            value,
-            prev_value: true,
-            expire_at: None,
-            ttl_ms: None,
-        })),
-    }
+    TxnOp::put(key.to_string_key(), value)
 }
 
 // TODO: replace it with common_meta_types::with::With
 pub fn txn_op_put_with_expire(key: &impl kvapi::Key, value: Vec<u8>, expire_at: u64) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: key.to_string_key(),
-            value,
-            prev_value: true,
-            expire_at: Some(expire_at),
-            ttl_ms: None,
-        })),
-    }
+    TxnOp::put_with_expire(key.to_string_key(), value, Some(expire_at))
 }
 
 /// Build a txn operation that deletes a record.
 pub fn txn_op_del(key: &impl kvapi::Key) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Delete(TxnDeleteRequest {
-            key: key.to_string_key(),
-            prev_value: true,
-            match_seq: None,
-        })),
-    }
+    TxnOp::delete(key.to_string_key())
 }
 
 /// Return OK if a db_id or db_meta exists by checking the seq.

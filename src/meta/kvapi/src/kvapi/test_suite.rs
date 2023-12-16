@@ -33,7 +33,6 @@ use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
-use databend_common_meta_types::TxnPutRequest;
 use databend_common_meta_types::TxnPutResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
@@ -505,15 +504,7 @@ impl kvapi::TestSuite {
             target: Some(txn_condition::Target::Seq(0)),
         }];
 
-        let if_then: Vec<TxnOp> = vec![TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: txn_key.clone(),
-                value: b"new_v1".to_vec(),
-                prev_value: true,
-                expire_at: None,
-                ttl_ms: None,
-            })),
-        }];
+        let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
 
         let else_then: Vec<TxnOp> = vec![];
 
@@ -667,15 +658,7 @@ impl kvapi::TestSuite {
                 target: Some(txn_condition::Target::Seq(0)),
             }];
 
-            let if_then: Vec<TxnOp> = vec![TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: txn_key.clone(),
-                    value: b"new_v1".to_vec(),
-                    prev_value: true,
-                    expire_at: None,
-                    ttl_ms: None,
-                })),
-            }];
+            let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
 
             let else_then: Vec<TxnOp> = vec![];
             let txn = TxnRequest {
@@ -720,15 +703,7 @@ impl kvapi::TestSuite {
                 },
             ];
 
-            let if_then: Vec<TxnOp> = vec![TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: txn_key1.clone(),
-                    value: b"new_v1".to_vec(),
-                    prev_value: true,
-                    expire_at: None,
-                    ttl_ms: None,
-                })),
-            }];
+            let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key1.clone(), b("new_v1"))];
 
             let else_then: Vec<TxnOp> = vec![];
             let txn = TxnRequest {
@@ -776,25 +751,9 @@ impl kvapi::TestSuite {
 
             let if_then: Vec<TxnOp> = vec![
                 // change k1
-                TxnOp {
-                    request: Some(txn_op::Request::Put(TxnPutRequest {
-                        key: txn_key1.clone(),
-                        value: val1_new.to_vec(),
-                        prev_value: true,
-                        expire_at: None,
-                        ttl_ms: None,
-                    })),
-                },
+                TxnOp::put(txn_key1.clone(), val1_new.clone()),
                 // change k2
-                TxnOp {
-                    request: Some(txn_op::Request::Put(TxnPutRequest {
-                        key: txn_key2.clone(),
-                        value: b"new_v2".to_vec(),
-                        prev_value: true,
-                        expire_at: None,
-                        ttl_ms: None,
-                    })),
-                },
+                TxnOp::put(txn_key2.clone(), b("new_v2")),
                 // get k1
                 TxnOp {
                     request: Some(txn_op::Request::Get(TxnGetRequest {
@@ -896,15 +855,7 @@ impl kvapi::TestSuite {
 
             let if_then: Vec<TxnOp> = vec![
                 // change k1
-                TxnOp {
-                    request: Some(txn_op::Request::Put(TxnPutRequest {
-                        key: txn_key1.clone(),
-                        value: val1_new.to_vec(),
-                        prev_value: true,
-                        expire_at: None,
-                        ttl_ms: None,
-                    })),
-                },
+                TxnOp::put(txn_key1.clone(), val1_new.clone()),
                 // get k1
                 TxnOp {
                     request: Some(txn_op::Request::Get(TxnGetRequest {
