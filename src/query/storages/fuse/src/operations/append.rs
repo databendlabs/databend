@@ -15,26 +15,26 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_catalog::table::AppendMode;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::Expr;
-use common_expression::SortColumnDescription;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::create_dummy_items;
-use common_pipeline_transforms::processors::BlockCompactor;
-use common_pipeline_transforms::processors::BlockCompactorForCopy;
-use common_pipeline_transforms::processors::TransformCompact;
-use common_pipeline_transforms::processors::TransformSortPartial;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::MutationKind;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Expr;
+use databend_common_expression::SortColumnDescription;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::create_dummy_items;
+use databend_common_pipeline_transforms::processors::BlockCompactor;
+use databend_common_pipeline_transforms::processors::BlockCompactorForCopy;
+use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::TransformSortPartial;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::MutationKind;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
@@ -131,7 +131,7 @@ impl FuseTable {
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
-            let sort_descs: Vec<SortColumnDescription> = cluster_keys
+            let sort_desc: Vec<SortColumnDescription> = cluster_keys
                 .iter()
                 .map(|index| SortColumnDescription {
                     offset: *index,
@@ -140,6 +140,7 @@ impl FuseTable {
                     is_nullable: false, // This information is not needed here.
                 })
                 .collect();
+            let sort_desc = Arc::new(sort_desc);
 
             let mut builder = pipeline.add_transform_with_specified_len(
                 |transform_input_port, transform_output_port| {
@@ -147,7 +148,7 @@ impl FuseTable {
                         transform_input_port,
                         transform_output_port,
                         None,
-                        sort_descs.clone(),
+                        sort_desc.clone(),
                     )?))
                 },
                 specified_mid_len,
@@ -187,7 +188,7 @@ impl FuseTable {
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
-            let sort_descs: Vec<SortColumnDescription> = cluster_keys
+            let sort_desc: Vec<SortColumnDescription> = cluster_keys
                 .iter()
                 .map(|index| SortColumnDescription {
                     offset: *index,
@@ -196,13 +197,13 @@ impl FuseTable {
                     is_nullable: false, // This information is not needed here.
                 })
                 .collect();
-
+            let sort_desc = Arc::new(sort_desc);
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                     transform_input_port,
                     transform_output_port,
                     None,
-                    sort_descs.clone(),
+                    sort_desc.clone(),
                 )?))
             })?;
         }

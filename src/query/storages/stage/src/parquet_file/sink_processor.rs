@@ -17,15 +17,15 @@ use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_catalog::plan::StageTableInfo;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_formats::output_format::OutputFormat;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_formats::output_format::OutputFormat;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 
 use crate::parquet_file::block_batch::BlockBatch;

@@ -18,10 +18,10 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use common_arrow::arrow::array::indexable::AsIndexed;
-use common_arrow::arrow::array::indexable::Indexable;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::indexable::AsIndexed;
+use databend_common_arrow::arrow::array::indexable::Indexable;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn primitive() -> Result<()> {

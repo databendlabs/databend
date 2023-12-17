@@ -15,8 +15,8 @@
 use std::io::Cursor;
 
 use chrono_tz::Tz;
-use common_exception::Result;
-use common_io::cursor_ext::*;
+use databend_common_exception::Result;
+use databend_common_io::cursor_ext::*;
 
 #[test]
 fn test_read_timestamp_text() -> Result<()> {

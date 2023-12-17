@@ -18,46 +18,44 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::native::read::ArrayIter;
-use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::plan::gen_mutation_stream_meta;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::TopK;
-use common_catalog::plan::VirtualColumnInfo;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::eval_function;
-use common_expression::filter_helper::FilterHelpers;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::Column;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TopKSorter;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::native::read::ArrayIter;
+use databend_common_arrow::parquet::metadata::ColumnDescriptor;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::eval_function;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TopKSorter;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
@@ -317,27 +315,22 @@ impl NativeDeserializeDataTransform {
                 }
                 let index = schema.index_of(&virtual_column.source_name).unwrap();
                 let source = block.get_by_offset(index);
-                let mut src_arg = (source.value.clone(), source.data_type.clone());
-                for path in virtual_column.paths.iter() {
-                    let path_arg = match path {
-                        Scalar::String(_) => (Value::Scalar(path.clone()), DataType::String),
-                        Scalar::Number(NumberScalar::UInt64(_)) => (
-                            Value::Scalar(path.clone()),
-                            DataType::Number(NumberDataType::UInt64),
-                        ),
-                        _ => unreachable!(),
-                    };
-                    let (value, data_type) = eval_function(
-                        None,
-                        "get",
-                        [src_arg, path_arg],
-                        &self.func_ctx,
-                        block.num_rows(),
-                        &BUILTIN_FUNCTIONS,
-                    )?;
-                    src_arg = (value, data_type);
-                }
-                let column = BlockEntry::new(DataType::from(&*virtual_column.data_type), src_arg.0);
+                let src_arg = (source.value.clone(), source.data_type.clone());
+                let path_arg = (
+                    Value::Scalar(virtual_column.key_paths.clone()),
+                    DataType::String,
+                );
+
+                let (value, data_type) = eval_function(
+                    None,
+                    "get_by_keypath",
+                    [src_arg, path_arg],
+                    &self.func_ctx,
+                    block.num_rows(),
+                    &BUILTIN_FUNCTIONS,
+                )?;
+
+                let column = BlockEntry::new(data_type, value);
                 block.add_column(column);
             }
         }
@@ -813,7 +806,7 @@ impl Processor for NativeDeserializeDataTransform {
             };
 
             // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
-            // `FillInternalColumnProcessor` will generate internal columns using `InternalColumnMeta` in next pipeline.
+            // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
             let mut block = block.resort(&self.src_schema, &self.output_schema)?;
             if self.block_reader.query_internal_columns() {
                 let offsets = if let Some(Value::Column(bitmap)) = filter.as_ref() {

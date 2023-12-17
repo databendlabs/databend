@@ -378,6 +378,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             visitor.visit_show_table_functions(show_options)
         }
         Statement::ShowIndexes { show_options } => visitor.visit_show_indexes(show_options),
+        Statement::ShowLocks(stmt) => visitor.visit_show_locks(stmt),
         Statement::KillStmt {
             kill_target,
             object_id,

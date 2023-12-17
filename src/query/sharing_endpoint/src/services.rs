@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_exception::Result;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_exception::Result;
 
 use crate::accessor::SharingAccessor;
 use crate::configs::Config;

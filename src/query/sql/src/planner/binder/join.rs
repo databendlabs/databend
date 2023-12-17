@@ -16,15 +16,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use common_ast::ast::split_conjunctions_expr;
-use common_ast::ast::split_equivalent_predicate_expr;
-use common_ast::ast::Expr;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_ast::ast::split_conjunctions_expr;
+use databend_common_ast::ast::split_equivalent_predicate_expr;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use indexmap::IndexMap;
 
 use super::Finder;
@@ -67,7 +67,7 @@ impl Binder {
         right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
-        join: &common_ast::ast::Join,
+        join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
         check_duplicate_join_tables(&left_context, &right_context)?;
 
@@ -239,6 +239,7 @@ impl Binder {
             marker_index: None,
             from_correlated_subquery: false,
             need_hold_hash_table: false,
+            broadcast: false,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),

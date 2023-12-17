@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserDefinedConnection;
 use minitrace::func_name;
 
 use crate::common;

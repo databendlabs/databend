@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_query::sessions::SessionType;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
@@ -54,9 +54,9 @@ async fn test_session_setting_override() -> Result<()> {
         let overrided = settings.get_max_storage_io_requests()?;
         let expect = 1000;
         assert_eq!(overrided, expect);
-        settings.set_setting("max_storage_io_requests".to_string(), "3000".to_string())?;
+        settings.set_setting("max_storage_io_requests".to_string(), "300".to_string())?;
         let actual = settings.get_max_storage_io_requests()?;
-        let expect = 3000;
+        let expect = 300;
         assert_eq!(actual, expect);
     }
 

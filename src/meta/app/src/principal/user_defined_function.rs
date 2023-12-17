@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_expression::types::DataType;
+use databend_common_expression::types::DataType;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {

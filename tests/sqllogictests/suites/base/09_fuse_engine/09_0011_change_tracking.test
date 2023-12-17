@@ -68,6 +68,9 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 5 0 0 0
 6 0 0 1
 
+statement error 1065
+select change$is_update from t
+
 statement error 1002
 replace into t on(a) values(7)
 

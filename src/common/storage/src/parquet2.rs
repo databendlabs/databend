@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_base::runtime::execute_futures_in_parallel;
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read as pread;
+use databend_common_arrow::parquet::metadata::FileMetaData;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use opendal::Operator;
 
 #[async_backtrace::framed]

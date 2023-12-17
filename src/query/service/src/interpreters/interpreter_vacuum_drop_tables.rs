@@ -15,20 +15,20 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_license::license::Feature::Vacuum;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::GcDroppedTableReq;
-use common_meta_app::schema::ListDroppedTableReq;
-use common_meta_app::schema::TableInfoFilter;
-use common_sql::plans::VacuumDropTablePlan;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::TableInfoFilter;
+use databend_common_sql::plans::VacuumDropTablePlan;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::as_debug;
 use log::info;
-use vacuum_handler::get_vacuum_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

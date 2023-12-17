@@ -15,13 +15,13 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_expression as ex;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_protos::pb;
-use common_protos::pb::data_type::Dt;
-use common_protos::pb::data_type::Dt24;
-use common_protos::pb::number::Num;
+use databend_common_expression as ex;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_protos::pb;
+use databend_common_protos::pb::data_type::Dt;
+use databend_common_protos::pb::data_type::Dt24;
+use databend_common_protos::pb::number::Num;
 
 use crate::reader_check_msg;
 use crate::FromToProto;

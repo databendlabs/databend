@@ -17,10 +17,10 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 use clap::Args;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::background::BackgroundJobParams;
-use common_meta_app::background::BackgroundJobType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::background::BackgroundJobParams;
+use databend_common_meta_app::background::BackgroundJobType;
 use serde::Deserialize;
 use serde::Serialize;
 

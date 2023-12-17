@@ -1062,5 +1062,32 @@ select * from null_target order by a,b;
 1 a3
 2 a2
 
+## issue#13972
+statement ok
+create table tt1_(a bool not null, b int not null, c int not null);
+
+statement ok
+insert into tt1_ values(true, 10, 11),(false, 20, 21);
+
+query TT
+MERGE INTO tt1_ USING
+     (SELECT
+         657 AS cc0,
+         658 AS cc1
+     ) AS tRIA7K(cc0, cc1) ON (
+         cc0 < cc1)
+     WHEN MATCHED AND FALSE THEN UPDATE SET
+         a = FALSE,
+         b = 332366211
+     WHEN MATCHED AND a THEN DELETE
+     WHEN NOT MATCHED AND TRUE THEN INSERT (b, c) VALUES(10, 20);
+----
+0 0 1
+
+query TTT
+select * from tt1_;
+----
+0 20 21
+
 statement ok
 set enable_experimental_merge_into = 0;

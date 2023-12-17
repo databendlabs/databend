@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Range;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Range;
+use databend_common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
 use strum::IntoEnumIterator;
@@ -480,6 +480,8 @@ pub enum TokenKind {
     DOW,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
+    #[token("DELTA", ignore(ascii_case))]
+    DELTA,
     #[token("DOY", ignore(ascii_case))]
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
@@ -646,6 +648,10 @@ pub enum TokenKind {
     LATERAL,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
+    #[token("LOCKS", ignore(ascii_case))]
+    LOCKS,
+    #[token("ACCOUNT", ignore(ascii_case))]
+    ACCOUNT,
     #[token("SECONDARY", ignore(ascii_case))]
     SECONDARY,
     #[token("ROLES", ignore(ascii_case))]

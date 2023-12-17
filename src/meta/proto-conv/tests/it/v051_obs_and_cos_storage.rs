@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::storage::StorageCosConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageParams;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::storage::StorageCosConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageParams;
 use minitrace::func_name;
 
 use crate::common;

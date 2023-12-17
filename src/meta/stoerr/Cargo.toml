@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-stoerr"
+name = "databend-common-meta-stoerr"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }

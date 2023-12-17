@@ -22,105 +22,105 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_app::data_mask::CreateDatamaskReq;
-use common_meta_app::data_mask::DatamaskNameIdent;
-use common_meta_app::data_mask::DropDatamaskReq;
-use common_meta_app::data_mask::MaskpolicyTableIdList;
-use common_meta_app::data_mask::MaskpolicyTableIdListKey;
-use common_meta_app::schema::CatalogMeta;
-use common_meta_app::schema::CatalogNameIdent;
-use common_meta_app::schema::CatalogOption;
-use common_meta_app::schema::CountTablesReq;
-use common_meta_app::schema::CreateCatalogReq;
-use common_meta_app::schema::CreateDatabaseReply;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateLockRevReq;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::CreateVirtualColumnReq;
-use common_meta_app::schema::DBIdTableName;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseIdToName;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::DbIdList;
-use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteLockRevReq;
-use common_meta_app::schema::DropCatalogReq;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropIndexReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::DroppedId;
-use common_meta_app::schema::ExtendLockRevReq;
-use common_meta_app::schema::GcDroppedTableReq;
-use common_meta_app::schema::GetCatalogReq;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_app::schema::GetLVTReq;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::IcebergCatalogOption;
-use common_meta_app::schema::IndexId;
-use common_meta_app::schema::IndexIdToName;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use common_meta_app::schema::IndexType;
-use common_meta_app::schema::ListCatalogReq;
-use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListDroppedTableReq;
-use common_meta_app::schema::ListIndexesByIdReq;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListLockRevReq;
-use common_meta_app::schema::ListTableReq;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_meta_app::schema::LockKey;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::SetLVTReq;
-use common_meta_app::schema::SetTableColumnMaskPolicyAction;
-use common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use common_meta_app::schema::TableCopiedFileInfo;
-use common_meta_app::schema::TableCopiedFileNameIdent;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableIdList;
-use common_meta_app::schema::TableIdListKey;
-use common_meta_app::schema::TableIdToName;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TableStatistics;
-use common_meta_app::schema::TruncateTableReq;
-use common_meta_app::schema::UndropDatabaseReq;
-use common_meta_app::schema::UndropTableReq;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpdateVirtualColumnReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::schema::VirtualColumnNameIdent;
-use common_meta_app::share::AddShareAccountsReq;
-use common_meta_app::share::CreateShareReq;
-use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use common_meta_app::share::ShareNameIdent;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::Key;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::UpsertKV;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskNameIdent;
+use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogNameIdent;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CountTablesReq;
+use databend_common_meta_app::schema::CreateCatalogReq;
+use databend_common_meta_app::schema::CreateDatabaseReply;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateIndexReq;
+use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DBIdTableName;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdToName;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DbIdList;
+use databend_common_meta_app::schema::DbIdListKey;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DropCatalogReq;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetCatalogReq;
+use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetLVTReq;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IndexId;
+use databend_common_meta_app::schema::IndexIdToName;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::schema::ListCatalogReq;
+use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SetLVTReq;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableCopiedFileInfo;
+use databend_common_meta_app::schema::TableCopiedFileNameIdent;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdList;
+use databend_common_meta_app::schema::TableIdListKey;
+use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableInfoFilter;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateVirtualColumnReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::share::AddShareAccountsReq;
+use databend_common_meta_app::share::CreateShareReq;
+use databend_common_meta_app::share::GrantShareObjectReq;
+use databend_common_meta_app::share::ShareGrantObjectName;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 use log::debug;
 use log::info;
 
@@ -326,6 +326,12 @@ impl SchemaApiTestSuite {
             .await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
+        suite
+            .drop_table_without_tableid_to_name(&b.build().await)
+            .await?;
+
+        suite.get_table_name_by_id(&b.build().await).await?;
+        suite.get_db_name_by_id(&b.build().await).await?;
 
         Ok(())
     }
@@ -1403,6 +1409,78 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
+    async fn drop_table_without_tableid_to_name<
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db = "db";
+        let table_name = "tbl";
+
+        let create_db_req = CreateDatabaseReq {
+            if_not_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db.to_string(),
+            },
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..DatabaseMeta::default()
+            },
+        };
+
+        let res = mt.create_database(create_db_req.clone()).await?;
+        let db_id = res.db_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: BTreeMap::new(),
+            updated_on: created_on,
+            created_on,
+            ..TableMeta::default()
+        };
+        let created_on = Utc::now();
+
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db.to_string(),
+                table_name: table_name.to_string(),
+            },
+
+            table_meta: table_meta(created_on),
+        };
+        let resp = mt.create_table(req.clone()).await?;
+        let table_id = resp.table_id;
+
+        let table_id_to_name = TableIdToName { table_id };
+        // delete TableIdToName before drop table
+        delete_test_data(mt.as_kv_api(), &table_id_to_name).await?;
+
+        mt.drop_table_by_id(DropTableByIdReq {
+            if_exists: false,
+            tenant: tenant.to_string(),
+            db_id,
+            table_name: table_name.to_string(),
+            tb_id: table_id,
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
     async fn table_least_visible_time<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
@@ -1568,7 +1646,7 @@ impl SchemaApiTestSuite {
         }
 
         info!("--- prepare db");
-        {
+        let db_id = {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -1585,7 +1663,8 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
-        }
+            res.db_id
+        };
 
         // check table count
         info!("--- check table count of tenant1");
@@ -1741,6 +1820,8 @@ impl SchemaApiTestSuite {
                 let plan = DropTableByIdReq {
                     if_exists: false,
                     tenant: tenant.to_string(),
+                    db_id,
+                    table_name: tbl_name.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -1768,6 +1849,8 @@ impl SchemaApiTestSuite {
                 let plan = DropTableByIdReq {
                     if_exists: false,
                     tenant: tenant.to_string(),
+                    db_id,
+                    table_name: tbl_name.to_string(),
                     tb_id,
                 };
                 let res = mt.drop_table_by_id(plan).await;
@@ -1785,6 +1868,8 @@ impl SchemaApiTestSuite {
                 let plan = DropTableByIdReq {
                     if_exists: true,
                     tenant: tenant.to_string(),
+                    db_id,
+                    table_name: tbl_name.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -3651,7 +3736,9 @@ impl SchemaApiTestSuite {
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3673,7 +3760,9 @@ impl SchemaApiTestSuite {
                 let resp = mt.create_table(req.clone()).await?;
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3749,7 +3838,9 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3772,7 +3863,9 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb2".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3947,7 +4040,9 @@ impl SchemaApiTestSuite {
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
+                    tenant: req.name_ident.tenant.clone(),
+                    db_id,
+                    table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -4202,7 +4297,9 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
+                tenant: tbl_name_ident.tenant.clone(),
+                db_id: old_db.ident.db_id,
+                table_name: tbl_name_ident.table_name.clone(),
                 tb_id,
             })
             .await?;
@@ -4258,6 +4355,8 @@ impl SchemaApiTestSuite {
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                db_id: old_db.ident.db_id,
+                table_name: tbl_name.to_string(),
                 tb_id,
             })
             .await?;
@@ -4316,6 +4415,8 @@ impl SchemaApiTestSuite {
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                db_id: old_db.ident.db_id,
+                table_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
             })
             .await?;
@@ -4418,6 +4519,8 @@ impl SchemaApiTestSuite {
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                db_id: cur_db.ident.db_id,
+                table_name: tbl_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
             };
 
@@ -4592,6 +4695,162 @@ impl SchemaApiTestSuite {
                 let err = ErrorCode::from(err);
 
                 assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+            }
+        }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn get_table_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            {
+                let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                let res = mt.create_table(req.clone()).await?;
+                let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table_name_by_id(tb_id).await?;
+
+                let want = tbl_name.to_string();
+                assert_eq!(want, got, "get created table");
+            }
+        }
+
+        info!("--- get_table_name_by_id ");
+        {
+            info!("--- get_table_name_by_id ");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let want = table.name.clone();
+                let got = mt.get_table_name_by_id(table.ident.table_id).await?;
+
+                assert_eq!(want, got);
+            }
+
+            info!("--- get_table_name_by_id with not exists table_id");
+            {
+                let got = mt.get_table_name_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+            }
+        }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn get_db_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+
+        info!("--- prepare and get db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+
+            let got = mt.get_db_name_by_id(res.db_id).await?;
+            assert_eq!(got, db_name.to_string())
+        }
+
+        info!("--- get_db_name_by_id ");
+        {
+            info!("--- get_db_name_by_id ");
+            {
+                let plan = GetDatabaseReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                };
+
+                let db = mt.get_database(plan).await.unwrap();
+
+                let got = mt.get_db_name_by_id(db.ident.db_id).await?;
+
+                assert_eq!(got, db_name.to_string());
+            }
+
+            info!("--- get_db_name_by_id with not exists db_id");
+            {
+                let got = mt.get_db_name_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownDatabaseId("").code(), err.code());
             }
         }
         Ok(())
@@ -6337,8 +6596,10 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 
     async fn drop_table_by_id(&mut self) -> anyhow::Result<()> {
         let req = DropTableByIdReq {
-            if_exists: false,
             tenant: self.tenant(),
+            table_name: self.tbl_name(),
+            if_exists: false,
+            db_id: self.db_id,
             tb_id: self.table_id,
         };
         self.mt.drop_table_by_id(req.clone()).await?;

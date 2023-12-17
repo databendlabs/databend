@@ -1,5 +1,5 @@
 [package]
-name = "common-cloud-control"
+name = "databend-common-cloud-control"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,8 +13,8 @@ test = false
 [dependencies]
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
+databend-common-base = { path = "../base" }
+databend-common-exception = { path = "../exception" }
 prost = { workspace = true }
 tonic = { workspace = true }
 

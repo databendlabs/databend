@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-sled-store"
+name = "databend-common-meta-sled-store"
 description = "Sled store backend for raft state machine"
 version = { workspace = true }
 authors = { workspace = true }
@@ -15,18 +15,17 @@ test = true
 io-uring = ["sled/io_uring"]
 
 [dependencies]
-common-meta-stoerr = { path = "../stoerr" }
-common-meta-types = { path = "../types" }
-common-tracing = { path = "../../common/tracing" }
+databend-common-meta-stoerr = { path = "../stoerr" }
+databend-common-meta-types = { path = "../types" }
+databend-common-tracing = { path = "../../common/tracing" }
 
 openraft = { workspace = true }
 sled = { workspace = true }
 
 anyerror = { workspace = true }
-byteorder = "1.4.3"
+byteorder = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
-once_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = "3.4.0"
@@ -34,7 +33,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-common-base = { path = "../../common/base" }
+databend-common-base = { path = "../../common/base" }
 pretty_assertions = "1.3.0"
 test-harness = "0.1.1"
 tokio = { workspace = true }

@@ -14,12 +14,12 @@
 
 use std::collections::BTreeMap;
 
-use common_catalog::plan::StreamColumn;
-use common_catalog::plan::StreamColumnType;
-use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
-use common_expression::ORIGIN_VERSION_COL_NAME;
 use ctor::ctor;
+use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::plan::StreamColumnType;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 
 #[ctor]
 pub static STREAM_COLUMN_FACTORY: StreamColumnFactory = StreamColumnFactory::init();

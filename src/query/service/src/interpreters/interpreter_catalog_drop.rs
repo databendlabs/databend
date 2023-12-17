@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_catalog::catalog::CatalogManager;
-use common_exception::Result;
-use common_sql::plans::DropCatalogPlan;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_exception::Result;
+use databend_common_sql::plans::DropCatalogPlan;
+use databend_common_storages_fuse::TableContext;
 use log::debug;
 
 use super::Interpreter;

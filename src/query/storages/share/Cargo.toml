@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-share"
+name = "databend-common-storages-share"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,11 +13,11 @@ test = false
 
 [dependencies]
 chrono = { workspace = true }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
-enumflags2 = { version = "0.7.7", features = ["serde"] }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
+enumflags2 = { workspace = true }
 
-storages-common-table-meta = { path = "../common/table_meta" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 opendal = { workspace = true }

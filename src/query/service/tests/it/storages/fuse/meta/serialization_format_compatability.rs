@@ -12,6 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::Cursor;
+
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 struct BasicOld {
     a: u32,
@@ -88,15 +93,19 @@ enum NewEnumInsertFieldInTheMiddle {
 #[test]
 fn test_bincode_backward_compat_enum() {
     let old_format = OldEnum::B(100);
-    let bytes = bincode::serialize(&old_format).unwrap();
-    let _: OldEnum = bincode::deserialize(&bytes).unwrap();
+
+    let mut buffer = Cursor::new(Vec::new());
+    bincode_serialize_into_buf(&mut buffer, &old_format).unwrap();
+    let bytes = buffer.get_ref().as_slice();
+
+    let _: OldEnum = bincode_deserialize_from_slice(bytes).unwrap();
 
     // enum extended with new field is ok
-    let new: NewEnumAppendField = bincode::deserialize(&bytes).unwrap();
+    let new: NewEnumAppendField = bincode_deserialize_from_slice(bytes).unwrap();
     assert_eq!(new, NewEnumAppendField::B(100));
 
     // enum, insert with new field in the middle, is NOT ok
-    let new: Result<NewEnumInsertFieldInTheMiddle, _> = bincode::deserialize(&bytes);
+    let new: Result<NewEnumInsertFieldInTheMiddle, _> = bincode_deserialize_from_slice(bytes);
     assert!(new.is_err())
 }
 

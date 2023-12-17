@@ -23,6 +23,7 @@ mod panic_hook;
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
 pub use crate::config::OTLPConfig;
+pub use crate::config::ProfileLogConfig;
 pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
 pub use crate::config::TracingConfig;
@@ -51,7 +52,7 @@ pub fn closure_name<F: std::any::Any>() -> &'static str {
 /// # #[macro_use] extern crate common_tracing;
 /// # fn main() {
 /// let _sentry = sentry::init(sentry::ClientOptions {
-///     release: common_tracing::databend_semver!(),
+///     release: databend_common_tracing::databend_semver!(),
 ///     ..Default::default()
 /// });
 /// # }

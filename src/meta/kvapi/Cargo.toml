@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-kvapi"
+name = "databend-common-meta-kvapi"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,10 +13,10 @@ doctest = false
 test = true
 
 [dependencies]
-common-meta-types = { path = "../types" }
+databend-common-meta-types = { path = "../types" }
 
 anyhow = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }

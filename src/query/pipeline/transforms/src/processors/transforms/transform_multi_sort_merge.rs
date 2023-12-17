@@ -18,29 +18,30 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::string::StringColumn;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::with_number_mapped_type;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
-use common_profile::SharedProcessorProfiles;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_profile::SharedProcessorProfiles;
 
+use super::sort::utils::find_bigger_child_of_root;
 use super::sort::Cursor;
 use super::sort::Rows;
 use super::sort::SimpleRows;
@@ -51,7 +52,7 @@ pub fn try_add_multi_sort_merge(
     input_schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     prof_info: Option<(u32, SharedProcessorProfiles)>,
     remove_order_col: bool,
 ) -> Result<()> {
@@ -105,7 +106,7 @@ fn create_processor(
     input_schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     Ok(if sort_columns_descriptions.len() == 1 {
@@ -182,7 +183,7 @@ where R: Rows
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
 
-    sort_desc: Vec<SortColumnDescription>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
 
     // Parameters
     block_size: usize,
@@ -218,7 +219,7 @@ where R: Rows
         output: Arc<OutputPort>,
         block_size: usize,
         limit: Option<usize>,
-        sort_desc: Vec<SortColumnDescription>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
     ) -> Result<Self> {
         let input_size = inputs.len();
@@ -552,16 +553,4 @@ enum ProcessorState {
     Output,
     // Need to generate output block.
     Generated(DataBlock), // Need to push output block to output port.
-}
-
-/// Find the bigger child of the root of the heap.
-#[inline(always)]
-fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
-    debug_assert!(heap.len() >= 2);
-    let slice = heap.as_slice();
-    if heap.len() == 2 {
-        &slice[1]
-    } else {
-        (&slice[1]).max(&slice[2])
-    }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_storages_hive::HiveFileSplitter;
+use databend_common_storages_hive::HiveFileSplitter;
 
 #[test]
 fn test_splitter() {

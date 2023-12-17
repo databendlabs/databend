@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::compute::take::can_take;
-use common_arrow::arrow::compute::take::take;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::error::Result;
-use common_arrow::arrow::types::NativeType;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::compute::take::can_take;
+use databend_common_arrow::arrow::compute::take::take;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::IntervalUnit;
+use databend_common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::types::NativeType;
 
 fn test_take_primitive<T>(
     data: &[Option<T>],
@@ -123,9 +123,9 @@ fn test_struct_with_nulls() {
 
 #[test]
 fn consistency() {
-    use common_arrow::arrow::array::new_null_array;
-    use common_arrow::arrow::datatypes::DataType::*;
-    use common_arrow::arrow::datatypes::TimeUnit;
+    use databend_common_arrow::arrow::array::new_null_array;
+    use databend_common_arrow::arrow::datatypes::DataType::*;
+    use databend_common_arrow::arrow::datatypes::TimeUnit;
 
     let datatypes = vec![
         Null,

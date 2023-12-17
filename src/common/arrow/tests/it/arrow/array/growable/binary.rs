@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableBinary;
-use common_arrow::arrow::array::BinaryArray;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableBinary;
+use databend_common_arrow::arrow::array::BinaryArray;
 
 #[test]
 fn no_offsets() {

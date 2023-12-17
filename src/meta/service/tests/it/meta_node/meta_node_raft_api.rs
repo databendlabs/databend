@@ -16,10 +16,10 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_meta_types::Cmd;
-use common_meta_types::LogEntry;
-use common_meta_types::UpsertKV;
+use databend_common_base::base::tokio;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::UpsertKV;
 use log::info;
 use maplit::btreeset;
 use test_harness::test;

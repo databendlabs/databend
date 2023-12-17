@@ -14,18 +14,18 @@
 
 use std::collections::HashMap;
 
-use common_expression::types::Number;
-use common_expression::types::NumberDataType;
-use common_expression::types::F32;
-use common_expression::types::F64;
-use common_expression::with_integer_mapped_type;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
+use databend_common_expression::with_integer_mapped_type;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use icelake::types::DataFile;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 /// Try to convert statistics in [`DataFile`] to [`StatisticsOfColumns`].
 pub fn get_stats_of_data_file(schema: &TableSchema, df: &DataFile) -> Option<StatisticsOfColumns> {

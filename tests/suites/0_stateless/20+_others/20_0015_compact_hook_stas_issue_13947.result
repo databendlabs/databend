@@ -1,0 +1,4 @@
+expects .stats.write_progress.rows be 2
+expects .error be null
+2
+null

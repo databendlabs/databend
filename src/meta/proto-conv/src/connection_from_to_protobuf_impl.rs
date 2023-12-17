@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::principal as mt;
-use common_protos::pb;
+use databend_common_meta_app::principal as mt;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
@@ -283,18 +283,13 @@ impl RulePushDownFilterScan {
             let used_columns = predicate.used_columns();
             let mut contain_derived_column = false;
             for column_entry in column_entries {
-                match column_entry {
-                    ColumnEntry::BaseTableColumn(_) => {}
-                    ColumnEntry::InternalColumn(_) => {}
-                    ColumnEntry::DerivedColumn(column) => {
-                        // Don't push down predicate that contains derived column
-                        // Because storage can't know such columns.
-                        if used_columns.contains(&column.column_index) {
-                            contain_derived_column = true;
-                            break;
-                        }
+                if let ColumnEntry::DerivedColumn(column) = column_entry {
+                    // Don't push down predicate that contains derived column
+                    // Because storage can't know such columns.
+                    if used_columns.contains(&column.column_index) {
+                        contain_derived_column = true;
+                        break;
                     }
-                    ColumnEntry::VirtualColumn(_) => {}
                 }
             }
             if !contain_derived_column {

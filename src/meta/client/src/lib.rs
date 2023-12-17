@@ -21,8 +21,10 @@ mod grpc_metrics;
 mod kv_api_impl;
 mod message;
 
-pub use common_meta_api::reply::reply_to_api_result;
-pub use common_meta_api::reply::reply_to_meta_result;
+use std::sync::LazyLock;
+
+pub use databend_common_meta_api::reply::reply_to_api_result;
+pub use databend_common_meta_api::reply::reply_to_meta_result;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
@@ -30,12 +32,11 @@ pub use grpc_client::ClientHandle;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
 pub use message::Streamed;
-use once_cell::sync::Lazy;
 use semver::BuildMetadata;
 use semver::Prerelease;
 use semver::Version;
 
-pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
+pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     let build_semver = option_env!("DATABEND_GIT_SEMVER");
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 

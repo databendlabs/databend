@@ -14,10 +14,10 @@
 
 use std::ops::Bound;
 
-use common_meta_sled_store::sled;
-use common_meta_sled_store::SledOrderedSerde;
-use common_meta_sled_store::SledRangeSerde;
-use common_meta_types::NodeId;
+use databend_common_meta_sled_store::sled;
+use databend_common_meta_sled_store::SledOrderedSerde;
+use databend_common_meta_sled_store::SledRangeSerde;
+use databend_common_meta_types::NodeId;
 
 #[test]
 fn test_node_id_serde_ser() -> anyhow::Result<()> {

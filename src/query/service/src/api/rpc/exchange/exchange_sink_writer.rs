@@ -14,20 +14,20 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_metrics::transform::*;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::PipeItem;
-use common_pipeline_sinks::AsyncSink;
-use common_pipeline_sinks::AsyncSinker;
-use common_pipeline_sinks::Sink;
-use common_pipeline_sinks::Sinker;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline_sinks::Sink;
+use databend_common_pipeline_sinks::Sinker;
 
 use crate::api::rpc::flight_client::FlightSender;
 use crate::api::ExchangeSerializeMeta;

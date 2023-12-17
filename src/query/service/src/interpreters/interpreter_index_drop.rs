@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use aggregating_index::get_agg_index_handler;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DropIndexReq;
-use common_meta_app::schema::IndexNameIdent;
-use common_sql::plans::DropIndexPlan;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_sql::plans::DropIndexPlan;
+use databend_enterprise_aggregating_index::get_agg_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

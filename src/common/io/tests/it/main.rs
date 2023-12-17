@@ -14,7 +14,10 @@
 // limitations under the License.
 #![allow(clippy::uninlined_format_args)]
 
+extern crate core;
+
 mod binary_read;
 mod binary_write;
 mod cursor_ext;
 mod escape;
+mod serialization;

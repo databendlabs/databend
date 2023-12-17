@@ -16,7 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::pipe::PipeItem;
 use crate::processors::Event;

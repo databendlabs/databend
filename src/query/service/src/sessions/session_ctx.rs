@@ -19,11 +19,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use common_config::GlobalConfig;
-use common_exception::Result;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_settings::Settings;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_settings::Settings;
 use parking_lot::RwLock;
 
 use super::SessionType;

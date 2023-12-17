@@ -20,8 +20,8 @@ use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::share as mt;
-use common_protos::pb;
+use databend_common_meta_app::share as mt;
+use databend_common_protos::pb;
 use enumflags2::BitFlags;
 
 use crate::reader_check_msg;

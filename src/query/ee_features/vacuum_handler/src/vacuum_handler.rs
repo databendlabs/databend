@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::GlobalInstance;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {

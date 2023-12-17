@@ -16,9 +16,9 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_metrics::interpreter::*;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_metrics::interpreter::*;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

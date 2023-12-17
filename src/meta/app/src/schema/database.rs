@@ -320,7 +320,7 @@ pub struct ListDatabaseReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;

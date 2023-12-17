@@ -17,7 +17,7 @@ use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 use futures::stream::StreamExt;
 use futures_util::stream::BoxStream;
 use stream_more::KMerge;

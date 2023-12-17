@@ -19,15 +19,15 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use ahash::HashMap;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_catalog::plan::InternalColumn;
-use common_catalog::table::Table;
-use common_expression::types::DataType;
-use common_expression::ComputedExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::table::Table;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;
@@ -236,18 +236,30 @@ impl Metadata {
         source_column_index: IndexType,
         column_name: String,
         data_type: TableDataType,
-        paths: Vec<Scalar>,
+        key_paths: Scalar,
+        old_index: Option<IndexType>,
     ) -> IndexType {
-        let column_index = self.columns.len();
-        self.columns.push(ColumnEntry::VirtualColumn(VirtualColumn {
+        // If the function that generates the virtual column already has an index,
+        // we can use that index and avoid generate a new one.
+        let column_index = if let Some(old_index) = old_index {
+            old_index
+        } else {
+            self.columns.len()
+        };
+        let column = ColumnEntry::VirtualColumn(VirtualColumn {
             table_index,
             source_column_name,
             source_column_index,
             column_index,
             column_name,
             data_type,
-            paths,
-        }));
+            key_paths,
+        });
+        if old_index.is_some() {
+            self.columns[column_index] = column;
+        } else {
+            self.columns.push(column);
+        }
         column_index
     }
 
@@ -522,7 +534,7 @@ pub struct VirtualColumn {
     pub data_type: TableDataType,
 
     /// Paths to generate virtual column from source column
-    pub paths: Vec<Scalar>,
+    pub key_paths: Scalar,
 }
 
 #[derive(Clone, Debug)]

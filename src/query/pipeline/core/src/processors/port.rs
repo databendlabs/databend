@@ -16,8 +16,8 @@ use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;

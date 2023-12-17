@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSetting;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::IntoSeqV;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSetting;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::IntoSeqV;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 
 use crate::setting::SettingApi;
 

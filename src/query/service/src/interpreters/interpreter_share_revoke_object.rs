@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_exception::Result;
-use common_meta_api::ShareApi;
-use common_meta_app::share::RevokeShareObjectReq;
-use common_meta_app::share::ShareNameIdent;
-use common_storages_share::save_share_spec;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::RevokeShareObjectReq;
+use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_storages_share::save_share_spec;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

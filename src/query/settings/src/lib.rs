@@ -22,4 +22,5 @@ pub use settings::ScopeLevel;
 pub use settings::Settings;
 pub use settings_default::ReplaceIntoShuffleStrategy;
 pub use settings_default::SettingMode;
+pub use settings_default::SettingRange;
 pub use settings_getter_setter::FlightCompression;

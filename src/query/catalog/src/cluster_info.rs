@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_meta_types::NodeInfo;
+use databend_common_meta_types::NodeInfo;
 
 pub struct Cluster {
     pub local_id: String,

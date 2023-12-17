@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types::MetaId;
+use databend_common_meta_types::MetaId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct VirtualColumnNameIdent {
@@ -122,7 +122,7 @@ impl ListVirtualColumnsReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::VirtualColumnNameIdent;
     use crate::schema::PREFIX_VIRTUAL_COLUMN;

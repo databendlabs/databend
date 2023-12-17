@@ -15,15 +15,15 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_index::PageIndex;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use log::warn;
-use storages_common_index::PageIndex;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ClusterStatistics;
 
 pub trait PagePruner {
     // returns true, if target should NOT be pruned (false positive allowed)

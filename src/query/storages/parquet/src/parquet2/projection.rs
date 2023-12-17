@@ -15,14 +15,14 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::schema_projection as ap;
-use common_catalog::plan::Projection;
-use common_exception::Result;
-use common_expression::FieldIndex;
-use common_storage::ColumnNodes;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::parquet::metadata::ColumnDescriptor;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_arrow::schema_projection as ap;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
+use databend_common_storage::ColumnNodes;
 
 #[allow(clippy::type_complexity)]
 pub fn project_parquet_schema(

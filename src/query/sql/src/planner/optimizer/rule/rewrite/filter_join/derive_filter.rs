@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
