@@ -55,6 +55,7 @@ use url::Url;
 // use object_store_opendal::OpendalStore;
 use crate::dal::OpendalStore;
 use crate::partition::DeltaPartInfo;
+use crate::partition_columns::get_partition_values;
 use crate::table_source::DeltaTableSource;
 
 pub const DELTA_ENGINE: &str = "DELTA";
@@ -245,6 +246,7 @@ impl DeltaTable {
         let mut read_rows = 0;
         let mut read_bytes = 0;
 
+        let partition_fields = self.get_partition_fields()?;
         let adds = table.get_state().files();
         let total_files = adds.len();
         let parts = adds.iter()
@@ -260,9 +262,10 @@ impl DeltaTable {
                     })?;
                 read_rows += stats.num_records as usize;
                 read_bytes += add.size as usize;
+                let partition_values = get_partition_values(add, &partition_fields[..])?;
                 Ok(Arc::new(
                     Box::new(DeltaPartInfo{
-                        partition_values: vec![],
+                        partition_values,
                         data: ParquetPart::ParquetFiles(
                             ParquetFilesPart {
                             files: vec![(add.path.clone(), add.size as u64)],
