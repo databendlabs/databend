@@ -25,7 +25,7 @@ use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::KvMeta;
-use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::stream::StreamExt;
@@ -80,7 +80,7 @@ async fn initialize_kvs(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Res
     info!("--- prepare keys: a(meta),c,c1,c2");
 
     let updates = vec![
-        UpsertKVReq::insert("a", &b("a")).with(KVMeta::new_expire(now_sec + 10)),
+        UpsertKVReq::insert("a", &b("a")).with(MetaSpec::new_expire(now_sec + 10)),
         UpsertKVReq::insert("c", &b("c")),
         UpsertKVReq::insert("c1", &b("c1")),
         UpsertKVReq::insert("c2", &b("c2")),

@@ -1130,8 +1130,18 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40f9ca3698b2e4cb7c15571db0abc5551dca417a21ae8140460b50309bb2cc62"
 dependencies = [
- "borsh-derive",
+ "borsh-derive 0.10.2",
  "hashbrown 0.13.2",
+]
+
+[[package]]
+name = "borsh"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9897ef0f1bd2362169de6d7e436ea2237dc1085d7d1e4db75f4be34d86f309d1"
+dependencies = [
+ "borsh-derive 1.2.1",
+ "cfg_aliases",
 ]
 
 [[package]]
@@ -1145,6 +1155,20 @@ dependencies = [
  "proc-macro-crate 0.1.5",
  "proc-macro2",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "478b41ff04256c5c8330f3dfdaaae2a5cc976a8e75088bafa4625b0d0208de8c"
+dependencies = [
+ "once_cell",
+ "proc-macro-crate 2.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+ "syn_derive",
 ]
 
 [[package]]
@@ -1453,6 +1477,12 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
@@ -2355,7 +2385,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "env_logger",
- "ethnum",
+ "ethnum 1.5.0",
  "fallible-streaming-iterator",
  "flate2",
  "foreign_vec",
@@ -2395,7 +2425,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "enum-as-inner",
- "ethnum",
+ "ethnum 1.5.0",
  "fast-float",
  "goldenfile",
  "itertools 0.10.5",
@@ -2403,7 +2433,7 @@ dependencies = [
  "minitrace",
  "nom",
  "nom-rule",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
@@ -2628,6 +2658,7 @@ dependencies = [
  "arrow-select",
  "async-backtrace",
  "base64 0.21.0",
+ "borsh 1.2.1",
  "bumpalo",
  "chrono",
  "chrono-tz",
@@ -2641,7 +2672,7 @@ dependencies = [
  "databend-common-io",
  "educe",
  "enum-as-inner",
- "ethnum",
+ "ethnum 1.5.0",
  "futures",
  "goldenfile",
  "hex",
@@ -2650,9 +2681,9 @@ dependencies = [
  "lexical-core",
  "log",
  "match-template",
- "micromarshal",
+ "micromarshal 0.5.0",
  "num-traits",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "pretty_assertions",
  "rand 0.8.5",
  "roaring",
@@ -2684,9 +2715,9 @@ dependencies = [
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "lexical-core",
  "match-template",
- "micromarshal",
+ "micromarshal 0.4.0",
  "num",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "pretty_assertions",
  "roaring",
  "serde_json",
@@ -2699,6 +2730,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.21.0",
  "blake3",
+ "borsh 1.2.1",
  "bstr 1.6.2",
  "bumpalo",
  "bytes",
@@ -2717,7 +2749,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
- "ethnum",
+ "ethnum 1.5.0",
  "geo",
  "geohash",
  "goldenfile",
@@ -2733,11 +2765,10 @@ dependencies = [
  "naive-cityhash",
  "num-traits",
  "once_cell",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
  "regex",
  "roaring",
- "serde",
  "sha1",
  "sha2",
  "simdutf8",
@@ -2772,8 +2803,8 @@ dependencies = [
  "cfg-if",
  "databend-common-arrow",
  "databend-common-base",
- "ethnum",
- "ordered-float 3.7.0",
+ "ethnum 1.5.0",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
 ]
 
@@ -2800,14 +2831,15 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "bincode 2.0.0-rc.3",
+ "borsh 1.2.1",
  "bytes",
  "chrono",
  "chrono-tz",
  "databend-common-exception",
- "ethnum",
+ "ethnum 1.5.0",
  "lexical-core",
- "micromarshal",
- "ordered-float 3.7.0",
+ "micromarshal 0.5.0",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
  "roaring",
  "serde",
@@ -3349,7 +3381,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "opendal",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "regex",
@@ -3384,7 +3416,7 @@ dependencies = [
  "metrics",
  "once_cell",
  "opendal",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "parquet",
  "regex",
  "reqwest",
@@ -3528,7 +3560,7 @@ dependencies = [
  "log",
  "minitrace",
  "opendal",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "serde",
  "typetag",
  "volo-thrift",
@@ -3641,7 +3673,7 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
- "ethnum",
+ "ethnum 1.5.0",
  "futures",
  "log",
  "opendal",
@@ -4192,7 +4224,7 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
- "ethnum",
+ "ethnum 1.5.0",
  "futures",
  "futures-util",
  "goldenfile",
@@ -4218,7 +4250,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
- "ordered-float 3.7.0",
+ "ordered-float 4.2.0",
  "p256 0.13.0",
  "parking_lot 0.12.1",
  "parquet",
@@ -4337,7 +4369,7 @@ dependencies = [
  "databend-common-sql",
  "databend-driver",
  "databend-sql",
- "ethnum",
+ "ethnum 1.5.0",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "rand 0.8.5",
@@ -5004,16 +5036,15 @@ name = "ethnum"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
-dependencies = [
- "ethnum-macros",
- "serde",
-]
 
 [[package]]
-name = "ethnum-macros"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba69ba11ab069d2f946bb46a199630ad6680fa3ecdc87a62c7477f9916095841"
+name = "ethnum"
+version = "1.5.0"
+source = "git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1#4cb05f1e407f76b193d81eef71b5dd0b73216856"
+dependencies = [
+ "borsh 1.2.1",
+ "serde",
+]
 
 [[package]]
 name = "event-listener"
@@ -7723,7 +7754,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "nom",
- "ordered-float 4.1.1",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
  "serde_json",
 ]
@@ -7736,7 +7767,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "nom",
- "ordered-float 4.1.1",
+ "ordered-float 4.2.0",
  "rand 0.8.5",
  "serde_json",
 ]
@@ -8390,8 +8421,17 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2777e7006e9b80afb5d2797e2b9e23865451708c9e280a61253586a0dd3a5db1"
 dependencies = [
- "ethnum",
+ "ethnum 1.3.2",
  "ordered-float 3.7.0",
+]
+
+[[package]]
+name = "micromarshal"
+version = "0.5.0"
+source = "git+https://github.com/ariesdevil/opensrv?rev=6c96813#6c96813099b49e63719740c216914e2f252321bc"
+dependencies = [
+ "ethnum 1.5.0",
+ "ordered-float 4.2.0",
 ]
 
 [[package]]
@@ -8947,7 +8987,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 2.0.1",
  "proc-macro2",
  "quote",
  "syn 2.0.29",
@@ -9235,17 +9275,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc2dbde8f8a79f2102cc474ceb0ad68e3b80b85289ea62389b60e66777e4213"
 dependencies = [
  "num-traits",
- "rand 0.8.5",
- "serde",
 ]
 
 [[package]]
 name = "ordered-float"
-version = "4.1.1"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "536900a8093134cf9ccf00a27deb3532421099e958d9dd431135d0c7543ca1e8"
+checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
 dependencies = [
+ "borsh 1.2.1",
  "num-traits",
+ "rand 0.8.5",
+ "serde",
 ]
 
 [[package]]
@@ -9988,7 +10029,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
 dependencies = [
  "once_cell",
- "toml_edit",
+ "toml_edit 0.19.14",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97dc5fea232fc28d2f597b37c4876b348a40e33f3b02cc975c8d006d78d94b1a"
+dependencies = [
+ "toml_datetime",
+ "toml_edit 0.20.2",
 ]
 
 [[package]]
@@ -11033,7 +11084,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0446843641c69436765a35a5a77088e28c2e6a12da93e84aa3ab1cd4aa5a042"
 dependencies = [
  "arrayvec 0.7.2",
- "borsh",
+ "borsh 0.10.2",
  "bytecheck",
  "byteorder",
  "bytes",
@@ -11974,8 +12025,9 @@ checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 [[package]]
 name = "streaming_algorithms"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op_fix_overflow_bug#e07d26324e3d5f42bd233231e80522b2659fce5e"
+source = "git+https://github.com/ariesdevil/streaming_algorithms?rev=2839d5d#2839d5d066c299bd37abd8679dfeb74f9bfb5093"
 dependencies = [
+ "borsh 1.2.1",
  "rand 0.7.3",
  "serde",
  "twox-hash",
@@ -12179,6 +12231,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "syn_derive"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1329189c02ff984e9736652b1631330da25eaa6bc639089ed4915d25446cbe7b"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
 ]
 
 [[package]]
@@ -12537,7 +12601,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit",
+ "toml_edit 0.19.14",
 ]
 
 [[package]]
@@ -12558,6 +12622,17 @@ dependencies = [
  "indexmap 2.0.0",
  "serde",
  "serde_spanned",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
+dependencies = [
+ "indexmap 2.0.0",
  "toml_datetime",
  "winnow",
 ]
