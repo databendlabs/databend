@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
 
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
@@ -54,7 +54,7 @@ impl DataBlock {
         string_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Result<Self>
     where
-        I: common_arrow::arrow::types::Index,
+        I: databend_common_arrow::arrow::types::Index,
     {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
@@ -84,7 +84,7 @@ impl DataBlock {
 
 impl Column {
     pub fn take<I>(&self, indices: &[I], string_items_buf: &mut Option<Vec<(u64, usize)>>) -> Self
-    where I: common_arrow::arrow::types::Index {
+    where I: databend_common_arrow::arrow::types::Index {
         match self {
             Column::Null { .. } => Column::Null { len: indices.len() },
             Column::EmptyArray { .. } => Column::EmptyArray { len: indices.len() },
@@ -190,7 +190,7 @@ impl Column {
     pub fn take_primitive_types<T, I>(col: &Buffer<T>, indices: &[I]) -> Vec<T>
     where
         T: Copy,
-        I: common_arrow::arrow::types::Index,
+        I: databend_common_arrow::arrow::types::Index,
     {
         let num_rows = indices.len();
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
@@ -209,7 +209,7 @@ impl Column {
         string_items_buf: Option<&mut Vec<(u64, usize)>>,
     ) -> StringColumn
     where
-        I: common_arrow::arrow::types::Index,
+        I: databend_common_arrow::arrow::types::Index,
     {
         let num_rows = indices.len();
 
@@ -260,7 +260,7 @@ impl Column {
     }
 
     pub fn take_boolean_types<I>(col: &Bitmap, indices: &[I]) -> Bitmap
-    where I: common_arrow::arrow::types::Index {
+    where I: databend_common_arrow::arrow::types::Index {
         let num_rows = indices.len();
         // Fast path: avoid iterating column to generate a new bitmap.
         // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
@@ -309,7 +309,7 @@ impl Column {
         indices: &[I],
     ) -> Column
     where
-        I: common_arrow::arrow::types::Index,
+        I: databend_common_arrow::arrow::types::Index,
     {
         for index in indices {
             T::push_item(&mut builder, unsafe {

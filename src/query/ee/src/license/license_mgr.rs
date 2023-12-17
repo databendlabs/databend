@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_exception::exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_license::license::Feature;
-use common_license::license::LicenseInfo;
-use common_license::license_manager::LicenseManager;
-use common_license::license_manager::LicenseManagerWrapper;
 use dashmap::DashMap;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
+use databend_common_license::license::Feature;
+use databend_common_license::license::LicenseInfo;
+use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::LicenseManagerWrapper;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;

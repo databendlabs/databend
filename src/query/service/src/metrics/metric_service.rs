@@ -15,11 +15,11 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_http::HttpError;
-use common_http::HttpShutdownHandler;
-use common_metrics::load_global_prometheus_registry;
-use common_metrics::render_prometheus_metrics;
+use databend_common_exception::ErrorCode;
+use databend_common_http::HttpError;
+use databend_common_http::HttpShutdownHandler;
+use databend_common_metrics::load_global_prometheus_registry;
+use databend_common_metrics::render_prometheus_metrics;
 use poem::IntoResponse;
 
 use crate::servers::Server;

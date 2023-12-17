@@ -14,13 +14,13 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-pub use common_storages_fuse as fuse;
-pub use storages_common_index as index;
+pub use databend_common_storages_fuse as fuse;
+pub use databend_storages_common_index as index;
 mod storage_factory;
 
-pub use common_catalog::table::NavigationPoint;
-pub use common_catalog::table::Table;
-pub use common_catalog::table::TableStatistics;
+pub use databend_common_catalog::table::NavigationPoint;
+pub use databend_common_catalog::table::Table;
+pub use databend_common_catalog::table::TableStatistics;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;

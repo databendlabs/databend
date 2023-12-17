@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
+use databend_common_base::base::tokio;
 use databend_meta::api::http::v1::config::config_handler;
 use databend_meta::configs::Config;
 use poem::get;

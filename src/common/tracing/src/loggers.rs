@@ -40,8 +40,14 @@ use tracing_appender::rolling::Rotation;
 pub(crate) fn new_file_log_writer(
     dir: &str,
     name: impl ToString,
+    max_files: usize,
 ) -> (BufWriter<NonBlocking>, WorkerGuard) {
-    let rolling = RollingFileAppender::new(Rotation::HOURLY, dir, name.to_string());
+    let rolling = RollingFileAppender::builder()
+        .rotation(Rotation::HOURLY)
+        .filename_prefix(name.to_string())
+        .max_log_files(max_files)
+        .build(dir)
+        .expect("failed to initialize rolling file appender");
     let (non_blocking, flush_guard) = tracing_appender::non_blocking(rolling);
     let buffered_non_blocking = BufWriter::with_capacity(64 * 1024 * 1024, non_blocking);
 

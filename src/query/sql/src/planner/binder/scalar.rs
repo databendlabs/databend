@@ -15,17 +15,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use indexmap::IndexMap;
 
 use crate::binder::wrap_cast;
@@ -47,7 +47,6 @@ pub struct ScalarBinder<'a> {
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     ctes_map: Box<IndexMap<String, CteInfo>>,
     aliases: &'a [(String, ScalarExpr)],
-    allow_pushdown: bool,
     forbid_udf: bool,
 }
 
@@ -72,13 +71,8 @@ impl<'a> ScalarBinder<'a> {
             m_cte_bound_ctx,
             ctes_map,
             aliases,
-            allow_pushdown: false,
             forbid_udf: false,
         }
-    }
-
-    pub fn allow_pushdown(&mut self) {
-        self.allow_pushdown = true;
     }
 
     pub fn forbid_udf(&mut self) {
@@ -93,7 +87,6 @@ impl<'a> ScalarBinder<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
-            self.allow_pushdown,
             self.forbid_udf,
         )?;
         type_checker.set_m_cte_bound_ctx(self.m_cte_bound_ctx.clone());
@@ -109,7 +102,7 @@ impl<'a> ScalarBinder<'a> {
         &mut self,
         field: &DataField,
         schema: &DataSchema,
-    ) -> Result<common_expression::Expr> {
+    ) -> Result<databend_common_expression::Expr> {
         if let Some(default_expr) = field.default_expr() {
             let tokens = tokenize_sql(default_expr)?;
             let ast = parse_expr(&tokens, self.dialect)?;
@@ -123,7 +116,7 @@ impl<'a> ScalarBinder<'a> {
         } else {
             // If field data type is nullable, then we'll fill it with null.
             if field.data_type().is_nullable() {
-                let expr = common_expression::Expr::Constant {
+                let expr = databend_common_expression::Expr::Constant {
                     span: None,
                     scalar: Scalar::Null,
                     data_type: field.data_type().clone(),
@@ -132,7 +125,7 @@ impl<'a> ScalarBinder<'a> {
             } else {
                 let data_type = field.data_type().clone();
                 let default_value = Scalar::default_value(&data_type);
-                let expr = common_expression::Expr::Constant {
+                let expr = databend_common_expression::Expr::Constant {
                     span: None,
                     scalar: default_value,
                     data_type,

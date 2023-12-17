@@ -16,11 +16,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::ExprContext;
 use crate::binder::aggregate::AggregateRewriter;
@@ -115,7 +115,6 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
                     if let Some((idx, (alias, _))) = aliases
@@ -267,7 +266,6 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        scalar_binder.allow_pushdown();
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {
             match order.expr {

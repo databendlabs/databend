@@ -1,5 +1,5 @@
 [package]
-name = "common-io"
+name = "databend-common-io"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,10 +14,10 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../exception" }
+databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
-bincode = { version = "2.0.0-rc.1", features = ["serde", "std"] }
+bincode = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -30,4 +30,4 @@ serde = { workspace = true }
 
 [dev-dependencies]
 aho-corasick = { version = "1.0.1" }
-rand = "0.8.5"
+rand = { workspace = true }

@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::*;
-use common_expression::Column;
-use common_expression::FromData;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::*;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::Thread;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::Pipeline;
+use databend_common_base::runtime::Thread;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::Pipeline;
 use minitrace::full_name;
 use minitrace::prelude::*;
 

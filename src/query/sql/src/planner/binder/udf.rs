@@ -12,225 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::mem;
-use std::sync::Arc;
+use databend_common_ast::ast::AlterUDFStmt;
+use databend_common_ast::ast::CreateUDFStmt;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::UDFDefinition;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UserDefinedFunction;
 
-use common_ast::ast::AlterUDFStmt;
-use common_ast::ast::CreateUDFStmt;
-use common_ast::ast::Identifier;
-use common_ast::ast::UDFDefinition;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::udf_client::UDFFlightClient;
-use common_meta_app::principal::LambdaUDF;
-use common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
-use common_meta_app::principal::UDFServer;
-use common_meta_app::principal::UserDefinedFunction;
-
-use crate::optimizer::SExpr;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
-use crate::plans::walk_expr_mut;
 use crate::plans::AlterUDFPlan;
-use crate::plans::BoundColumnRef;
 use crate::plans::CreateUDFPlan;
-use crate::plans::EvalScalar;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
-use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
-use crate::plans::UDFServerCall;
-use crate::plans::Udf;
-use crate::plans::VisitorMut;
 use crate::Binder;
-use crate::ColumnBindingBuilder;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::Visibility;
-
-#[derive(Default, Clone, PartialEq, Eq, Debug)]
-pub struct UdfInfo {
-    /// Arguments of udf functions
-    pub udf_arguments: Vec<ScalarItem>,
-    /// Udf functions
-    pub udf_functions: Vec<ScalarItem>,
-    /// Mapping: (udf function display name) -> (derived column ref)
-    /// This is used to replace udf with a derived column.
-    pub udf_functions_map: HashMap<String, BoundColumnRef>,
-    /// Mapping: (udf function display name) -> (derived index)
-    /// This is used to reuse already generated derived columns
-    pub udf_functions_index_map: HashMap<String, IndexType>,
-}
-
-pub(crate) struct UdfRewriter {
-    udf_info: UdfInfo,
-    metadata: MetadataRef,
-}
-
-impl UdfRewriter {
-    pub(crate) fn new(metadata: MetadataRef) -> Self {
-        Self {
-            udf_info: Default::default(),
-            metadata,
-        }
-    }
-
-    pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut s_expr = s_expr.clone();
-        if !s_expr.children.is_empty() {
-            let mut children = Vec::with_capacity(s_expr.children.len());
-            for child in s_expr.children.iter() {
-                children.push(Arc::new(self.rewrite(child)?));
-            }
-            s_expr.children = children;
-        }
-
-        // Rewrite Udf and its arguments as derived column.
-        match (*s_expr.plan).clone() {
-            RelOperator::EvalScalar(mut plan) => {
-                for item in &plan.items {
-                    // The index of Udf item can be reused.
-                    if let ScalarExpr::UDFServerCall(udf) = &item.scalar {
-                        self.udf_info
-                            .udf_functions_index_map
-                            .insert(udf.display_name.clone(), item.index);
-                    }
-                }
-                for item in &mut plan.items {
-                    self.visit(&mut item.scalar)?;
-                }
-                let child_expr = self.create_udf_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
-                Ok(new_expr)
-            }
-            RelOperator::Filter(mut plan) => {
-                for scalar in &mut plan.predicates {
-                    self.visit(scalar)?;
-                }
-                let child_expr = self.create_udf_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
-                Ok(new_expr)
-            }
-            _ => Ok(s_expr),
-        }
-    }
-
-    fn create_udf_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
-        let udf_info = &mut self.udf_info;
-        if !udf_info.udf_functions.is_empty() {
-            if !udf_info.udf_arguments.is_empty() {
-                // Add an EvalScalar for the arguments of Udf.
-                let mut scalar_items = mem::take(&mut udf_info.udf_arguments);
-                scalar_items.sort_by_key(|item| item.index);
-                let eval_scalar = EvalScalar {
-                    items: scalar_items,
-                };
-                child_expr = Arc::new(SExpr::create_unary(
-                    Arc::new(eval_scalar.into()),
-                    child_expr,
-                ));
-            }
-
-            let udf_plan = Udf {
-                items: mem::take(&mut udf_info.udf_functions),
-            };
-            Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr))
-        } else {
-            child_expr
-        }
-    }
-}
-
-impl<'a> VisitorMut<'a> for UdfRewriter {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        walk_expr_mut(self, expr)?;
-        // replace udf with derived column
-        if let ScalarExpr::UDFServerCall(udf) = expr {
-            if let Some(column_ref) = self.udf_info.udf_functions_map.get(&udf.display_name) {
-                *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
-            } else {
-                return Err(ErrorCode::Internal("Rewrite udf function failed"));
-            }
-        }
-        Ok(())
-    }
-
-    fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) -> Result<()> {
-        for (i, arg) in udf.arguments.iter_mut().enumerate() {
-            if let ScalarExpr::UDFServerCall(_) = arg {
-                return Err(ErrorCode::InvalidArgument(
-                    "the argument of UDF server call can't be a UDF server call",
-                ));
-            }
-            self.visit(arg)?;
-
-            let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
-                column_ref.clone()
-            } else {
-                let name = format!("{}_arg_{}", &udf.display_name, i);
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), arg.data_type()?);
-
-                // Generate a ColumnBinding for each argument of udf function
-                let column = ColumnBindingBuilder::new(
-                    name,
-                    index,
-                    Box::new(arg.data_type()?),
-                    Visibility::Visible,
-                )
-                .build();
-
-                BoundColumnRef {
-                    span: arg.span(),
-                    column,
-                }
-            };
-
-            self.udf_info.udf_arguments.push(ScalarItem {
-                index: new_column_ref.column.index,
-                scalar: arg.clone(),
-            });
-            *arg = new_column_ref.into();
-        }
-
-        let index = match self.udf_info.udf_functions_index_map.get(&udf.display_name) {
-            Some(index) => *index,
-            None => self
-                .metadata
-                .write()
-                .add_derived_column(udf.display_name.clone(), (*udf.return_type).clone()),
-        };
-
-        // Generate a ColumnBinding for the udf function
-        let column = ColumnBindingBuilder::new(
-            udf.display_name.clone(),
-            index,
-            udf.return_type.clone(),
-            Visibility::Visible,
-        )
-        .build();
-
-        let replaced_column = BoundColumnRef {
-            span: udf.span,
-            column,
-        };
-
-        self.udf_info
-            .udf_functions_map
-            .insert(udf.display_name.clone(), replaced_column);
-        self.udf_info.udf_functions.push(ScalarItem {
-            index,
-            scalar: udf.clone().into(),
-        });
-
-        Ok(())
-    }
-}
 
 impl Binder {
     pub(in crate::planner::binder) async fn bind_udf_definition(

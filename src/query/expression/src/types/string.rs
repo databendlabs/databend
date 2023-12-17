@@ -15,10 +15,10 @@
 use std::iter::once;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::trusted_len::TrustedLen;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 

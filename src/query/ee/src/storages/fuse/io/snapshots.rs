@@ -18,11 +18,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::Result;
-use common_storages_fuse::io::SnapshotLiteExtended;
-use common_storages_fuse::io::SnapshotsIO;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::io::SnapshotLiteExtended;
+use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_storages_common_table_meta::meta::Location;
 use log::info;
-use storages_common_table_meta::meta::Location;
 
 #[async_backtrace::framed]
 pub async fn get_snapshot_referenced_segments<T>(

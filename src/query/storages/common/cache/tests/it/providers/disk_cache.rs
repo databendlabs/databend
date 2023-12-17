@@ -18,10 +18,10 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
-use storages_common_cache::DiskCacheError;
-use storages_common_cache::DiskCacheKey;
-use storages_common_cache::DiskCacheResult;
-use storages_common_cache::LruDiskCache as DiskCache;
+use databend_storages_common_cache::DiskCacheError;
+use databend_storages_common_cache::DiskCacheKey;
+use databend_storages_common_cache::DiskCacheResult;
+use databend_storages_common_cache::LruDiskCache as DiskCache;
 use tempfile::TempDir;
 
 struct TestFixture {

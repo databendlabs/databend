@@ -14,8 +14,8 @@
 
 use std::time::Duration;
 
-use common_exception::Result;
-use common_storages_share::get_share_spec_location;
+use databend_common_exception::Result;
+use databend_common_storages_share::get_share_spec_location;
 
 use crate::accessor::truncate_root;
 use crate::accessor::SharingAccessor;

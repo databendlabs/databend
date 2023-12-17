@@ -17,11 +17,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::base::signal_stream;
-use common_base::base::DummySignalStream;
-use common_base::base::SignalStream;
-use common_base::base::SignalType;
-use common_exception::Result;
+use databend_common_base::base::signal_stream;
+use databend_common_base::base::DummySignalStream;
+use databend_common_base::base::SignalStream;
+use databend_common_base::base::SignalType;
+use databend_common_exception::Result;
 use futures::stream::Abortable;
 use futures::StreamExt;
 use log::error;

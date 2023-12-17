@@ -14,27 +14,28 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_users::GrantObjectVisibilityChecker;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -101,19 +102,84 @@ where TablesTable<T>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .list_catalogs(&tenant)
-            .await?
-            .iter()
-            .map(|e| (e.name(), e.clone()))
-            .collect();
+        let catalogs = catalog_mgr.list_catalogs(&tenant).await?;
+        let visibility_checker = ctx.get_visibility_checker().await?;
+
+        Ok(self
+            .get_full_data_from_catalogs(ctx, push_downs, catalogs, visibility_checker)
+            .await)
+    }
+}
+
+impl<const T: bool> TablesTable<T>
+where TablesTable<T>: HistoryAware
+{
+    pub fn schema() -> TableSchemaRef {
+        TableSchemaRefExt::create(vec![
+            TableField::new("catalog", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("engine", TableDataType::String),
+            TableField::new("engine_full", TableDataType::String),
+            TableField::new("cluster_by", TableDataType::String),
+            TableField::new("is_transient", TableDataType::String),
+            TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new(
+                "dropped_on",
+                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            ),
+            TableField::new("updated_on", TableDataType::Timestamp),
+            TableField::new(
+                "num_rows",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "data_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "data_compressed_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "number_of_segments",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "number_of_blocks",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "owner",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+        ])
+    }
+
+    /// dump all the tables from all the catalogs with pushdown, this is used for `SHOW TABLES` command.
+    /// please note that this function is intended to not wrapped with Result<>, because we do not want to
+    /// break ALL the output on reading ANY of the catalog, database or table failed.
+    #[async_backtrace::framed]
+    async fn get_full_data_from_catalogs(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        catalogs: Vec<Arc<dyn Catalog>>,
+        visibility_checker: GrantObjectVisibilityChecker,
+    ) -> DataBlock {
+        let tenant = ctx.get_tenant();
+        let ctls: Vec<(String, Arc<dyn Catalog>)> =
+            catalogs.iter().map(|e| (e.name(), e.clone())).collect();
 
         let mut catalogs = vec![];
         let mut databases = vec![];
 
         let mut database_tables = vec![];
-
-        let visibility_checker = ctx.get_visibility_checker().await?;
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
@@ -142,7 +208,17 @@ where TablesTable<T>: HistoryAware
             }
 
             if dbs.is_empty() {
-                dbs = ctl.list_databases(tenant.as_str()).await?;
+                dbs = match ctl.list_databases(tenant.as_str()).await {
+                    Ok(dbs) => dbs,
+                    Err(err) => {
+                        ctx.push_warning(format!(
+                            "list databases failed on catalog {}: {}",
+                            ctl.name(),
+                            err
+                        ));
+                        vec![]
+                    }
+                }
             }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
@@ -202,7 +278,17 @@ where TablesTable<T>: HistoryAware
                     .as_ref()
                     .map(|v| v.owner_role_name.as_bytes().to_vec()),
             );
-            let stats = tbl.table_statistics().await?;
+            let stats = match tbl.table_statistics().await {
+                Ok(stats) => stats,
+                Err(err) => {
+                    ctx.push_warning(format!(
+                        "get table statistics failed on table {}: {}",
+                        tbl.name(),
+                        err
+                    ));
+                    None
+                }
+            };
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
             number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
             number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));
@@ -263,7 +349,7 @@ where TablesTable<T>: HistoryAware
                 }
             })
             .collect();
-        Ok(DataBlock::new_from_columns(vec![
+        DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
             StringType::from_data(names),
@@ -282,57 +368,6 @@ where TablesTable<T>: HistoryAware
             UInt64Type::from_opt_data(number_of_segments),
             UInt64Type::from_opt_data(number_of_blocks),
             StringType::from_opt_data(owner),
-        ]))
-    }
-}
-
-impl<const T: bool> TablesTable<T>
-where TablesTable<T>: HistoryAware
-{
-    pub fn schema() -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![
-            TableField::new("catalog", TableDataType::String),
-            TableField::new("database", TableDataType::String),
-            TableField::new("name", TableDataType::String),
-            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("engine", TableDataType::String),
-            TableField::new("engine_full", TableDataType::String),
-            TableField::new("cluster_by", TableDataType::String),
-            TableField::new("is_transient", TableDataType::String),
-            TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new(
-                "dropped_on",
-                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
-            ),
-            TableField::new("updated_on", TableDataType::Timestamp),
-            TableField::new(
-                "num_rows",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "data_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "data_compressed_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "index_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "number_of_segments",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "number_of_blocks",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "owner",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
         ])
     }
 

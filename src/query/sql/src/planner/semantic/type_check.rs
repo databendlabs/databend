@@ -17,64 +17,65 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::ColumnID;
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::IntervalKind as ASTIntervalKind;
-use common_ast::ast::Literal;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::Query;
-use common_ast::ast::SubqueryModifier;
-use common_ast::ast::TrimWhere;
-use common_ast::ast::TypeName;
-use common_ast::ast::UnaryOperator;
-use common_ast::ast::Window;
-use common_ast::ast::WindowFrame;
-use common_ast::ast::WindowFrameBound;
-use common_ast::ast::WindowFrameUnits;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::infer_schema_type;
-use common_expression::shrink_scalar;
-use common_expression::type_check;
-use common_expression::type_check::check_number;
-use common_expression::types::decimal::DecimalDataType;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnIndex;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::Expr as EExpr;
-use common_expression::FunctionContext;
-use common_expression::FunctionKind;
-use common_expression::RawExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::is_builtin_function;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_functions::GENERAL_LAMBDA_FUNCTIONS;
-use common_functions::GENERAL_WINDOW_FUNCTIONS;
-use common_license::license::Feature::VirtualColumn;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::principal::LambdaUDF;
-use common_meta_app::principal::UDFDefinition;
-use common_meta_app::principal::UDFServer;
-use common_users::UserApiProvider;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
+use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SubqueryModifier;
+use databend_common_ast::ast::TrimWhere;
+use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowFrame;
+use databend_common_ast::ast::WindowFrameBound;
+use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::decimal::DecimalDataType;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnIndex;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Expr as EExpr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::is_builtin_function;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
+use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use jsonb::keypath::KeyPath;
+use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
@@ -82,7 +83,6 @@ use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
@@ -121,7 +121,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::Visibility;
 
 /// A helper for type checking.
 ///
@@ -151,7 +150,6 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
-    allow_pushdown: bool,
     forbid_udf: bool,
 }
 
@@ -162,7 +160,6 @@ impl<'a> TypeChecker<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
-        allow_pushdown: bool,
         forbid_udf: bool,
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
@@ -179,7 +176,6 @@ impl<'a> TypeChecker<'a> {
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
-            allow_pushdown,
             forbid_udf,
         })
     }
@@ -268,18 +264,26 @@ impl<'a> TypeChecker<'a> {
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         // add internal column binding into `BindContext`
-                        let column = self
-                            .bind_context
-                            .add_internal_column_binding(&column, self.metadata.clone())?;
-                        let data_type = *column.data_type.clone();
-                        (
-                            BoundColumnRef {
-                                span: *span,
-                                column,
-                            }
-                            .into(),
-                            data_type,
-                        )
+                        let column = self.bind_context.add_internal_column_binding(
+                            &column,
+                            self.metadata.clone(),
+                            true,
+                        )?;
+                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
+                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                            let expr = parse_expr(&sql_tokens, self.dialect)?;
+                            return self.resolve(&expr).await;
+                        } else {
+                            let data_type = *column.data_type.clone();
+                            (
+                                BoundColumnRef {
+                                    span: *span,
+                                    column,
+                                }
+                                .into(),
+                                data_type,
+                            )
+                        }
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)
@@ -809,15 +813,6 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InLambdaFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "window functions can not be used in lambda function".to_string(),
-                        )
-                        .set_span(*span));
-                    }
                     // general window function
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
@@ -832,16 +827,6 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InLambdaFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "aggregate functions can not be used in lambda function".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
@@ -863,113 +848,14 @@ impl<'a> TypeChecker<'a> {
                         Box::new((new_agg_func.into(), data_type))
                     }
                 } else if GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InLambdaFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "lambda functions can not be used in lambda function".to_string(),
-                        )
-                        .set_span(*span));
-                    }
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "function {func_name} must have a lambda expression",
                         )));
                     }
                     let lambda = lambda.as_ref().unwrap();
-
-                    let params = lambda
-                        .params
-                        .iter()
-                        .map(|param| param.name.to_lowercase())
-                        .collect::<Vec<_>>();
-
-                    // TODO: support multiple params
-                    if params.len() != 1 {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
-                        )));
-                    }
-
-                    if args.len() != 1 {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "invalid arguments for lambda function, {func_name} expects 1 argument"
-                        )));
-                    }
-                    let box (arg, arg_type) = self.resolve(args[0]).await?;
-
-                    let inner_ty = match arg_type.remove_nullable() {
-                        DataType::Array(box inner_ty) => inner_ty.clone(),
-                        DataType::Null | DataType::EmptyArray => DataType::Null,
-                        _ => {
-                            return Err(ErrorCode::SemanticError(
-                                "invalid arguments for lambda function, argument data type must be array".to_string()
-                            ));
-                        }
-                    };
-                    let box (lambda_expr, lambda_type) =
-                        parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
-
-                    let return_type = if func_name == "array_filter" {
-                        if lambda_type.remove_nullable() == DataType::Boolean {
-                            arg_type.clone()
-                        } else {
-                            return Err(ErrorCode::SemanticError(
-                                "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
-                            ));
-                        }
-                    } else if arg_type.is_nullable() {
-                        DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
-                    } else {
-                        DataType::Array(Box::new(lambda_type))
-                    };
-
-                    match arg_type.remove_nullable() {
-                        // Null and Empty array can convert to ConstantExpr
-                        DataType::Null => Box::new((
-                            ConstantExpr {
-                                span: *span,
-                                value: Scalar::Null,
-                            }
-                            .into(),
-                            DataType::Null,
-                        )),
-                        DataType::EmptyArray => Box::new((
-                            ConstantExpr {
-                                span: *span,
-                                value: Scalar::EmptyArray,
-                            }
-                            .into(),
-                            DataType::EmptyArray,
-                        )),
-                        _ => {
-                            // generate lambda expression
-                            let lambda_field = DataField::new("0", inner_ty.clone());
-                            let lambda_schema = DataSchema::new(vec![lambda_field]);
-
-                            let expr = lambda_expr.type_check(&lambda_schema)?.project_column_ref(
-                                |index| lambda_schema.index_of(&index.to_string()).unwrap(),
-                            );
-                            let (expr, _) =
-                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                            let remote_lambda_expr = expr.as_remote_expr();
-                            let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
-
-                            Box::new((
-                                LambdaFunc {
-                                    span: *span,
-                                    func_name: func_name.to_string(),
-                                    args: vec![arg],
-                                    lambda_expr: Box::new(remote_lambda_expr),
-                                    lambda_display,
-                                    return_type: Box::new(return_type.clone()),
-                                }
-                                .into(),
-                                return_type,
-                            ))
-                        }
-                    }
+                    self.resolve_lambda_function(*span, func_name, &args, lambda)
+                        .await?
                 } else {
                     // Scalar function
                     let params = params
@@ -1165,10 +1051,10 @@ impl<'a> TypeChecker<'a> {
     // TODO: remove this function
     fn rewrite_substring(args: &mut [ScalarExpr]) {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
-            if let common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
+            if let databend_common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: common_expression::Scalar::Number(NumberScalar::Int64(1)),
+                    value: databend_common_expression::Scalar::Number(NumberScalar::Int64(1)),
                 }
                 .into();
             }
@@ -1285,7 +1171,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_literal(
         &self,
         span: Span,
-        literal: &common_ast::ast::Literal,
+        literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (value, data_type) = self.resolve_literal_scalar(literal)?;
 
@@ -1348,7 +1234,7 @@ impl<'a> TypeChecker<'a> {
                 let box (expr, _) = self.resolve(expr).await?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant { scalar, .. } = expr {
+                if let databend_common_expression::Expr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {
                     Err(ErrorCode::SemanticError(
@@ -1479,6 +1365,15 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InLambdaFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "window functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
         // try to resolve window function without arguments first
         if let Ok(window_func) = WindowFuncType::from_name(func_name) {
             return Ok(window_func);
@@ -1704,6 +1599,15 @@ impl<'a> TypeChecker<'a> {
         params: &[Literal],
         args: &[&Expr],
     ) -> Result<(AggregateFunction, DataType)> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InLambdaFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "aggregate functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
         if self.in_aggregate_function {
             if self.in_window_function {
                 // The aggregate function can be in window function call,
@@ -1793,6 +1697,120 @@ impl<'a> TypeChecker<'a> {
         let data_type = agg_func.return_type()?;
 
         Ok((new_agg_func, data_type))
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_lambda_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+        lambda: &Lambda,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InLambdaFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "lambda functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
+        let params = lambda
+            .params
+            .iter()
+            .map(|param| param.name.to_lowercase())
+            .collect::<Vec<_>>();
+
+        // TODO: support multiple params
+        if params.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
+            )));
+        }
+
+        if args.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for lambda function, {func_name} expects 1 argument"
+            )));
+        }
+        let box (arg, arg_type) = self.resolve(args[0]).await?;
+
+        let inner_ty = match arg_type.remove_nullable() {
+            DataType::Array(box inner_ty) => inner_ty.clone(),
+            DataType::Null | DataType::EmptyArray => DataType::Null,
+            _ => {
+                return Err(ErrorCode::SemanticError(
+                    "invalid arguments for lambda function, argument data type must be array"
+                        .to_string(),
+                ));
+            }
+        };
+        let box (lambda_expr, lambda_type) =
+            parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
+
+        let return_type = if func_name == "array_filter" {
+            if lambda_type.remove_nullable() == DataType::Boolean {
+                arg_type.clone()
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
+                ));
+            }
+        } else if arg_type.is_nullable() {
+            DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
+        } else {
+            DataType::Array(Box::new(lambda_type))
+        };
+
+        let (lambda_func, data_type) = match arg_type.remove_nullable() {
+            // Null and Empty array can convert to ConstantExpr
+            DataType::Null => (
+                ConstantExpr {
+                    span,
+                    value: Scalar::Null,
+                }
+                .into(),
+                DataType::Null,
+            ),
+            DataType::EmptyArray => (
+                ConstantExpr {
+                    span,
+                    value: Scalar::EmptyArray,
+                }
+                .into(),
+                DataType::EmptyArray,
+            ),
+            _ => {
+                // generate lambda expression
+                let lambda_field = DataField::new("0", inner_ty.clone());
+                let lambda_schema = DataSchema::new(vec![lambda_field]);
+
+                let expr = lambda_expr
+                    .type_check(&lambda_schema)?
+                    .project_column_ref(|index| {
+                        lambda_schema.index_of(&index.to_string()).unwrap()
+                    });
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let remote_lambda_expr = expr.as_remote_expr();
+                let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
+
+                (
+                    LambdaFunc {
+                        span,
+                        func_name: func_name.to_string(),
+                        args: vec![arg],
+                        lambda_expr: Box::new(remote_lambda_expr),
+                        lambda_display,
+                        return_type: Box::new(return_type.clone()),
+                    }
+                    .into(),
+                    return_type,
+                )
+            }
+        };
+
+        Ok(Box::new((lambda_func, data_type)))
     }
 
     /// Resolve function call.
@@ -1885,7 +1903,7 @@ impl<'a> TypeChecker<'a> {
         // the implicitly casted literal values, e.g. `timestamp > '2001-01-01'`
         // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
         let folded_args = match &expr {
-            common_expression::Expr::FunctionCall {
+            databend_common_expression::Expr::FunctionCall {
                 args: checked_args, ..
             } => {
                 let mut folded_args = Vec::with_capacity(args.len());
@@ -2445,60 +2463,6 @@ impl<'a> TypeChecker<'a> {
                     Err(e) => Err(e),
                 })
             }
-            // Try convert get function of Variant data type into a virtual column
-            ("get", args) => {
-                if !self.allow_pushdown {
-                    return None;
-                }
-                let mut paths = VecDeque::new();
-                let mut get_args = args.to_vec();
-                loop {
-                    if get_args.len() != 2 {
-                        break;
-                    }
-                    if let Expr::Literal { lit, .. } = get_args[1] {
-                        match lit {
-                            Literal::UInt64(_) | Literal::String(_) => {
-                                paths.push_front((span, lit.clone()));
-                            }
-                            _ => {
-                                break;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                    if let Expr::FunctionCall { name, args, .. } = get_args[0] {
-                        if name.name != "get" {
-                            return None;
-                        }
-                        get_args = args.iter().collect();
-                        continue;
-                    } else if let Expr::ColumnRef { .. } = get_args[0] {
-                        let box (scalar, data_type) = self.resolve(get_args[0]).await.ok()?;
-                        if let DataType::Variant = data_type.remove_nullable() {
-                            if let ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                ref column, ..
-                            }) = scalar
-                            {
-                                let column_entry =
-                                    self.metadata.read().column(column.index).clone();
-                                if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                                    return self
-                                        .resolve_variant_map_access_pushdown(
-                                            column.clone(),
-                                            base_column,
-                                            &mut paths,
-                                        )
-                                        .await;
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-                None
-            }
             ("array_sort", args) => {
                 if args.is_empty() || args.len() > 3 {
                     return None;
@@ -2642,7 +2606,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: common_expression::Scalar::String(" ".as_bytes().to_vec()),
+                value: databend_common_expression::Scalar::String(" ".as_bytes().to_vec()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -2657,7 +2621,7 @@ impl<'a> TypeChecker<'a> {
     /// Resolve literal values.
     pub fn resolve_literal_scalar(
         &self,
-        literal: &common_ast::ast::Literal,
+        literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(Scalar, DataType)>> {
         let value = match literal {
             Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
@@ -3038,45 +3002,31 @@ impl<'a> TypeChecker<'a> {
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (mut scalar, data_type) = self.resolve(expr).await?;
+        // Variant type can be converted to `get_by_keypath` function.
+        if data_type.remove_nullable() == DataType::Variant {
+            return self.resolve_variant_map_access(scalar, &mut paths).await;
+        }
+
         let mut table_data_type = infer_schema_type(&data_type)?;
         // If it is a tuple column, convert it to the internal column specified by the paths.
-        // If it is a variant column, try convert it to a virtual column.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
                 column_entry
             {
+                // Use data type from meta to get the field names of tuple type.
                 table_data_type = data_type.clone();
-            }
-            if self.allow_pushdown {
-                match table_data_type.remove_nullable() {
-                    TableDataType::Tuple { .. } => {
-                        let box (inner_scalar, _inner_data_type) = self
-                            .resolve_tuple_map_access_pushdown(
-                                expr.span(),
-                                column.clone(),
-                                &mut table_data_type,
-                                &mut paths,
-                            )
-                            .await?;
-                        scalar = inner_scalar;
-                    }
-                    TableDataType::Variant => {
-                        if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                            if let Some(result) = self
-                                .resolve_variant_map_access_pushdown(
-                                    column.clone(),
-                                    base_column,
-                                    &mut paths,
-                                )
-                                .await
-                            {
-                                return result;
-                            }
-                        }
-                    }
-                    _ => {}
+                if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
+                    let box (inner_scalar, _inner_data_type) = self
+                        .resolve_tuple_map_access_pushdown(
+                            expr.span(),
+                            column.clone(),
+                            &mut table_data_type,
+                            &mut paths,
+                        )
+                        .await?;
+                    scalar = inner_scalar;
                 }
             }
         }
@@ -3315,89 +3265,51 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
+    // Rewrite variant map access as `get_by_keypath` function
     #[async_recursion::async_recursion]
-    async fn resolve_variant_map_access_pushdown(
+    async fn resolve_variant_map_access(
         &mut self,
-        column: ColumnBinding,
-        base_column: BaseTableColumn,
+        scalar: ScalarExpr,
         paths: &mut VecDeque<(Span, Literal)>,
-    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self
-            .metadata
-            .read()
-            .table(base_column.table_index)
-            .table()
-            .support_virtual_columns()
-        {
-            return None;
-        }
-
-        let license_manager = get_license_manager();
-        if license_manager
-            .manager
-            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)
-            .is_err()
-        {
-            return None;
-        }
-
-        let mut name = String::new();
-        name.push_str(&base_column.column_name);
-        let mut json_paths = Vec::with_capacity(paths.len());
-        for (_, path) in paths.iter() {
-            let json_path = match path {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut key_paths = Vec::with_capacity(paths.len());
+        for (span, path) in paths.iter() {
+            let key_path = match path {
                 Literal::UInt64(idx) => {
-                    name.push('[');
-                    name.push_str(&idx.to_string());
-                    name.push(']');
-                    Scalar::Number(NumberScalar::UInt64(*idx))
+                    if let Ok(i) = i32::try_from(*idx) {
+                        KeyPath::Index(i)
+                    } else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "path index is overflow, max allowed value is {}, but got {}",
+                            i32::MAX,
+                            idx
+                        ))
+                        .set_span(*span));
+                    }
                 }
-                Literal::String(field) => {
-                    name.push(':');
-                    name.push_str(field.as_ref());
-                    Scalar::String(field.clone().into_bytes())
-                }
+                Literal::String(field) => KeyPath::QuotedName(std::borrow::Cow::Borrowed(field)),
                 _ => unreachable!(),
             };
-            json_paths.push(json_path);
+            key_paths.push(key_path);
         }
+        let keypaths = KeyPaths { paths: key_paths };
 
-        let mut index = 0;
-        // Check for duplicate virtual columns
-        for table_column in self
-            .metadata
-            .read()
-            .virtual_columns_by_table_index(base_column.table_index)
-        {
-            if table_column.name() == name {
-                index = table_column.index();
-                break;
-            }
-        }
-
-        if index == 0 {
-            return None;
-        }
-
-        paths.clear();
-
-        let data_type = DataType::Nullable(Box::new(DataType::Variant));
-        let virtual_column = ColumnBindingBuilder::new(
-            name,
-            index,
-            Box::new(data_type.clone()),
-            Visibility::InVisible,
-        )
-        .database_name(column.database_name.clone())
-        .table_name(column.table_name.clone())
-        .table_index(Some(base_column.table_index))
-        .build();
-        let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+        let keypaths_str = format!("{}", keypaths);
+        let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
             span: None,
-            column: virtual_column,
+            value: Scalar::String(keypaths_str.into_bytes()),
         });
+        let args = vec![scalar, path_scalar];
 
-        Some(Ok(Box::new((scalar, data_type))))
+        Ok(Box::new((
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "get_by_keypath".to_string(),
+                params: vec![],
+                arguments: args,
+            }),
+            DataType::Nullable(Box::new(DataType::Variant)),
+        )))
     }
 
     #[allow(clippy::only_used_in_recursion)]
@@ -3687,10 +3599,10 @@ impl<'a> TypeChecker<'a> {
 
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
-        expr: &common_expression::Expr<Index>,
+        expr: &databend_common_expression::Expr<Index>,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            if let (common_expression::Expr::Constant { scalar, .. }, _) =
+            if let (databend_common_expression::Expr::Constant { scalar, .. }, _) =
                 ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
                 let scalar = shrink_scalar(scalar);
@@ -3711,11 +3623,11 @@ impl<'a> TypeChecker<'a> {
 }
 
 pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataType> {
-    let sql_tokens = common_ast::parser::tokenize_sql(name)?;
-    let backtrace = common_ast::Backtrace::new();
-    match common_ast::parser::expr::type_name(common_ast::Input(
+    let sql_tokens = databend_common_ast::parser::tokenize_sql(name)?;
+    let backtrace = databend_common_ast::Backtrace::new();
+    match databend_common_ast::parser::expr::type_name(databend_common_ast::Input(
         &sql_tokens,
-        common_ast::Dialect::default(),
+        databend_common_ast::Dialect::default(),
         &backtrace,
     )) {
         Ok((_, typename)) => resolve_type_name(&typename, not_null),

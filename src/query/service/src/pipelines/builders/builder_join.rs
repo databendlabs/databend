@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Barrier;
-use common_exception::Result;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sinks::Sinker;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_pipeline_transforms::processors::ProfileStub;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::executor::physical_plans::HashJoin;
-use common_sql::executor::physical_plans::MaterializedCte;
-use common_sql::executor::physical_plans::RangeJoin;
-use common_sql::executor::PhysicalPlan;
-use common_sql::ColumnBinding;
-use common_sql::IndexType;
+use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::Sinker;
+use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use databend_common_pipeline_transforms::processors::ProfileStub;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MaterializedCte;
+use databend_common_sql::executor::physical_plans::RangeJoin;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::ColumnBinding;
+use databend_common_sql::IndexType;
 
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -124,18 +124,20 @@ impl PipelineBuilder {
     }
 
     pub(crate) fn build_join(&mut self, join: &HashJoin) -> Result<()> {
-        let state = self.build_join_state(join)?;
+        let id = join.probe.get_table_index();
+        let state = self.build_join_state(join, id)?;
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)
     }
 
-    fn build_join_state(&mut self, join: &HashJoin) -> Result<Arc<HashJoinState>> {
+    fn build_join_state(&mut self, join: &HashJoin, id: IndexType) -> Result<Arc<HashJoinState>> {
         HashJoinState::try_create(
             self.ctx.clone(),
             join.build.output_schema()?,
             &join.build_projections,
             HashJoinDesc::create(join)?,
             &join.probe_to_build,
+            id,
         )
     }
 

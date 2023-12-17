@@ -19,14 +19,14 @@ use std::sync::Arc;
 
 use byte_unit::Byte;
 use byte_unit::ByteUnit;
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_hashtable::hash2bucket;
-use common_pipeline_core::query_spill_prefix;
-use common_sql::plans::JoinType;
-use common_storage::DataOperator;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::hash2bucket;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_sql::plans::JoinType;
+use databend_common_storage::DataOperator;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;

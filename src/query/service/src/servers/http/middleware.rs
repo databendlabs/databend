@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_metrics::http::metrics_incr_http_request_count;
-use common_metrics::http::metrics_incr_http_response_panics_count;
-use common_metrics::http::metrics_incr_http_slow_request_count;
-use common_storages_fuse::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::http::metrics_incr_http_request_count;
+use databend_common_metrics::http::metrics_incr_http_response_panics_count;
+use databend_common_metrics::http::metrics_incr_http_slow_request_count;
+use databend_common_storages_fuse::TableContext;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;

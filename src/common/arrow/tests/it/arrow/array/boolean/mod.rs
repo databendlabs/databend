@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BooleanArray;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::error::Result;
 
 mod mutable;
 
@@ -120,10 +121,7 @@ fn from_trusted_len_iter() {
 
 #[test]
 fn try_from_trusted_len_iter() {
-    let iter = std::iter::repeat(true)
-        .take(2)
-        .map(Some)
-        .map(common_arrow::arrow::error::Result::Ok);
+    let iter = std::iter::repeat(true).take(2).map(Some).map(Result::Ok);
     let a = BooleanArray::try_from_trusted_len_iter(iter.clone()).unwrap();
     assert_eq!(a.len(), 2);
     let a = unsafe { BooleanArray::try_from_trusted_len_iter_unchecked(iter).unwrap() };

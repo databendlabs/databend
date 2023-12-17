@@ -16,9 +16,9 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_functions::aggregates::StateAddr;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
+use databend_common_functions::aggregates::StateAddr;
+use databend_common_hashtable::HashtableEntryRefLike;
+use databend_common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::group_by::Area;

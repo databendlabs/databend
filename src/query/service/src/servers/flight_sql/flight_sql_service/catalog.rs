@@ -21,10 +21,10 @@ use arrow_flight::utils::batches_to_flight_data;
 use arrow_schema::DataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
-use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use futures_util::stream;
 use log::warn;
 use tonic::Status;
@@ -49,7 +49,8 @@ impl CatalogInfoProvider {
         ctx: Arc<dyn TableContext>,
         catalog_name: Option<String>,
         database_name: Option<String>,
-    ) -> common_exception::Result<(Vec<String>, Vec<String>, Vec<String>, Vec<String>)> {
+    ) -> databend_common_exception::Result<(Vec<String>, Vec<String>, Vec<String>, Vec<String>)>
+    {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = if let Some(catalog_name) = catalog_name {

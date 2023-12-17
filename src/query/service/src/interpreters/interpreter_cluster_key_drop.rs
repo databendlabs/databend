@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_sql::plans::DropTableClusterKeyPlan;
+use databend_common_exception::Result;
+use databend_common_sql::plans::DropTableClusterKeyPlan;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
 use crate::optimizer::RelExpr;
@@ -87,6 +87,7 @@ impl JoinNode {
             marker_index: None,
             from_correlated_subquery: false,
             need_hold_hash_table: false,
+            broadcast: false,
         });
         let children = self
             .children

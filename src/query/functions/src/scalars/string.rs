@@ -18,22 +18,24 @@ use std::io::Write;
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use bstr::ByteSlice;
-use common_expression::types::number::SimpleDomain;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::ArrayType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::vectorize_with_builder_3_arg;
-use common_expression::vectorize_with_builder_4_arg;
-use common_expression::EvalContext;
-use common_expression::FunctionDomain;
-use common_expression::FunctionRegistry;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -259,6 +261,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_u8(*x);
                 }
             });
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
+        "to_uuid",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
+            let uuid = Uuid::from_u128(arg as u128);
+            let str = uuid.as_simple().to_string();
+            output.put_slice(str.as_bytes());
             output.commit_row();
         }),
     );
@@ -875,8 +888,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 pub(crate) mod soundex {
-    use common_expression::types::string::StringColumnBuilder;
-    use common_expression::EvalContext;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::EvalContext;
 
     pub fn soundex(val: &[u8], output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
         let mut last = None;

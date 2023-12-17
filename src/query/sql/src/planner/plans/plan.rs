@@ -16,13 +16,13 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
-use common_catalog::query_kind::QueryKind;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
 use super::SetSecondaryRolesPlan;
 use crate::optimizer::SExpr;
@@ -317,6 +317,8 @@ pub enum RewriteKind {
     ShowProcessList,
     ShowEngines,
     ShowIndexes,
+
+    ShowLocks,
 
     ShowCatalogs,
     ShowDatabases,

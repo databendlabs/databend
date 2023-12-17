@@ -59,6 +59,11 @@ impl<R: Rows> Cursor<R> {
     pub fn last(&self) -> R::Item<'_> {
         self.rows.row(self.num_rows - 1)
     }
+
+    #[inline]
+    pub fn num_rows(&self) -> usize {
+        self.num_rows
+    }
 }
 
 impl<R: Rows> Ord for Cursor<R> {

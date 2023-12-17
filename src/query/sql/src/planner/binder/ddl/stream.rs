@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::CreateStreamStmt;
-use common_ast::ast::DescribeStreamStmt;
-use common_ast::ast::DropStreamStmt;
-use common_ast::ast::ShowLimit;
-use common_ast::ast::ShowStreamsStmt;
-use common_ast::ast::StreamPoint;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
+use databend_common_ast::ast::CreateStreamStmt;
+use databend_common_ast::ast::DescribeStreamStmt;
+use databend_common_ast::ast::DropStreamStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowStreamsStmt;
+use databend_common_ast::ast::StreamPoint;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use log::debug;
 
 use crate::binder::Binder;
@@ -152,24 +152,24 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-
         if let Some(catalog) = catalog {
             let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
             select_builder.with_filter(format!("catalog = '{catalog}'"));
         }
+        if let Some(limit) = limit {
+            match limit {
+                ShowLimit::Like { pattern } => {
+                    select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                }
+                ShowLimit::Where { selection } => {
+                    select_builder.with_filter(format!("({selection})"));
+                }
+            }
+        }
 
-        let query = match limit {
-            None => select_builder.build(),
-            Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
-                select_builder.build()
-            }
-            Some(ShowLimit::Where { selection }) => {
-                select_builder.with_filter(format!("({selection})"));
-                select_builder.build()
-            }
-        };
+        let query = select_builder.build();
         debug!("show streams rewrite to: {:?}", query);
+
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),

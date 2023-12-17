@@ -25,31 +25,32 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
-use common_base::base::mask_string;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::AuthType;
-use common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
-use common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
-use common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
-use common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
-use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
-use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
-use common_meta_app::tenant::TenantQuota;
-use common_storage::StorageConfig as InnerStorageConfig;
-use common_tracing::Config as InnerLogConfig;
-use common_tracing::FileConfig as InnerFileLogConfig;
-use common_tracing::OTLPConfig as InnerOTLPLogConfig;
-use common_tracing::QueryLogConfig as InnerQueryLogConfig;
-use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_tracing::TracingConfig as InnerTracingConfig;
-use common_users::idm_config::IDMConfig as InnerIDMConfig;
+use databend_common_base::base::mask_string;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
+use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
+use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
+use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::StorageConfig as InnerStorageConfig;
+use databend_common_tracing::Config as InnerLogConfig;
+use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
+use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
+use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
+use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::TracingConfig as InnerTracingConfig;
+use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -1801,6 +1802,9 @@ pub struct LogConfig {
     pub query: QueryLogConfig,
 
     #[clap(flatten)]
+    pub profile: ProfileLogConfig,
+
+    #[clap(flatten)]
     pub tracing: TracingConfig,
 }
 
@@ -1861,6 +1865,17 @@ impl TryInto<InnerLogConfig> for LogConfig {
             }
         }
 
+        let mut profile: InnerProfileLogConfig = self.profile.try_into()?;
+        if profile.on && profile.dir.is_empty() && profile.otlp_endpoint.is_empty() {
+            if file.dir.is_empty() {
+                return Err(ErrorCode::InvalidConfig(
+                    "`dir` or `file.dir` must be set when `profile.dir` is empty".to_string(),
+                ));
+            } else {
+                profile.dir = format!("{}/profiles", &file.dir);
+            }
+        }
+
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
         Ok(InnerLogConfig {
@@ -1868,6 +1883,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             stderr: self.stderr.try_into()?,
             otlp,
             query,
+            profile,
             tracing,
         })
     }
@@ -1882,6 +1898,7 @@ impl From<InnerLogConfig> for LogConfig {
             stderr: inner.stderr.into(),
             otlp: inner.otlp.into(),
             query: inner.query.into(),
+            profile: inner.profile.into(),
             tracing: inner.tracing.into(),
 
             // Deprecated fields
@@ -1918,6 +1935,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-format", value_name = "VALUE", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
+
+    /// Log file max
+    #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
+    #[serde(rename = "limit")]
+    pub file_limit: usize,
 }
 
 impl Default for FileLogConfig {
@@ -1935,6 +1957,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
+            limit: self.file_limit,
         })
     }
 }
@@ -1946,6 +1969,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_level: inner.level,
             file_dir: inner.dir,
             file_format: inner.format,
+            file_limit: inner.limit,
         }
     }
 }
@@ -2113,6 +2137,63 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
             log_query_dir: inner.dir,
             log_query_otlp_endpoint: inner.otlp_endpoint,
             log_query_otlp_labels: inner.labels,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct ProfileLogConfig {
+    #[clap(long = "log-profile-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[serde(rename = "on")]
+    pub log_profile_on: bool,
+
+    /// Profile Log file dir
+    #[clap(long = "log-profile-dir", value_name = "VALUE", default_value = "")]
+    #[serde(rename = "dir")]
+    pub log_profile_dir: String,
+
+    /// Profile Log OpenTelemetry OTLP endpoint
+    #[clap(
+        long = "log-profile-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = ""
+    )]
+    #[serde(rename = "otlp_endpoint")]
+    pub log_profile_otlp_endpoint: String,
+
+    /// Profile Log Labels
+    #[clap(skip)]
+    #[serde(rename = "labels")]
+    pub log_profile_otlp_labels: BTreeMap<String, String>,
+}
+
+impl Default for ProfileLogConfig {
+    fn default() -> Self {
+        InnerProfileLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerProfileLogConfig> for ProfileLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerProfileLogConfig> {
+        Ok(InnerProfileLogConfig {
+            on: self.log_profile_on,
+            dir: self.log_profile_dir,
+            otlp_endpoint: self.log_profile_otlp_endpoint,
+            labels: self.log_profile_otlp_labels,
+        })
+    }
+}
+
+impl From<InnerProfileLogConfig> for ProfileLogConfig {
+    fn from(inner: InnerProfileLogConfig) -> Self {
+        Self {
+            log_profile_on: inner.on,
+            log_profile_dir: inner.dir,
+            log_profile_otlp_endpoint: inner.otlp_endpoint,
+            log_profile_otlp_labels: inner.labels,
         }
     }
 }

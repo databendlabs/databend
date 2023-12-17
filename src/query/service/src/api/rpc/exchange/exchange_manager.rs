@@ -19,20 +19,20 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::Thread;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_grpc::ConnectionFactory;
-use common_pipeline_core::processors::profile::Profile;
-use common_profile::SharedProcessorProfiles;
-use common_sql::executor::PhysicalPlan;
+use databend_common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_profile::SharedProcessorProfiles;
+use databend_common_sql::executor::PhysicalPlan;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -371,15 +371,15 @@ impl DataExchangeManager {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
 
-                    statistics_receiver.shutdown(may_error.is_some());
+                    statistics_receiver.shutdown(may_error.is_err());
                     ctx.get_exchange_manager().on_finished_query(&query_id);
                     statistics_receiver.wait_shutdown()?;
 
                     on_finished(may_error)?;
 
                     match may_error {
-                        None => Ok(()),
-                        Some(error_code) => Err(error_code.clone()),
+                        Ok(_) => Ok(()),
+                        Err(error_code) => Err(error_code.clone()),
                     }
                 });
 
@@ -772,7 +772,9 @@ impl QueryCoordinator {
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
-            statistics_sender.shutdown(executor.execute().err());
+            let res = executor.execute().err();
+            let profiles = executor.get_inner().get_profiles();
+            statistics_sender.shutdown(res, profiles);
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id);

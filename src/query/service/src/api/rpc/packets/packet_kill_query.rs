@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_meta_types::NodeInfo;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_meta_types::NodeInfo;
 
 use crate::api::rpc::flight_actions::KillQuery;
 use crate::api::rpc::packets::packet::create_client;

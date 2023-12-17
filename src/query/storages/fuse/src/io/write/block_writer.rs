@@ -17,25 +17,25 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::native::write::NativeWriter;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use databend_common_arrow::native::write::NativeWriter;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
-use storages_common_blocks::blocks_to_parquet;
-use storages_common_index::BloomIndex;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::table::TableCompression;
 
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
@@ -71,7 +71,7 @@ pub fn serialize_block(
             let mut writer = NativeWriter::new(
                 buf,
                 arrow_schema,
-                common_arrow::native::write::WriteOptions {
+                databend_common_arrow::native::write::WriteOptions {
                     default_compression: write_settings.table_compression.into(),
                     max_page_size: Some(write_settings.max_page_size),
                     default_compress_ratio,

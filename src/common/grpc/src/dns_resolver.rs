@@ -17,21 +17,21 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::task;
 use std::task::Poll;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::tokio;
-use common_base::base::tokio::task::JoinHandle;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper::Uri;
 use log::info;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 use tonic::transport::Certificate;
@@ -46,8 +46,8 @@ pub struct DNSResolver {
     inner: TokioAsyncResolver,
 }
 
-static INSTANCE: Lazy<Result<Arc<DNSResolver>>> =
-    Lazy::new(|| match TokioAsyncResolver::tokio_from_system_conf() {
+static INSTANCE: LazyLock<Result<Arc<DNSResolver>>> =
+    LazyLock::new(|| match TokioAsyncResolver::tokio_from_system_conf() {
         Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
             "DNS resolver create error: {}",
             error

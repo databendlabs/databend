@@ -15,9 +15,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_storages_fuse::FuseTable;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::EntryMode;

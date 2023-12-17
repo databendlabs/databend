@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::BlockMetaInfo;
-use common_expression::DataBlock;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::DataBlock;
 
 #[derive(Debug)]
 pub struct BlockBatch {

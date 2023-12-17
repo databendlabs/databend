@@ -17,32 +17,32 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::ColumnID;
-use common_ast::ast::ColumnPosition;
-use common_ast::ast::Expr;
-use common_ast::ast::Expr::Array;
-use common_ast::ast::GroupBy;
-use common_ast::ast::Identifier;
-use common_ast::ast::Join;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_ast::ast::Query;
-use common_ast::ast::SelectStmt;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::SetExpr;
-use common_ast::ast::SetOperator;
-use common_ast::ast::TableReference;
-use common_ast::Visitor;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Expr::Array;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectStmt;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::SetOperator;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::Visitor;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::warn;
 
 use super::sort::OrderItem;
@@ -50,7 +50,6 @@ use super::Finder;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
-use crate::binder::udf::UdfRewriter;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
@@ -72,6 +71,8 @@ use crate::plans::Visitor as _;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::UdfRewriter;
+use crate::VirtualColumnRewriter;
 use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
@@ -299,6 +300,11 @@ impl Binder {
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
+        // rewrite variant inner fields as virtual columns
+        let mut virtual_column_rewriter =
+            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
+        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
 
@@ -435,7 +441,6 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
 
         let f = |scalar: &ScalarExpr| {

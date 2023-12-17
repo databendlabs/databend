@@ -16,25 +16,25 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_ast::ast::Join;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_ast::ast::JoinOperator::Inner;
-use common_ast::ast::JoinOperator::RightAnti;
-use common_ast::ast::JoinOperator::RightOuter;
-use common_ast::ast::MatchOperation;
-use common_ast::ast::MatchedClause;
-use common_ast::ast::MergeIntoStmt;
-use common_ast::ast::TableReference;
-use common_ast::ast::UnmatchedClause;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnType;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::FieldIndex;
-use common_expression::TableSchemaRef;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::JoinOperator::Inner;
+use databend_common_ast::ast::JoinOperator::RightAnti;
+use databend_common_ast::ast::JoinOperator::RightOuter;
+use databend_common_ast::ast::MatchOperation;
+use databend_common_ast::ast::MatchedClause;
+use databend_common_ast::ast::MergeIntoStmt;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UnmatchedClause;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 
@@ -288,8 +288,11 @@ impl Binder {
             },
         };
 
-        let column_binding = target_context
-            .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
+        let column_binding = target_context.add_internal_column_binding(
+            &row_id_column_binding,
+            self.metadata.clone(),
+            true,
+        )?;
 
         target_expr =
             SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index);

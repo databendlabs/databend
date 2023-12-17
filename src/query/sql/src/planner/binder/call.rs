@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::CallStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::CallStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::binder::Binder;
 use crate::plans::Plan;

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
-use storages_common_blocks::blocks_to_parquet;
-use storages_common_table_meta::table::TableCompression;
 use uuid::Uuid;
 
 pub(super) struct ResultCacheWriter {
