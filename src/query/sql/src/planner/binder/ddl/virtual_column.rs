@@ -28,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
