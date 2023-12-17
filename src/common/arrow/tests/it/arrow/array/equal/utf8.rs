@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::offset::Offset;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::offset::Offset;
 
 use super::binary_cases;
 use super::test_equal;

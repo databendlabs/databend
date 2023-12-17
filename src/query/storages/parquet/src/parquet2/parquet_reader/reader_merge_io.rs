@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use bytes::Bytes;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::FieldIndex;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
 
 pub struct OwnerMemory {
     chunks: HashMap<usize, Bytes>,

@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::WindowDefinition;
-use common_ast::ast::WindowSpec;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_ast::ast::WindowDefinition;
+use databend_common_ast::ast::WindowSpec;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 
 use super::select::SelectList;
 use crate::binder::ColumnBinding;

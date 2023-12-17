@@ -19,9 +19,9 @@ use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::schema as mt;
-use common_meta_app::share;
-use common_protos::pb;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::share;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;

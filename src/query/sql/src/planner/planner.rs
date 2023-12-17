@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::Statement;
-use common_ast::parser::parse_sql;
-use common_ast::parser::token::Token;
-use common_ast::parser::token::TokenKind;
-use common_ast::parser::token::Tokenizer;
-use common_ast::walk_statement_mut;
-use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::token::Token;
+use databend_common_ast::parser::token::TokenKind;
+use databend_common_ast::parser::token::Tokenizer;
+use databend_common_ast::walk_statement_mut;
+use databend_common_ast::Dialect;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;

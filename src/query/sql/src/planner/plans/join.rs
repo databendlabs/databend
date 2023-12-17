@@ -18,10 +18,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::F64;
-use common_storage::Datum;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::F64;
+use databend_common_storage::Datum;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;

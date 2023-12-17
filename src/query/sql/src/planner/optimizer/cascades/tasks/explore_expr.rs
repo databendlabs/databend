@@ -15,8 +15,8 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use educe::Educe;
 
 use super::apply_rule::ApplyRuleTask;

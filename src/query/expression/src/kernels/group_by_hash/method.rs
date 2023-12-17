@@ -16,10 +16,10 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ptr::NonNull;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::FastHash;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::FastHash;
 use ethnum::i256;
 use ethnum::u256;
 

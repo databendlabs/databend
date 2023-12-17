@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_meta_app::principal::OnErrorMode;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::OnErrorMode;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;

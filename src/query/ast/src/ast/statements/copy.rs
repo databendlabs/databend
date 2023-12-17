@@ -21,11 +21,11 @@ use std::io::ErrorKind;
 use std::io::Result;
 use std::str::FromStr;
 
-use common_base::base::mask_string;
-use common_exception::ErrorCode;
-use common_meta_app::principal::CopyOptions;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use databend_common_base::base::mask_string;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::CopyOptions;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use itertools::Itertools;
 use url::Url;
 
@@ -126,7 +126,7 @@ impl CopyIntoTableStmt {
     pub fn apply_to_copy_option(
         &self,
         copy_options: &mut CopyOptions,
-    ) -> common_exception::Result<()> {
+    ) -> databend_common_exception::Result<()> {
         copy_options.on_error =
             OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
 
@@ -387,7 +387,7 @@ impl UriLocation {
         uri: String,
         part_prefix: String,
         conns: BTreeMap<String, String>,
-    ) -> common_exception::Result<Self> {
+    ) -> databend_common_exception::Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
             return Ok(UriLocation::new(
@@ -399,8 +399,9 @@ impl UriLocation {
             ));
         }
 
-        let parsed = Url::parse(&uri)
-            .map_err(|e| common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e)))?;
+        let parsed = Url::parse(&uri).map_err(|e| {
+            databend_common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e))
+        })?;
 
         let protocol = parsed.scheme().to_string();
 
@@ -413,7 +414,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or_else(|| common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| databend_common_exception::ErrorCode::BadArguments("invalid uri"))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()

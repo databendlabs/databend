@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_grpc::GrpcClaim;
-use common_grpc::GrpcToken;
+use databend_common_exception::Result;
+use databend_common_grpc::GrpcClaim;
+use databend_common_grpc::GrpcToken;
 
 #[test]
 fn test_flight_token() -> Result<()> {

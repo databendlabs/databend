@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::Config;
 
@@ -50,7 +50,7 @@ impl Config {
                     data_cache_storage = "disk"
                     ...
                     [cache.disk]
-                    max_bytes = [MAX_BYTES]  
+                    max_bytes = [MAX_BYTES]
                     ...
                   "#,
                 "CACHE_DISK_MAX_BYTES",
@@ -89,7 +89,7 @@ impl Config {
                     data_cache_storage = "disk"
                     ...
                     [cache.disk]
-                    max_bytes = [MAX_BYTES]  
+                    max_bytes = [MAX_BYTES]
                     path = [PATH]
                     ...
                     "#,
@@ -184,7 +184,7 @@ impl Config {
             format!(
                 "
  --------------------------------------------------------------
- *** {cli_arg_name} *** is obsoleted : 
+ *** {cli_arg_name} *** is obsoleted :
  --------------------------------------------------------------
    alternative command-line options : {alternative_cli_arg}
    alternative environment variable : {alternative_env_var}

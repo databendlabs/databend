@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_meta_app::principal::StageFile;
-use common_meta_app::principal::StageInfo;
-use common_meta_types::MatchSeq;
-use common_meta_types::SeqV;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageFile;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {

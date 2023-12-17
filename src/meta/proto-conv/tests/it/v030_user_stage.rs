@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use minitrace::func_name;
 
 use crate::common;

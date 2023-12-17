@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::Span;
+use databend_common_exception::Span;
 
 use crate::parser::quote::quote_ident;
 

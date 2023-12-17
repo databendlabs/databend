@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::KVMeta;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 
 use crate::sm_v002::marked::InternalSeq;
 use crate::sm_v002::marked::Marked;

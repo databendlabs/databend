@@ -14,10 +14,10 @@
 
 use std::fmt::Display;
 
-use common_exception::Result;
-use common_exception::Span;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
 
 use crate::ast::*;
 use crate::visitors::Visitor;

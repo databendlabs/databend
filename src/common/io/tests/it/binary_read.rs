@@ -14,8 +14,8 @@
 
 use std::io::Cursor;
 
-use common_exception::Result;
-use common_io::prelude::*;
+use databend_common_exception::Result;
+use databend_common_io::prelude::*;
 
 #[test]
 fn test_write_and_read() -> Result<()> {

@@ -15,15 +15,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
-use storages_common_index::RangeIndex;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
     // returns true, if target should NOT be pruned (false positive allowed)

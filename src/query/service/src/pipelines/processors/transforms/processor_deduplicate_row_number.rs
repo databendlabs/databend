@@ -14,20 +14,20 @@
 
 use std::collections::HashSet;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::UInt64Type;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::PipeItem;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use itertools::Itertools;
 use log::info;
 
@@ -114,8 +114,8 @@ pub(crate) fn get_row_number(data_block: &DataBlock, row_number_idx: usize) -> B
     );
     let value = row_number_col.value.try_downcast::<UInt64Type>().unwrap();
     match value {
-        common_expression::Value::Scalar(scalar) => Buffer::from(vec![scalar]),
-        common_expression::Value::Column(column) => column,
+        databend_common_expression::Value::Scalar(scalar) => Buffer::from(vec![scalar]),
+        databend_common_expression::Value::Column(column) => column,
     }
 }
 

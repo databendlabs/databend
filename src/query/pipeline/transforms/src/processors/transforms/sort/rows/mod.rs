@@ -16,11 +16,11 @@ mod common;
 mod simple;
 
 pub use common::*;
-use common_exception::Result;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
 pub use simple::*;
 
 /// Convert columns to rows.

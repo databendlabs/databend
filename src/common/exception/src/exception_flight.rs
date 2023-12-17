@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_arrow::arrow_format::flight::data::FlightData;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;

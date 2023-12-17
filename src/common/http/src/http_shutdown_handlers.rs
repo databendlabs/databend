@@ -16,10 +16,10 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::broadcast;
-use common_base::base::tokio::sync::oneshot;
-use common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::broadcast;
+use databend_common_base::base::tokio::sync::oneshot;
+use databend_common_base::base::tokio::task::JoinHandle;
 use futures::future::Either;
 use futures::FutureExt;
 use log::error;
@@ -80,7 +80,7 @@ impl HttpShutdownHandler {
         }
 
         let (tx, rx) = oneshot::channel();
-        let join_handle = common_base::base::tokio::spawn(
+        let join_handle = databend_common_base::base::tokio::spawn(
             async_backtrace::location!().frame(
                 poem::Server::new_with_acceptor(acceptor)
                     .name(self.service_name.clone())

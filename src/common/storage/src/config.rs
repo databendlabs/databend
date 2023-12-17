@@ -16,11 +16,11 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::sync::Arc;
 
-use common_auth::RefreshableToken;
-use common_auth::TokenFile;
-use common_base::base::tokio::sync::RwLock;
-use common_base::base::GlobalInstance;
-use common_meta_app::storage::StorageParams;
+use databend_common_auth::RefreshableToken;
+use databend_common_auth::TokenFile;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::GlobalInstance;
+use databend_common_meta_app::storage::StorageParams;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -58,7 +58,7 @@ impl ShareTableConfig {
         share_endpoint_address: &str,
         token_file: &str,
         default_token: String,
-    ) -> common_exception::Result<()> {
+    ) -> databend_common_exception::Result<()> {
         GlobalInstance::set(Self::try_create(
             share_endpoint_address,
             token_file,
@@ -72,7 +72,7 @@ impl ShareTableConfig {
         share_endpoint_address: &str,
         token_file: &str,
         default_token: String,
-    ) -> common_exception::Result<ShareTableConfig> {
+    ) -> databend_common_exception::Result<ShareTableConfig> {
         let share_endpoint_address = if share_endpoint_address.is_empty() {
             None
         } else {

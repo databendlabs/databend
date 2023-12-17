@@ -21,11 +21,11 @@ use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio::time::sleep;
-use common_base::runtime::catch_unwind;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;

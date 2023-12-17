@@ -1,5 +1,5 @@
 [package]
-name = "common-formats"
+name = "databend-common-formats"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -24,19 +24,18 @@ roaring = { version = "0.10.1", features = ["serde"] }
 serde_json = { workspace = true }
 
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
-common-io = { path = "../../common/io" }
-common-meta-app = { path = "../../meta/app" }
-common-settings = { path = "../settings" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-io = { path = "../../common/io" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-settings = { path = "../settings" }
+databend-storages-common-blocks = { path = "../storages/common/blocks" }
+databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 jsonb = { workspace = true }
 
-storages-common-blocks = { path = "../storages/common/blocks" }
-storages-common-table-meta = { path = "../storages/common/table_meta" }
-
 [dev-dependencies]
-common-arrow = { path = "../../common/arrow" }
+databend-common-arrow = { path = "../../common/arrow" }
 tokio = { workspace = true }
 
 pretty_assertions = "1.3.0"

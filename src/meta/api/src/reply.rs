@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::protobuf::RaftReply;
-use common_meta_types::InvalidReply;
-use common_meta_types::MetaAPIError;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnReply;
+use databend_common_meta_types::protobuf::RaftReply;
+use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::TxnOpResponse;
+use databend_common_meta_types::TxnReply;
 use serde::de::DeserializeOwned;
 
 use crate::compat_errors::Compatible;
@@ -84,9 +84,9 @@ mod tests {
         i: i32,
     }
 
-    use common_meta_types::protobuf::RaftReply;
-    use common_meta_types::MetaAPIError;
-    use common_meta_types::MetaNetworkError;
+    use databend_common_meta_types::protobuf::RaftReply;
+    use databend_common_meta_types::MetaAPIError;
+    use databend_common_meta_types::MetaNetworkError;
 
     use crate::reply::reply_to_api_result;
 

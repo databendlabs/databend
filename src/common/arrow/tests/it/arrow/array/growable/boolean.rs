@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableBoolean;
-use common_arrow::arrow::array::BooleanArray;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableBoolean;
+use databend_common_arrow::arrow::array::BooleanArray;
 
 #[test]
 fn test_bool() {

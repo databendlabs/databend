@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_hook;
 mod grant;
 mod metrics;
 mod query_log;
-mod refresh_hook;
 mod stream;
 mod table;
 mod task;
 mod util;
 
-pub use compact_hook::*;
 pub use grant::validate_grant_object_exists;
 pub use query_log::InterpreterQueryLog;
-pub use refresh_hook::hook_refresh;
-pub use refresh_hook::RefreshDesc;
 pub use stream::build_update_stream_meta_seq;
 pub use table::check_referenced_computed_columns;
 pub use task::get_client_config;

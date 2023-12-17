@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use storages_common_table_meta::meta::Location;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_storages_common_table_meta::meta::Location;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnPlan {

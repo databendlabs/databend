@@ -16,9 +16,9 @@
 mod iterator;
 mod mutable;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::*;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::*;
 
 #[test]
 fn debug() {

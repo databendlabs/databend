@@ -44,6 +44,11 @@ impl Progress {
             .fetch_add(progress_values.bytes, Ordering::Relaxed);
     }
 
+    pub fn set(&self, progress_values: &ProgressValues) {
+        self.rows.store(progress_values.rows, Ordering::Relaxed);
+        self.bytes.store(progress_values.bytes, Ordering::Relaxed);
+    }
+
     pub fn fetch(&self) -> ProgressValues {
         let rows = self.rows.fetch_min(0, Ordering::SeqCst);
         let bytes = self.bytes.fetch_min(0, Ordering::SeqCst);

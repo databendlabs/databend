@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_base::base::*;
+use databend_common_base::base::*;
 use log::info;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;

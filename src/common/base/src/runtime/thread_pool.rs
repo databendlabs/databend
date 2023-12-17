@@ -14,7 +14,7 @@
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::runtime::Thread;
 

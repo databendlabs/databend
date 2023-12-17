@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::*;
-use common_expression::types::*;
-use common_expression::with_number_mapped_type;
-use common_expression::Scalar;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -31,7 +31,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunctionRef;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, BorshSerialize, BorshDeserialize)]
 struct KurtosisState {
     pub n: u64,
     pub sum: f64,
@@ -102,11 +102,11 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        deserialize_state::<Self>(reader)
+        borsh_deserialize_state::<Self>(reader)
     }
 }
 

@@ -12,10 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 #[test]

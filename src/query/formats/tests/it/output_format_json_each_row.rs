@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::number::Float32Type;
-use common_expression::types::number::Int32Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::Float32Type;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;

@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::schema::TableStatistics;
-use common_meta_app::schema::TruncateTableReq;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use uuid::Uuid;
 
 use crate::FuseTable;

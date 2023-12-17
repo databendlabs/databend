@@ -14,13 +14,13 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::UserInfo;
-use common_users::CustomClaims;
-use common_users::EnsureUser;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_users::CustomClaims;
+use databend_common_users::EnsureUser;
+use databend_common_users::UserApiProvider;
 use databend_query::auth::AuthMgr;
 use databend_query::auth::Credential;
 use databend_query::sessions::TableContext;

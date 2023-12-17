@@ -15,17 +15,17 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeType;
-use common_settings::Settings;
-use common_users::GrantObjectVisibilityChecker;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_settings::Settings;
+use databend_common_users::GrantObjectVisibilityChecker;
 use log::debug;
 use parking_lot::RwLock;
 

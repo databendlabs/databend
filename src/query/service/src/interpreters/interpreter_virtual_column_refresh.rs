@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::Result;
-use common_license::license::Feature::VirtualColumn;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_sql::plans::RefreshVirtualColumnPlan;
-use common_storages_fuse::FuseTable;
-use virtual_column::get_virtual_column_handler;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature::VirtualColumn;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_sql::plans::RefreshVirtualColumnPlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_virtual_column::get_virtual_column_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

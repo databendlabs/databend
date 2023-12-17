@@ -16,14 +16,14 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_meta_app::principal::StageInfo;
-use common_storage::init_stage_operator;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {

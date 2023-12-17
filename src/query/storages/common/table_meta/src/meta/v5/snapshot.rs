@@ -16,10 +16,10 @@ use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::uuid::Uuid;
-use common_exception::Result;
-use common_expression::TableSchema;
-use common_io::prelude::BinaryRead;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
+use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 

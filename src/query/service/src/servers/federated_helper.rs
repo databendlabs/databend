@@ -14,9 +14,9 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
 use regex::Regex;
 
 pub type LazyBlockFunc = fn(&str) -> Option<(TableSchemaRef, DataBlock)>;
