@@ -25,7 +25,9 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Entry;
+use databend_common_meta_types::EvalExpireTime;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
@@ -385,7 +387,10 @@ impl SMV002 {
     pub(crate) async fn upsert_kv_primary_index(
         &mut self,
         upsert_kv: &UpsertKV,
+        cmd_ctx: &CmdContext,
     ) -> Result<(Marked<Vec<u8>>, Marked<Vec<u8>>), io::Error> {
+        let kv_meta = upsert_kv.value_meta.as_ref().map(|m| m.to_kv_meta(cmd_ctx));
+
         let prev = self.levels.str_map().get(&upsert_kv.key).await?.clone();
 
         if upsert_kv.seq.match_seq(prev.seq()).is_err() {
@@ -395,24 +400,17 @@ impl SMV002 {
         let (prev, mut result) = match &upsert_kv.value {
             Operation::Update(v) => {
                 self.levels
-                    .set(
-                        upsert_kv.key.clone(),
-                        Some((v.clone(), upsert_kv.value_meta.clone())),
-                    )
+                    .set(upsert_kv.key.clone(), Some((v.clone(), kv_meta.clone())))
                     .await?
             }
             Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await?,
             Operation::AsIs => {
-                MapApiExt::update_meta(
-                    &mut self.levels,
-                    upsert_kv.key.clone(),
-                    upsert_kv.value_meta.clone(),
-                )
-                .await?
+                MapApiExt::update_meta(&mut self.levels, upsert_kv.key.clone(), kv_meta.clone())
+                    .await?
             }
         };
 
-        let expire_ms = upsert_kv.get_expire_at_ms().unwrap_or(u64::MAX);
+        let expire_ms = kv_meta.eval_expire_at_ms();
         if expire_ms < self.expire_cursor.time_ms {
             // The record has expired, delete it at once.
             //

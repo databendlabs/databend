@@ -24,8 +24,8 @@ use databend_common_meta_types::new_log_id;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::EntryPayload;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use test_harness::test;
@@ -154,7 +154,9 @@ fn ent(index: u64, key: &str, expire: Option<u64>, time_ms: Option<u64>) -> Entr
         payload: EntryPayload::Normal(LogEntry {
             txid: None,
             time_ms,
-            cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes()).with(KVMeta::new(expire))),
+            cmd: Cmd::UpsertKV(
+                UpsertKV::update(key, key.as_bytes()).with(MetaSpec::new(expire, None)),
+            ),
         }),
     }
 }
