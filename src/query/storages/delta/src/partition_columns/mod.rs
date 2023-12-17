@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(lazy_cell)]
-#![feature(impl_trait_in_assoc_type)]
-#![allow(clippy::diverging_sub_expression)]
+mod pushdown_transform;
+mod values_serde;
 
-mod dal;
-mod partition;
-mod partition_columns;
-mod table;
-mod table_source;
-
-pub use table::DeltaTable;
+pub use pushdown_transform::get_pushdown_without_partition_columns;
+pub use values_serde::get_partition_values;
