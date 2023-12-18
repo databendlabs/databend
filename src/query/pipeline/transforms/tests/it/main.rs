@@ -12,9 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core_intrinsics)]
-#![feature(int_roundings)]
-#![feature(binary_heap_as_slice)]
-#![feature(let_chains)]
-
-pub mod processors;
+mod merger;
