@@ -53,8 +53,7 @@ async fn do_vacuum_drop_table(
 
     let ret = match dry_run_limit {
         None => {
-            let _ = operator.remove_all(&dir).await;
-
+            operator.remove_all(&dir).await?;
             Ok(None)
         }
         Some(dry_run_limit) => {
