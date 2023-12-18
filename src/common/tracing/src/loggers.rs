@@ -19,10 +19,10 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use opentelemetry::logs::AnyValue;
-use opentelemetry::logs::Logger as _;
+use opentelemetry::logs::Logger;
+use opentelemetry::logs::LoggerProvider;
 use opentelemetry::logs::Severity;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::logs::Logger;
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
@@ -96,39 +96,48 @@ impl log::Log for MinitraceLogger {
     fn flush(&self) {}
 }
 
-pub(crate) struct OpenTelemetryOTLPLogWriter {
-    logger: Logger,
+pub(crate) struct OpenTelemetryLogger {
+    logger: opentelemetry_sdk::logs::Logger,
+    // keep provider alive
+    provider: opentelemetry_sdk::logs::LoggerProvider,
 }
 
-pub(crate) fn new_otlp_log_writer(
-    endpoint: &str,
-    labels: BTreeMap<String, String>,
-) -> OpenTelemetryOTLPLogWriter {
-    let kvs = labels
-        .into_iter()
-        .map(|(k, v)| opentelemetry::KeyValue::new(k, v))
-        .collect::<Vec<_>>();
-    let log_config = opentelemetry_sdk::logs::Config {
-        resource: Cow::Owned(opentelemetry::sdk::Resource::new(kvs)),
-    };
-    let export_config = opentelemetry_otlp::ExportConfig {
-        endpoint: endpoint.to_string(),
-        protocol: opentelemetry_otlp::Protocol::Grpc,
-        timeout: Duration::from_secs(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT),
-    };
-    let exporter = opentelemetry_otlp::new_exporter()
-        .tonic()
-        .with_export_config(export_config);
-    let logger = opentelemetry_otlp::new_pipeline()
-        .logging()
-        .with_exporter(exporter)
-        .with_log_config(log_config)
-        .install_batch(opentelemetry_sdk::runtime::Tokio)
-        .expect("install query log otlp pipeline");
-    OpenTelemetryOTLPLogWriter { logger }
+impl OpenTelemetryLogger {
+    pub(crate) fn new(
+        name: impl ToString,
+        endpoint: &str,
+        labels: BTreeMap<String, String>,
+    ) -> Self {
+        let kvs = labels
+            .into_iter()
+            .map(|(k, v)| opentelemetry::KeyValue::new(k, v))
+            .collect::<Vec<_>>();
+        let export_config = opentelemetry_otlp::ExportConfig {
+            endpoint: endpoint.to_string(),
+            protocol: opentelemetry_otlp::Protocol::Grpc,
+            timeout: Duration::from_secs(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT),
+        };
+        let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
+            opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_export_config(export_config)
+                .into();
+        let exporter = exporter_builder
+            .build_log_exporter()
+            .expect("build log exporter");
+        let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
+            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+            .with_config(
+                opentelemetry_sdk::logs::Config::default()
+                    .with_resource(opentelemetry_sdk::Resource::new(kvs)),
+            )
+            .build();
+        let logger = provider.versioned_logger(name.to_string(), None, None, None);
+        Self { logger, provider }
+    }
 }
 
-impl log::Log for OpenTelemetryOTLPLogWriter {
+impl log::Log for OpenTelemetryLogger {
     fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
         // we handle level and target filter with fern
         true
@@ -144,17 +153,10 @@ impl log::Log for OpenTelemetryOTLPLogWriter {
     }
 
     fn flush(&self) {
-        match self.logger.provider() {
-            Some(provider) => {
-                let result = provider.force_flush();
-                for r in result {
-                    if let Err(e) = r {
-                        eprintln!("flush log failed: {}", e);
-                    }
-                }
-            }
-            None => {
-                eprintln!("flush log failed: logger provider is None");
+        let result = self.provider.force_flush();
+        for r in result {
+            if let Err(e) = r {
+                eprintln!("flush log failed: {}", e);
             }
         }
     }
