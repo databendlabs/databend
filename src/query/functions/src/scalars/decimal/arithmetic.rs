@@ -26,7 +26,6 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use databend_common_expression::Value;
 use ethnum::i256;
 
 #[derive(Copy, Clone, Debug)]
@@ -136,10 +135,7 @@ macro_rules! binary_decimal {
                 )
             }
         };
-        match result {
-            Value::Scalar(x) => Value::Scalar(T::upcast_scalar(x, $size)),
-            Value::Column(x) => Value::Column(T::upcast_column(x, $size)),
-        }
+        result.upcast_decimal($size)
     }};
 }
 

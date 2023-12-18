@@ -117,10 +117,7 @@ where
     let a = a.try_downcast().unwrap();
     let b = b.try_downcast().unwrap();
     let value = vectorize_2_arg::<DecimalType<T>, DecimalType<T>, BooleanType>(f)(a, b, ctx);
-    match value {
-        Value::Scalar(x) => Value::Scalar(BooleanType::upcast_scalar(x)),
-        Value::Column(x) => Value::Column(BooleanType::upcast_column(x)),
-    }
+    value.upcast()
 }
 
 pub fn register_decimal_compare_op(registry: &mut FunctionRegistry) {

@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
+use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
+use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
@@ -67,9 +67,10 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
-                eval: Box::new(move |args, _ctx| {
+                eval: Box::new(move |args, ctx| {
                     decimal_math(
                         &args[0],
+                        ctx,
                         from_type.clone(),
                         dest_decimal_type,
                         scale,
@@ -107,121 +108,146 @@ enum RoundMode {
     Ceil,
 }
 
-fn decimal_round_positive<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
-where T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T> {
+fn decimal_round_positive<T>(
+    value: ValueRef<DecimalType<T>>,
+    source_scale: i64,
+    target_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<T>>
+where
+    T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T>,
+{
     let power_of_ten = T::e((source_scale - target_scale) as u32);
     let addition = power_of_ten / T::from(2);
-
-    values
-        .iter()
-        .map(|input| {
-            let input = if input < &T::zero() {
-                *input - addition
-            } else {
-                *input + addition
-            };
-            input / power_of_ten
-        })
-        .collect()
+    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
+        if a < T::zero() {
+            (a - addition) / power_of_ten
+        } else {
+            (a + addition) / power_of_ten
+        }
+    })(value, ctx)
 }
 
-fn decimal_round_negative<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
-where T: Decimal
+fn decimal_round_negative<T>(
+    value: ValueRef<DecimalType<T>>,
+    source_scale: i64,
+    target_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<T>>
+where
+    T: Decimal
         + From<i8>
         + DivAssign
         + Div<Output = T>
         + Add<Output = T>
         + Sub<Output = T>
-        + Mul<Output = T> {
+        + Mul<Output = T>,
+{
     let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
     let addition = divide_power_of_ten / T::from(2);
     let multiply_power_of_ten = T::e((-target_scale) as u32);
 
-    values
-        .iter()
-        .map(|input| {
-            let input = if input < &T::zero() {
-                *input - addition
-            } else {
-                *input + addition
-            };
-            input / divide_power_of_ten * multiply_power_of_ten
-        })
-        .collect()
+    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
+        let a = if a < T::zero() {
+            a - addition
+        } else {
+            a + addition
+        };
+        a / divide_power_of_ten * multiply_power_of_ten
+    })(value, ctx)
 }
 
 // if round mode is ceil, truncate should add one value
-fn decimal_truncate_positive<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
-where T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T> {
+fn decimal_truncate_positive<T>(
+    value: ValueRef<DecimalType<T>>,
+    source_scale: i64,
+    target_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<T>>
+where
+    T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T>,
+{
     let power_of_ten = T::e((source_scale - target_scale) as u32);
-
-    values.iter().map(|input| *input / power_of_ten).collect()
+    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| a / power_of_ten)(value, ctx)
 }
 
-fn decimal_truncate_negative<T>(values: &[T], source_scale: i64, target_scale: i64) -> Vec<T>
-where T: Decimal
+fn decimal_truncate_negative<T>(
+    value: ValueRef<DecimalType<T>>,
+    source_scale: i64,
+    target_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<T>>
+where
+    T: Decimal
         + From<i8>
         + DivAssign
         + Div<Output = T>
         + Add<Output = T>
         + Sub<Output = T>
-        + Mul<Output = T> {
+        + Mul<Output = T>,
+{
     let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
     let multiply_power_of_ten = T::e((-target_scale) as u32);
 
-    values
-        .iter()
-        .map(|input| *input / divide_power_of_ten * multiply_power_of_ten)
-        .collect()
+    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
+        a / divide_power_of_ten * multiply_power_of_ten
+    })(value, ctx)
 }
 
-fn decimal_floor<T>(values: &[T], source_scale: i64) -> Vec<T>
-where T: Decimal
+fn decimal_floor<T>(
+    value: ValueRef<DecimalType<T>>,
+    source_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<T>>
+where
+    T: Decimal
         + From<i8>
         + DivAssign
         + Div<Output = T>
         + Add<Output = T>
         + Sub<Output = T>
-        + Mul<Output = T> {
+        + Mul<Output = T>,
+{
     let power_of_ten = T::e(source_scale as u32);
 
-    values
-        .iter()
-        .map(|input| {
-            if input < &T::zero() {
-                // below 0 we ceil the number (e.g. -10.5 -> -11)
-                ((*input + T::one()) / power_of_ten) - T::one()
-            } else {
-                *input / power_of_ten
-            }
-        })
-        .collect()
+    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
+        if a < T::zero() {
+            // below 0 we ceil the number (e.g. -10.5 -> -11)
+            ((a + T::one()) / power_of_ten) - T::one()
+        } else {
+            a / power_of_ten
+        }
+    })(value, ctx)
 }
 
-fn decimal_ceil<T>(values: &[T], source_scale: i64) -> Vec<T>
-where T: Decimal
+fn decimal_ceil<T>(
+    value: ValueRef<DecimalType<T>>,
+    source_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<T>>
+where
+    T: Decimal
         + From<i8>
         + DivAssign
         + Div<Output = T>
         + Add<Output = T>
         + Sub<Output = T>
-        + Mul<Output = T> {
+        + Mul<Output = T>,
+{
     let power_of_ten = T::e(source_scale as u32);
 
-    values
-        .iter()
-        .map(|input| {
-            if input <= &T::zero() {
-                *input / power_of_ten
-            } else {
-                ((*input - T::one()) / power_of_ten) + T::one()
-            }
-        })
-        .collect()
+    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
+        if a <= T::zero() {
+            a / power_of_ten
+        } else {
+            ((a - T::one()) / power_of_ten) + T::one()
+        }
+    })(value, ctx)
 }
 
 fn decimal_math(
     arg: &ValueRef<AnyType>,
+    ctx: &mut EvalContext,
     from_type: DataType,
     dest_type: DecimalDataType,
     target_scale: i64,
@@ -234,47 +260,30 @@ fn decimal_math(
         return arg.clone().to_owned();
     }
 
-    let mut is_scalar = false;
-    let column = match arg {
-        ValueRef::Column(column) => column.clone(),
-        ValueRef::Scalar(s) => {
-            is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &from_type);
-            builder.build()
-        }
-    };
-
     let none_negative = target_scale >= 0;
 
-    let result = with_decimal_mapped_type!(|DECIMAL_TYPE| match from_decimal_type {
+    with_decimal_mapped_type!(|DECIMAL_TYPE| match from_decimal_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
-            let (buffer, _) = DECIMAL_TYPE::try_downcast_column(&column).unwrap();
+            let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
 
             let result = match (none_negative, mode) {
                 (true, RoundMode::Round) => {
-                    decimal_round_positive::<_>(&buffer, source_scale, target_scale)
+                    decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
                 }
                 (true, RoundMode::Truncate) => {
-                    decimal_truncate_positive::<_>(&buffer, source_scale, target_scale)
+                    decimal_truncate_positive::<_>(value, source_scale, target_scale, ctx)
                 }
                 (false, RoundMode::Round) => {
-                    decimal_round_negative::<_>(&buffer, source_scale, target_scale)
+                    decimal_round_negative::<_>(value, source_scale, target_scale, ctx)
                 }
                 (false, RoundMode::Truncate) => {
-                    decimal_truncate_negative::<_>(&buffer, source_scale, target_scale)
+                    decimal_truncate_negative::<_>(value, source_scale, target_scale, ctx)
                 }
-                (_, RoundMode::Floor) => decimal_floor::<_>(&buffer, source_scale),
-                (_, RoundMode::Ceil) => decimal_ceil::<_>(&buffer, source_scale),
+                (_, RoundMode::Floor) => decimal_floor::<_>(value, source_scale, ctx),
+                (_, RoundMode::Ceil) => decimal_ceil::<_>(value, source_scale, ctx),
             };
-            DECIMAL_TYPE::to_column(result, dest_type.size())
-        }
-    });
 
-    let result = Column::Decimal(result);
-    if is_scalar {
-        let scalar = result.index(0).unwrap();
-        Value::Scalar(scalar.to_owned())
-    } else {
-        Value::Column(result)
-    }
+            result.upcast_decimal(dest_type.size())
+        }
+    })
 }

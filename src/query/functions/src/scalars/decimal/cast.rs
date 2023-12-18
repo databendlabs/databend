@@ -317,11 +317,7 @@ fn convert_to_decimal(
                 }
                 _ => unreachable!("to_decimal not support this DataType"),
             };
-
-            match result {
-                Value::Scalar(x) => Value::Scalar(T::upcast_scalar(x, size)),
-                Value::Column(x) => Value::Column(T::upcast_column(x, size)),
-            }
+            result.upcast_decimal(size)
         }
     })
 }
@@ -493,9 +489,9 @@ fn get_round_val<T: Decimal>(x: T, scale: u32, ctx: &mut EvalContext) -> Option<
         // Checking whether numbers need to be added or subtracted to calculate rounding
         if let Some(r) = x.checked_rem(T::e(scale)) {
             if let Some(m) = r.checked_div(T::e(scale - 1)) {
-                if m >= T::from_i64(5i64) {
+                if m >= T::from_i128(5i64) {
                     round_val = Some(T::one());
-                } else if m <= T::from_i64(-5i64) {
+                } else if m <= T::from_i128(-5i64) {
                     round_val = Some(T::minus_one());
                 }
             }
