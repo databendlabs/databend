@@ -44,7 +44,7 @@ impl Profile {
             wait_time: AtomicU64::new(0),
             plan_id: scope.as_ref().map(|x| x.id),
             plan_name: scope.as_ref().map(|x| x.name.clone()),
-            plan_parent_id: scope.as_ref().map(|x| x.parent_id),
+            plan_parent_id: scope.as_ref().and_then(|x| x.parent_id),
         }
     }
 }
@@ -109,14 +109,14 @@ impl Drop for PlanScopeGuard {
 pub struct PlanScope {
     pub id: u32,
     pub name: String,
-    pub parent_id: u32,
+    pub parent_id: Option<u32>,
 }
 
 impl PlanScope {
     pub fn create(id: u32, name: String) -> PlanScope {
         PlanScope {
             id,
-            parent_id: 0,
+            parent_id: None,
             name,
         }
     }
