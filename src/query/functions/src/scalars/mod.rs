@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionRegistry;
 
 mod arithmetic;
@@ -40,13 +39,6 @@ pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
 pub use comparison::PatternType;
 pub use comparison::ALL_COMP_FUNC_NAMES;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::vectorize_2_arg;
-use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
@@ -68,56 +60,4 @@ pub fn register(registry: &mut FunctionRegistry) {
     decimal::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
-}
-
-pub fn binary_op<'a, I1, I2, O, F>(
-    a: ValueRef<'a, I1>,
-    b: ValueRef<'a, I2>,
-    func: F,
-    ctx: &mut EvalContext,
-) -> Value<AnyType>
-where
-    I1: ArgType,
-    I2: ArgType,
-    O: ArgType,
-    F: Fn(
-            <I1 as ValueType>::ScalarRef<'_>,
-            <I2 as ValueType>::ScalarRef<'_>,
-            &mut EvalContext,
-        ) -> <O as ValueType>::Scalar
-        + Copy
-        + Send
-        + Sync,
-{
-    let result = vectorize_2_arg::<I1, I2, O>(func)(a, b, ctx);
-    match result {
-        Value::Scalar(x) => Value::Scalar(O::upcast_scalar(x)),
-        Value::Column(x) => Value::Column(O::upcast_column(x)),
-    }
-}
-
-pub fn binary_op_with_builder<'a, I1, I2, O, F>(
-    a: ValueRef<'a, I1>,
-    b: ValueRef<'a, I2>,
-    func: F,
-    ctx: &mut EvalContext,
-) -> Value<AnyType>
-where
-    I1: ArgType,
-    I2: ArgType,
-    O: ArgType,
-    F: Fn(
-            <I1 as ValueType>::ScalarRef<'_>,
-            <I2 as ValueType>::ScalarRef<'_>,
-            &mut O::ColumnBuilder,
-            &mut EvalContext,
-        ) + Copy
-        + Send
-        + Sync,
-{
-    let result = vectorize_with_builder_2_arg::<I1, I2, O>(func)(a, b, ctx);
-    match result {
-        Value::Scalar(x) => Value::Scalar(O::upcast_scalar(x)),
-        Value::Column(x) => Value::Column(O::upcast_column(x)),
-    }
 }

@@ -305,6 +305,7 @@ pub trait Decimal:
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
+    fn from_i128(value: i128) -> Self;
     fn from_u64(value: u64) -> Self;
     fn from_i64(value: i64) -> Self;
     fn de_binary(bytes: &mut &[u8]) -> Self;
@@ -440,6 +441,10 @@ impl Decimal for i128 {
         } else {
             Self::zero()
         }
+    }
+
+    fn from_i128(value: i128) -> Self {
+        value
     }
 
     fn from_u64(value: u64) -> Self {
@@ -609,6 +614,10 @@ impl Decimal for i256 {
 
     fn from_float(value: f64) -> Self {
         value.as_i256()
+    }
+
+    fn from_i128(value: i128) -> Self {
+        i256::from(value)
     }
 
     fn from_u64(value: u64) -> Self {

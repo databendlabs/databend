@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
+use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -29,8 +30,6 @@ use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use ethnum::i256;
-
-use crate::scalars::binary_op;
 
 macro_rules! register_decimal_compare_op {
     ($registry: expr, $name: expr, $op: ident, $domain_op: tt) => {
@@ -117,7 +116,11 @@ where
 {
     let a = a.try_downcast().unwrap();
     let b = b.try_downcast().unwrap();
-    binary_op::<DecimalType<T>, DecimalType<T>, BooleanType, _>(a, b, f, ctx)
+    let value = vectorize_2_arg::<DecimalType<T>, DecimalType<T>, BooleanType>(f)(a, b, ctx);
+    match value {
+        Value::Scalar(x) => Value::Scalar(BooleanType::upcast_scalar(x)),
+        Value::Column(x) => Value::Column(BooleanType::upcast_column(x)),
+    }
 }
 
 pub fn register_decimal_compare_op(registry: &mut FunctionRegistry) {

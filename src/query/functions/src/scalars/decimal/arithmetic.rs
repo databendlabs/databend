@@ -17,7 +17,8 @@ use std::sync::Arc;
 
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
-use databend_common_expression::Column;
+use databend_common_expression::vectorize_2_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -25,14 +26,8 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use ethnum::i256;
-
-use crate::scalars::binary_op;
-use crate::scalars::binary_op_with_builder;
 
 #[derive(Copy, Clone, Debug)]
 enum ArithmeticOp {
@@ -87,7 +82,7 @@ macro_rules! binary_decimal {
         let zero = T::zero();
         let one = T::one();
 
-        if matches!($arithmetic_op, ArithmeticOp::Divide) {
+        let result = if matches!($arithmetic_op, ArithmeticOp::Divide) {
             let scale_a = $left.scale();
             let scale_b = $right.scale();
 
@@ -100,7 +95,7 @@ macro_rules! binary_decimal {
             let multiplier = T::e(scale_mul as u32);
             let div = T::e(scale_div as u32);
 
-            let f = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
+            let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
                 if std::intrinsics::unlikely(b == zero) {
                     ctx.set_error(result.len(), "divided by zero");
                     result.push(one);
@@ -109,15 +104,15 @@ macro_rules! binary_decimal {
                 }
             };
 
-            binary_op_with_builder::<DecimalType<T>, DecimalType<T>, DecimalType<T>, _>(
-                a, b, f, $ctx,
+            vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                a, b, $ctx,
             )
         } else {
             if overflow {
                 let min_for_precision = T::min_for_precision($size.precision);
                 let max_for_precision = T::max_for_precision($size.precision);
 
-                let f = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
+                let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
                     let t = a.$op(b);
                     if t < min_for_precision || t > max_for_precision {
                         ctx.set_error(
@@ -130,13 +125,21 @@ macro_rules! binary_decimal {
                     }
                 };
 
-                binary_op_with_builder::<DecimalType<T>, DecimalType<T>, DecimalType<T>, _>(
-                    a, b, f, $ctx,
+                vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                    a, b, $ctx
                 )
             } else {
-                let f = |l: T, r: T, _ctx: &mut EvalContext| l.$op(r);
-                binary_op::<DecimalType<T>, DecimalType<T>, DecimalType<T>, _>(a, b, f, $ctx)
+                let func = |l: T, r: T, _ctx: &mut EvalContext| l.$op(r);
+
+                vectorize_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                    a, b, $ctx
+                )
             }
+        };
+
+        match result {
+            Value::Scalar(x) => Value::Scalar(T::upcast_scalar(x, $size)),
+            Value::Column(x) => Value::Column(T::upcast_column(x, $size)),
         }
     }};
 }
@@ -249,8 +252,8 @@ macro_rules! register_decimal_binary_op {
             let decimal_b =
                 DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
 
-            let is_multiply = matches!($arithmetic_op, ArithmeticOperator::Multiply);
-            let is_divide = matches!($arithmetic_op, ArithmeticOperator::Divide);
+            let is_multiply = matches!($arithmetic_op, ArithmeticOp::Multiply);
+            let is_divide = matches!($arithmetic_op, ArithmeticOp::Divide);
             let is_plus_minus = !is_multiply && !is_divide;
 
             // left, right will unify to same width decimal, both 256 or both 128
@@ -265,7 +268,7 @@ macro_rules! register_decimal_binary_op {
 
             let function = Function {
                 signature: FunctionSignature {
-                    name,
+                    name: format!("{:?}", $arithmetic_op).to_lowercase(),
                     args_type: vec![
                         DataType::Decimal(left.clone()),
                         DataType::Decimal(right.clone()),
