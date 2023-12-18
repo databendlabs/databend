@@ -252,7 +252,7 @@ impl HashJoinState {
     // Generate runtime filters
     pub(crate) fn generate_runtime_filters(&self) -> Result<()> {
         // If build side rows < 10k, using inlist filter
-        // TODO: else using bloom filter
+        // TODO: else using bloom filter/min-max filter
         let func_ctx = self.ctx.get_function_context()?;
         let build_state = unsafe { &mut *self.build_state.get() };
         let data_blocks = &mut build_state.build_chunks;
