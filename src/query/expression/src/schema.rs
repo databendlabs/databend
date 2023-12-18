@@ -102,6 +102,13 @@ pub fn is_internal_column(column_name: &str) -> bool {
             | BASE_BLOCK_IDS_COL_NAME
             | ROW_NUMBER_COL_NAME
             | PREDICATE_COLUMN_NAME
+            | CHANGE_ACTION_COL_NAME
+            | CHANGE_IS_UPDATE_COL_NAME
+            | CHANGE_ROW_ID_COL_NAME
+            // change$row_id might be expended 
+            // to the computation of the two following internal columns
+            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+            | BASE_ROW_ID_COL_NAME
     )
 }
 
