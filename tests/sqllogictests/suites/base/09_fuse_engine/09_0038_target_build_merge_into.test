@@ -5,6 +5,3 @@ include ./09_0037_target_build_merge_into_without_distributed_enable.test
 
 statement ok
 set enable_distributed_merge_into = 0;
-
-MERGE INTO orders_25 as orders USING ( SELECT * FROM orders WHERE status = 'pending') AS
- pending_orders ON orders.order_id = pending_orders.order_id WHEN MATCHED THEN UPDATE SET orders.status = 'completed';
