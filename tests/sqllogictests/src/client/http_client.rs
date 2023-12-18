@@ -16,6 +16,7 @@ use std::time::Instant;
 
 use databend_driver::Client;
 use databend_driver::Connection;
+use databend_driver::DataType;
 use futures_util::StreamExt;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
@@ -62,7 +63,15 @@ impl HttpClient {
             let row = row?;
             let mut parsed_row = vec![];
             for value in row {
-                let mut cell = value.to_string();
+                let mut cell = match value.get_type() {
+                    // for backward compatibility
+                    DataType::Boolean => match value.to_string().as_str() {
+                        "true" => "1".to_string(),
+                        "false" => "0".to_string(),
+                        _ => unreachable!(),
+                    },
+                    _ => value.to_string(),
+                };
                 if cell == "inf" {
                     cell = "Infinity".to_string();
                 }
