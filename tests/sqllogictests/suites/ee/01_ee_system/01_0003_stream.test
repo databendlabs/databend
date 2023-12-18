@@ -223,5 +223,37 @@ drop table s2
 statement ok
 drop stream s2
 
+# issue 14062
+statement ok
+drop stream s
+
+statement ok
+drop stream t
+
+statement ok
+create table t (c int);
+
+statement ok
+create stream s on table t ;
+
+statement ok
+insert into t values(1);
+
+query T
+select * from s where change$action = 'INSERT';
+----
+1
+
+query T
+select * from s where change$is_update = false;
+----
+1
+
+query T
+select * from s where change$row_id = '1';
+----
+
+# end of issue 14062
+
 statement ok
 DROP DATABASE IF EXISTS test_stream
