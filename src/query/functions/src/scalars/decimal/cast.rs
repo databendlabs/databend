@@ -573,7 +573,7 @@ macro_rules! m_decimal_to_decimal {
         {
             if F::MAX == T::MAX {
                 // 128 -> 128 or 256 -> 256
-                return $value.clone().to_owned();
+                return buffer.clone().to_owned().upcast_decimal($dest_size);
             } else {
                 // 128 -> 256
                 vectorize_1_arg::<DecimalType<F>, DecimalType<T>>(|x: F, _: &mut EvalContext| {

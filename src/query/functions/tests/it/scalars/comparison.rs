@@ -40,6 +40,7 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "null=null", &[]);
     run_ast(file, "1=2", &[]);
     run_ast(file, "1.0=1", &[]);
+    run_ast(file, "2.222>2.11", &[]);
     run_ast(file, "true=null", &[]);
     run_ast(file, "true=false", &[]);
     run_ast(file, "false=false", &[]);
