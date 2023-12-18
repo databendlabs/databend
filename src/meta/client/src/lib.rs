@@ -78,7 +78,7 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2023-10-20: since 1.2.176:
 ///   Meta client: call stream api: kv_read_v1(), revert to 1.1.32 if server < 1.2.163
 ///
-/// - 2023-12-16: since TODO:
+/// - 2023-12-16: since 1.2.258:
 ///   Meta service: add: ttl to TxnPutRequest and Upsert
 ///
 /// Server feature set:
