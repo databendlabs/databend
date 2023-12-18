@@ -15,32 +15,32 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::GlobalQueryRuntime;
-use common_catalog::catalog::CatalogCreator;
-use common_catalog::catalog::CatalogManager;
-use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_config::GlobalConfig;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_meta_app::schema::CatalogType;
-use common_profile::QueryProfileManager;
-use common_sharing::ShareEndpointManager;
-use common_storage::DataOperator;
-use common_storage::ShareTableConfig;
-use common_storages_hive::HiveCreator;
-use common_storages_iceberg::IcebergCreator;
-use common_tracing::GlobalLogger;
-use common_users::RoleCacheManager;
-use common_users::UserApiProvider;
-use storages_common_cache_manager::CacheManager;
-use storages_common_locks::LockManager;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_catalog::catalog::CatalogCreator;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CatalogType;
+use databend_common_profile::QueryProfileManager;
+use databend_common_sharing::ShareEndpointManager;
+use databend_common_storage::DataOperator;
+use databend_common_storage::ShareTableConfig;
+use databend_common_storages_hive::HiveCreator;
+use databend_common_storages_iceberg::IcebergCreator;
+use databend_common_tracing::GlobalLogger;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
+use databend_storages_common_cache_manager::CacheManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
+use crate::locks::LockManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
 
@@ -56,15 +56,7 @@ impl GlobalServices {
     #[async_backtrace::framed]
     pub async fn init_with(config: &InnerConfig) -> Result<()> {
         // app name format: node_id[0..7]@cluster_id
-        let app_name_shuffle = format!(
-            "databend-query-{}@{}",
-            if config.query.node_id.len() >= 7 {
-                &config.query.node_id[0..7]
-            } else {
-                &config.query.node_id
-            },
-            config.query.cluster_id
-        );
+        let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
 
         // The order of initialization is very important
         // 1. global config init.

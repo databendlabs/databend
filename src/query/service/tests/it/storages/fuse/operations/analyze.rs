@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 use databend_query::test_kits::*;
 
 use crate::storages::fuse::utils::do_insertions;

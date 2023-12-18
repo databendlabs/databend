@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::ColumnSet;

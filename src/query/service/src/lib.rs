@@ -47,6 +47,7 @@ pub mod clusters;
 pub mod databases;
 pub mod interpreters;
 pub mod local;
+pub mod locks;
 pub mod metrics;
 pub mod pipelines;
 pub mod schedulers;
@@ -59,6 +60,6 @@ pub mod test_kits;
 
 mod global_services;
 
-pub use common_sql as sql;
-pub use common_storages_factory as storages;
+pub use databend_common_sql as sql;
+pub use databend_common_storages_factory as storages;
 pub use global_services::GlobalServices;

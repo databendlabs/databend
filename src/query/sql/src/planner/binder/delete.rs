@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::DeleteStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::TableReference;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::DeleteStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::TableReference;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;

@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::schema::LockMeta;
-use common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::LockType;
 use minitrace::func_name;
 
 use crate::common;

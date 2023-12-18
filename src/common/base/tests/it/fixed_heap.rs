@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use common_base::containers::FixedHeap;
+use databend_common_base::containers::FixedHeap;
 use rand::Rng;
 
 #[test]

@@ -20,29 +20,30 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::EvalExpireTime;
+
 pub trait SeqValue<V = Vec<u8>> {
     fn seq(&self) -> u64;
     fn value(&self) -> Option<&V>;
     fn meta(&self) -> Option<&KVMeta>;
 
     /// Return the expire time in millisecond since 1970.
-    fn expire_at_ms(&self) -> Option<u64> {
+    fn get_expire_at_ms(&self) -> Option<u64> {
         if let Some(meta) = self.meta() {
-            meta.expire_at.map(|t| t * 1000)
+            meta.get_expire_at_ms()
         } else {
             None
         }
     }
 
+    /// Evaluate and returns the absolute expire time in millisecond since 1970.
+    fn eval_expire_at_ms(&self) -> u64 {
+        self.meta().eval_expire_at_ms()
+    }
+
     /// Return true if the record is expired.
     fn is_expired(&self, now_ms: u64) -> bool {
-        if let Some(expire_at) = self.expire_at_ms() {
-            if expire_at < now_ms {
-                return true;
-            }
-        }
-
-        false
+        self.eval_expire_at_ms() < now_ms
     }
 }
 
@@ -50,13 +51,33 @@ pub trait SeqValue<V = Vec<u8>> {
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct KVMeta {
     /// expiration time in second since 1970
-    pub expire_at: Option<u64>,
+    pub(crate) expire_at: Option<u64>,
 }
 
 impl KVMeta {
+    /// Create a new KVMeta
+    pub fn new(expire_at: Option<u64>) -> Self {
+        Self { expire_at }
+    }
+
+    /// Create a KVMeta with a absolute expiration time in second since 1970-01-01.
     pub fn new_expire(expire_at: u64) -> Self {
         Self {
             expire_at: Some(expire_at),
+        }
+    }
+
+    /// Returns expire time in millisecond since 1970.
+    pub fn get_expire_at_ms(&self) -> Option<u64> {
+        self.expire_at.map(|t| t * 1000)
+    }
+}
+
+impl EvalExpireTime for KVMeta {
+    fn eval_expire_at_ms(&self) -> u64 {
+        match self.expire_at {
+            None => u64::MAX,
+            Some(exp_at_sec) => exp_at_sec * 1000,
         }
     }
 }
@@ -164,20 +185,6 @@ impl<T> SeqV<T> {
 
     pub fn with_meta(seq: u64, meta: Option<KVMeta>, data: T) -> Self {
         Self { seq, meta, data }
-    }
-
-    /// Returns millisecond since 1970-01-01
-    pub fn get_expire_at(&self) -> u64 {
-        match self.meta {
-            None => u64::MAX,
-            Some(ref m) => match m.expire_at {
-                None => u64::MAX,
-                Some(exp_at) => {
-                    // exp_at is in second.
-                    exp_at * 1000
-                }
-            },
-        }
     }
 
     #[must_use]

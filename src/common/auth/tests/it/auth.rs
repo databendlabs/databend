@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use chrono::Utc;
-use common_auth::RefreshableToken;
-use common_auth::TokenFile;
-use common_base::base::tokio;
+use databend_common_auth::RefreshableToken;
+use databend_common_auth::TokenFile;
+use databend_common_base::base::tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn direct_token() {

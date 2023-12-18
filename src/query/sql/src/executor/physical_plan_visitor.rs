@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
@@ -233,6 +233,8 @@ pub trait PhysicalPlanReplacer {
             output_schema: plan.output_schema.clone(),
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
+            probe_keys_rt: plan.probe_keys_rt.clone(),
+            broadcast: plan.broadcast,
         }))
     }
 

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -183,6 +183,7 @@ impl Operator for Aggregate {
             output_columns,
             outer_columns,
             used_columns,
+            orderings: vec![],
         }))
     }
 

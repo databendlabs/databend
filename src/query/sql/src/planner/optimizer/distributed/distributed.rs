@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use super::sort_and_limit::SortAndLimitPushDownOptimizer;
 use crate::optimizer::property::require_property;

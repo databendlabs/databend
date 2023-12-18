@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use ahash::HashSet;
-use common_exception::ErrorCode;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 
 // This mod need to be refactored, since it not longer aiming to be
 // used in the implementation of `MERGE INTO` statement in the future.

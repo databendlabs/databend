@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_enterprise_storage_encryption::StorageEncryptionHandler;
+use databend_enterprise_storage_encryption::StorageEncryptionHandlerWrapper;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use storage_encryption::StorageEncryptionHandler;
-use storage_encryption::StorageEncryptionHandlerWrapper;
 
 pub struct RealStorageEncryptionHandler {
     cfg: InnerConfig,

@@ -15,14 +15,14 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use common_expression::BlockThresholds;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::table_functions::cmp_with_null;
 

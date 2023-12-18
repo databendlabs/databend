@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use ahash::HashMap;
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;

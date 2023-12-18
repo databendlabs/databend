@@ -15,19 +15,20 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::InternalColumnMeta;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::StealablePartitions;
-use common_catalog::plan::TopK;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::StealablePartitions;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
 use crate::fuse_part::FusePartInfo;
@@ -42,6 +43,7 @@ use crate::operations::read::ReadParquetDataSource;
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     mut max_threads: usize,
@@ -76,7 +78,9 @@ pub fn build_fuse_native_source_pipeline(
                     output.clone(),
                     ReadNativeDataSource::<true>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -101,7 +105,9 @@ pub fn build_fuse_native_source_pipeline(
                     output.clone(),
                     ReadNativeDataSource::<false>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -134,6 +140,7 @@ pub fn build_fuse_native_source_pipeline(
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     plan: &DataSourcePlan,
@@ -158,7 +165,9 @@ pub fn build_fuse_parquet_source_pipeline(
                     output.clone(),
                     ReadParquetDataSource::<true>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -181,7 +190,9 @@ pub fn build_fuse_parquet_source_pipeline(
                     output.clone(),
                     ReadParquetDataSource::<false>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),

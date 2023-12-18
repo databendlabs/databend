@@ -19,7 +19,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;

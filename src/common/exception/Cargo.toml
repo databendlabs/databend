@@ -1,5 +1,5 @@
 [package]
-name = "common-exception"
+name = "databend-common-exception"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,9 +11,9 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
-common-arrow = { path = "../arrow" }
-common-meta-stoerr = { path = "../../meta/stoerr" }
-common-meta-types = { path = "../../meta/types" }
+databend-common-arrow = { path = "../arrow" }
+databend-common-meta-stoerr = { path = "../../meta/stoerr" }
+databend-common-meta-types = { path = "../../meta/types" }
 
 # GitHub dependencies
 # TODO: Use the version from crates.io once

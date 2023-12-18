@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use futures::AsyncRead;
 use futures_util::AsyncReadExt;
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::RemoteExpr;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RemoteExpr;
 
 use crate::executor::physical_plans::common::FragmentKind;
 use crate::executor::PhysicalPlan;

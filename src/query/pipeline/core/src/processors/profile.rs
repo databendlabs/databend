@@ -44,8 +44,43 @@ impl Profile {
             wait_time: AtomicU64::new(0),
             plan_id: scope.as_ref().map(|x| x.id),
             plan_name: scope.as_ref().map(|x| x.name.clone()),
-            plan_parent_id: scope.as_ref().map(|x| x.parent_id),
+            plan_parent_id: scope.as_ref().and_then(|x| x.parent_id),
         }
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlanProfile {
+    pub id: Option<u32>,
+    pub name: Option<String>,
+    pub parent_id: Option<u32>,
+
+    /// The time spent to process in nanoseconds
+    pub cpu_time: usize,
+    /// The time spent to wait in nanoseconds, usually used to
+    /// measure the time spent on waiting for I/O
+    pub wait_time: usize,
+}
+
+impl PlanProfile {
+    pub fn create(profile: &Profile) -> PlanProfile {
+        PlanProfile {
+            id: profile.plan_id,
+            name: profile.plan_name.clone(),
+            parent_id: profile.plan_parent_id,
+            cpu_time: profile.cpu_time.load(Ordering::SeqCst) as usize,
+            wait_time: profile.wait_time.load(Ordering::SeqCst) as usize,
+        }
+    }
+
+    pub fn accumulate(&mut self, profile: &Profile) {
+        self.cpu_time += profile.cpu_time.load(Ordering::SeqCst) as usize;
+        self.wait_time += profile.wait_time.load(Ordering::SeqCst) as usize;
+    }
+
+    pub fn merge(&mut self, profile: &PlanProfile) {
+        self.cpu_time += profile.cpu_time;
+        self.wait_time += profile.wait_time;
     }
 }
 
@@ -74,14 +109,14 @@ impl Drop for PlanScopeGuard {
 pub struct PlanScope {
     pub id: u32,
     pub name: String,
-    pub parent_id: u32,
+    pub parent_id: Option<u32>,
 }
 
 impl PlanScope {
     pub fn create(id: u32, name: String) -> PlanScope {
         PlanScope {
             id,
-            parent_id: 0,
+            parent_id: None,
             name,
         }
     }

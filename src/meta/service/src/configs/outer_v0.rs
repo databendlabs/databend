@@ -17,15 +17,16 @@ use std::env;
 use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
-use common_meta_raft_store::config::get_default_raft_advertise_host;
-use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
-use common_meta_types::MetaStartupError;
-use common_tracing::Config as InnerLogConfig;
-use common_tracing::FileConfig as InnerFileLogConfig;
-use common_tracing::OTLPConfig;
-use common_tracing::QueryLogConfig;
-use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_tracing::TracingConfig;
+use databend_common_meta_raft_store::config::get_default_raft_advertise_host;
+use databend_common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
+use databend_common_meta_types::MetaStartupError;
+use databend_common_tracing::Config as InnerLogConfig;
+use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::OTLPConfig;
+use databend_common_tracing::ProfileLogConfig;
+use databend_common_tracing::QueryLogConfig;
+use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -265,6 +266,7 @@ pub struct ConfigViaEnv {
     pub metasrv_log_file_level: String,
     pub metasrv_log_file_dir: String,
     pub metasrv_log_file_format: String,
+    pub metasrv_log_file_limit: usize,
     pub metasrv_log_stderr_on: bool,
     pub metasrv_log_stderr_level: String,
     pub metasrv_log_stderr_format: String,
@@ -311,6 +313,7 @@ impl From<Config> for ConfigViaEnv {
             metasrv_log_file_level: cfg.log.file.file_level,
             metasrv_log_file_dir: cfg.log.file.file_dir,
             metasrv_log_file_format: cfg.log.file.file_format,
+            metasrv_log_file_limit: cfg.log.file.file_limit,
             metasrv_log_stderr_on: cfg.log.stderr.stderr_on,
             metasrv_log_stderr_level: cfg.log.stderr.stderr_level,
             metasrv_log_stderr_format: cfg.log.stderr.stderr_format,
@@ -375,6 +378,7 @@ impl Into<Config> for ConfigViaEnv {
                 file_level: self.metasrv_log_file_level,
                 file_dir: self.metasrv_log_file_dir,
                 file_format: self.metasrv_log_file_format,
+                file_limit: self.metasrv_log_file_limit,
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
@@ -592,6 +596,7 @@ impl Into<InnerLogConfig> for LogConfig {
             stderr: self.stderr.into(),
             otlp: OTLPConfig::default(),
             query: QueryLogConfig::default(),
+            profile: ProfileLogConfig::default(),
             tracing: TracingConfig::default(),
         }
     }
@@ -627,6 +632,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-format", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
+
+    /// Log file max
+    #[clap(long = "log-file-limit", default_value = "48")]
+    #[serde(rename = "limit")]
+    pub file_limit: usize,
 }
 
 impl Default for FileLogConfig {
@@ -643,6 +653,7 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
+            limit: self.file_limit,
         }
     }
 }
@@ -654,6 +665,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_level: inner.level,
             file_dir: inner.dir,
             file_format: inner.format,
+            file_limit: inner.limit,
         }
     }
 }

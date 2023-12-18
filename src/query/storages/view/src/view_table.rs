@@ -15,11 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::catalog::StorageDescription;
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::TableInfo;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 
 pub struct ViewTable {
     table_info: TableInfo,
@@ -52,7 +52,7 @@ impl ViewTable {
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: "VIEW".to_string(),
-            comment: "VIEW STORAGE (LOGICAL VIEW)".to_string(),
+            comment: "VIEW Storage (LOGICAL VIEW)".to_string(),
             ..Default::default()
         }
     }

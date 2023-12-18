@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Span;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::Span;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
 
 use super::walk_mut::walk_cte_mut;
 use super::walk_mut::walk_expr_mut;
@@ -418,6 +418,8 @@ pub trait VisitorMut: Sized {
     fn visit_show_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_show_indexes(&mut self, _show_options: &mut Option<ShowOptions>) {}
+
+    fn visit_show_locks(&mut self, _show_locks: &mut ShowLocksStmt) {}
 
     fn visit_show_table_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 

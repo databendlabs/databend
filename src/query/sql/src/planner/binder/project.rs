@@ -16,23 +16,23 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_ast::ast::ColumnFilter;
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::Indirection;
-use common_ast::ast::Literal;
-use common_ast::ast::SelectTarget;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::walk_expr_mut;
-use common_ast::VisitorMut;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::Column;
-use common_expression::ConstantFolder;
-use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::ColumnFilter;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_expr_mut;
+use databend_common_ast::VisitorMut;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -252,7 +252,6 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
@@ -480,7 +479,6 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
-                false,
                 true,
             )?;
             let (scalar, _) = *type_checker.resolve(&expr).await?;
@@ -489,7 +487,7 @@ impl Binder {
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
 
             match new_expr {
-                common_expression::Expr::Constant {
+                databend_common_expression::Expr::Constant {
                     scalar: Scalar::Array(Column::Boolean(bitmap)),
                     ..
                 } => {

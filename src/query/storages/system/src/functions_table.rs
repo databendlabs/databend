@@ -14,25 +14,25 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::UserDefinedFunction;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_sql::TypeChecker;
-use common_users::UserApiProvider;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_sql::TypeChecker;
+use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -62,7 +62,7 @@ impl AsyncSystemTable for FunctionsTable {
                 .map(|name| name.to_string()),
         );
         scalar_func_names.extend(
-            common_ast::ast::Expr::all_function_like_syntaxes()
+            databend_common_ast::ast::Expr::all_function_like_syntaxes()
                 .iter()
                 .map(|name| name.to_lowercase()),
         );

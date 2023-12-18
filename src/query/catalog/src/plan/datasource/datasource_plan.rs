@@ -14,11 +14,11 @@
 
 use std::collections::BTreeMap;
 
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_meta_app::schema::CatalogInfo;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::CatalogInfo;
 
 use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::PartStatistics;
@@ -47,6 +47,8 @@ pub struct DataSourcePlan {
 
     // data mask policy for `output_schema` columns
     pub data_mask_policy: Option<BTreeMap<FieldIndex, RemoteExpr>>,
+
+    pub table_index: usize,
 }
 
 impl DataSourcePlan {

@@ -14,13 +14,17 @@
 
 use std::fmt::Display;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bumpalo::Bump;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_io::prelude::borsh_deserialize_from_stream;
+use databend_common_io::prelude::borsh_serialize_into_buf;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -152,18 +156,14 @@ pub fn eval_aggr(
 }
 
 #[inline]
-pub fn serialize_state<W: std::io::Write, T: serde::Serialize>(
+pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
     writer: &mut W,
     value: &T,
 ) -> Result<()> {
-    bincode::serde::encode_into_std_write(value, writer, bincode::config::standard())?;
-    Ok(())
+    borsh_serialize_into_buf(writer, value)
 }
 
 #[inline]
-pub fn deserialize_state<T: serde::de::DeserializeOwned>(slice: &mut &[u8]) -> Result<T> {
-    let (value, bytes_read) =
-        bincode::serde::decode_from_slice(slice, bincode::config::standard())?;
-    *slice = &slice[bytes_read..];
-    Ok(value)
+pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
+    borsh_deserialize_from_stream(slice)
 }

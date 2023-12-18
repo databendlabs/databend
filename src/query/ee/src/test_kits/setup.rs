@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_tracing::set_panic_hook;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use log::info;
@@ -31,7 +31,7 @@ impl TestFixture {
         #[cfg(debug_assertions)]
         {
             let thread_name = std::thread::current().name().unwrap().to_string();
-            common_base::base::GlobalInstance::init_testing(&thread_name);
+            databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
         GlobalServices::init_with(config).await?;

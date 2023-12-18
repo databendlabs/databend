@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::TableCompression;
 
 use crate::FuseStorageFormat;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;

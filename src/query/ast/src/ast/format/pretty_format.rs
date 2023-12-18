@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Write;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::FormatTreeNode;
 

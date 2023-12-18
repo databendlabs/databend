@@ -16,26 +16,26 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::StringType;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use serde::Deserialize;
-use serde::Serialize;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct StringAggState {
     values: Vec<u8>,
 }
@@ -122,13 +122,13 @@ impl AggregateFunction for AggregateStringAggFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<StringAggState>();
-        serialize_state(writer, state)?;
+        borsh_serialize_state(writer, state)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<StringAggState>();
-        let rhs: StringAggState = deserialize_state(reader)?;
+        let rhs: StringAggState = borsh_deserialize_state(reader)?;
         state.values.extend_from_slice(rhs.values.as_slice());
         Ok(())
     }

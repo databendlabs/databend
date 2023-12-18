@@ -14,12 +14,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Scalar;
-use once_cell::sync::Lazy;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
 
 use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionOrNullAdaptor;
@@ -42,7 +42,7 @@ pub type AggregateFunctionCombinatorCreator = Box<
         + Send,
 >;
 
-static FACTORY: Lazy<Arc<AggregateFunctionFactory>> = Lazy::new(|| {
+static FACTORY: LazyLock<Arc<AggregateFunctionFactory>> = LazyLock::new(|| {
     let mut factory = AggregateFunctionFactory::create();
     Aggregators::register(&mut factory);
     Aggregators::register_combinator(&mut factory);

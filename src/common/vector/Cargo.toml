@@ -1,5 +1,5 @@
 [package]
-name = "common-vector"
+name = "databend-common-vector"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
-common-exception = { path = "../exception" }
+databend-common-exception = { path = "../exception" }
 
 ndarray = "0.15.6"
 

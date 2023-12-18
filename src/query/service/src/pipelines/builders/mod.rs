@@ -39,3 +39,4 @@ mod builder_update;
 mod builder_window;
 
 pub use builder_replace_into::ValueSource;
+pub use builder_sort::SortPipelineBuilder;

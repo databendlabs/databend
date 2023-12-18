@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::connect;
-use common_pipeline_core::processors::EventCause;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ResizeProcessor;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::connect;
+use databend_common_pipeline_core::processors::EventCause;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ResizeProcessor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resize_output_finish() -> Result<()> {

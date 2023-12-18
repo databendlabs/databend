@@ -17,11 +17,11 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::ArrayRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use databend_common_arrow::ArrayRef;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
@@ -216,6 +216,12 @@ impl DataBlock {
         self.num_rows() == 0
     }
 
+    // Full empty means no row, no column, no meta
+    #[inline]
+    pub fn is_full_empty(&self) -> bool {
+        self.is_empty() && self.meta.is_none() && self.columns.is_empty()
+    }
+
     #[inline]
     pub fn domains(&self) -> Vec<Domain> {
         self.columns
@@ -375,6 +381,11 @@ impl DataBlock {
             num_rows: self.num_rows,
             meta,
         })
+    }
+
+    #[inline]
+    pub fn replace_meta(&mut self, meta: BlockMetaInfoPtr) {
+        self.meta.replace(meta);
     }
 
     #[inline]
@@ -541,6 +552,13 @@ impl DataBlock {
             columns.push(column);
         }
         DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
+
+    #[inline]
+    pub fn get_last_column(&self) -> &Column {
+        debug_assert!(!self.columns.is_empty());
+        debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
+        self.columns.last().unwrap().value.as_column().unwrap()
     }
 }
 

@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::mem_allocator::GlobalAllocator;
+#![feature(lazy_cell)]
+
+use databend_common_base::mem_allocator::GlobalAllocator;
 
 mod fixed_heap;
 mod pool;

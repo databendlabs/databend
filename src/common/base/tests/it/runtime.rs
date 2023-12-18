@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::Result;
-use once_cell::sync::Lazy;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::Result;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::sync::Semaphore;
@@ -84,7 +84,7 @@ async fn test_shutdown_long_run_runtime() -> Result<()> {
     Ok(())
 }
 
-static START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
+static START_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 // println can more clearly know if they are parallel
 async fn mock_get_page(i: usize) -> Vec<usize> {
