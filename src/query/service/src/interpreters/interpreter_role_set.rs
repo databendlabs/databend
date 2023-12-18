@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_sql::plans::SetRolePlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_sql::plans::SetRolePlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -63,7 +63,7 @@ impl Interpreter for SetRoleInterpreter {
                 .await?;
         } else {
             session
-                .set_current_role_checked(&self.plan.role_name, false)
+                .set_current_role_checked(&self.plan.role_name)
                 .await?;
         }
         Ok(PipelineBuildResult::create())

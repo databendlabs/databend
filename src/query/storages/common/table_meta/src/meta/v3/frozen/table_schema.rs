@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_expression::ColumnId;
+use databend_common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -92,7 +92,7 @@ pub struct DecimalSize {
 mod converters {
     use super::*;
 
-    impl From<TableField> for common_expression::TableField {
+    impl From<TableField> for databend_common_expression::TableField {
         fn from(value: TableField) -> Self {
             Self {
                 name: value.name,
@@ -104,7 +104,7 @@ mod converters {
         }
     }
 
-    impl From<TableDataType> for common_expression::TableDataType {
+    impl From<TableDataType> for databend_common_expression::TableDataType {
         fn from(value: TableDataType) -> Self {
             match value {
                 TableDataType::Null => Self::Null,
@@ -141,24 +141,24 @@ mod converters {
         }
     }
 
-    impl From<common_expression::types::number::NumberDataType> for NumberDataType {
-        fn from(value: common_expression::types::number::NumberDataType) -> Self {
+    impl From<databend_common_expression::types::number::NumberDataType> for NumberDataType {
+        fn from(value: databend_common_expression::types::number::NumberDataType) -> Self {
             match value {
-                common_expression::types::number::NumberDataType::UInt8 => Self::UInt8,
-                common_expression::types::number::NumberDataType::UInt16 => Self::UInt16,
-                common_expression::types::number::NumberDataType::UInt32 => Self::UInt32,
-                common_expression::types::number::NumberDataType::UInt64 => Self::UInt64,
-                common_expression::types::number::NumberDataType::Int8 => Self::Int8,
-                common_expression::types::number::NumberDataType::Int16 => Self::Int16,
-                common_expression::types::number::NumberDataType::Int32 => Self::Int32,
-                common_expression::types::number::NumberDataType::Int64 => Self::Int64,
-                common_expression::types::number::NumberDataType::Float32 => Self::Float32,
-                common_expression::types::number::NumberDataType::Float64 => Self::Float64,
+                databend_common_expression::types::number::NumberDataType::UInt8 => Self::UInt8,
+                databend_common_expression::types::number::NumberDataType::UInt16 => Self::UInt16,
+                databend_common_expression::types::number::NumberDataType::UInt32 => Self::UInt32,
+                databend_common_expression::types::number::NumberDataType::UInt64 => Self::UInt64,
+                databend_common_expression::types::number::NumberDataType::Int8 => Self::Int8,
+                databend_common_expression::types::number::NumberDataType::Int16 => Self::Int16,
+                databend_common_expression::types::number::NumberDataType::Int32 => Self::Int32,
+                databend_common_expression::types::number::NumberDataType::Int64 => Self::Int64,
+                databend_common_expression::types::number::NumberDataType::Float32 => Self::Float32,
+                databend_common_expression::types::number::NumberDataType::Float64 => Self::Float64,
             }
         }
     }
 
-    impl From<NumberDataType> for common_expression::types::number::NumberDataType {
+    impl From<NumberDataType> for databend_common_expression::types::number::NumberDataType {
         fn from(value: NumberDataType) -> Self {
             match value {
                 NumberDataType::UInt8 => Self::UInt8,
@@ -175,7 +175,7 @@ mod converters {
         }
     }
 
-    impl From<DecimalDataType> for common_expression::types::DecimalDataType {
+    impl From<DecimalDataType> for databend_common_expression::types::DecimalDataType {
         fn from(value: DecimalDataType) -> Self {
             match value {
                 DecimalDataType::Decimal128(value) => Self::Decimal128(value.into()),
@@ -184,7 +184,7 @@ mod converters {
         }
     }
 
-    impl From<DecimalSize> for common_expression::types::DecimalSize {
+    impl From<DecimalSize> for databend_common_expression::types::DecimalSize {
         fn from(value: DecimalSize) -> Self {
             Self {
                 precision: value.precision,
@@ -193,7 +193,7 @@ mod converters {
         }
     }
 
-    impl From<TableSchema> for common_expression::TableSchema {
+    impl From<TableSchema> for databend_common_expression::TableSchema {
         fn from(value: TableSchema) -> Self {
             Self {
                 fields: value

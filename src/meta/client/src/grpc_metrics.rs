@@ -13,30 +13,34 @@
 // limitations under the License.
 
 use std::error::Error;
+use std::sync::LazyLock;
 
-use common_meta_types::MetaError;
-use common_metrics::register_counter_family;
-use common_metrics::register_gauge;
-use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::Gauge;
-use common_metrics::Histogram;
-use common_metrics::VecLabels;
-use lazy_static::lazy_static;
+use databend_common_meta_types::MetaError;
+use databend_common_metrics::register_counter_family;
+use databend_common_metrics::register_gauge;
+use databend_common_metrics::register_histogram_family_in_milliseconds;
+use databend_common_metrics::Counter;
+use databend_common_metrics::Family;
+use databend_common_metrics::Gauge;
+use databend_common_metrics::Histogram;
+use databend_common_metrics::VecLabels;
 
-lazy_static! {
-    static ref META_GRPC_CLIENT_REQUEST_DURATION_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds("meta_grpc_client_request_duration_ms");
-    static ref META_GRPC_CLIENT_REQUEST_INFLIGHT: Gauge =
-        register_gauge("meta_grpc_client_request_inflight");
-    static ref META_GRPC_CLIENT_REQUEST_SUCCESS: Family<VecLabels, Counter> =
-        register_counter_family("meta_grpc_client_request_success");
-    static ref META_GRPC_CLIENT_REQUEST_FAILED: Family<VecLabels, Counter> =
-        register_counter_family("meta_grpc_client_request_fail");
-    static ref META_GRPC_MAKE_CLIENT_FAIL: Family<VecLabels, Counter> =
-        register_counter_family("meta_grpc_make_client_fail");
-}
+pub static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| {
+        register_histogram_family_in_milliseconds("meta_grpc_client_request_duration_ms")
+    });
+
+pub static META_GRPC_CLIENT_REQUEST_INFLIGHT: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("meta_grpc_client_request_inflight"));
+
+pub static META_GRPC_CLIENT_REQUEST_SUCCESS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("meta_grpc_client_request_success"));
+
+pub static META_GRPC_CLIENT_REQUEST_FAILED: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("meta_grpc_client_request_fail"));
+
+pub static META_GRPC_MAKE_CLIENT_FAIL: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("meta_grpc_make_client_fail"));
 
 const LABEL_ENDPOINT: &str = "endpoint";
 const LABEL_REQUEST: &str = "request";

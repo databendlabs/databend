@@ -15,30 +15,30 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use background_service::background_service::BackgroundServiceHandlerWrapper;
-use background_service::BackgroundServiceHandler;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::base::tokio::sync::Mutex;
-use common_base::base::uuid::Uuid;
-use common_base::base::GlobalInstance;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_meta_api::BackgroundApi;
-use common_meta_app::background::BackgroundJobIdent;
-use common_meta_app::background::BackgroundJobInfo;
-use common_meta_app::background::BackgroundJobParams;
-use common_meta_app::background::BackgroundJobState;
-use common_meta_app::background::CreateBackgroundJobReq;
-use common_meta_app::background::GetBackgroundJobReq;
-use common_meta_app::background::ManualTriggerParams;
-use common_meta_app::background::UpdateBackgroundJobParamsReq;
-use common_meta_app::background::UpdateBackgroundJobStatusReq;
-use common_meta_app::principal::UserIdentity;
-use common_meta_store::MetaStore;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_api::BackgroundApi;
+use databend_common_meta_app::background::BackgroundJobIdent;
+use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundJobParams;
+use databend_common_meta_app::background::BackgroundJobState;
+use databend_common_meta_app::background::CreateBackgroundJobReq;
+use databend_common_meta_app::background::GetBackgroundJobReq;
+use databend_common_meta_app::background::ManualTriggerParams;
+use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
+use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_store::MetaStore;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_background_service::background_service::BackgroundServiceHandlerWrapper;
+use databend_enterprise_background_service::BackgroundServiceHandler;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::table_functions::SuggestedBackgroundTasksSource;
@@ -267,7 +267,7 @@ impl RealBackgroundService {
             .get_settings();
         // check for valid license
         get_license_manager().manager.check_enterprise_enabled(
-            settings.get_enterprise_license().unwrap_or_default(),
+            unsafe { settings.get_enterprise_license().unwrap_or_default() },
             Feature::BackgroundService,
         )
     }

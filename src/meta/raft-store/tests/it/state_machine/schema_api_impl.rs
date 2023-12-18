@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use common_meta_api::BackgroundApiTestSuite;
-use common_meta_api::SchemaApiTestSuite;
-use common_meta_api::ShareApiTestSuite;
-use common_meta_kvapi::kvapi;
-use common_meta_raft_store::state_machine::StateMachine;
+use databend_common_meta_api::BackgroundApiTestSuite;
+use databend_common_meta_api::SchemaApiTestSuite;
+use databend_common_meta_api::ShareApiTestSuite;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_raft_store::state_machine::StateMachine;
 use test_harness::test;
 
 use crate::testing::new_raft_test_context;

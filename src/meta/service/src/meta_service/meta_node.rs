@@ -21,49 +21,49 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::watch;
-use common_base::base::tokio::sync::watch::error::RecvError;
-use common_base::base::tokio::sync::Mutex;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::tokio::time::sleep;
-use common_base::base::tokio::time::Instant;
-use common_grpc::ConnectionFactory;
-use common_grpc::DNSResolver;
-use common_meta_client::reply_to_api_result;
-use common_meta_client::RequestFor;
-use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::ondisk::DataVersion;
-use common_meta_raft_store::ondisk::DATA_VERSION;
-use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::storage::Adaptor;
-use common_meta_sled_store::openraft::ChangeMembers;
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::AppliedState;
-use common_meta_types::Cmd;
-use common_meta_types::CommittedLeaderId;
-use common_meta_types::Endpoint;
-use common_meta_types::ForwardRPCError;
-use common_meta_types::ForwardToLeader;
-use common_meta_types::GrpcConfig;
-use common_meta_types::InvalidReply;
-use common_meta_types::LogEntry;
-use common_meta_types::LogId;
-use common_meta_types::MembershipNode;
-use common_meta_types::MetaAPIError;
-use common_meta_types::MetaError;
-use common_meta_types::MetaManagementError;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaOperationError;
-use common_meta_types::MetaStartupError;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
-use common_meta_types::RaftMetrics;
-use common_meta_types::TypeConfig;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::watch;
+use databend_common_base::base::tokio::sync::watch::error::RecvError;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::base::tokio::time::Instant;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_grpc::DNSResolver;
+use databend_common_meta_client::reply_to_api_result;
+use databend_common_meta_client::RequestFor;
+use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::ondisk::DataVersion;
+use databend_common_meta_raft_store::ondisk::DATA_VERSION;
+use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
+use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::storage::Adaptor;
+use databend_common_meta_sled_store::openraft::ChangeMembers;
+use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::CommittedLeaderId;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::ForwardRPCError;
+use databend_common_meta_types::ForwardToLeader;
+use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::MembershipNode;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaManagementError;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::MetaOperationError;
+use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::RaftMetrics;
+use databend_common_meta_types::TypeConfig;
 use futures::channel::oneshot;
 use itertools::Itertools;
 use log::as_debug;
@@ -164,7 +164,7 @@ pub type LogStore = Adaptor<TypeConfig, RaftStore>;
 pub type SMStore = Adaptor<TypeConfig, RaftStore>;
 
 /// MetaRaft is a implementation of the generic Raft handling meta data R/W.
-pub type MetaRaft = Raft<TypeConfig, Network, LogStore, SMStore>;
+pub type MetaRaft = Raft<TypeConfig>;
 
 /// MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
@@ -851,9 +851,13 @@ impl MetaNode {
         let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
 
-        // TODO(1): initialize() and add_node() are not done atomically.
-        //          There is an issue that just after initializing the cluster, the node will be used but no node info is found.
-        //          To address it, upgrade to membership with embedded Node.
+        // initialize() and add_node() are not done atomically.
+        // There is an issue that just after initializing the cluster,
+        // the node will be used but no node info is found.
+        // Thus meta-server can only be initialized with a single node.
+        //
+        // We do not store node info in membership config,
+        // because every start a meta-server node updates its latest configured address.
         self.raft.initialize(cluster_node_ids).await?;
 
         info!("initialized cluster");

@@ -16,34 +16,33 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PruningStatistics;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::TopK;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_meta_app::schema::TableInfo;
-use common_sql::field_default_value;
-use common_storage::ColumnNodes;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PruningStatistics;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_sql::field_default_value;
+use databend_common_storage::ColumnNodes;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_index::Index;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use log::debug;
 use log::info;
 use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CachedObject;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
-use storages_common_pruner::BlockMetaIndex;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::fuse_part::FusePartInfo;
 use crate::pruning::FusePruner;
@@ -98,7 +97,7 @@ impl FuseTable {
                 }
 
                 let snapshot_loc = Some(snapshot_loc);
-                let table_info = self.table_info.clone();
+                let table_schema = self.schema_with_stream();
                 let summary = snapshot.summary.block_count as usize;
                 let mut segments_location = Vec::with_capacity(snapshot.segments.len());
                 for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -113,7 +112,7 @@ impl FuseTable {
                     ctx.clone(),
                     self.operator.clone(),
                     push_downs.clone(),
-                    table_info,
+                    table_schema,
                     segments_location,
                     summary,
                 )
@@ -130,7 +129,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         push_downs: Option<PushDownInfo>,
-        table_info: TableInfo,
+        table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
@@ -170,7 +169,7 @@ impl FuseTable {
             FusePruner::create(
                 &ctx,
                 dal.clone(),
-                table_info.schema(),
+                table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
             )?
@@ -180,7 +179,7 @@ impl FuseTable {
             FusePruner::create_with_pages(
                 &ctx,
                 dal.clone(),
-                table_info.schema(),
+                table_schema,
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
@@ -202,9 +201,10 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
+        let schema = self.schema_with_stream();
         let result = self.read_partitions_with_metas(
             ctx.clone(),
-            table_info.schema(),
+            schema,
             push_downs,
             &block_metas,
             summary,
@@ -433,6 +433,7 @@ impl FuseTable {
         meta: &BlockMeta,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
+        let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
 
         for column_id in meta.col_metas.keys() {
             // ignore all deleted field
@@ -445,6 +446,10 @@ impl FuseTable {
             // ignore column this block dose not exist
             if let Some(meta) = meta.col_metas.get(column_id) {
                 columns_meta.insert(*column_id, meta.clone());
+            }
+
+            if let Some(stat) = meta.col_stats.get(column_id) {
+                columns_stats.insert(*column_id, stat.clone());
             }
         }
 
@@ -463,6 +468,7 @@ impl FuseTable {
             location,
             rows_count,
             columns_meta,
+            Some(columns_stats),
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
@@ -478,6 +484,7 @@ impl FuseTable {
         projection: &Projection,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
+        let mut columns_stat = HashMap::with_capacity(projection.len());
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
@@ -485,6 +492,9 @@ impl FuseTable {
                 // ignore column this block dose not exist
                 if let Some(column_meta) = meta.col_metas.get(column_id) {
                     columns_meta.insert(*column_id, column_meta.clone());
+                }
+                if let Some(column_stat) = meta.col_stats.get(column_id) {
+                    columns_stat.insert(*column_id, column_stat.clone());
                 }
             }
         }
@@ -506,6 +516,7 @@ impl FuseTable {
             location,
             rows_count,
             columns_meta,
+            Some(columns_stat),
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),

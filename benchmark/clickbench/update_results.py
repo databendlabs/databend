@@ -23,7 +23,10 @@ def update_results(dataset, title, url):
     for result_file in glob.glob(f"results/{dataset}/**/*.json", recursive=True):
         logger.info(f"reading result: {result_file}...")
         with open(result_file, "r") as f:
-            results.append(json.load(f))
+            result = json.load(f)
+            # if dataset == "tpch":
+            #     result["result"].insert(0, [0.01, 0.01, 0.01])
+            results.append(result)
 
     logger.info("loading report template %s ...", TEMPLATE_FILE)
     templateLoader = FileSystemLoader(searchpath="./")

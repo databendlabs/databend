@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use log::info;
 use opendal::Operator;
 
@@ -69,6 +69,12 @@ impl Files {
 
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
+        // temporary fix for https://github.com/datafuselabs/databend/issues/13804
+        let locations = locations
+            .into_iter()
+            .map(|loc| loc.trim_start_matches('/').to_owned())
+            .filter(|loc| !loc.is_empty())
+            .collect::<Vec<_>>();
         info!("deleting files: {:?}", &locations);
         op.remove(locations).await?;
         Ok(())

@@ -33,11 +33,11 @@ pub mod pruning;
 pub mod statistics;
 pub mod table_functions;
 
-use common_catalog::table::NavigationPoint;
-use common_catalog::table::Table;
-use common_catalog::table::TableStatistics;
-pub use common_catalog::table_context::TableContext;
 pub use constants::*;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
+pub use databend_common_catalog::table_context::TableContext;
 pub use fuse_column::FuseTableColumnStatisticsProvider;
 pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_part::FusePartInfo;
@@ -48,6 +48,6 @@ pub use io::MergeIOReadResult;
 pub use pruning::SegmentLocation;
 
 mod sessions {
-    pub use common_catalog::table_context::TableContext;
+    pub use databend_common_catalog::table_context::TableContext;
 }
-pub use storages_common_index as index;
+pub use databend_storages_common_index as index;

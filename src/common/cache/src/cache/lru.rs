@@ -20,7 +20,7 @@
 //! # Examples
 //!
 //! ```rust,ignore
-//! use common_cache::{Cache, LruCache};
+//! use databend_common_cache::{Cache, LruCache};
 //!
 //! let mut cache = LruCache::new(2);
 //!
@@ -86,7 +86,7 @@ impl<K: Eq + Hash, V> LruCache<K, V> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     /// let mut cache: LruCache<i32, &str> = LruCache::new(10);
     /// ```
     pub fn new(capacity: u64) -> Self {
@@ -109,7 +109,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> LruCache<K, V, DefaultHashBuilder
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache, Meter};
+    /// use databend_common_cache::{Cache, LruCache, Meter};
     /// use std::borrow::Borrow;
     ///
     /// /// Measure Vec items by their length
@@ -178,7 +178,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -211,7 +211,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Example
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     /// let mut cache = LruCache::new(2);
     ///
     /// cache.put(1, "a");
@@ -235,7 +235,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Example
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     /// let mut cache = LruCache::new(2);
     ///
     /// cache.put(1, "a");
@@ -252,7 +252,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(1);
     ///
@@ -273,7 +273,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -302,7 +302,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -331,7 +331,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -359,7 +359,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -411,7 +411,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     /// let mut cache: LruCache<i32, &str> = LruCache::new(2);
     /// assert_eq!(cache.capacity(), 2);
     /// ```
@@ -439,7 +439,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S,
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -464,7 +464,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S,
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use common_cache::{Cache, LruCache};
+    /// use databend_common_cache::{Cache, LruCache};
     ///
     /// let mut cache = LruCache::new(2);
     ///
@@ -544,7 +544,7 @@ impl<'a, K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> IntoIterator
 /// # Examples
 ///
 /// ```rust,ignore
-/// use common_cache::{Cache, LruCache};
+/// use databend_common_cache::{Cache, LruCache};
 ///
 /// let mut cache = LruCache::new(2);
 ///

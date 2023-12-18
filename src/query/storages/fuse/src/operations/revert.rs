@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::table::NavigationDescriptor;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
+use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
 
 use crate::FuseTable;
 
@@ -53,6 +53,7 @@ impl FuseTable {
             new_table_meta: table_meta_to_be_committed,
             copied_files: None,
             deduplicated_label: None,
+            update_stream_meta: vec![],
         };
 
         // 4. let's roll

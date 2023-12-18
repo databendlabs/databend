@@ -16,23 +16,25 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::DataSource;
@@ -58,6 +60,8 @@ pub struct DeserializeDataTransform {
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+
+    base_block_ids: Option<Scalar>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -105,6 +109,7 @@ impl DeserializeDataTransform {
             uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             index_reader,
             virtual_reader,
+            base_block_ids: plan.base_block_ids.clone(),
         })))
     }
 }
@@ -224,16 +229,27 @@ impl Processor for DeserializeDataTransform {
                     };
                     self.scan_progress.incr(&progress_values);
 
-                    let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+                    let mut data_block =
+                        data_block.resort(&self.src_schema, &self.output_schema)?;
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
+                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     if self.block_reader.query_internal_columns() {
-                        let data_block = fill_internal_column_meta(data_block, part, None)?;
-                        self.output_data = Some(data_block);
-                    } else {
-                        self.output_data = Some(data_block);
-                    };
+                        data_block = fill_internal_column_meta(
+                            data_block,
+                            part,
+                            None,
+                            self.base_block_ids.clone(),
+                        )?;
+                    }
+
+                    if self.block_reader.update_stream_columns() {
+                        let inner_meta = data_block.take_meta();
+                        let meta = gen_mutation_stream_meta(inner_meta, &part.location)?;
+                        data_block = data_block.add_meta(Some(Box::new(meta)))?;
+                    }
+
+                    self.output_data = Some(data_block);
                 }
             }
         }

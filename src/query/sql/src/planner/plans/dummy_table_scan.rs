@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -48,6 +48,7 @@ impl Operator for DummyTableScan {
             output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
+            orderings: vec![],
         }))
     }
 

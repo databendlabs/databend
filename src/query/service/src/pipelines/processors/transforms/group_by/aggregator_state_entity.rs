@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_hashtable::HashtableEntry;
-use common_hashtable::HashtableKeyable;
-use common_hashtable::ShortStringHashtableEntryMutRef;
-use common_hashtable::ShortStringHashtableEntryRef;
+use databend_common_hashtable::HashtableEntry;
+use databend_common_hashtable::HashtableKeyable;
+use databend_common_hashtable::ShortStringHashtableEntryMutRef;
+use databend_common_hashtable::ShortStringHashtableEntryRef;
 
 pub trait StateEntityRef {
     type KeyRef: Copy;

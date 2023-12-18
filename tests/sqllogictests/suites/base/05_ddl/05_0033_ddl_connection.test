@@ -10,7 +10,7 @@ CREATE CONNECTION test_conn
 statement error 1005
 CREATE CONNECTION test_conn TYPE='S3'
 
-statement error 4000.*URI protocol azblob2 is not supported yet
+statement error 4000.*protocol azblob2 is not supported yet
 CREATE CONNECTION test_conn STORAGE_TYPE='azblob2'
 
 statement error 4000.*invalid input parameter \(endpoint_url is required for storage azblob\)
@@ -28,12 +28,12 @@ CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazon
 query TTT
 DESC CONNECTION test_conn
 ----
-test_conn azblob endpoint_url=http://s3.amazonaws.com
+test_conn azblob endpoint_url=******com
 
 query TTT
 SHOW CONNECTIONS
 ----
-test_conn azblob endpoint_url=http://s3.amazonaws.com
+test_conn azblob endpoint_url=******com
 
 statement ok
 DROP CONNECTION test_conn

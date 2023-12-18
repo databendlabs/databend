@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use common_datavalues as dv;
-use common_expression::ColumnId;
+use databend_common_datavalues as dv;
+use databend_common_expression::ColumnId;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {

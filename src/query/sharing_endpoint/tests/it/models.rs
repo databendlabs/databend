@@ -14,14 +14,14 @@
 
 use std::collections::HashMap;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use sharing_endpoint::models::DatabaseSpec;
-use sharing_endpoint::models::LambdaInput;
-use sharing_endpoint::models::ShareSpec;
-use sharing_endpoint::models::SharingConfig;
-use sharing_endpoint::models::TableSpec;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_sharing_endpoint::models::DatabaseSpec;
+use databend_sharing_endpoint::models::LambdaInput;
+use databend_sharing_endpoint::models::ShareSpec;
+use databend_sharing_endpoint::models::SharingConfig;
+use databend_sharing_endpoint::models::TableSpec;
 // mock some SharingConfig
 // and test on SharingConfig get_tables method
 #[tokio::test(flavor = "multi_thread")]

@@ -14,20 +14,18 @@
 
 #![allow(clippy::too_many_arguments)]
 
-pub mod block_writer;
+mod block_writer;
+mod check;
+mod cluster;
 pub mod config;
-pub mod context;
-#[allow(dead_code)]
-pub mod sessions;
-pub mod table_test_fixture;
-pub mod utils;
+mod context;
+mod fixture;
+mod fuse;
 
+pub use block_writer::BlockWriter;
+pub use check::*;
+pub use cluster::ClusterDescriptor;
 pub use config::ConfigBuilder;
-pub use context::create_query_context;
-pub use context::create_query_context_with_cluster;
-pub use context::create_query_context_with_config;
-pub use context::create_query_context_with_session;
-pub use context::ClusterDescriptor;
-pub use sessions::TestGlobalServices;
-pub use sessions::TestGuard;
-pub use table_test_fixture::TestFixture;
+pub use context::*;
+pub use fixture::*;
+pub use fuse::*;

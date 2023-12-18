@@ -12,25 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use databend_query::test_kits::table_test_fixture::execute_query;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::table_test_fixture::TestFixture;
-use enterprise_query::test_kits::context::create_ee_query_context;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-    let catalog = fixture.default_catalog_name();
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
+    fixture.create_default_database().await?;
     fixture.create_computed_table().await?;
 
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
     for i in 0..2 {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
@@ -59,7 +55,7 @@ async fn test_computed_column() -> Result<()> {
         ];
         expects_ok(
             "check insert computed columns",
-            execute_query(ctx.clone(), query.as_str()).await,
+            fixture.execute_query(query.as_str()).await,
             expected,
         )
         .await?;
@@ -67,9 +63,8 @@ async fn test_computed_column() -> Result<()> {
 
     // update
     {
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let update = format!("update {}.{} set c = 'abc', d = 100 where id = 0", db, tbl);
-        let _res = execute_query(ctx.clone(), &update).await?;
+        fixture.execute_command(&update).await?;
 
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
@@ -84,19 +79,16 @@ async fn test_computed_column() -> Result<()> {
             "| 5        | '2-1-s'  | 'S-1-2'  | 14       | 39       | 's-1-2'  | 12       |",
             "+----------+----------+----------+----------+----------+----------+----------+",
         ];
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         expects_ok(
             "check update computed columns",
-            execute_query(ctx.clone(), query.as_str()).await,
+            fixture.execute_query(query.as_str()).await,
             expected,
         )
         .await?;
 
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let update = format!("update {}.{} set c = 'xyz', d = 30 where b1 = 12", db, tbl);
-        let _res = execute_query(ctx.clone(), &update).await?;
+        fixture.execute_command(&update).await?;
 
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+----------+",
@@ -112,7 +104,7 @@ async fn test_computed_column() -> Result<()> {
         ];
         expects_ok(
             "check update computed columns",
-            execute_query(ctx.clone(), query.as_str()).await,
+            fixture.execute_query(query.as_str()).await,
             expected,
         )
         .await?;
@@ -120,11 +112,9 @@ async fn test_computed_column() -> Result<()> {
 
     // delete
     {
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let delete = format!("delete from {}.{} where id >= 4", db, tbl);
-        let _res = execute_query(ctx.clone(), &delete).await?;
+        fixture.execute_command(&delete).await?;
 
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+----------+",
@@ -138,16 +128,14 @@ async fn test_computed_column() -> Result<()> {
         ];
         expects_ok(
             "check delete computed columns",
-            execute_query(ctx.clone(), query.as_str()).await,
+            fixture.execute_query(query.as_str()).await,
             expected,
         )
         .await?;
 
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let delete = format!("delete from {}.{} where b1 = 3 or b2 = 9", db, tbl);
-        let _res = execute_query(ctx.clone(), &delete).await?;
+        fixture.execute_command(&delete).await?;
 
-        ctx.evict_table_from_cache(&catalog, &db, &tbl)?;
         let query = format!("select * from {}.{} order by id", db, tbl);
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+----------+",
@@ -159,7 +147,7 @@ async fn test_computed_column() -> Result<()> {
         ];
         expects_ok(
             "check delete computed columns",
-            execute_query(ctx.clone(), query.as_str()).await,
+            fixture.execute_query(query.as_str()).await,
             expected,
         )
         .await?;

@@ -16,18 +16,18 @@ use std::cmp::Ordering;
 use std::iter::once;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::ord as arrow_ord;
-use common_arrow::arrow::array::ord::DynComparator;
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::compute::merge_sort as arrow_merge_sort;
-use common_arrow::arrow::compute::merge_sort::build_comparator_impl;
-use common_arrow::arrow::compute::sort as arrow_sort;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::error::Error as ArrowError;
-use common_arrow::arrow::error::Result as ArrowResult;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::array::ord as arrow_ord;
+use databend_common_arrow::arrow::array::ord::DynComparator;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::PrimitiveArray;
+use databend_common_arrow::arrow::compute::merge_sort as arrow_merge_sort;
+use databend_common_arrow::arrow::compute::merge_sort::build_comparator_impl;
+use databend_common_arrow::arrow::compute::sort as arrow_sort;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
+use databend_common_arrow::arrow::error::Error as ArrowError;
+use databend_common_arrow::arrow::error::Result as ArrowResult;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::types::DataType;
 use crate::utils::arrow::column_to_arrow_array;
@@ -230,12 +230,16 @@ fn compare_null() -> ArrowResult<DynComparator> {
 fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     let left = left
         .as_any()
-        .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
+        .downcast_ref::<databend_common_arrow::arrow::array::PrimitiveArray<
+            databend_common_arrow::arrow::types::i256,
+        >>()
         .unwrap()
         .clone();
     let right = right
         .as_any()
-        .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
+        .downcast_ref::<databend_common_arrow::arrow::array::PrimitiveArray<
+            databend_common_arrow::arrow::types::i256,
+        >>()
         .unwrap()
         .clone();
 

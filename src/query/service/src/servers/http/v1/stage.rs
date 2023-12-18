@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::principal::StageInfo;
-use common_storages_stage::StageTable;
-use common_users::UserApiProvider;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_storages_stage::StageTable;
+use databend_common_users::UserApiProvider;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -85,7 +85,7 @@ pub async fn upload_to_stage(
     req: &Request,
     mut multipart: Multipart,
 ) -> PoemResult<Json<UploadToStageResponse>> {
-    let session = ctx.get_session(SessionType::HTTPAPI("UploadToStage".to_string()));
+    let session = ctx.upgrade_session(SessionType::HTTPAPI("UploadToStage".to_string()))?;
     let context = session
         .create_query_context()
         .await

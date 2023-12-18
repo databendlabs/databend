@@ -19,8 +19,8 @@ use std::convert::TryFrom;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app as mt;
-use common_protos::pb;
+use databend_common_meta_app as mt;
+use databend_common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
@@ -207,6 +207,7 @@ impl FromToProto for mt::principal::StageInfo {
                     reason: "StageInfo.stage_params cannot be None".to_string(),
                 },
             )?)?,
+            is_temporary: false,
             file_format_params,
             copy_options: mt::principal::CopyOptions::from_pb(p.copy_options.ok_or_else(
                 || Incompatible {
@@ -218,6 +219,10 @@ impl FromToProto for mt::principal::StageInfo {
             creator: match p.creator {
                 Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
                 None => None,
+            },
+            created_on: match p.created_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
             },
         })
     }
@@ -240,6 +245,7 @@ impl FromToProto for mt::principal::StageInfo {
                 Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
                 None => None,
             },
+            created_on: Some(self.created_on.to_pb()?),
         })
     }
 }

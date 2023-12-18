@@ -16,29 +16,26 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::Utc;
-use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_storages_fuse::io::MetaWriter;
-use common_storages_fuse::FuseTable;
-use databend_query::test_kits::table_test_fixture::append_sample_data;
-use databend_query::test_kits::table_test_fixture::check_data_dir;
-use databend_query::test_kits::table_test_fixture::TestFixture;
-use databend_query::test_kits::utils::generate_segments;
-use databend_query::test_kits::utils::generate_snapshot_with_segments;
-use databend_query::test_kits::utils::generate_snapshots;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::FuseTable;
+use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::compact_segment;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_case() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
 
     // ingests some test data
     append_sample_data(1, &fixture).await?;
@@ -66,14 +63,17 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
         None,
     )
     .await?;
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
 
     // ingests some test data
     append_sample_data(1, &fixture).await?;
@@ -121,6 +121,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         None,
     )
     .await?;
+
     Ok(())
 }
 
@@ -173,9 +174,11 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     //  - 3 segments left: seg_c, seg_2, seg_1
     //  - 3 blocks left: block_c, block_2, block_1
 
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
 
     // 1. prepare `S_1`
     let number_of_block = 1;
@@ -241,15 +244,18 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
         None,
     )
     .await?;
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_older_version() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
+
     generate_snapshots(&fixture).await?;
-    let ctx = fixture.ctx();
+    let ctx = fixture.new_query_ctx().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let now = Utc::now();
 

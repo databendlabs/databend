@@ -16,9 +16,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_base::base::GlobalInstance;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use databend_common_base::base::GlobalInstance;
 
 use crate::prof::QueryProfile;
 

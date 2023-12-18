@@ -200,7 +200,7 @@ WHERE
         AND (b < 10)
     )
 
-skipif clickhouse
+
 query T
 explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
@@ -217,7 +217,7 @@ SIZE_LIMIT = 10
 PURGE = false
 DISABLE_VARIANT_CHECK = false
 
-skipif clickhouse
+
 query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
@@ -455,7 +455,7 @@ Delete (children 2)
         ├── ColumnIdentifier b
         └── Literal UInt64(10)
 
-skipif clickhouse
+
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
@@ -1382,7 +1382,7 @@ INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
 statement ok
 INSERT INTO t2 VALUES (1, 10), (2, 20);
 
-query I
+query T
 EXPLAIN SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
 Sort
@@ -1419,3 +1419,313 @@ Sort
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
+
+query T
+EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
+----
+EvalScalar
+├── scalars: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
+└── Sort
+    ├── sort keys: [i (#0) ASC, j (#1) ASC]
+    ├── limit: [NONE]
+    └── HashJoin: LEFT OUTER
+        ├── equi conditions: [eq(t1.i (#0), t2.k (#2))]
+        ├── non-equi conditions: []
+        ├── LogicalGet
+        │   ├── table: default.default.t1
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Filter
+            ├── filters: [false]
+            └── LogicalGet
+                ├── table: default.default.t2
+                ├── filters: [false]
+                ├── order by: []
+                └── limit: NONE
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+CREATE TABLE customers AS SELECT
+  number % 100 AS customer_id,
+  concat('Customer ', to_string(number % 100)) AS customer_name,
+  CASE WHEN (rand() * 10000)::int % 3 = 0 THEN 'Small'
+       WHEN (rand() * 10000 % 3)::int = 1 THEN 'Medium'
+       ELSE 'Large'
+  END AS segment,
+  date_add('year', floor(rand() * 100 % 5)::int, '2021-01-01') AS create_timestamp,
+  (rand() * 100)::int % 2 = 0 AS active
+FROM numbers(100);
+
+
+statement ok
+CREATE TABLE products AS SELECT
+  number % 10 AS product_id,
+  concat('Product ', to_string(number % 10)) AS product_name,
+  (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS price,
+  CASE WHEN (rand() * 100)::int % 4 = 0 THEN 'Electronics'
+       WHEN (rand() * 100 % 4)::int = 1 THEN 'Clothing'
+       WHEN (rand() * 1000 % 4)::int = 2 THEN 'Grocery'
+       ELSE 'Furniture'
+  END AS category
+FROM numbers(10);
+
+statement ok
+CREATE TABLE sales AS SELECT
+  number % 500 AS sale_id,
+  number % 100 AS product_id,
+  number % 100 AS customer_id,
+  date_add('day', floor(rand() * 10000 % 365)::int, '2021-01-01') AS sale_date,
+  (rand() * 10000 % 20 + 1)::int AS quantity,
+  (rand() * 10000 % 2000 * 0.01)::decimal(10, 2) AS net_paid
+FROM numbers(500);
+
+query T
+explain join SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
+----
+HashJoin: LEFT SINGLE
+├── Build
+│   └── HashJoin: RIGHT SEMI
+│       ├── Build
+│       │   └── HashJoin: CROSS
+│       │       ├── Build
+│       │       │   └── Scan: default.default.customers (read rows: 100)
+│       │       └── Probe
+│       │           └── Scan: default.default.sales (read rows: 500)
+│       └── Probe
+│           └── Scan: default.default.customers (read rows: 100)
+└── Probe
+    └── HashJoin: LEFT SEMI
+        ├── Build
+        │   └── Scan: default.default.sales (read rows: 0)
+        └── Probe
+            └── Scan: default.default.customers (read rows: 100)
+
+
+query T
+explain join SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT category FROM products WHERE category NOT IN ( SELECT p.category FROM sales s JOIN products p ON s.product_id = p.product_id WHERE s.customer_id = c.customer_id ) ) ORDER BY c.customer_name;
+----
+HashJoin: RIGHT MARK
+├── Build
+│   └── HashJoin: RIGHT MARK
+│       ├── Build
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── Scan: default.default.products (read rows: 10)
+│       │       └── Probe
+│       │           └── Scan: default.default.sales (read rows: 500)
+│       └── Probe
+│           └── HashJoin: CROSS
+│               ├── Build
+│               │   └── Scan: default.default.customers (read rows: 100)
+│               └── Probe
+│                   └── Scan: default.default.products (read rows: 10)
+└── Probe
+    └── Scan: default.default.customers (read rows: 100)
+
+statement ok
+drop table customers;
+
+statement ok
+drop table products;
+
+statement ok
+drop table sales;
+
+statement ok
+create table t1 (a int);
+
+statement ok
+create table t2 (b int);
+
+query T
+explain select date from (select *, 'year' as date from t1 left join t2 on t1.a = t2.b) where date = '';
+----
+EvalScalar
+├── output columns: [date (#2)]
+├── expressions: ['year']
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: []
+    ├── join type: LEFT OUTER
+    ├── build keys: [t2.b (#1)]
+    ├── probe keys: [t1.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [t2.b (#1)]
+    │   ├── filters: [false]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── output columns: [b (#1)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [false], limit: NONE]
+    │       └── estimated rows: 0.00
+    └── Filter(Probe)
+        ├── output columns: [t1.a (#0)]
+        ├── filters: [false]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [a (#0)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [false], limit: NONE]
+            └── estimated rows: 0.00
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+create table t1(a int, b int, c varchar(20));
+
+statement ok
+create table t2(a int, b int, c varchar(20));
+
+# scalar subquery and sort plan contains count() agg function.
+query T
+explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(a));
+----
+Filter
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
+├── filters: [is_true(t2.c (#2) > scalar_subquery_5 (#5))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
+    ├── join type: LEFT SINGLE
+    ├── build keys: [a (#3)]
+    ├── probe keys: [a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Sort(Build)
+    │   ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+    │   ├── sort keys: [count(a) ASC NULLS LAST]
+    │   ├── estimated rows: 0.00
+    │   └── EvalScalar
+    │       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+    │       ├── expressions: [count(a) (#6)]
+    │       ├── estimated rows: 0.00
+    │       └── AggregateFinal
+    │           ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
+    │           ├── group by: [c, a]
+    │           ├── aggregate functions: [count(a)]
+    │           ├── estimated rows: 0.00
+    │           └── AggregatePartial
+    │               ├── output columns: [count(a) (#6), #_group_by_key]
+    │               ├── group by: [c, a]
+    │               ├── aggregate functions: [count(a)]
+    │               ├── estimated rows: 0.00
+    │               └── Filter
+    │                   ├── output columns: [t1.a (#3), t1.c (#5)]
+    │                   ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.default.t1
+    │                       ├── output columns: [a (#3), c (#5)]
+    │                       ├── read rows: 0
+    │                       ├── read bytes: 0
+    │                       ├── partitions total: 0
+    │                       ├── partitions scanned: 0
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── output columns: [a (#0), b (#1), c (#2)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(*));
+----
+Filter
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
+├── filters: [is_true(t2.c (#2) > scalar_subquery_5 (#5))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
+    ├── join type: LEFT SINGLE
+    ├── build keys: [a (#3)]
+    ├── probe keys: [a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Sort(Build)
+    │   ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+    │   ├── sort keys: [COUNT(*) ASC NULLS LAST]
+    │   ├── estimated rows: 0.00
+    │   └── EvalScalar
+    │       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+    │       ├── expressions: [COUNT(*) (#6)]
+    │       ├── estimated rows: 0.00
+    │       └── AggregateFinal
+    │           ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
+    │           ├── group by: [c, a]
+    │           ├── aggregate functions: [count()]
+    │           ├── estimated rows: 0.00
+    │           └── AggregatePartial
+    │               ├── output columns: [COUNT(*) (#6), #_group_by_key]
+    │               ├── group by: [c, a]
+    │               ├── aggregate functions: [count()]
+    │               ├── estimated rows: 0.00
+    │               └── Filter
+    │                   ├── output columns: [t1.a (#3), t1.c (#5)]
+    │                   ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.default.t1
+    │                       ├── output columns: [a (#3), c (#5)]
+    │                       ├── read rows: 0
+    │                       ├── read bytes: 0
+    │                       ├── partitions total: 0
+    │                       ├── partitions scanned: 0
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── output columns: [a (#0), b (#1), c (#2)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain insert into t2 select * from t1;
+----
+Insert
+TableScan
+├── table: default.default.t1
+├── output columns: [a (#0), b (#1), c (#2)]
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 0.00
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

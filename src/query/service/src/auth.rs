@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserInfo;
-use common_users::JwtAuthenticator;
-use common_users::UserApiProvider;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_users::JwtAuthenticator;
+use databend_common_users::UserApiProvider;
 
 use crate::sessions::Session;
 
@@ -108,7 +108,7 @@ impl AuthMgr {
                         let ensure_user = jwt
                             .custom
                             .ensure_user
-                            .ok_or(ErrorCode::AuthenticateFailure(e.message()))?;
+                            .ok_or_else(|| ErrorCode::AuthenticateFailure(e.message()))?;
                         // create a new user if not exists
                         let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                         if let Some(ref roles) = ensure_user.roles {

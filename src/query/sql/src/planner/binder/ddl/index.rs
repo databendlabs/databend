@@ -12,34 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_ast::ast::CreateIndexStmt;
-use common_ast::ast::DropIndexStmt;
-use common_ast::ast::ExplainKind;
-use common_ast::ast::Identifier;
-use common_ast::ast::Query;
-use common_ast::ast::RefreshIndexStmt;
-use common_ast::ast::SetExpr;
-use common_ast::ast::Statement;
-use common_ast::ast::TableReference;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::walk_statement_mut;
-use common_ast::Dialect;
-use common_ast::Visitor;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_license::license::Feature::AggregateIndex;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::GetIndexReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use storages_common_table_meta::meta::Location;
+use databend_common_ast::ast::CreateIndexStmt;
+use databend_common_ast::ast::DropIndexStmt;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::RefreshIndexStmt;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_statement_mut;
+use databend_common_ast::Visitor;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature::AggregateIndex;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
@@ -98,7 +94,7 @@ impl Binder {
                     .get_enable_aggregating_index_scan()?
                 && !bind_context.planning_agg_index
                 && table.support_index()
-                && table.engine() != "VIEW"
+                && !matches!(table.engine(), "VIEW" | "STREAM")
             {
                 let license_manager = get_license_manager();
                 if license_manager
@@ -117,7 +113,7 @@ impl Binder {
                     let mut s_exprs = Vec::with_capacity(indexes.len());
                     for (index_id, _, index_meta) in indexes {
                         let tokens = tokenize_sql(&index_meta.query)?;
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
@@ -272,7 +268,7 @@ impl Binder {
         segment_locs: Option<Vec<Location>>,
     ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
-        let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (mut stmt, _) = parse_sql(&tokens, self.dialect)?;
 
         // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,
@@ -290,10 +286,8 @@ impl Binder {
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
-            }));
-            Ok(optimize(self.ctx.clone(), opt_ctx, select_plan)?)
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            Ok(optimize(opt_ctx, select_plan)?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };

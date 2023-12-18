@@ -17,17 +17,17 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
+use databend_common_base::base::tokio;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::MySQLTlsConfig;
 use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::TestFixture;
 use mysql_async::prelude::FromRow;
 use mysql_async::prelude::Queryable;
 use mysql_async::FromRowError;
@@ -39,8 +39,7 @@ use crate::tests::tls_constants::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {
-    // Setup
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    let _fixture = TestFixture::setup().await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -57,8 +56,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_connect_with_tls() -> Result<()> {
-    // Setup
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    let _fixture = TestFixture::setup().await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let tls_config = MySQLTlsConfig::new(TEST_SERVER_CERT.to_string(), TEST_SERVER_KEY.to_string());
@@ -77,8 +75,12 @@ async fn test_connect_with_tls() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
+    // TestFixture will create a default session, so we should limit the max_active_sessions to 2.
+    let max_active_sessions = 2;
+    let conf = ConfigBuilder::create()
+        .max_active_sessions(max_active_sessions)
+        .build();
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -89,6 +91,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     {
         // Accepted connection
         let conn = create_connection(listening.port(), false).await?;
+        let conn2 = create_connection(listening.port(), false).await?;
 
         // Rejected connection
         match create_connection(listening.port(), false).await {
@@ -97,12 +100,13 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
                 assert_eq!(error.code(), 1067);
                 assert_eq!(
                     error.message(),
-                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (1) has exceeded the max_active_sessions limit (1)'"
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (2) has exceeded the max_active_sessions limit (2)'"
                 );
             }
         };
 
         drop(conn);
+        drop(conn2);
     }
 
     // Wait for the connection to be destroyed
@@ -136,16 +140,19 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
                 assert_eq!(error.code(), 1067);
                 assert_eq!(
                     error.message(),
-                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (1) has exceeded the max_active_sessions limit (1)'"
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (2) has exceeded the max_active_sessions limit (2)'"
                 );
                 CreateServerResult::Rejected
             }
         }
     }
 
-    // Setup
-    let _guard =
-        TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
+    // TestFixture will create a default session, so we should limit the max_active_sessions to 2.
+    let max_active_sessions = 2;
+    let conf = ConfigBuilder::create()
+        .max_active_sessions(max_active_sessions)
+        .build();
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -179,8 +186,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         }
     }
 
-    assert_eq!(accept, 1);
-    assert_eq!(rejected, 2);
+    assert_eq!(accept, 2);
+    assert_eq!(rejected, 1);
 
     Ok(())
 }

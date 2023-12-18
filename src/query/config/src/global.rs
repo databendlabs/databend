@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_exception::Result;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
 
 use crate::InnerConfig;
 
 pub struct GlobalConfig;
 
 impl GlobalConfig {
-    pub fn init(config: InnerConfig) -> Result<()> {
-        GlobalInstance::set(Arc::new(config));
+    pub fn init(config: &InnerConfig) -> Result<()> {
+        GlobalInstance::set(Arc::new(config.clone()));
         Ok(())
     }
 

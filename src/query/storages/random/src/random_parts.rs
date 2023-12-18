@@ -15,10 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct RandomPartInfo {
@@ -50,8 +50,6 @@ impl RandomPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&RandomPartInfo> {
         info.as_any()
             .downcast_ref::<RandomPartInfo>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to RandomPartInfo.",
-            ))
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to RandomPartInfo."))
     }
 }

@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::Hint;
 use crate::ast::write_comma_separated_list;
@@ -242,6 +242,7 @@ impl MergeSource {
                 source_alias,
             } => TableReference::Subquery {
                 span: None,
+                lateral: false,
                 subquery: query.clone(),
                 alias: Some(source_alias.clone()),
             },

@@ -20,22 +20,23 @@ use std::vec;
 use ce::types::decimal::DecimalSize;
 use ce::types::DecimalDataType;
 use ce::types::NumberDataType;
+use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ce;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_app::schema as mt;
-use common_meta_app::schema::CatalogOption;
-use common_meta_app::schema::IcebergCatalogOption;
-use common_meta_app::schema::IndexType;
-use common_meta_app::schema::LockType;
-use common_meta_app::share;
-use common_meta_app::storage::StorageS3Config;
-use common_proto_conv::FromToProto;
-use common_proto_conv::Incompatible;
-use common_proto_conv::VER;
+use databend_common_expression as ce;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::share;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_proto_conv::FromToProto;
+use databend_common_proto_conv::Incompatible;
+use databend_common_proto_conv::VER;
 use maplit::btreemap;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -143,7 +144,9 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
 }
 
 fn new_lvt() -> mt::LeastVisibleTime {
-    mt::LeastVisibleTime { time: 10267 }
+    mt::LeastVisibleTime {
+        time: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+    }
 }
 
 fn new_table_meta() -> mt::TableMeta {
@@ -283,8 +286,8 @@ pub(crate) fn new_lock_meta() -> mt::LockMeta {
     }
 }
 
-fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
-    common_meta_app::data_mask::DatamaskMeta {
+fn new_data_mask_meta() -> databend_common_meta_app::data_mask::DatamaskMeta {
+    databend_common_meta_app::data_mask::DatamaskMeta {
         args: vec![("a".to_string(), "String".to_string())],
         return_type: "String".to_string(),
         body: "CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END".to_string(),
@@ -294,8 +297,8 @@ fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
     }
 }
 
-fn new_table_statistics() -> common_meta_app::schema::TableStatistics {
-    common_meta_app::schema::TableStatistics {
+fn new_table_statistics() -> databend_common_meta_app::schema::TableStatistics {
+    databend_common_meta_app::schema::TableStatistics {
         number_of_rows: 100,
         data_bytes: 200,
         compressed_data_bytes: 15,
@@ -305,10 +308,10 @@ fn new_table_statistics() -> common_meta_app::schema::TableStatistics {
     }
 }
 
-fn new_catalog_meta() -> common_meta_app::schema::CatalogMeta {
-    common_meta_app::schema::CatalogMeta {
+fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
+    databend_common_meta_app::schema::CatalogMeta {
         catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
-            storage_params: Box::new(common_meta_app::storage::StorageParams::S3(
+            storage_params: Box::new(databend_common_meta_app::storage::StorageParams::S3(
                 StorageS3Config {
                     endpoint_url: "http://127.0.0.1:9900".to_string(),
                     region: "hello".to_string(),
@@ -352,7 +355,7 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 
     let data_mask_meta = new_data_mask_meta();
     let p = data_mask_meta.to_pb()?;
-    let got = common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
+    let got = databend_common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
     assert_eq!(data_mask_meta, got);
 
     let lvt = new_lvt();
@@ -410,7 +413,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("db:{:?}", buf);
     }
 
@@ -421,7 +424,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = tbl.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("table:{:?}", buf);
     }
 
@@ -432,7 +435,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = tbl.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("share:{:?}", buf);
     }
 
@@ -443,7 +446,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = share_account_meta.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("share account:{:?}", buf);
     }
 
@@ -453,7 +456,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = index.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("index:{buf:?}");
     }
 
@@ -463,7 +466,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = copied_file.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("copied_file:{:?}", buf);
     }
 
@@ -473,7 +476,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = empty_proto.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("empty_proto:{:?}", buf);
     }
 
@@ -483,7 +486,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = table_lock_meta.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
     }
 
     // schema
@@ -492,7 +495,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = schema.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("schema:{:?}", buf);
     }
 
@@ -502,7 +505,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = data_mask_meta.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("data mask:{:?}", buf);
     }
 
@@ -512,7 +515,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = table_statistics.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("table statistics:{:?}", buf);
     }
 
@@ -522,7 +525,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = catalog_meta.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("catalog catalog_meta:{:?}", buf);
     }
 
@@ -532,7 +535,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = lvt.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("lvt:{:?}", buf);
     }
 

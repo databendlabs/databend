@@ -14,19 +14,20 @@
 
 use std::collections::HashMap;
 
-use common_exception::Result;
-use common_expression::types::NumberType;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_functions::aggregates::eval_aggr;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
+use databend_common_functions::aggregates::eval_aggr;
+use databend_storages_common_index::Index;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
     let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column.clone()], rows)?;
@@ -52,6 +53,11 @@ pub fn gen_columns_statistics(
     for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         // Ignore the range index does not supported type.
         if !RangeIndex::supported_type(data_type) {
+            continue;
+        }
+
+        // Ignore the origin block row number column.
+        if column_id == ORIGIN_BLOCK_ROW_NUM_COLUMN_ID {
             continue;
         }
 
@@ -125,11 +131,11 @@ pub fn gen_columns_statistics(
 }
 
 pub mod traverse {
-    use common_expression::types::map::KvPair;
-    use common_expression::types::AnyType;
-    use common_expression::types::DataType;
-    use common_expression::BlockEntry;
-    use common_expression::Column;
+    use databend_common_expression::types::map::KvPair;
+    use databend_common_expression::types::AnyType;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
 
     use super::*;
 

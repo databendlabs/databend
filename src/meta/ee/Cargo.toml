@@ -1,5 +1,5 @@
 [package]
-name = "enterprise-meta"
+name = "databend-enterprise-meta"
 description = "enterprise features for databend-meta"
 version = { workspace = true }
 authors = { workspace = true }
@@ -14,7 +14,4 @@ test = true
 [dependencies]
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]
+databend-common-building = { path = "../../common/building" }

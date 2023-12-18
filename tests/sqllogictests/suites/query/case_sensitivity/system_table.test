@@ -2,10 +2,13 @@ onlyif mysql
 query I
 select "Engine" as engine from system.engines order by engine
 ----
+DELTA
 FUSE
+ICEBERG
 MEMORY
 NULL
 RANDOM
+STREAM
 VIEW
 
 statement error 1065

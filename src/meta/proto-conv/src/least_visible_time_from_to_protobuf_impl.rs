@@ -15,8 +15,10 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_meta_app::schema as mt;
-use common_protos::pb;
+use chrono::DateTime;
+use chrono::Utc;
+use databend_common_meta_app::schema as mt;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -35,7 +37,9 @@ impl FromToProto for mt::LeastVisibleTime {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let v = Self { time: p.time };
+        let v = Self {
+            time: DateTime::<Utc>::from_pb(p.time)?,
+        };
         Ok(v)
     }
 
@@ -43,7 +47,7 @@ impl FromToProto for mt::LeastVisibleTime {
         let p = pb::LeastVisibleTime {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            time: self.time,
+            time: self.time.to_pb()?,
         };
         Ok(p)
     }

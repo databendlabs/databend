@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::StageTableInfo;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_formats::FileFormatOptionsExt;
-use common_pipeline_core::Pipeline;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use crate::parquet_file::limit_file_size_processor::LimitFileSizeProcessor;

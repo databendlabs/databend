@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::SendableDataBlockStream;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::SendableDataBlockStream;
 use futures::Stream;
 use pin_project_lite::pin_project;
 

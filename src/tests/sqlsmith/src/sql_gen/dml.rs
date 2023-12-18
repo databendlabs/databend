@@ -15,42 +15,42 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_ast::ast::AddColumnOption;
-use common_ast::ast::AlterTableAction;
-use common_ast::ast::AlterTableStmt;
-use common_ast::ast::ColumnDefinition;
-use common_ast::ast::DeleteStmt;
-use common_ast::ast::Hint;
-use common_ast::ast::HintItem;
-use common_ast::ast::Identifier;
-use common_ast::ast::InsertOperation;
-use common_ast::ast::InsertSource;
-use common_ast::ast::InsertStmt;
-use common_ast::ast::MatchOperation;
-use common_ast::ast::MatchedClause;
-use common_ast::ast::MergeIntoStmt;
-use common_ast::ast::MergeOption;
-use common_ast::ast::MergeSource;
-use common_ast::ast::MergeUpdateExpr;
-use common_ast::ast::NullableConstraint;
-use common_ast::ast::ReplaceStmt;
-use common_ast::ast::TableReference;
-use common_ast::ast::UnmatchedClause;
-use common_ast::ast::UpdateExpr;
-use common_ast::ast::UpdateStmt;
-use common_exception::Span;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ScalarRef;
-use common_expression::TableField;
-use common_formats::field_encoder::FieldEncoderValues;
-use common_formats::OutputCommonSettings;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_UPPER;
-use common_io::constants::TRUE_BYTES_LOWER;
-use common_sql::resolve_type_name;
+use databend_common_ast::ast::AddColumnOption;
+use databend_common_ast::ast::AlterTableAction;
+use databend_common_ast::ast::AlterTableStmt;
+use databend_common_ast::ast::ColumnDefinition;
+use databend_common_ast::ast::DeleteStmt;
+use databend_common_ast::ast::Hint;
+use databend_common_ast::ast::HintItem;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::InsertOperation;
+use databend_common_ast::ast::InsertSource;
+use databend_common_ast::ast::InsertStmt;
+use databend_common_ast::ast::MatchOperation;
+use databend_common_ast::ast::MatchedClause;
+use databend_common_ast::ast::MergeIntoStmt;
+use databend_common_ast::ast::MergeOption;
+use databend_common_ast::ast::MergeSource;
+use databend_common_ast::ast::MergeUpdateExpr;
+use databend_common_ast::ast::NullableConstraint;
+use databend_common_ast::ast::ReplaceStmt;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UnmatchedClause;
+use databend_common_ast::ast::UpdateExpr;
+use databend_common_ast::ast::UpdateStmt;
+use databend_common_exception::Span;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::TableField;
+use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_formats::OutputCommonSettings;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_UPPER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_sql::resolve_type_name;
 use itertools::join;
 use rand::Rng;
 use roaring::RoaringTreemap;
@@ -456,7 +456,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 };
                 (
                     AlterTableAction::ModifyColumn {
-                        action: common_ast::ast::ModifyColumnAction::SetDataType(vec![
+                        action: databend_common_ast::ast::ModifyColumnAction::SetDataType(vec![
                             new_column.clone(),
                         ]),
                     },

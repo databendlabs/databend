@@ -20,7 +20,7 @@ mod user_quota;
 
 #[test]
 fn test_bin_commit_version() -> anyhow::Result<()> {
-    let v = &common_meta_types::config::DATABEND_COMMIT_VERSION;
+    let v = &databend_common_meta_types::config::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
 }

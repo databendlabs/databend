@@ -1,0 +1,14 @@
+statement ok
+SHOW LOCKS
+
+statement error 1005
+SHOW LOCKS LIKE 'test%'
+
+statement ok
+SHOW LOCKS WHERE status = 'HOLDING'
+
+statement ok
+SHOW LOCKS IN ACCOUNT
+
+statement error 1005
+SHOW LOCKS IN ACCOUNT WHERE table_id = 1 LIMIT 2

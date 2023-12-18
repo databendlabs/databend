@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_pipeline_core::processors::*;
+pub use databend_common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
 pub use transforms::DeduplicateRowNumber;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
-pub use transforms::SinkRuntimeFilterSource;
+pub use transforms::TransformAddStreamColumns;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCreateSets;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;
 pub use transforms::TransformResortAddOnWithoutSourceSchema;
-pub use transforms::TransformRuntimeFilter;
 pub use transforms::TransformWindow;

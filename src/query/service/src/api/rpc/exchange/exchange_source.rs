@@ -14,18 +14,24 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::Pipeline;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::TransformDummy;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
-use crate::api::rpc::exchange::exchange_source_reader;
+use crate::api::rpc::exchange::exchange_source_reader::ExchangeSourceReader;
 use crate::api::ExchangeInjector;
 use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
+/// Add Exchange Source to the pipeline.
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
     params: &MergeExchangeParams,
@@ -53,8 +59,39 @@ pub fn via_exchange_source(
     let flight_receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
 
     let last_output_len = pipeline.output_len();
-    exchange_source_reader::via_reader(last_output_len, pipeline, flight_receivers);
+    let mut items = Vec::with_capacity(last_output_len + flight_receivers.len());
 
-    pipeline.try_resize(last_output_len)?;
+    for _index in 0..last_output_len {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+
+        items.push(PipeItem::create(
+            TransformDummy::create(input.clone(), output.clone()),
+            vec![input],
+            vec![output],
+        ));
+    }
+
+    for (destination_id, flight_exchange) in flight_receivers {
+        let output = OutputPort::create();
+        items.push(PipeItem::create(
+            ExchangeSourceReader::create(
+                output.clone(),
+                flight_exchange,
+                &destination_id,
+                &ctx.get_cluster().local_id(),
+                params.fragment_id,
+            ),
+            vec![],
+            vec![output],
+        ));
+    }
+
+    pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
+
+    if params.allow_adjust_parallelism {
+        pipeline.try_resize(last_output_len)?;
+    }
+
     injector.apply_merge_deserializer(params, pipeline)
 }

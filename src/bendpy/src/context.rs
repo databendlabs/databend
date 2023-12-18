@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeSet;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -62,6 +62,11 @@ impl PySessionContext {
             user.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_stage(),
+            );
+
+            user.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_udf(),
             );
 
             session.set_authed_user(user, None).await.unwrap();

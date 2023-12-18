@@ -215,10 +215,10 @@ Limit
     ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
     ├── estimated rows: 0.00
     └── Exchange
-        ├── output columns: [c (#4), d (#5), e (#6)]
+        ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
         ├── exchange type: Merge
         └── Sort
-            ├── output columns: [c (#4), d (#5), e (#6)]
+            ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 0.00
             └── EvalScalar
@@ -314,10 +314,10 @@ Limit
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 10.00
     └── Exchange
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [numbers.number (#0), #_order_col]
         ├── exchange type: Merge
         └── Sort
-            ├── output columns: [numbers.number (#0)]
+            ├── output columns: [numbers.number (#0), #_order_col]
             ├── sort keys: [number ASC NULLS LAST]
             ├── estimated rows: 10.00
             └── TableScan
@@ -343,10 +343,10 @@ Limit
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 50.00
     └── Exchange
-        ├── output columns: [numbers.number (#0), numbers.number (#1)]
+        ├── output columns: [numbers.number (#0), numbers.number (#1), #_order_col]
         ├── exchange type: Merge
         └── Sort
-            ├── output columns: [numbers.number (#0), numbers.number (#1)]
+            ├── output columns: [numbers.number (#0), numbers.number (#1), #_order_col]
             ├── sort keys: [number ASC NULLS LAST]
             ├── estimated rows: 50.00
             └── HashJoin

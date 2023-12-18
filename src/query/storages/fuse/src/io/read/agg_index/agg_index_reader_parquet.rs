@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read as pread;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_arrow::arrow::io::parquet::read as pread;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use log::debug;
 
 use super::AggIndexReader;
@@ -47,6 +47,7 @@ impl AggIndexReader {
                     loc.to_string(),
                     row_group.num_rows() as u64,
                     columns_meta,
+                    None,
                     self.compression.into(),
                     None,
                     None,
@@ -96,6 +97,7 @@ impl AggIndexReader {
                     loc.to_string(),
                     row_group.num_rows() as u64,
                     columns_meta,
+                    None,
                     self.compression.into(),
                     None,
                     None,

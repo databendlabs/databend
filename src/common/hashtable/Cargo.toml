@@ -1,5 +1,5 @@
 [package]
-name = "common-hashtable"
+name = "databend-common-hashtable"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,7 +12,8 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../base" }
+databend-common-arrow = { path = "../arrow" }
+databend-common-base = { path = "../base" }
 
 # Crates.io dependencies
 
@@ -24,4 +25,4 @@ ethnum = { workspace = true }
 ordered-float = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = { workspace = true }

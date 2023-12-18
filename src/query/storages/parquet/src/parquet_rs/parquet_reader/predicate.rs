@@ -16,17 +16,18 @@ use std::sync::Arc;
 
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_catalog::plan::PrewhereInfo;
-use common_catalog::plan::Projection;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_catalog::plan::PrewhereInfo;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
@@ -76,7 +77,8 @@ impl ParquetPredicate {
     }
 
     pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
-        let block = transform_record_batch(batch, &self.field_paths)?;
+        let data_schema = DataSchema::from(&self.schema);
+        let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
     }

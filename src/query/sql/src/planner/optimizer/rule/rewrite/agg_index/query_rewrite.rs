@@ -16,13 +16,13 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::types::DataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
 use itertools::Itertools;
 use log::info;
 
@@ -1013,6 +1013,7 @@ fn rewrite_query_item(
                 UDFServerCall {
                     span: udf.span,
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),

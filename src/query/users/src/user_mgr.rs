@@ -15,16 +15,16 @@
 use core::net::Ipv4Addr;
 
 use cidr::Ipv4Cidr;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::UserApi;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_types::MatchSeq;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::UserApi;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_types::MatchSeq;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
@@ -42,6 +42,10 @@ impl UserApiProvider {
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_stage(),
+            );
+            user_info.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_udf(),
             );
             // Grant admin role to all configured users.
             user_info

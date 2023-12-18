@@ -14,28 +14,30 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc::channel;
-use common_base::base::tokio::sync::mpsc::Receiver;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::SyncSenderSink;
-use common_pipeline_sources::SyncReceiverSource;
-use common_pipeline_transforms::processors::TransformDummy;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::mpsc::channel;
+use databend_common_base::base::tokio::sync::mpsc::Receiver;
+use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sinks::SyncSenderSink;
+use databend_common_pipeline_sources::SyncReceiverSource;
+use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::InputPort;
 use databend_query::pipelines::processors::OutputPort;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::create_query_context;
+use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
     assert_eq!(
         format!("{:?}", create_simple_pipeline(ctx)?),
         "digraph {\
@@ -52,7 +54,9 @@ async fn test_create_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
     assert_eq!(
         format!("{:?}", create_parallel_simple_pipeline(ctx)?),
         "digraph {\
@@ -74,7 +78,9 @@ async fn test_create_parallel_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_resize_pipeline() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
     assert_eq!(
         format!("{:?}", create_resize_pipeline(ctx)?),
         "digraph {\
@@ -104,7 +110,9 @@ async fn test_create_resize_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_pipeline_init_queue() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
     unsafe {
         assert_eq!(
             format!("{:?}", create_simple_pipeline(ctx)?.init_schedule_queue(0)?),
@@ -115,13 +123,16 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
                 async_queue: [] \
             }"
         );
-        Ok(())
     }
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
     unsafe {
         assert_eq!(
             format!(
@@ -136,13 +147,16 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
                 async_queue: [] \
             }"
         );
-        Ok(())
     }
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resize_pipeline_init_queue() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
     unsafe {
         assert_eq!(
             format!("{:?}", create_resize_pipeline(ctx)?.init_schedule_queue(0)?),
@@ -154,9 +168,9 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
                 async_queue: [] \
             }"
         );
-
-        Ok(())
     }
+
+    Ok(())
 }
 
 fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {

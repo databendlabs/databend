@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::SledItem;
-use common_meta_sled_store::SledTree;
-use common_meta_types::new_log_id;
-use common_meta_types::Cmd;
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::LogEntry;
-use common_meta_types::UpsertKV;
+use databend_common_meta_sled_store::SledItem;
+use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::UpsertKV;
 use log::info;
 use pretty_assertions::assert_eq;
 use sled::IVec;
@@ -74,7 +74,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
 
     let mut trees = vec![t1.clone(), t2.clone()];
 
-    for tree_iter in common_meta_sled_store::iter::<IVec>() {
+    for tree_iter in databend_common_meta_sled_store::iter::<IVec>() {
         let (tree_name, item_iter) = tree_iter?;
 
         if tree_name == "__sled__default" {
@@ -110,7 +110,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
     let trees = vec![t1, t2];
 
     let mut got = vec![];
-    for tree_iter in common_meta_sled_store::iter::<Vec<u8>>() {
+    for tree_iter in databend_common_meta_sled_store::iter::<Vec<u8>>() {
         let (tree_name, item_iter) = tree_iter?;
 
         if !trees.contains(&tree_name) {

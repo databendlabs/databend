@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
 use tonic::Request;
@@ -66,11 +66,8 @@ pub fn make_request<T>(t: T, config: ClientConfig) -> Request<T> {
 impl TaskClient {
     // TODO: add auth interceptor
     pub async fn new(endpoint: Endpoint) -> Result<Arc<TaskClient>> {
-        let task_client = TaskServiceClient::connect(endpoint).await.map_err(|err| {
-            common_exception::ErrorCode::CloudControlConnectError(format!(
-                "Cannot connect to task client: {err}"
-            ))
-        })?;
+        let channel = endpoint.connect_lazy();
+        let task_client = TaskServiceClient::new(channel);
         Ok(Arc::new(TaskClient { task_client }))
     }
 

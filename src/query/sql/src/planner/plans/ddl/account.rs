@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserPrivilegeSet;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
@@ -85,6 +85,12 @@ pub struct RevokeRolePlan {
 pub struct SetRolePlan {
     pub is_default: bool,
     pub role_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetSecondaryRolesPlan {
+    All,
+    None,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

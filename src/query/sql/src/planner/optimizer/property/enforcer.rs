@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::property::Distribution;
 use crate::optimizer::RelExpr;
@@ -46,13 +46,14 @@ pub fn require_property(
 
     let rel_expr = RelExpr::with_s_expr(&optimized_expr);
     let mut children = Vec::with_capacity(s_expr.arity());
+    let mut plan = optimized_expr.plan.as_ref().clone();
     for index in 0..optimized_expr.arity() {
         let required = rel_expr.compute_required_prop_child(ctx.clone(), index, required)?;
         let physical = rel_expr.derive_physical_prop_child(index)?;
-        if let RelOperator::Join(_) = s_expr.plan.as_ref() {
+        if let RelOperator::Join(join) = &mut plan {
             if index == 0 && required.distribution == Distribution::Broadcast {
                 // If the child is join probe side and join type is broadcast join
-                // We should wrap the child with Random exchange to make it partition to all nodes
+                // We should wrap the child with Random exchange to make it repartition to all nodes
                 if optimized_expr
                     .child(0)?
                     .children()
@@ -69,13 +70,15 @@ pub fn require_property(
                 children.push(Arc::new(enforced_child));
                 continue;
             } else if index == 1 && required.distribution == Distribution::Broadcast {
+                join.broadcast = true;
                 // If the child is join build side and join type is broadcast join
                 // We should wrap the child with Broadcast exchange to make it available to all nodes.
                 let enforced_child = enforce_property(optimized_expr.child(index)?, &required)?;
                 children.push(Arc::new(enforced_child));
+                continue;
             }
         }
-        if let RelOperator::UnionAll(_) = s_expr.plan.as_ref() {
+        if let RelOperator::UnionAll(_) = &plan {
             // Wrap the child with Random exchange to make it partition to all nodes
             // Check if exists `Merge` in child, if not exits, wrap it with `Exchange`
             if optimized_expr
@@ -102,13 +105,7 @@ pub fn require_property(
         children.push(Arc::new(enforced_child));
     }
 
-    Ok(SExpr::create(
-        Arc::new(optimized_expr.plan().clone()),
-        children,
-        None,
-        None,
-        None,
-    ))
+    Ok(SExpr::create(Arc::new(plan), children, None, None, None))
 }
 
 /// Try to enforce physical property from a physical `SExpr`

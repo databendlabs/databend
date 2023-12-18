@@ -18,56 +18,57 @@ use std::fmt::Debug;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
-use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_sled_store::AsKeySpace;
-use common_meta_sled_store::SledKeySpace;
-use common_meta_sled_store::SledTree;
-use common_meta_sled_store::Store;
-use common_meta_sled_store::TransactionSledTree;
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::protobuf as pb;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op;
-use common_meta_types::txn_op_response;
-use common_meta_types::AppliedState;
-use common_meta_types::Change;
-use common_meta_types::Cmd;
-use common_meta_types::ConditionResult;
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::KVMeta;
-use common_meta_types::LogId;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::StoredMembership;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteByPrefixRequest;
-use common_meta_types::TxnDeleteByPrefixResponse;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnDeleteResponse;
-use common_meta_types::TxnGetRequest;
-use common_meta_types::TxnGetResponse;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
-use common_meta_types::TxnPutResponse;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKV;
-use common_meta_types::With;
+use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::openraft::MessageSummary;
+use databend_common_meta_sled_store::AsKeySpace;
+use databend_common_meta_sled_store::SledKeySpace;
+use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_sled_store::Store;
+use databend_common_meta_sled_store::TransactionSledTree;
+use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_op;
+use databend_common_meta_types::txn_op_response;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::Change;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::CmdContext;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::Interval;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnDeleteByPrefixRequest;
+use databend_common_meta_types::TxnDeleteByPrefixResponse;
+use databend_common_meta_types::TxnDeleteRequest;
+use databend_common_meta_types::TxnDeleteResponse;
+use databend_common_meta_types::TxnGetRequest;
+use databend_common_meta_types::TxnGetResponse;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnOpResponse;
+use databend_common_meta_types::TxnPutRequest;
+use databend_common_meta_types::TxnPutResponse;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use log::as_debug;
 use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
-use log::warn;
 use num::FromPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
@@ -82,7 +83,6 @@ use crate::key_spaces::StateMachineMeta;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
-use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
@@ -191,55 +191,6 @@ impl StateMachine {
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
         self.subscriber = Some(subscriber);
-    }
-
-    /// Create a snapshot.
-    ///
-    /// Returns:
-    /// - all key values in state machine;
-    /// - the last applied log id
-    /// - and a snapshot id that uniquely identifies this snapshot.
-    // TODO: remove it
-    pub fn build_snapshot(
-        &self,
-    ) -> Result<
-        (
-            SerializableSnapshot,
-            Option<LogId>,
-            StoredMembership,
-            MetaSnapshotId,
-        ),
-        MetaStorageError,
-    > {
-        let last_applied = self.get_last_applied()?;
-        let last_membership = self.get_membership()?.unwrap_or_default();
-
-        let snapshot_idx = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let snapshot_id = MetaSnapshotId::new(last_applied, snapshot_idx);
-
-        let view = self.sm_tree.tree.iter();
-
-        let mut kvs = Vec::new();
-        for rkv in view {
-            let (k, v) = rkv?;
-            kvs.push(vec![k.to_vec(), v.to_vec()]);
-        }
-        let snap = SerializableSnapshot { kvs };
-
-        if cfg!(debug_assertions) {
-            let sl = self.blocking_config().write_snapshot;
-            if !sl.is_zero() {
-                warn!("start    build snapshot sleep 1000s");
-                std::thread::sleep(sl);
-                warn!("finished build snapshot sleep 1000s");
-            }
-        }
-
-        Ok((snap, last_applied, last_membership, snapshot_id))
     }
 
     fn scan_prefix_if_needed(
@@ -584,9 +535,10 @@ impl StateMachine {
     ) -> Result<(), MetaStorageError> {
         let (expired, prev, result) = Self::txn_upsert_kv(
             txn_tree,
-            &UpsertKV::update(&put.key, &put.value).with(KVMeta {
-                expire_at: put.expire_at,
-            }),
+            &UpsertKV::update(&put.key, &put.value).with(MetaSpec::new(
+                put.expire_at,
+                put.ttl_ms.map(Interval::from_millis),
+            )),
             log_time_ms,
         )?;
 
@@ -912,8 +864,8 @@ impl StateMachine {
 
         if let Some(sv) = &expired {
             if let Some(m) = &sv.meta {
-                if let Some(exp) = m.expire_at {
-                    expires.remove(&ExpireKey::new(exp * 1000, sv.seq))?;
+                if let Some(exp_ms) = m.get_expire_at_ms() {
+                    expires.remove(&ExpireKey::new(exp_ms, sv.seq))?;
                 }
             }
         }
@@ -927,16 +879,16 @@ impl StateMachine {
 
         if let Some(sv) = &prev {
             if let Some(m) = &sv.meta {
-                if let Some(exp) = m.expire_at {
-                    expires.remove(&ExpireKey::new(exp * 1000, sv.seq))?;
+                if let Some(exp_ms) = m.get_expire_at_ms() {
+                    expires.remove(&ExpireKey::new(exp_ms, sv.seq))?;
                 }
             }
         }
 
         if let Some(sv) = &res {
             if let Some(m) = &sv.meta {
-                if let Some(exp) = m.expire_at {
-                    let k = ExpireKey::new(exp * 1000, sv.seq);
+                if let Some(exp_ms) = m.get_expire_at_ms() {
+                    let k = ExpireKey::new(exp_ms, sv.seq);
                     let v = ExpireValue::new(&upsert_kv.key, 0);
                     expires.insert(&k, &v)?;
                 }
@@ -957,6 +909,8 @@ impl StateMachine {
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
     ) -> Result<(Option<SeqV>, Option<SeqV>, Option<SeqV>), MetaStorageError> {
+        let cmd_ctx = CmdContext::from_millis(log_time_ms);
+
         let kvs = txn_tree.key_space::<GenericKV>();
 
         let prev = kvs.get(&upsert_kv.key)?;
@@ -969,16 +923,26 @@ impl StateMachine {
         }
 
         let mut new_seq_v = match &upsert_kv.value {
-            Operation::Update(v) => SeqV::with_meta(0, upsert_kv.value_meta.clone(), v.clone()),
+            Operation::Update(v) => SeqV::with_meta(
+                0,
+                upsert_kv
+                    .value_meta
+                    .as_ref()
+                    .map(|x| x.to_kv_meta(&cmd_ctx)),
+                v.clone(),
+            ),
             Operation::Delete => {
                 kvs.remove(&upsert_kv.key)?;
                 return Ok((expired, prev, None));
             }
             Operation::AsIs => match prev {
                 None => return Ok((expired, prev, None)),
-                Some(ref prev_kv_value) => {
-                    prev_kv_value.clone().set_meta(upsert_kv.value_meta.clone())
-                }
+                Some(ref prev_kv_value) => prev_kv_value.clone().set_meta(
+                    upsert_kv
+                        .value_meta
+                        .as_ref()
+                        .map(|m| m.to_kv_meta(&cmd_ctx)),
+                ),
             },
         };
 
@@ -1076,7 +1040,7 @@ impl StateMachine {
         log_time_ms: u64,
     ) -> (Option<SeqV<V>>, Option<SeqV<V>>) {
         if let Some(s) = &seq_value {
-            if s.get_expire_at() < log_time_ms {
+            if s.eval_expire_at_ms() < log_time_ms {
                 (seq_value, None)
             } else {
                 (None, seq_value)
@@ -1117,8 +1081,8 @@ impl StateMachine {
 
 #[cfg(test)]
 mod tests {
-    use common_meta_types::KVMeta;
-    use common_meta_types::SeqV;
+    use databend_common_meta_types::KVMeta;
+    use databend_common_meta_types::SeqV;
 
     use crate::state_machine::StateMachine;
 
@@ -1131,35 +1095,16 @@ mod tests {
         assert_eq!((None, Some(sv())), expire_seq_v(Some(sv()), 10_000));
 
         assert_eq!(
-            (None, Some(sv().set_meta(Some(KVMeta { expire_at: None })))),
-            expire_seq_v(
-                Some(sv().set_meta(Some(KVMeta { expire_at: None }))),
-                10_000
-            )
+            (None, Some(sv().set_meta(Some(KVMeta::new(None))))),
+            expire_seq_v(Some(sv().set_meta(Some(KVMeta::new(None)))), 10_000)
         );
         assert_eq!(
-            (
-                None,
-                Some(sv().set_meta(Some(KVMeta {
-                    expire_at: Some(20)
-                })))
-            ),
-            expire_seq_v(
-                Some(sv().set_meta(Some(KVMeta {
-                    expire_at: Some(20)
-                }))),
-                10_000
-            )
+            (None, Some(sv().set_meta(Some(KVMeta::new_expire(20))))),
+            expire_seq_v(Some(sv().set_meta(Some(KVMeta::new_expire(20)))), 10_000)
         );
         assert_eq!(
-            (
-                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
-                None
-            ),
-            expire_seq_v(
-                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
-                10_000
-            )
+            (Some(sv().set_meta(Some(KVMeta::new_expire(5)))), None),
+            expire_seq_v(Some(sv().set_meta(Some(KVMeta::new_expire(5)))), 10_000)
         );
 
         Ok(())

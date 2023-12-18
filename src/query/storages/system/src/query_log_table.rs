@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use chrono::NaiveDateTime;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::NumberDataType;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
 use serde::Serialize;
 use serde::Serializer;
 use serde_repr::Serialize_repr;
@@ -145,6 +145,8 @@ pub struct QueryLogElement {
 
     // Extra.
     pub extra: String,
+
+    pub has_profiles: bool,
 }
 
 impl SystemLogElement for QueryLogElement {
@@ -265,6 +267,7 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("session_settings", TableDataType::String),
             // Extra.
             TableField::new("extra", TableDataType::String),
+            TableField::new("has_profile", TableDataType::Boolean),
         ])
     }
 
@@ -475,6 +478,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.extra.as_bytes().to_vec()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Boolean(self.has_profiles).as_ref());
         Ok(())
     }
 }

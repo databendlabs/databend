@@ -14,7 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use ordered_float::OrderedFloat;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;

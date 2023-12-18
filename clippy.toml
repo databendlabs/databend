@@ -1,0 +1,19 @@
+disallowed-methods = [
+    { path = "std::panic::catch_unwind", reason = "Please use `common_base::runtime::catch_unwind` instead." },
+    { path = "futures::FutureExt::catch_unwind", reason = "Please use `common_base::runtime::CatchUnwindFuture` instead." },
+    { path = "num_traits::sign::Signed::is_positive", reason = "This returns true for 0.0 but false for 0." },
+    { path = "num_traits::sign::Signed::is_negative", reason = "This returns true for -0.0 but false for 0." },
+    { path = "num_traits::sign::Signed::signum", reason = "This returns 1.0 for 0.0 but 0 for 0." }
+]
+
+disallowed-types = [
+    { path = "once_cell::sync::Lazy", reason = "Please use `std::sync::LazyLock` instead." },
+]
+
+disallowed-macros = [
+    { path = "lazy_static::lazy_static", reason = "Please use `std::sync::LazyLock` instead." },
+]
+
+avoid-breaking-exported-api = true
+too-many-arguments-threshold = 10
+upper-case-acronyms-aggressive = false

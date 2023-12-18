@@ -15,10 +15,10 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Scalar;
-use common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::IndexType;
 
@@ -54,8 +54,8 @@ pub struct SortDesc {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct OnConflictField {
-    pub table_field: common_expression::TableField,
-    pub field_index: common_expression::FieldIndex,
+    pub table_field: databend_common_expression::TableField,
+    pub field_index: databend_common_expression::FieldIndex,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -77,6 +77,7 @@ pub enum MutationKind {
     Recluster,
     Insert,
     Compact,
+    MergeInto,
 }
 
 impl Display for MutationKind {
@@ -88,6 +89,7 @@ impl Display for MutationKind {
             MutationKind::Update => write!(f, "Update"),
             MutationKind::Replace => write!(f, "Replace"),
             MutationKind::Compact => write!(f, "Compact"),
+            MutationKind::MergeInto => write!(f, "MergeInto"),
         }
     }
 }

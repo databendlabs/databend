@@ -19,11 +19,11 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -391,12 +391,7 @@ impl FunctionRegistry {
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
         if self.contains(&func_name) {
-            Some(
-                self.properties
-                    .get(&func_name.to_lowercase())
-                    .cloned()
-                    .unwrap_or_default(),
-            )
+            Some(self.properties.get(&func_name).cloned().unwrap_or_default())
         } else {
             None
         }
@@ -655,8 +650,10 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
                         let validity = bitmap.into();
-                        let validity =
-                            common_arrow::arrow::bitmap::and(&nullable_column.validity, &validity);
+                        let validity = databend_common_arrow::arrow::bitmap::and(
+                            &nullable_column.validity,
+                            &validity,
+                        );
                         Column::Nullable(Box::new(NullableColumn {
                             column: nullable_column.column,
                             validity,

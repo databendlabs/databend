@@ -12,12 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_sql::Planner;
-use common_storages_fuse::TableContext;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_sql::Planner;
+use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 use crate::storages::fuse::utils::do_purge_test;
@@ -34,11 +34,12 @@ async fn test_fuse_snapshot_optimize_all() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert 5 times

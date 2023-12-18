@@ -14,16 +14,16 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::OwnershipInfo;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::principal::UserPrivilegeType;
-use common_meta_types::MatchSeq;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipInfo;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_types::MatchSeq;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
@@ -120,7 +120,10 @@ impl UserApiProvider {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_stage(),
         );
-
+        account_admin.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_udf(),
+        );
         let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         public.grants.grant_privileges(
             &GrantObject::Table(

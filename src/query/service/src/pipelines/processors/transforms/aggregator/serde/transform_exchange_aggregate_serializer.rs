@@ -15,30 +15,32 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_base::base::GlobalUniqName;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::arrow::serialize_column;
-use common_expression::types::ArgType;
-use common_expression::types::ArrayType;
-use common_expression::types::Int64Type;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::FromData;
-use common_hashtable::HashtableLike;
-use common_metrics::transform::*;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::BlockMetaTransform;
-use common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FromData;
+use databend_common_hashtable::HashtableLike;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_settings::FlightCompression;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
@@ -81,11 +83,19 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
         operator: Operator,
         location_prefix: String,
         params: Arc<AggregatorParams>,
+        compression: Option<FlightCompression>,
         schema: DataSchemaRef,
         local_pos: usize,
     ) -> Box<dyn Processor> {
         let arrow_schema = schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
 
         BlockMetaTransformer::create(input, output, TransformExchangeAggregateSerializer::<
             Method,
@@ -97,7 +107,7 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
             location_prefix,
             local_pos,
             ipc_fields,
-            options: WriteOptions { compression: None },
+            options: WriteOptions { compression },
         })
     }
 }

@@ -16,9 +16,9 @@ use std::any::Any;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -362,7 +362,11 @@ impl Processor for TransformHashJoinBuild {
                         .spiller
                         .read_spilled_data(&(partition_id as u8), self.processor_id)
                         .await?;
-                    self.input_data = Some(DataBlock::concat(&spilled_data)?);
+                    if spilled_data.is_empty() {
+                        self.input_data = None;
+                    } else {
+                        self.input_data = Some(DataBlock::concat(&spilled_data)?);
+                    }
                 }
                 self.build_state.restore_barrier.wait().await;
                 self.reset().await?;

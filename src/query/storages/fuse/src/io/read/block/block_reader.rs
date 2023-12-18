@@ -15,24 +15,24 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ColumnId;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_sql::field_default_value;
-use common_storage::ColumnNode;
-use common_storage::ColumnNodes;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_sql::field_default_value;
+use databend_common_storage::ColumnNode;
+use databend_common_storage::ColumnNodes;
 use opendal::Operator;
 
 // TODO: make BlockReader as a trait.
@@ -47,6 +47,8 @@ pub struct BlockReader {
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
     pub query_internal_columns: bool,
+    // used for mutation to update stream columns.
+    pub update_stream_columns: bool,
     pub put_cache: bool,
 }
 
@@ -84,6 +86,7 @@ impl BlockReader {
         schema: TableSchemaRef,
         projection: Projection,
         query_internal_columns: bool,
+        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         // init projected_schema and default_vals of schema.fields
@@ -142,6 +145,7 @@ impl BlockReader {
             parquet_schema_descriptor,
             default_vals,
             query_internal_columns,
+            update_stream_columns,
             put_cache,
         }))
     }
@@ -170,6 +174,10 @@ impl BlockReader {
 
     pub fn query_internal_columns(&self) -> bool {
         self.query_internal_columns
+    }
+
+    pub fn update_stream_columns(&self) -> bool {
+        self.update_stream_columns
     }
 
     pub fn schema(&self) -> TableSchemaRef {

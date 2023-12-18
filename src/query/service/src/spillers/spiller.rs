@@ -18,13 +18,14 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::base::GlobalUniqName;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::arrow::deserialize_column;
-use common_expression::arrow::serialize_column;
-use common_expression::DataBlock;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::hash2bucket;
 use log::info;
 use opendal::Operator;
 
@@ -34,9 +35,9 @@ use crate::sessions::QueryContext;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpillerType {
     HashJoinBuild,
-    HashJoinProbe, /* Todo: Add more spillers type
-                    * OrderBy
-                    * Aggregation */
+    HashJoinProbe,
+    OrderBy, /* Todo: Add more spillers type
+              * Aggregation */
 }
 
 impl Display for SpillerType {
@@ -44,11 +45,13 @@ impl Display for SpillerType {
         match self {
             SpillerType::HashJoinBuild => write!(f, "HashJoinBuild"),
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
+            SpillerType::OrderBy => write!(f, "OrderBy"),
         }
     }
 }
 
 /// Spiller configuration
+#[derive(Clone)]
 pub struct SpillerConfig {
     pub location_prefix: String,
 }
@@ -65,6 +68,7 @@ impl SpillerConfig {
 /// 2. Partition data by the specified algorithm which specifies by operator
 /// 3. Serialization and deserialization input data
 /// 4. Interact with the underlying storage engine to write and read spilled data
+#[derive(Clone)]
 pub struct Spiller {
     ctx: Arc<QueryContext>,
     operator: Operator,
@@ -102,6 +106,53 @@ impl Spiller {
         }
     }
 
+    /// Read a certain file to a [`DataBlock`].
+    /// We should guarantee that the file is managed by this spiller.
+    pub async fn read_spilled(&self, file: &str) -> Result<(DataBlock, u64)> {
+        debug_assert!(self.columns_layout.contains_key(file));
+        let data = self.operator.read(file).await?;
+        let bytes = data.len() as u64;
+
+        let mut begin = 0;
+        let mut columns = Vec::with_capacity(self.columns_layout.len());
+        let columns_layout = self.columns_layout.get(file).unwrap();
+        for column_layout in columns_layout.iter() {
+            columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
+            begin += column_layout;
+        }
+        let block = DataBlock::new_from_columns(columns);
+        Ok((block, bytes))
+    }
+
+    /// Write a [`DataBlock`] to storage.
+    pub async fn spill_block(&mut self, data: DataBlock) -> Result<(String, u64)> {
+        let unique_name = GlobalUniqName::unique();
+        let location = format!("{}/{}", self.config.location_prefix, unique_name);
+        let mut write_bytes = 0;
+
+        let mut writer = self.operator.writer(&location).await?;
+        let columns = data.columns().to_vec();
+        let mut columns_data = Vec::with_capacity(columns.len());
+        for column in columns.into_iter() {
+            let column = column.value.as_column().unwrap();
+            let column_data = serialize_column(column);
+            self.columns_layout
+                .entry(location.clone())
+                .and_modify(|layouts| {
+                    layouts.push(column_data.len());
+                })
+                .or_insert(vec![column_data.len()]);
+            write_bytes += column_data.len() as u64;
+            columns_data.push(column_data);
+        }
+        for data in columns_data.into_iter() {
+            writer.write(data).await?;
+        }
+        writer.close().await?;
+
+        Ok((location, write_bytes))
+    }
+
     #[async_backtrace::framed]
     /// Spill partition set
     pub async fn spill(
@@ -124,46 +175,25 @@ impl Spiller {
         data: DataBlock,
         worker_id: usize,
     ) -> Result<()> {
+        let progress_val = ProgressValues {
+            rows: data.num_rows(),
+            bytes: data.memory_size(),
+        };
+
+        let (location, _) = self.spill_block(data).await?;
         self.spilled_partition_set.insert(p_id);
-        let unique_name = GlobalUniqName::unique();
-        let location = format!("{}/{}", self.config.location_prefix, unique_name);
         self.partition_location
             .entry(p_id)
             .and_modify(|locs| {
                 locs.push(location.clone());
             })
             .or_insert(vec![location.clone()]);
-        let mut writer = self.operator.writer(location.as_str()).await?;
-        let columns = data.columns().to_vec();
-        let mut columns_data = Vec::with_capacity(columns.len());
-        for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
-            self.columns_layout
-                .entry(location.clone())
-                .and_modify(|layouts| {
-                    layouts.push(column_data.len());
-                })
-                .or_insert(vec![column_data.len()]);
-            columns_data.push(column_data);
-        }
-        for data in columns_data.into_iter() {
-            writer.write(data).await?;
-        }
-        writer.close().await?;
-        {
-            let progress_val = ProgressValues {
-                rows: data.num_rows(),
-                bytes: data.memory_size(),
-            };
-            self.ctx.get_join_spill_progress().incr(&progress_val);
-        }
+
+        self.ctx.get_join_spill_progress().incr(&progress_val);
+
         info!(
             "{:?} spilled {:?} rows data, partition id is {:?}, worker id is {:?}",
-            self.spiller_type,
-            data.num_rows(),
-            p_id,
-            worker_id
+            self.spiller_type, progress_val.rows, p_id, worker_id
         );
         Ok(())
     }
@@ -190,15 +220,7 @@ impl Spiller {
         let mut spilled_data = Vec::with_capacity(files.len());
         // Todo: make it parallel
         for file in files.iter() {
-            let data = self.operator.read(file).await?;
-            let mut begin = 0;
-            let mut columns = Vec::with_capacity(self.columns_layout.len());
-            let columns_layout = self.columns_layout.get(file).unwrap();
-            for column_layout in columns_layout.iter() {
-                columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
-                begin += column_layout;
-            }
-            let block = DataBlock::new_from_columns(columns);
+            let (block, _) = self.read_spilled(file).await?;
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }
@@ -227,7 +249,7 @@ impl Spiller {
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0111;
+            let partition_id = hash2bucket::<3, false>(*hash as usize) as u8;
             if spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows
@@ -269,12 +291,19 @@ impl Spiller {
     }
 
     /// Check if all partitions have been spilled
+    #[inline(always)]
     pub fn is_all_spilled(&self) -> bool {
         self.partition_set.len() == self.spilled_partition_set.len()
     }
 
     /// Check if any partition has been spilled
+    #[inline(always)]
     pub fn is_any_spilled(&self) -> bool {
         !self.spilled_partition_set.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn spilled_files_num(&self, pid: u8) -> usize {
+        self.partition_location[&pid].len()
     }
 }

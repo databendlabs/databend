@@ -20,33 +20,33 @@ use std::marker::Send;
 use std::marker::Sync;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use bumpalo::Bump;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_expression::types::number::Number;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_hashtable::HashSet as CommonHashSet;
-use common_hashtable::HashtableKeyable;
-use common_hashtable::HashtableLike;
-use common_hashtable::ShortStringHashSet;
-use common_hashtable::StackHashSet;
-use common_io::prelude::*;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_hashtable::HashSet as CommonHashSet;
+use databend_common_hashtable::HashtableKeyable;
+use databend_common_hashtable::HashtableLike;
+use databend_common_hashtable::ShortStringHashSet;
+use databend_common_hashtable::StackHashSet;
+use databend_common_io::prelude::*;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 
 pub trait DistinctStateFunc: Sized + Send + Sync {
     fn new() -> Self;
@@ -86,11 +86,11 @@ impl DistinctStateFunc for AggregateDistinctState {
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.set)
+        borsh_serialize_state(writer, &self.set)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        let set = deserialize_state(reader)?;
+        let set = borsh_deserialize_state(reader)?;
         Ok(Self { set })
     }
 
@@ -108,7 +108,7 @@ impl DistinctStateFunc for AggregateDistinctState {
             .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
             .collect::<Vec<_>>();
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-        serialize_state(&mut buffer, &values)?;
+        borsh_serialize_state(&mut buffer, &values)?;
         self.set.insert(buffer);
         Ok(())
     }
@@ -127,7 +127,7 @@ impl DistinctStateFunc for AggregateDistinctState {
                     .collect::<Vec<_>>();
 
                 let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-                serialize_state(&mut buffer, &values)?;
+                borsh_serialize_state(&mut buffer, &values)?;
                 self.set.insert(buffer);
             }
         }
@@ -146,7 +146,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
         for data in self.set.iter() {
             let mut slice = data.as_slice();
-            let scalars: Vec<Scalar> = deserialize_state(&mut slice)?;
+            let scalars: Vec<Scalar> = borsh_deserialize_state(&mut slice)?;
             scalars.iter().enumerate().for_each(|(idx, group_value)| {
                 builders[idx].push(group_value.as_ref());
             });
@@ -241,7 +241,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
 }
 
 impl<T> DistinctStateFunc for AggregateDistinctNumberState<T>
-where T: Number + Serialize + DeserializeOwned + HashtableKeyable
+where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
 {
     fn new() -> Self {
         AggregateDistinctNumberState {
@@ -252,7 +252,7 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for e in self.set.iter() {
-            serialize_state(writer, e.key())?
+            borsh_serialize_state(writer, e.key())?
         }
         Ok(())
     }
@@ -261,7 +261,7 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
         let size = reader.read_uvarint()?;
         let mut set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let t: T = deserialize_state(reader)?;
+            let t: T = borsh_deserialize_state(reader)?;
             let _ = set.set_insert(t).is_ok();
         }
         Ok(Self { set })
@@ -333,7 +333,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            serialize_state(writer, value.key())?
+            borsh_serialize_state(writer, value.key())?
         }
         Ok(())
     }
@@ -342,7 +342,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         let size = reader.read_uvarint()?;
         let mut set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let e = deserialize_state(reader)?;
+            let e = borsh_deserialize_state(reader)?;
             let _ = set.set_insert(e).is_ok();
         }
         Ok(Self { set })

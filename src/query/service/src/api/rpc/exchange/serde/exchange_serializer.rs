@@ -16,25 +16,28 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::flight::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_io::prelude::BinaryWrite;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::BlockMetaTransform;
-use common_pipeline_transforms::processors::BlockMetaTransformer;
-use common_pipeline_transforms::processors::Transform;
-use common_pipeline_transforms::processors::Transformer;
-use common_pipeline_transforms::processors::UnknownMode;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::serialize_batch;
+use databend_common_arrow::arrow::io::flight::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::BinaryWrite;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_pipeline_transforms::processors::UnknownMode;
+use databend_common_settings::FlightCompression;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -99,15 +102,24 @@ impl TransformExchangeSerializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: &MergeExchangeParams,
+        compression: Option<FlightCompression>,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = params.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
+
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             TransformExchangeSerializer {
                 ipc_fields,
-                options: WriteOptions { compression: None },
+                options: WriteOptions { compression },
             },
         )))
     }
@@ -131,17 +143,26 @@ impl TransformScatterExchangeSerializer {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        compression: Option<FlightCompression>,
         params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
         let arrow_schema = params.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
+
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
             TransformScatterExchangeSerializer {
                 ipc_fields,
-                options: WriteOptions { compression: None },
+                options: WriteOptions { compression },
                 local_pos: params
                     .destination_ids
                     .iter()
@@ -191,7 +212,7 @@ pub fn serialize_block(
 
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
-    bincode::serialize_into(&mut meta, &data_block.get_meta())
+    bincode_serialize_into_buf(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
     let (dict, values) = match data_block.is_empty() {

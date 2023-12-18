@@ -18,10 +18,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::F64;
-use common_storage::Datum;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::F64;
+use databend_common_storage::Datum;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
@@ -44,6 +44,7 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
+    Cross,
     Inner,
     Left,
     Right,
@@ -52,7 +53,6 @@ pub enum JoinType {
     RightSemi,
     LeftAnti,
     RightAnti,
-    Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
     /// Left Mark Join use subquery as probe side, it's blocked at `mark_join_blocks`
     LeftMark,
@@ -148,11 +148,11 @@ pub struct Join {
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
-    // It means that join has a corresponding runtime filter
-    pub contain_runtime_filter: bool,
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
+    // Under cluster, mark if the join is broadcast join.
+    pub broadcast: bool,
 }
 
 impl Default for Join {
@@ -164,8 +164,8 @@ impl Default for Join {
             join_type: JoinType::Cross,
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
-            contain_runtime_filter: false,
             need_hold_hash_table: false,
+            broadcast: false,
         }
     }
 }
@@ -390,10 +390,14 @@ impl Operator for Join {
         used_columns.extend(left_prop.used_columns.clone());
         used_columns.extend(right_prop.used_columns.clone());
 
+        // Derive orderings
+        let orderings = vec![];
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 

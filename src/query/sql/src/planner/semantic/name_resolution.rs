@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Identifier;
-use common_ast::VisitorMut;
-use common_settings::Settings;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::VisitorMut;
+use databend_common_settings::Settings;
 
 #[derive(Debug, Clone)]
 pub struct NameResolutionContext {
@@ -34,9 +34,9 @@ impl Default for NameResolutionContext {
 }
 
 impl TryFrom<&Settings> for NameResolutionContext {
-    type Error = common_exception::ErrorCode;
+    type Error = databend_common_exception::ErrorCode;
 
-    fn try_from(settings: &Settings) -> common_exception::Result<Self> {
+    fn try_from(settings: &Settings) -> databend_common_exception::Result<Self> {
         let unquoted_ident_case_sensitive = settings.get_unquoted_ident_case_sensitive()?;
         let quoted_ident_case_sensitive = settings.get_quoted_ident_case_sensitive()?;
 

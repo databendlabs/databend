@@ -6,6 +6,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
+echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists 'test-role1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists 'test-role2'" | $BENDSQL_CLIENT_CONNECT
@@ -135,19 +137,19 @@ rm -rf password.out
 export TEST_USER_PASSWORD="password"
 export USER_A_CONNECT="bendsql --user=a --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-echo "drop user if exists a" |  $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '$TEST_USER_PASSWORD'" |  $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists nogrant" |  $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists grant_db" |  $BENDSQL_CLIENT_CONNECT
-echo "create database grant_db" |  $BENDSQL_CLIENT_CONNECT
-echo "create table grant_db.t(c1 int not null)" |  $BENDSQL_CLIENT_CONNECT
-echo "create database nogrant" |  $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists a" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists nogrant" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists grant_db" | $BENDSQL_CLIENT_CONNECT
+echo "create database grant_db" | $BENDSQL_CLIENT_CONNECT
+echo "create table grant_db.t(c1 int not null)" | $BENDSQL_CLIENT_CONNECT
+echo "create database nogrant" | $BENDSQL_CLIENT_CONNECT
 echo "create table nogrant.t(id int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on default.* to a" |  $BENDSQL_CLIENT_CONNECT
-echo "grant select on grant_db.t to a" |  $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists default.test_t" |  $BENDSQL_CLIENT_CONNECT
-echo "create table default.test_t(id int not null)" |  $BENDSQL_CLIENT_CONNECT
-echo "show grants for a" |  $BENDSQL_CLIENT_CONNECT
+echo "grant select on default.* to a" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on grant_db.t to a" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists default.test_t" | $BENDSQL_CLIENT_CONNECT
+echo "create table default.test_t(id int not null)" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for a" | $BENDSQL_CLIENT_CONNECT
 echo "show databases" | $USER_A_CONNECT
 echo "select 'test -- show tables'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables" | $USER_A_CONNECT
@@ -165,25 +167,69 @@ echo "show columns from t from grant_db" | $USER_A_CONNECT
 echo "show columns from tables from system" | $USER_A_CONNECT
 echo "show tables from nogrant" | $USER_A_CONNECT
 
-
-# should return result: 2. default.test_t.id and grant_db.t.c1
-echo "select count(1) from information_schema.columns where table_schema not in ('information_schema', 'system');" | $USER_A_CONNECT
+echo "select count(1) from information_schema.columns where table_schema in ('grant_db');" | $USER_A_CONNECT
+echo "select count(1) from information_schema.columns where table_schema in ('nogrant');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.columns where table_schema in ('information_schema', 'system');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.tables where table_schema in ('information_schema', 'system');;" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema not in ('information_schema', 'system');" | $USER_A_CONNECT
+echo "select count(1) from information_schema.tables where table_schema in ('grant_db');" | $USER_A_CONNECT
+echo "select count(1) from information_schema.tables where table_schema in ('nogrant');" | $USER_A_CONNECT
 
-#echo "=== test UDF priv"
-#echo "DROP FUNCTION IF EXISTS test_alter_udf;" |  $BENDSQL_CLIENT_CONNECT
-#echo "CREATE FUNCTION test_alter_udf AS (p) -> not(is_null(p))" | $BENDSQL_CLIENT_CONNECT
-##error test
-#echo "ALTER FUNCTION test_alter_udf AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'" | $USER_A_CONNECT
-#echo "DROP FUNCTION IF EXISTS test_alter_udf;" |  $USER_A_CONNECT
-#
-#echo "grant UsageUDF on udf test_alter_udf to a;" |  $BENDSQL_CLIENT_CONNECT
-#echo "ALTER FUNCTION test_alter_udf AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'" | $USER_A_CONNECT
-#echo "DROP FUNCTION test_alter_udf;" |  $USER_A_CONNECT
+#DML privilege check
+export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+
+rm -rf /tmp/00_0020
+mkdir -p /tmp/00_0020
+cat <<EOF >/tmp/00_0020/i0.csv
+1
+2
+EOF
+
+echo "drop user if exists b" | $BENDSQL_CLIENT_CONNECT
+echo "create user b identified by '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
+
+echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
+
+echo "create table t(id int)" | $BENDSQL_CLIENT_CONNECT
+echo "create table t1(id int)" | $BENDSQL_CLIENT_CONNECT
+echo "grant create on default.* to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert, delete on default.t to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on system.* to b" | $BENDSQL_CLIENT_CONNECT
+
+echo "create stage s3;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT
+
+# need err
+echo "insert into t select * from t1" | $USER_B_CONNECT
+echo "insert into t select * from @s3" | $USER_B_CONNECT
+echo "create table t2 as select * from t" | $USER_B_CONNECT
+echo "create table t2 as select * from @s3" | $USER_B_CONNECT
+echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
+echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
+
+echo "grant select on default.t to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on default.t1 to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant read on stage s3 to b" | $BENDSQL_CLIENT_CONNECT
+
+echo "insert into t select * from t1" | $USER_B_CONNECT
+echo "insert into t select * from @s3" | $USER_B_CONNECT
+echo "create table t2 as select * from t" | $USER_B_CONNECT
+echo "drop table t2" | $BENDSQL_CLIENT_CONNECT
+echo "create table t2 as select * from @s3" | $USER_B_CONNECT
+echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
+echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
 
 ## Drop user
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
+echo "drop user b" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
-echo "drop database grant_db" |  $BENDSQL_CLIENT_CONNECT
+echo "drop database grant_db" | $BENDSQL_CLIENT_CONNECT
+
+echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
+
+echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

@@ -17,9 +17,9 @@ mod marked_test;
 
 mod internal_seq;
 
-use common_meta_types::KVMeta;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 pub(in crate::sm_v002) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
@@ -89,8 +89,6 @@ impl<T> SeqValue<T> for Marked<T> {
     }
 }
 
-// FIXME: do we need to remove function like max_ref?
-#[allow(dead_code)]
 impl<T> Marked<T> {
     pub const fn empty() -> Self {
         Marked::TombStone { internal_seq: 0 }
@@ -138,6 +136,8 @@ impl<T> Marked<T> {
     }
 
     /// Return the one with the larger sequence number.
+    // Not used, may be useful.
+    #[allow(dead_code)]
     pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
         if a.internal_seq() > b.internal_seq() {
             a
@@ -150,6 +150,7 @@ impl<T> Marked<T> {
         Marked::TombStone { internal_seq }
     }
 
+    #[allow(dead_code)]
     pub fn new_normal(seq: u64, value: T) -> Self {
         Marked::Normal {
             internal_seq: seq,
@@ -166,6 +167,7 @@ impl<T> Marked<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_meta(self, meta: Option<KVMeta>) -> Self {
         match self {
             Marked::TombStone { .. } => {
@@ -238,7 +240,7 @@ impl From<Marked<String>> for Option<ExpireValue> {
 
 #[cfg(test)]
 mod tests {
-    use common_meta_types::KVMeta;
+    use databend_common_meta_types::KVMeta;
 
     use crate::sm_v002::marked::Marked;
 
@@ -254,36 +256,24 @@ mod tests {
             m
         );
 
-        let m = m.with_meta(Some(KVMeta {
-            expire_at: Some(20),
-        }));
+        let m = m.with_meta(Some(KVMeta::new_expire(20)));
 
         assert_eq!(
             Marked::Normal {
                 internal_seq: 1,
                 value: "a",
-                meta: Some(KVMeta {
-                    expire_at: Some(20)
-                })
+                meta: Some(KVMeta::new_expire(20))
             },
             m
         );
 
-        let m = Marked::new_with_meta(
-            2,
-            "b",
-            Some(KVMeta {
-                expire_at: Some(30),
-            }),
-        );
+        let m = Marked::new_with_meta(2, "b", Some(KVMeta::new_expire(30)));
 
         assert_eq!(
             Marked::Normal {
                 internal_seq: 2,
                 value: "b",
-                meta: Some(KVMeta {
-                    expire_at: Some(30)
-                })
+                meta: Some(KVMeta::new_expire(30))
             },
             m
         );

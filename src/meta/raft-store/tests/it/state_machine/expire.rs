@@ -15,19 +15,19 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_meta_raft_store::key_spaces::Expire;
-use common_meta_raft_store::key_spaces::GenericKV;
-use common_meta_raft_store::state_machine::ExpireKey;
-use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_sled_store::AsKeySpace;
-use common_meta_types::new_log_id;
-use common_meta_types::Cmd;
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::KVMeta;
-use common_meta_types::LogEntry;
-use common_meta_types::UpsertKV;
-use common_meta_types::With;
+use databend_common_meta_raft_store::key_spaces::Expire;
+use databend_common_meta_raft_store::key_spaces::GenericKV;
+use databend_common_meta_raft_store::state_machine::ExpireKey;
+use databend_common_meta_raft_store::state_machine::StateMachine;
+use databend_common_meta_sled_store::AsKeySpace;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use test_harness::test;
 
 use crate::testing::new_raft_test_context;
@@ -155,7 +155,7 @@ fn ent(index: u64, key: &str, expire: Option<u64>, time_ms: Option<u64>) -> Entr
             txid: None,
             time_ms,
             cmd: Cmd::UpsertKV(
-                UpsertKV::update(key, key.as_bytes()).with(KVMeta { expire_at: expire }),
+                UpsertKV::update(key, key.as_bytes()).with(MetaSpec::new(expire, None)),
             ),
         }),
     }

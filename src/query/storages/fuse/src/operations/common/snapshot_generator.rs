@@ -17,21 +17,21 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_metrics::storage::*;
-use common_sql::field_default_value;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::*;
+use databend_common_sql::field_default_value;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 use crate::statistics::merge_statistics;
@@ -227,7 +227,7 @@ impl SnapshotGenerator for MutationGenerator {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
-            .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
+            .ok_or_else(|| ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
             ConflictResolveContext::AppendOnly(_) => {
                 return Err(ErrorCode::Internal(
@@ -325,7 +325,7 @@ impl AppendGenerator {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
-            .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
+            .ok_or_else(|| ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
             ConflictResolveContext::AppendOnly((ctx, schema)) => Ok((ctx, schema.as_ref())),
             _ => Err(ErrorCode::Internal(

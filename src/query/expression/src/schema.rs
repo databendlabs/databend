@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::datatypes::TimeUnit;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -45,20 +45,77 @@ pub type ColumnId = u32;
 // Index of TableSchema.fields array
 pub type FieldIndex = usize;
 
+// internal column id.
 pub const ROW_ID_COLUMN_ID: u32 = u32::MAX;
 pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
+// internal stream column id.
+pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
+pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
+pub const CHANGE_ACTION_COLUMN_ID: u32 = u32::MAX - 7;
+pub const CHANGE_IS_UPDATE_COLUMN_ID: u32 = u32::MAX - 8;
+pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 9;
 
+// internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
-pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
+// internal stream column name.
+pub const BASE_ROW_ID_COL_NAME: &str = "_base_row_id";
+pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
+pub const CHANGE_ACTION_COL_NAME: &str = "change$action";
+pub const CHANGE_IS_UPDATE_COL_NAME: &str = "change$is_update";
+pub const CHANGE_ROW_ID_COL_NAME: &str = "change$row_id";
+
+pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
+pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
+
+// stream column id.
+pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
+pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
+pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
+// stream column name.
+pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
+pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
+pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= SNAPSHOT_NAME_COLUMN_ID
+    column_id >= CHANGE_ROW_ID_COLUMN_ID
+}
+
+#[inline]
+pub fn is_internal_stream_column_id(column_id: ColumnId) -> bool {
+    (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
+}
+
+#[inline]
+pub fn is_internal_column(column_name: &str) -> bool {
+    matches!(
+        column_name,
+        ROW_ID_COL_NAME
+            | SNAPSHOT_NAME_COL_NAME
+            | SEGMENT_NAME_COL_NAME
+            | BLOCK_NAME_COL_NAME
+            | BASE_BLOCK_IDS_COL_NAME
+            | ROW_NUMBER_COL_NAME
+            | PREDICATE_COLUMN_NAME
+    )
+}
+
+#[inline]
+pub fn is_stream_column_id(column_id: ColumnId) -> bool {
+    (ORIGIN_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
+}
+
+#[inline]
+pub fn is_stream_column(column_name: &str) -> bool {
+    matches!(
+        column_name,
+        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -655,7 +712,7 @@ impl TableSchema {
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = data_type
+            } = data_type.remove_nullable()
             {
                 if col_name.starts_with(field_name) {
                     for ((i, inner_field_name), inner_field_type) in
@@ -1266,6 +1323,13 @@ impl TableSchemaRefExt {
     pub fn create(fields: Vec<TableField>) -> TableSchemaRef {
         Arc::new(TableSchema::new(fields))
     }
+
+    pub fn create_dummy() -> TableSchemaRef {
+        Self::create(vec![TableField::new(
+            "dummy",
+            TableDataType::Number(NumberDataType::UInt8),
+        )])
+    }
 }
 
 impl From<&ArrowSchema> for TableSchema {
@@ -1379,12 +1443,16 @@ impl From<&ArrowField> for TableDataType {
                     fields_type,
                 }
             }
-            ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
+            ArrowDataType::Extension(custom_name, data_type, _) => match custom_name.as_str() {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
                 ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
-                _ => unimplemented!("data_type: {:?}", f.data_type()),
+                _ => {
+                    let a =
+                        ArrowField::new(custom_name, data_type.as_ref().to_owned(), f.is_nullable);
+                    (&a).into()
+                }
             },
             // this is safe, because we define the datatype firstly
             _ => {

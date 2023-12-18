@@ -1,11 +1,14 @@
 query TT
 SHOW ENGINES
 ----
+DELTA DELTA Storage Engine
 FUSE FUSE Storage Engine
+ICEBERG ICEBERG Storage Engine
 MEMORY MEMORY Storage Engine
 NULL NULL Storage Engine
 RANDOM RANDOM Storage Engine
-VIEW VIEW STORAGE (LOGICAL VIEW)
+STREAM STREAM Storage Engine
+VIEW VIEW Storage (LOGICAL VIEW)
 
 query TT
 SHOW ENGINES LIKE 'FU%' LIMIT 1

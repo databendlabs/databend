@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_expression as ex;
-use common_meta_app::schema as mt;
-use common_meta_app::storage::StorageParams;
-use common_protos::pb;
+use databend_common_expression as ex;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -175,7 +175,7 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = p.schema.ok_or(Incompatible {
+        let schema = p.schema.ok_or_else(|| Incompatible {
             reason: "TableMeta.schema can not be None".to_string(),
         })?;
 

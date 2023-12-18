@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_profile::SharedProcessorProfiles;
+use databend_common_exception::Result;
+use databend_common_profile::SharedProcessorProfiles;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -78,6 +78,7 @@ pub async fn build_local_pipeline(
         ctx.clone(),
         enable_profiling,
         SharedProcessorProfiles::default(),
+        vec![],
     );
     let mut build_res = pipeline.finalize(plan)?;
 

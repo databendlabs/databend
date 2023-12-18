@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio::time::Duration;
-use common_base::base::Profiling;
-use log::info;
+use databend_common_base::base::tokio::time::Duration;
+use databend_common_base::base::Profiling;
+use log::debug;
 use poem::error::InternalServerError;
 use poem::web::Query;
 use poem::IntoResponse;
@@ -31,7 +31,7 @@ pub async fn debug_pprof_handler(
     let profile = match req {
         Some(query) => {
             let duration = Duration::from_secs(query.seconds);
-            info!(
+            debug!(
                 "start pprof request second: {:?} frequency: {:?}",
                 query.seconds, query.frequency
             );
@@ -39,7 +39,7 @@ pub async fn debug_pprof_handler(
         }
         None => {
             let duration = Duration::from_secs(PProfRequest::default_seconds());
-            info!(
+            debug!(
                 "start pprof request second: {:?} frequency: {:?}",
                 PProfRequest::default_seconds(),
                 PProfRequest::default_frequency()
@@ -49,6 +49,6 @@ pub async fn debug_pprof_handler(
     };
     let body = profile.dump_proto().await.map_err(InternalServerError)?;
 
-    info!("finished pprof request");
+    debug!("finished pprof request");
     Ok(body)
 }

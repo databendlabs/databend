@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVMeta;
-use common_meta_types::MetaError;
-use common_meta_types::SeqV;
-use common_meta_types::With;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::With;
 use databend_meta::configs::Config;
 
 pub enum KvApiCommand {
@@ -40,9 +40,7 @@ impl KvApiCommand {
                 let req = UpsertKVReq::update(config.key[0].as_str(), config.value.as_bytes());
 
                 let req = if let Some(expire_after) = config.expire_after {
-                    req.with(KVMeta {
-                        expire_at: Some(SeqV::<()>::now_ms() / 1000 + expire_after),
-                    })
+                    req.with(MetaSpec::new_expire(SeqV::<()>::now_sec() + expire_after))
                 } else {
                     req
                 };

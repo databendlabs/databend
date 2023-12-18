@@ -15,13 +15,13 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_expression as ex;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_protos::pb;
-use common_protos::pb::data_type::Dt;
-use common_protos::pb::data_type::Dt24;
-use common_protos::pb::number::Num;
+use databend_common_expression as ex;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_protos::pb;
+use databend_common_protos::pb::data_type::Dt;
+use databend_common_protos::pb::data_type::Dt24;
+use databend_common_protos::pb::number::Num;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -116,7 +116,7 @@ impl FromToProto for ex::ComputedExpr {
     fn from_pb(p: pb::ComputedExpr) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let computed_expr = p.computed_expr.ok_or(Incompatible {
+        let computed_expr = p.computed_expr.ok_or_else(|| Incompatible {
             reason: "Invalid ComputedExpr: .computed_expr can not be None".to_string(),
         })?;
 
@@ -335,7 +335,7 @@ impl FromToProto for ex::types::NumberDataType {
     fn from_pb(p: pb::Number) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let num = p.num.ok_or(Incompatible {
+        let num = p.num.ok_or_else(|| Incompatible {
             reason: "Invalid Number: .num can not be None".to_string(),
         })?;
 
@@ -386,7 +386,7 @@ impl FromToProto for ex::types::DecimalDataType {
     fn from_pb(p: pb::Decimal) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let num = p.decimal.ok_or(Incompatible {
+        let num = p.decimal.ok_or_else(|| Incompatible {
             reason: "Invalid Decimal: .decimal can not be None".to_string(),
         })?;
 

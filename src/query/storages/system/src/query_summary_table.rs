@@ -14,25 +14,25 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_expression::types::ArgType;
-use common_expression::types::ArrayType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt32Type;
-use common_expression::types::ValueType;
-use common_expression::types::VariantType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_profile::OperatorAttribute;
-use common_profile::QueryProfileManager;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_profile::OperatorAttribute;
+use databend_common_profile::QueryProfileManager;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -65,9 +65,6 @@ fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
         OperatorAttribute::ProjectSet(project_attr) => {
             (&serde_json::json!({ "functions": project_attr.functions })).into()
         }
-        OperatorAttribute::Lambda(lambda_attr) => {
-            (&serde_json::json!({ "scalars": lambda_attr.scalars })).into()
-        }
         OperatorAttribute::Limit(limit_attr) => (&serde_json::json!({
             "limit": limit_attr.limit,
             "offset": limit_attr.offset,
@@ -87,6 +84,9 @@ fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
         }
         OperatorAttribute::Exchange(exchange_attr) => {
             (&serde_json::json!({ "exchange_mode": exchange_attr.exchange_mode })).into()
+        }
+        OperatorAttribute::Udf(udf_attr) => {
+            (&serde_json::json!({ "scalars": udf_attr.scalars })).into()
         }
         OperatorAttribute::Empty => jsonb::Value::Null,
     }
@@ -132,7 +132,10 @@ impl SyncSystemTable for QuerySummaryTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> common_exception::Result<DataBlock> {
+    fn get_full_data(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> databend_common_exception::Result<DataBlock> {
         let profile_mgr = QueryProfileManager::instance();
         let query_profs = profile_mgr.list_all();
 

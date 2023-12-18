@@ -14,19 +14,20 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_license::license::Feature::ComputedColumn;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
-use common_sql::field_default_value;
-use common_sql::plans::AddColumnOption;
-use common_sql::plans::AddTableColumnPlan;
-use common_storages_share::save_share_table_info;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature::ComputedColumn;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::field_default_value;
+use databend_common_sql::plans::AddColumnOption;
+use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_storages_share::save_share_table_info;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::Interpreter;
@@ -70,10 +71,11 @@ impl Interpreter for AddTableColumnInterpreter {
             table.check_mutable()?;
 
             let table_info = table.get_table_info();
-            if table_info.engine() == VIEW_ENGINE {
+            let engine = table_info.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is VIEW that doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
@@ -113,6 +115,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 new_table_meta,
                 copied_files: None,
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let res = catalog.update_table_meta(table_info, req).await?;

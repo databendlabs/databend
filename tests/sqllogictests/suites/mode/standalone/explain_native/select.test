@@ -208,7 +208,7 @@ explain select a, v['b'] from t_json
 ----
 EvalScalar
 ├── output columns: [t_json.a (#0), v['b'] (#2)]
-├── expressions: [get(t_json.v (#1), 'b')]
+├── expressions: [get_by_keypath(t_json.v (#1), '{"b"}')]
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json
@@ -226,7 +226,7 @@ explain select a, v['a'][0] from t_json
 ----
 EvalScalar
 ├── output columns: [t_json.a (#0), v['a'][0] (#2)]
-├── expressions: [get(get(t_json.v (#1), 'a'), 0)]
+├── expressions: [get_by_keypath(t_json.v (#1), '{"a",0}')]
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json

@@ -20,10 +20,16 @@ use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::FormatVersion;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotLite;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
@@ -33,12 +39,6 @@ use minitrace::prelude::*;
 use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotLite;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -73,7 +73,7 @@ impl SnapshotsIO {
     }
 
     #[async_backtrace::framed]
-    async fn read_snapshot(
+    pub async fn read_snapshot(
         snapshot_location: String,
         data_accessor: Operator,
     ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {

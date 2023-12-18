@@ -37,22 +37,19 @@ use crate::ScalarExpr;
 
 #[derive(Debug)]
 pub struct ConstraintSet {
-    pub constraints: Vec<(ScalarExpr, MirExpr)>,
-    pub unsupported_constraints: Vec<ScalarExpr>,
+    pub constraints: Vec<(ScalarExpr, Option<MirExpr>)>,
 }
 
 impl ConstraintSet {
     /// Build a `ConstraintSet` with conjunctions
     pub fn new(constraints: &[ScalarExpr]) -> Self {
-        let mut supported_constraints = Vec::new();
-        let mut unsupported_constraints = Vec::new();
 
         for constraint in constraints {
             let mir_expr = as_mir(constraint);
             if let Some(mir_expr) = mir_expr {
-                supported_constraints.push((constraint.clone(), mir_expr));
+                supported_constraints.push(Either::Right((constraint.clone(), mir_expr)));
             } else {
-                unsupported_constraints.push(constraint.clone());
+                supported_constraints.push(Either::Left(constraint.clone()));
             }
         }
 

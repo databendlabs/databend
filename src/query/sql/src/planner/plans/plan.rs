@@ -16,14 +16,15 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
-use common_catalog::query_kind::QueryKind;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
+use super::SetSecondaryRolesPlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
@@ -49,6 +50,7 @@ use crate::plans::CreateRolePlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
+use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -73,6 +75,7 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
+use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
@@ -211,6 +214,10 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
 
+    // Streams
+    CreateStream(Box<CreateStreamPlan>),
+    DropStream(Box<DropStreamPlan>),
+
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
@@ -242,6 +249,7 @@ pub enum Plan {
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
+    SetSecondaryRoles(Box<SetSecondaryRolesPlan>),
 
     // FileFormat
     CreateFileFormat(Box<CreateFileFormatPlan>),
@@ -310,11 +318,15 @@ pub enum RewriteKind {
     ShowEngines,
     ShowIndexes,
 
+    ShowLocks,
+
     ShowCatalogs,
     ShowDatabases,
     ShowTables(String),
     ShowColumns(String, String),
     ShowTablesStatus,
+
+    ShowStreams(String),
 
     ShowFunctions,
     ShowTableFunctions,
@@ -400,7 +412,7 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
-
+            Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
@@ -447,6 +459,7 @@ impl Plan {
                 | Plan::DescribeTask(_)
                 | Plan::DescConnection(_)
                 | Plan::ShowConnections(_)
+                | Plan::MergeInto(_)
         )
     }
 }

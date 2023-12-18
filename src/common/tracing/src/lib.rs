@@ -16,18 +16,21 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod config;
-mod minitrace;
+mod init;
+mod loggers;
 mod panic_hook;
 
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
+pub use crate::config::OTLPConfig;
+pub use crate::config::ProfileLogConfig;
 pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
 pub use crate::config::TracingConfig;
-pub use crate::minitrace::init_logging;
-pub use crate::minitrace::inject_span_to_tonic_request;
-pub use crate::minitrace::start_trace_for_remote_request;
-pub use crate::minitrace::GlobalLogger;
+pub use crate::init::init_logging;
+pub use crate::init::inject_span_to_tonic_request;
+pub use crate::init::start_trace_for_remote_request;
+pub use crate::init::GlobalLogger;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
 
@@ -49,7 +52,7 @@ pub fn closure_name<F: std::any::Any>() -> &'static str {
 /// # #[macro_use] extern crate common_tracing;
 /// # fn main() {
 /// let _sentry = sentry::init(sentry::ClientOptions {
-///     release: common_tracing::databend_semver!(),
+///     release: databend_common_tracing::databend_semver!(),
 ///     ..Default::default()
 /// });
 /// # }

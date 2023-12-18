@@ -16,28 +16,30 @@ use std::any::Any;
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_base::base::ProgressValues;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnMeta;
-use common_catalog::plan::InternalColumnType;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::Value;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_sql::evaluator::BlockOperator;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::Value;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::evaluator::BlockOperator;
 
 use super::mutation_meta::SerializeBlock;
 use crate::fuse_part::FusePartInfo;
@@ -69,7 +71,7 @@ enum State {
         data_block: DataBlock,
         filter: Option<Value<BooleanType>>,
     },
-    PerformOperator(DataBlock),
+    PerformOperator(DataBlock, String),
     Output(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -181,10 +183,10 @@ impl Processor for MutationSource {
                 )?;
                 let num_rows = data_block.num_rows();
 
+                let fuse_part = FusePartInfo::from_part(&part)?;
                 if let Some(filter) = self.filter.as_ref() {
                     if self.query_row_id_col {
                         // Add internal column to data block
-                        let fuse_part = FusePartInfo::from_part(&part)?;
                         let block_meta = fuse_part.block_meta_index().unwrap();
                         let internal_column_meta = InternalColumnMeta {
                             segment_idx: block_meta.segment_idx,
@@ -193,6 +195,7 @@ impl Processor for MutationSource {
                             segment_location: block_meta.segment_location.clone(),
                             snapshot_location: None,
                             offsets: None,
+                            base_block_ids: None,
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),
@@ -227,7 +230,7 @@ impl Processor for MutationSource {
                     if affect_rows != 0 {
                         // Pop the row_id column
                         if self.query_row_id_col {
-                            data_block = data_block.pop_columns(1)?;
+                            data_block.pop_columns(1);
                         }
 
                         let progress_values = ProgressValues {
@@ -255,7 +258,10 @@ impl Processor for MutationSource {
                                     let filter = predicate_col.not();
                                     data_block = data_block.filter_with_bitmap(&filter)?;
                                     if self.remain_reader.is_none() {
-                                        self.state = State::PerformOperator(data_block);
+                                        self.state = State::PerformOperator(
+                                            data_block,
+                                            fuse_part.location.clone(),
+                                        );
                                     } else {
                                         self.state = State::ReadRemain {
                                             part,
@@ -272,7 +278,10 @@ impl Processor for MutationSource {
                                     Value::upcast(predicates),
                                 ));
                                 if self.remain_reader.is_none() {
-                                    self.state = State::PerformOperator(data_block);
+                                    self.state = State::PerformOperator(
+                                        data_block,
+                                        fuse_part.location.clone(),
+                                    );
                                 } else {
                                     self.state = State::ReadRemain {
                                         part,
@@ -293,7 +302,7 @@ impl Processor for MutationSource {
                         bytes: 0,
                     };
                     self.ctx.get_write_progress().incr(&progress_values);
-                    self.state = State::PerformOperator(data_block);
+                    self.state = State::PerformOperator(data_block, fuse_part.location.clone());
                 }
             }
             State::MergeRemain {
@@ -302,6 +311,7 @@ impl Processor for MutationSource {
                 mut data_block,
                 filter,
             } => {
+                let path = FusePartInfo::from_part(&part)?.location.clone();
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
                     let remain_block = remain_reader.deserialize_chunks_with_part_info(
@@ -324,18 +334,22 @@ impl Processor for MutationSource {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
 
-                self.state = State::PerformOperator(data_block);
+                self.state = State::PerformOperator(data_block, path);
             }
-            State::PerformOperator(data_block) => {
+            State::PerformOperator(data_block, path) => {
                 let func_ctx = self.ctx.get_function_context()?;
                 let block = self
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
-                let meta = Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
-                    self.index.clone(),
-                    self.stats_type.clone(),
-                )));
+                let inner_meta = Box::new(SerializeDataMeta::SerializeBlock(
+                    SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
+                ));
+                let meta: BlockMetaInfoPtr = if self.block_reader.update_stream_columns() {
+                    Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
+                } else {
+                    inner_meta
+                };
                 self.state = State::Output(self.ctx.get_partition(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),

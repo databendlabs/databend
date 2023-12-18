@@ -12,176 +12,156 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
-use std::fmt;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::ValueType;
-use common_expression::with_number_mapped_type;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
+use databend_common_exception::Result;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
 use streaming_algorithms::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::deserialize_state;
-use super::serialize_state;
-use super::AggregateFunctionRef;
-use super::StateAddr;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
+use super::AggregateUnaryFunction;
+use super::FunctionData;
+use super::UnaryState;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 
 /// Use Hyperloglog to estimate distinct of values
-pub struct AggregateApproxCountDistinctState<S> {
-    hll: HyperLogLog<S>,
-}
-
-/// S: ScalarType
-#[derive(Clone)]
-pub struct AggregateApproxCountDistinctFunction<T> {
-    display_name: String,
-    _t: PhantomData<T>,
-}
-
-impl<T: ValueType + Send + Sync> AggregateApproxCountDistinctFunction<T>
-where for<'a> T::ScalarRef<'a>: Hash
+struct AggregateApproxCountDistinctState<T>
+where T: ValueType
 {
-    pub fn try_create(
-        display_name: &str,
-        _arguments: Vec<DataType>,
-    ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(Self {
-            display_name: display_name.to_string(),
-            _t: PhantomData,
-        }))
-    }
+    hll: HyperLogLog<T::Scalar>,
 }
 
-impl<T: ValueType + Send + Sync> AggregateFunction for AggregateApproxCountDistinctFunction<T>
-where for<'a> T::ScalarRef<'a>: Hash
+impl<T> Default for AggregateApproxCountDistinctState<T>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: Hash,
 {
-    fn name(&self) -> &str {
-        "AggregateApproxCountDistinctFunction"
-    }
-
-    fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Number(NumberDataType::UInt64))
-    }
-
-    fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateApproxCountDistinctState {
-            hll: HyperLogLog::<T::ScalarRef<'_>>::new(0.04),
-        });
-    }
-
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>()
-    }
-
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[Column],
-        validity: Option<&Bitmap>,
-        _input_rows: usize,
-    ) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let column = T::try_downcast_column(&columns[0]).unwrap();
-
-        if let Some(validity) = validity {
-            T::iter_column(&column)
-                .zip(validity.iter())
-                .for_each(|(t, b)| {
-                    if b {
-                        state.hll.push(&t);
-                    }
-                });
-        } else {
-            T::iter_column(&column).for_each(|t| {
-                state.hll.push(&t);
-            });
+    fn default() -> Self {
+        Self {
+            hll: HyperLogLog::<T::Scalar>::new(0.04),
         }
+    }
+}
+
+impl<T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState<T>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: Hash,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        self.hll.push(&T::to_owned_scalar(other));
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let column = T::try_downcast_column(&columns[0]).unwrap();
-        state.hll.push(&T::index_column(&column, row).unwrap());
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.hll.union(&rhs.hll);
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        serialize_state(writer, &state.hll)
-    }
-
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let hll: HyperLogLog<T::ScalarRef<'_>> = deserialize_state(reader)?;
-        state.hll.union(&hll);
-
+    fn merge_result(
+        &mut self,
+        builder: &mut Vec<u64>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        builder.push(self.hll.len() as u64);
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let other = rhs.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        state.hll.union(&other.hll);
-        Ok(())
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        borsh_serialize_state(writer, &self.hll)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let builder = NumberType::<u64>::try_downcast_builder(builder).unwrap();
-        builder.push(state.hll.len() as u64);
-        Ok(())
-    }
-
-    fn need_manual_drop_state(&self) -> bool {
-        true
-    }
-
-    unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        std::ptr::drop_in_place(state);
+    fn deserialize(reader: &mut &[u8]) -> Result<Self>
+    where Self: Sized {
+        let hll = borsh_deserialize_state(reader)?;
+        Ok(Self { hll })
     }
 }
 
 pub fn try_create_aggregate_approx_count_distinct_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
 
+    let return_type = DataType::Number(NumberDataType::UInt64);
+
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            AggregateApproxCountDistinctFunction::<NumberType<NUM_TYPE>>::try_create(
-                display_name,
-                arguments,
+            let func = AggregateUnaryFunction::<
+                AggregateApproxCountDistinctState<NumberType<NUM_TYPE>>,
+                NumberType<NUM_TYPE>,
+                UInt64Type,
+            >::try_create(
+                display_name, return_type, params, arguments[0].clone()
             )
+            .with_need_drop(true);
+
+            Ok(Arc::new(func))
         }
-        DataType::String =>
-            AggregateApproxCountDistinctFunction::<StringType>::try_create(display_name, arguments,),
-        DataType::Date =>
-            AggregateApproxCountDistinctFunction::<DateType>::try_create(display_name, arguments,),
-        DataType::Timestamp => AggregateApproxCountDistinctFunction::<TimestampType>::try_create(
-            display_name,
-            arguments,
-        ),
-        _ => AggregateApproxCountDistinctFunction::<AnyType>::try_create(display_name, arguments,),
+        DataType::String => {
+            let func = AggregateUnaryFunction::<
+                AggregateApproxCountDistinctState<StringType>,
+                StringType,
+                UInt64Type,
+            >::try_create(
+                display_name, return_type, params, arguments[0].clone()
+            )
+            .with_need_drop(true);
+
+            Ok(Arc::new(func))
+        }
+        DataType::Date => {
+            let func = AggregateUnaryFunction::<
+                AggregateApproxCountDistinctState<DateType>,
+                DateType,
+                UInt64Type,
+            >::try_create(
+                display_name, return_type, params, arguments[0].clone()
+            )
+            .with_need_drop(true);
+
+            Ok(Arc::new(func))
+        }
+        DataType::Timestamp => {
+            let func = AggregateUnaryFunction::<
+                AggregateApproxCountDistinctState<TimestampType>,
+                TimestampType,
+                UInt64Type,
+            >::try_create(
+                display_name, return_type, params, arguments[0].clone()
+            )
+            .with_need_drop(true);
+
+            Ok(Arc::new(func))
+        }
+        _ => {
+            let func = AggregateUnaryFunction::<
+                AggregateApproxCountDistinctState<AnyType>,
+                AnyType,
+                UInt64Type,
+            >::try_create(
+                display_name, return_type, params, arguments[0].clone()
+            )
+            .with_need_drop(true);
+
+            Ok(Arc::new(func))
+        }
     })
 }
 
@@ -195,10 +175,4 @@ pub fn aggregate_approx_count_distinct_function_desc() -> AggregateFunctionDescr
         Box::new(try_create_aggregate_approx_count_distinct_function),
         features,
     )
-}
-
-impl<T> fmt::Display for AggregateApproxCountDistinctFunction<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
-    }
 }

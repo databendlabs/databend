@@ -12,27 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
 use anyhow::anyhow;
-use common_ast::ast::UriLocation;
-use common_config::GlobalConfig;
-use common_meta_app::storage::StorageAzblobConfig;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig;
-use common_meta_app::storage::StorageHttpConfig;
-use common_meta_app::storage::StorageIpfsConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
-use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
-use common_storage::STDIN_FD;
+use databend_common_ast::ast::Connection;
+use databend_common_ast::ast::UriLocation;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::StorageAzblobConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
+use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageIpfsConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use databend_common_storage::STDIN_FD;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -172,6 +176,10 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         )
     })?;
 
+    // If role_arn is empty and we don't allow allow insecure, we should disable credential loader.
+    let disable_credential_loader =
+        role_arn.is_empty() && !GlobalConfig::instance().storage.allow_insecure;
+
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
         region,
@@ -181,9 +189,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         security_token,
         master_key,
         root,
-        // Disable credential load by default.
-        // TODO(xuanwo): we should support AssumeRole.
-        disable_credential_loader: !GlobalConfig::instance().storage.allow_insecure,
+        disable_credential_loader,
         enable_virtual_host_style,
         role_arn,
         external_id,
@@ -299,24 +305,47 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
     Ok(sp)
 }
 
+/// Generally, the URI is in the pattern hdfs://<namenode>/<path>.
+/// If <namenode> is empty (i.e. `hdfs:///<path>`),  use <namenode> configured somewhere else, e.g. in XML config file.
+/// For databend user can specify <namenode> in connection options.
+/// refer to https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/HadoopIntegrationGuide/libhdfs/HdfsURL.htm
 #[cfg(feature = "storage-hdfs")]
 fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
-    let sp = StorageParams::Hdfs(common_meta_app::storage::StorageHdfsConfig {
-        name_node: l
-            .connection
-            .get("name_node")
-            .ok_or_else(|| {
-                Error::new(
+    let name_node_from_uri = if l.name.is_empty() {
+        None
+    } else {
+        Some(format!("hdfs://{}", l.name))
+    };
+    let name_node_option = l.connection.get("name_node");
+
+    let name_node = match (name_node_option, name_node_from_uri) {
+        (Some(n1), Some(n2)) => {
+            if n1 != &n2 {
+                return Err(Error::new(
                     ErrorKind::InvalidInput,
-                    anyhow!("name_node is required for storage hdfs"),
-                )
-            })?
-            .to_string(),
+                    format!(
+                        "name_node in uri({n2}) and from connection option 'name_node'({n1}) not match."
+                    ),
+                ));
+            } else {
+                n2
+            }
+        }
+        (Some(n1), None) => n1.to_string(),
+        (None, Some(n2)) => n2,
+        (None, None) => {
+            // we prefer user to specify name_node in options
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "name_node is required for storage hdfs",
+            ));
+        }
+    };
+    let sp = StorageParams::Hdfs(databend_common_meta_app::storage::StorageHdfsConfig {
+        name_node,
         root: l.path.clone(),
     });
-
     l.connection.check()?;
-
     Ok(sp)
 }
 
@@ -356,7 +385,10 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
 }
 
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
-pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
+pub async fn parse_uri_location(
+    l: &mut UriLocation,
+    ctx: Option<&dyn TableContext>,
+) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
@@ -367,6 +399,51 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
     };
 
     let protocol = l.protocol.parse::<Scheme>()?;
+    if let Scheme::Custom(_) = protocol {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("protocol {protocol} is not supported yet."),
+        ));
+    }
+
+    match (ctx, l.connection.get("connection_name")) {
+        (None, Some(_)) => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("can not use connection_name when create connection"),
+            ));
+        }
+        (_, None) => {}
+        (Some(ctx), Some(name)) => {
+            let conn = ctx.get_connection(name).await.map_err(|err| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("fail to get connection_name {name}: {err:?}"),
+                )
+            })?;
+            let proto = conn.storage_type.parse::<Scheme>().map_err(|err| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("input connection is not a valid protocol: {err:?}"),
+                )
+            })?;
+            if proto != protocol {
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!(
+                        "protocol from connection_name={name} ({proto}) not match with uri protocol ({protocol})."
+                    ),
+                ));
+            }
+            l.connection.check().map_err(|_| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("connection_name can not be used with other connection options"),
+                )
+            })?;
+            l.connection = Connection::new(conn.storage_params);
+        }
+    }
 
     let sp = match protocol {
         Scheme::Azblob => parse_azure_params(l, root)?,
@@ -421,4 +498,34 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
     })?;
 
     Ok((sp, path))
+}
+
+pub async fn get_storage_params_from_options(
+    ctx: &dyn TableContext,
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<StorageParams> {
+    let location = options
+        .get("location")
+        .ok_or_else(|| ErrorCode::BadArguments("missing option 'location'".to_string()))?;
+    let connection = options.get("connection_name");
+
+    let mut location = if let Some(connection) = connection {
+        let connection = ctx.get_connection(connection).await?;
+        let location = UriLocation::from_uri(
+            location.to_string(),
+            "".to_string(),
+            connection.storage_params,
+        )?;
+        if location.protocol.to_lowercase() != connection.storage_type {
+            return Err(ErrorCode::BadArguments(format!(
+                "Incorrect CREATE query: protocol in location {:?} is not equal to connection {:?}",
+                location.protocol, connection.storage_type
+            )));
+        };
+        location
+    } else {
+        UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
+    };
+    let (sp, _) = parse_uri_location(&mut location, None).await?;
+    Ok(sp)
 }

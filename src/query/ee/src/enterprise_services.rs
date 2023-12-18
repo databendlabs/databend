@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license_manager::LicenseManager;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license_manager::LicenseManager;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::background_service::RealBackgroundService;
@@ -22,6 +22,7 @@ use crate::data_mask::RealDatamaskHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
+use crate::stream::RealStreamHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct EnterpriseServices;
@@ -35,6 +36,7 @@ impl EnterpriseServices {
         RealDatamaskHandler::init()?;
         RealBackgroundService::init(&cfg).await?;
         RealVirtualColumnHandler::init()?;
+        RealStreamHandler::init()?;
         Ok(())
     }
 }

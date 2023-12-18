@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::ShowLimit;
-use common_ast::ast::ShowOptions;
-use common_exception::Result;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowLocksStmt;
+use databend_common_ast::ast::ShowOptions;
+use databend_common_exception::Result;
+use log::debug;
 
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::BindContext;
 use crate::Binder;
+use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -62,7 +65,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name {}",
+            "SELECT name, value, default, `range`, level, description, type FROM system.settings {} ORDER BY name {}",
             show_limit, limit_str,
         );
 
@@ -132,6 +135,34 @@ impl Binder {
         );
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowProcessList)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_locks(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowLocksStmt,
+    ) -> Result<Plan> {
+        // let user = ctx.get_current_user()?.name;
+        let ShowLocksStmt { in_account, limit } = stmt;
+
+        let mut select_builder = SelectBuilder::from("system.locks");
+        select_builder
+            .with_order_by("table_id")
+            .with_order_by("revision");
+
+        if *in_account {
+            let user = self.ctx.get_current_user()?.name;
+            select_builder.with_filter(format!("user = '{user}'"));
+        }
+        if let Some(ShowLimit::Where { selection }) = limit {
+            select_builder.with_filter(format!("({selection})"));
+        }
+        let query = select_builder.build();
+        debug!("show locks rewrite to: {:?}", query);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowLocks)
             .await
     }
 }

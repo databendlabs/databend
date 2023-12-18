@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::DeleteStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::TableReference;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::DeleteStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::TableReference;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
@@ -98,6 +98,16 @@ impl<'a> Binder {
         let (selection, subquery_desc) = self
             .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
+
+        if let Some(selection) = &selection {
+            if !self.check_allowed_scalar_expr_with_subquery(selection)? {
+                return Err(ErrorCode::SemanticError(
+                    "selection in delete statement can't contain window|aggregate|udf functions"
+                        .to_string(),
+                )
+                .set_span(selection.span()));
+            }
+        }
 
         let plan = DeletePlan {
             catalog_name,
@@ -184,18 +194,18 @@ impl Binder {
         table_expr: SExpr,
         subquery_desc: &mut Vec<SubqueryDesc>,
     ) -> Result<()> {
-        struct FindSubquery<'a> {
+        struct FindSubqueryVisitor<'a> {
             subqueries: Vec<&'a SubqueryExpr>,
         }
 
-        impl<'a> Visitor<'a> for FindSubquery<'a> {
+        impl<'a> Visitor<'a> for FindSubqueryVisitor<'a> {
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
                 self.subqueries.push(subquery);
                 Ok(())
             }
         }
 
-        let mut find_subquery = FindSubquery { subqueries: vec![] };
+        let mut find_subquery = FindSubqueryVisitor { subqueries: vec![] };
         find_subquery.visit(scalar)?;
 
         for subquery in find_subquery.subqueries {

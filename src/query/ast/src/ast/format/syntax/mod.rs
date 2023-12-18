@@ -17,7 +17,7 @@ mod dml;
 mod expr;
 mod query;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use ddl::*;
 use dml::*;
 use pretty::RcDoc;
@@ -38,6 +38,7 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
         Statement::AlterTable(alter_table_stmt) => pretty_alter_table(alter_table_stmt),
         Statement::CreateView(create_view_stmt) => pretty_create_view(create_view_stmt),
         Statement::AlterView(alter_view_stmt) => pretty_alter_view(alter_view_stmt),
+        Statement::CreateStream(create_stream_stmt) => pretty_create_stream(create_stream_stmt),
         // Other SQL statements are relatively short and don't need extra format.
         _ => RcDoc::text(stmt.to_string()),
     };

@@ -1,5 +1,5 @@
 [package]
-name = "storages-common-cache-manager"
+name = "databend-storages-common-cache-manager"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -9,14 +9,14 @@ edition = { workspace = true }
 [features]
 
 [dependencies]
-common-arrow = { path = "../../../../common/arrow" }
-common-base = { path = "../../../../common/base" }
-common-cache = { path = "../../../../common/cache" }
-common-catalog = { path = "../../../catalog" }
-common-config = { path = "../../../config" }
-common-exception = { path = "../../../../common/exception" }
-storages-common-cache = { path = "../../common/cache" }
-storages-common-index = { path = "../../common/index" }
-storages-common-table-meta = { path = "../table_meta" }
+databend-common-arrow = { path = "../../../../common/arrow" }
+databend-common-base = { path = "../../../../common/base" }
+databend-common-cache = { path = "../../../../common/cache" }
+databend-common-catalog = { path = "../../../catalog" }
+databend-common-config = { path = "../../../config" }
+databend-common-exception = { path = "../../../../common/exception" }
+databend-storages-common-cache = { path = "../../common/cache" }
+databend-storages-common-index = { path = "../../common/index" }
+databend-storages-common-table-meta = { path = "../table_meta" }
 
 log = { workspace = true }

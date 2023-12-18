@@ -137,9 +137,9 @@ fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc<'static> {
                             RcDoc::nil()
                         })
                     }
-                    SelectTarget::QualifiedName {
+                    SelectTarget::StarColumns {
                         qualified: object_name,
-                        exclude,
+                        column_filter,
                     } => {
                         let docs = inline_dot(
                             object_name
@@ -147,12 +147,12 @@ fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc<'static> {
                                 .map(|indirection| RcDoc::text(indirection.to_string())),
                         )
                         .group();
-                        docs.append(if let Some(cols) = exclude {
-                            if !cols.is_empty() {
-                                RcDoc::line()
+                        docs.append(if let Some(filter) = column_filter {
+                            match filter {
+                                crate::ast::ColumnFilter::Excludes(exclude) => RcDoc::line()
                                     .append(
                                         RcDoc::text("EXCLUDE").append(
-                                            if cols.len() > 1 {
+                                            if exclude.len() > 1 {
                                                 RcDoc::line()
                                             } else {
                                                 RcDoc::space()
@@ -161,16 +161,24 @@ fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc<'static> {
                                         ),
                                     )
                                     .append(
-                                        interweave_comma(cols.into_iter().map(|ident| {
+                                        interweave_comma(exclude.into_iter().map(|ident| {
                                             RcDoc::space()
                                                 .append(RcDoc::space())
                                                 .append(RcDoc::text(ident.to_string()))
                                         }))
                                         .nest(NEST_FACTOR)
                                         .group(),
-                                    )
-                            } else {
-                                RcDoc::nil()
+                                    ),
+                                crate::ast::ColumnFilter::Lambda(lambda) => RcDoc::line()
+                                    .append(RcDoc::text("("))
+                                    .append(inline_comma(
+                                        lambda
+                                            .params
+                                            .iter()
+                                            .map(|ident| RcDoc::text(ident.to_string())),
+                                    ))
+                                    .append(RcDoc::text("->"))
+                                    .append(pretty_expr(*lambda.expr)),
                             }
                         } else {
                             RcDoc::nil()
@@ -349,15 +357,23 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         }),
         TableReference::Subquery {
             span: _,
+            lateral,
             subquery,
             alias,
-        } => parenthesized(pretty_query(*subquery)).append(if let Some(alias) = alias {
+        } => (if lateral {
+            RcDoc::text("LATERAL")
+        } else {
+            RcDoc::nil()
+        })
+        .append(parenthesized(pretty_query(*subquery)))
+        .append(if let Some(alias) = alias {
             RcDoc::text(format!(" AS {alias}"))
         } else {
             RcDoc::nil()
         }),
         TableReference::TableFunction {
             span: _,
+            lateral,
             name,
             params,
             named_params,
@@ -368,21 +384,26 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             } else {
                 RcDoc::nil()
             };
-            RcDoc::text(name.to_string())
-                .append(RcDoc::text("("))
-                .append(inline_comma(params.into_iter().map(pretty_expr)))
-                .append(separator)
-                .append(inline_comma(named_params.into_iter().map(|(k, v)| {
-                    RcDoc::text(k)
-                        .append(RcDoc::text("=>"))
-                        .append(pretty_expr(v))
-                })))
-                .append(RcDoc::text(")"))
-                .append(if let Some(alias) = alias {
-                    RcDoc::text(format!(" AS {alias}"))
-                } else {
-                    RcDoc::nil()
-                })
+            if lateral {
+                RcDoc::text("LATERAL ")
+            } else {
+                RcDoc::nil()
+            }
+            .append(RcDoc::text(name.to_string()))
+            .append(RcDoc::text("("))
+            .append(inline_comma(params.into_iter().map(pretty_expr)))
+            .append(separator)
+            .append(inline_comma(named_params.into_iter().map(|(k, v)| {
+                RcDoc::text(k)
+                    .append(RcDoc::text("=>"))
+                    .append(pretty_expr(v))
+            })))
+            .append(RcDoc::text(")"))
+            .append(if let Some(alias) = alias {
+                RcDoc::text(format!(" AS {alias}"))
+            } else {
+                RcDoc::nil()
+            })
         }
         TableReference::Join { span: _, join } => pretty_table(*join.left)
             .append(RcDoc::line())

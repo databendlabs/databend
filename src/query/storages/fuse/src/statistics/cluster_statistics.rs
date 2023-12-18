@@ -14,14 +14,14 @@
 
 use std::cmp::Ordering;
 
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_sql::evaluator::BlockOperator;
-use storages_common_table_meta::meta::ClusterStatistics;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::statistics::column_statistic::Trim;
 use crate::table_functions::cmp_with_null;
@@ -32,7 +32,6 @@ pub const CLUSTER_STATS_STRING_PREFIX_LEN: usize = 8;
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
 
-    pub(crate) cluster_key_index: Vec<usize>,
     pub(crate) extra_key_num: usize,
 
     max_page_size: Option<usize>,
@@ -40,9 +39,10 @@ pub struct ClusterStatsGenerator {
     level: i32,
     block_thresholds: BlockThresholds,
 
-    pub(crate) operators: Vec<BlockOperator>,
-    pub(crate) out_fields: Vec<DataField>,
-    pub(crate) func_ctx: FunctionContext,
+    pub cluster_key_index: Vec<usize>,
+    pub operators: Vec<BlockOperator>,
+    pub out_fields: Vec<DataField>,
+    pub func_ctx: FunctionContext,
 }
 
 impl ClusterStatsGenerator {
@@ -83,11 +83,11 @@ impl ClusterStatsGenerator {
     // The input block contains the cluster key block.
     pub fn gen_stats_for_append(
         &self,
-        data_block: DataBlock,
+        mut data_block: DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
         let cluster_stats = self.clusters_statistics(&data_block, self.level)?;
-        let block = data_block.pop_columns(self.extra_key_num)?;
-        Ok((cluster_stats, block))
+        data_block.pop_columns(self.extra_key_num);
+        Ok((cluster_stats, data_block))
     }
 
     // This can be used in deletion, for an existing block.

@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_ast::ast::Expr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::Finder;
 use crate::binder::aggregate::AggregateRewriter;
@@ -29,6 +28,7 @@ use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
+use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::Binder;
 
@@ -41,7 +41,7 @@ impl Binder {
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         having: &Expr,
-    ) -> Result<(ScalarExpr, Span)> {
+    ) -> Result<ScalarExpr> {
         bind_context.set_expr_context(ExprContext::HavingClause);
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -52,9 +52,10 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (scalar, _) = scalar_binder.bind(having).await?;
+        let (mut scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        Ok((rewriter.visit(&scalar)?, having.span()))
+        rewriter.visit(&mut scalar)?;
+        Ok(scalar)
     }
 
     #[async_backtrace::framed]
@@ -62,7 +63,6 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         having: ScalarExpr,
-        span: Span,
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::HavingClause);
@@ -79,8 +79,10 @@ impl Binder {
 
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
-            let grouping_checker = GroupingChecker::new(bind_context);
-            grouping_checker.resolve(&having, span)?
+            let mut having = having;
+            let mut grouping_checker = GroupingChecker::new(bind_context);
+            grouping_checker.visit(&mut having)?;
+            having
         } else {
             // Otherwise we just fallback to a normal selection as `WHERE` clause.
             // This follows behavior of MySQL and Snowflake.

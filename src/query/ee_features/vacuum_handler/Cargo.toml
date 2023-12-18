@@ -1,5 +1,5 @@
 [package]
-name = "vacuum-handler"
+name = "databend-enterprise-vacuum-handler"
 description = "vacuum handler"
 version = { workspace = true }
 authors = { workspace = true }
@@ -13,16 +13,13 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-storages-fuse = { path = "../../storages/fuse" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-storages-fuse = { path = "../../storages/fuse" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
 
 [build-dependencies]
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]

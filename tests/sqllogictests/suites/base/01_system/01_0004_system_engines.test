@@ -2,5 +2,5 @@ onlyif mysql
 query TT
 SELECT * FROM system.engines ORDER BY "Engine" LIMIT 1,2
 ----
-MEMORY MEMORY Storage Engine
-NULL NULL Storage Engine
+FUSE FUSE Storage Engine
+ICEBERG ICEBERG Storage Engine

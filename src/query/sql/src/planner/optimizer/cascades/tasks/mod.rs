@@ -14,7 +14,7 @@
 
 use std::cell::RefCell;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 pub use self::apply_rule::ApplyRuleTask;
 pub use self::explore_expr::ExploreExprTask;
@@ -70,7 +70,7 @@ impl Task {
     pub fn execute(
         self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut Scheduler<'_>,
     ) -> Result<()> {
         match self {
             Task::ApplyRule(task) => task.execute(optimizer),

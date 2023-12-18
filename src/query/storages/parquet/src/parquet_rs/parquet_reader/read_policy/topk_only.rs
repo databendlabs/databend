@@ -15,13 +15,13 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::TableSchema;
-use common_expression::TopKSorter;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
@@ -136,6 +136,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
             .fetch(self.topk.projection(), selection.as_ref())
             .await?;
         let block = read_all(
+            self.src_schema.as_ref(),
             &row_group,
             self.topk.field_levels(),
             selection.clone(),
@@ -211,7 +212,8 @@ impl ReadPolicy for TopkOnlyPolicy {
             debug_assert!(
                 self.prefetched.is_none() || !self.prefetched.as_ref().unwrap().is_empty()
             );
-            let mut block = transform_record_batch(&batch, &self.remain_field_paths)?;
+            let mut block =
+                transform_record_batch(self.src_schema.as_ref(), &batch, &self.remain_field_paths)?;
             if let Some(q) = self.prefetched.as_mut() {
                 let prefetched = q.pop_front().unwrap();
                 block.add_column(prefetched);

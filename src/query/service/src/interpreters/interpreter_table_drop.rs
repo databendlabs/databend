@@ -14,17 +14,18 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::schema::DropTableByIdReq;
-use common_sql::plans::DropTablePlan;
-use common_storages_fuse::FuseTable;
-use common_storages_share::save_share_spec;
-use common_storages_view::view_table::VIEW_ENGINE;
-use common_users::UserApiProvider;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_sql::plans::DropTablePlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_share::save_share_spec;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -66,10 +67,16 @@ impl Interpreter for DropTableInterpreter {
             )));
         }
         if let Some(tbl) = tbl {
-            if tbl.get_table_info().engine() == VIEW_ENGINE {
+            let engine = tbl.get_table_info().engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is VIEW that doesn't support drop, use `DROP VIEW {}.{}` instead",
-                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                    "{}.{} engine is {} that doesn't support drop, use `DROP {} {}.{}` instead",
+                    &self.plan.database,
+                    &self.plan.table,
+                    engine,
+                    engine,
+                    &self.plan.database,
+                    &self.plan.table
                 )));
             }
             let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -100,8 +107,10 @@ impl Interpreter for DropTableInterpreter {
             let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
-                    tenant: self.plan.tenant.clone(),
+                    tenant,
+                    table_name: tbl_name.to_string(),
                     tb_id: tbl.get_table_info().ident.table_id,
+                    db_id: db.get_db_info().ident.db_id,
                 })
                 .await?;
 

@@ -1,5 +1,5 @@
 [package]
-name = "common-openai"
+name = "databend-common-openai"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,8 +14,8 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../exception" }
-common-metrics = { path = "../metrics" }
+databend-common-exception = { path = "../exception" }
+databend-common-metrics = { path = "../metrics" }
 
 # GitHub dependencies
 

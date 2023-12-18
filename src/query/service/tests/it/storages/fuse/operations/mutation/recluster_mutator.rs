@@ -17,41 +17,41 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_storages_fuse::io::SegmentWriter;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::operations::ReclusterMutator;
-use common_storages_fuse::pruning::create_segment_location_vector;
-use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::statistics::reducers::reduce_block_metas;
-use common_storages_fuse::FusePartInfo;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_storages_fuse::io::SegmentWriter;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::ReclusterMutator;
+use databend_common_storages_fuse::pruning::create_segment_location_vector;
+use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
+use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use rand::thread_rng;
 use rand::Rng;
-use storages_common_table_meta::meta;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_block_select() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let data_accessor = ctx.get_data_operator()?.operator();
@@ -154,8 +154,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety_for_recluster() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_data_operator()?.operator();
 
     let recluster_block_size = 300;

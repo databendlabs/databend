@@ -14,23 +14,23 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_sql::executor::physical_plans::CompactSource;
-use common_sql::executor::physical_plans::CopyIntoTable;
-use common_sql::executor::physical_plans::CopyIntoTableSource;
-use common_sql::executor::physical_plans::DeleteSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::ExchangeSink;
-use common_sql::executor::physical_plans::ExchangeSource;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::HashJoin;
-use common_sql::executor::physical_plans::MergeInto;
-use common_sql::executor::physical_plans::QuerySource;
-use common_sql::executor::physical_plans::ReclusterSource;
-use common_sql::executor::physical_plans::ReplaceInto;
-use common_sql::executor::physical_plans::TableScan;
-use common_sql::executor::PhysicalPlanReplacer;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::CopyIntoTable;
+use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::DeleteSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::ExchangeSink;
+use databend_common_sql::executor::physical_plans::ExchangeSource;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MergeInto;
+use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::physical_plans::ReclusterSource;
+use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::PhysicalPlanReplacer;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -105,6 +105,7 @@ impl Fragmenter {
                 FragmentKind::Merge => Ok(Some(MergeExchange::create(
                     Self::get_local_executor(ctx),
                     plan.ignore_exchange,
+                    plan.allow_adjust_parallelism,
                 ))),
                 FragmentKind::Expansive => Ok(Some(BroadcastExchange::create(
                     from_multiple_nodes,
@@ -235,9 +236,10 @@ impl PhysicalPlanReplacer for Fragmenter {
             from_correlated_subquery: plan.from_correlated_subquery,
             probe_to_build: plan.probe_to_build.clone(),
             output_schema: plan.output_schema.clone(),
-            contain_runtime_filter: plan.contain_runtime_filter,
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
+            probe_keys_rt: plan.probe_keys_rt.clone(),
+            broadcast: plan.broadcast,
         }))
     }
 
@@ -265,6 +267,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             // set the fragment id to a invalid value here.
             destination_fragment_id: usize::MAX,
             ignore_exchange: plan.ignore_exchange,
+            allow_adjust_parallelism: plan.allow_adjust_parallelism,
         });
         let fragment_type = match self.state {
             State::SelectLeaf => FragmentType::Source,
@@ -282,6 +285,8 @@ impl PhysicalPlanReplacer for Fragmenter {
                 .iter()
                 .all(|fragment| !matches!(&fragment.exchange, Some(DataExchange::Merge(_)))),
         )?;
+
+        let table_index = plan.get_table_index();
 
         let mut source_fragment = PlanFragment {
             plan,
@@ -308,6 +313,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             query_id: self.query_id.clone(),
 
             source_fragment_id,
+            table_index,
         }))
     }
 }

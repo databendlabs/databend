@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::scalar::BooleanScalar;
-use common_arrow::arrow::scalar::Scalar;
-use common_arrow::arrow::scalar::StructScalar;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::scalar::BooleanScalar;
+use databend_common_arrow::arrow::scalar::Scalar;
+use databend_common_arrow::arrow::scalar::StructScalar;
 
 #[allow(clippy::eq_op)]
 #[test]

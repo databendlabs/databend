@@ -14,20 +14,20 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_expression::DataBlock;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_query::test_kits::table_test_fixture::execute_query;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataBlock;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -84,7 +84,8 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::Result<()> {
+async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_exception::Result<()>
+{
     // the test scenario is as follows:
     // ┌──────┐
     // │  s0  │
@@ -107,8 +108,10 @@ async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::
     //
     //        s3 should be a valid snapshot,full-scan should work as expected
 
-    let fixture = Arc::new(TestFixture::new().await);
-    let ctx = fixture.ctx();
+    let fixture = Arc::new(TestFixture::setup().await?);
+    let ctx = fixture.new_query_ctx().await?;
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
     let init_table = fixture.latest_default_table().await?;
 
@@ -160,7 +163,8 @@ async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::
         fixture.default_table_name()
     );
     // - full scan should work
-    let result = execute_query(ctx.clone(), qry.as_str())
+    let result = fixture
+        .execute_query(qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
         .await?;

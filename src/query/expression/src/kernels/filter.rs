@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use common_arrow::arrow::bitmap::utils::BitChunksExact;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
+use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
+use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
 
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
@@ -444,7 +444,7 @@ impl Column {
     /// # Safety
     /// * `src` + `src_idx`(in bits) must be [valid] for reads of `len` bits.
     /// * `ptr` must be [valid] for writes of `len` bits.
-    unsafe fn copy_continuous_bits(
+    pub unsafe fn copy_continuous_bits(
         ptr: &mut *mut u8,
         src: &[u8],
         mut dst_idx: usize,

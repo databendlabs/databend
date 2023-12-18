@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Filters;
-use common_catalog::plan::Partitions;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Partitions;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DeleteSource {

@@ -14,26 +14,26 @@
 
 use std::sync::Arc;
 
-use common_base::base::escape_for_key;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_api::reply::txn_reply_to_api_result;
-use common_meta_api::txn_cond_seq;
-use common_meta_api::txn_op_del;
-use common_meta_api::txn_op_put;
-use common_meta_app::app_error::TxnRetryMaxTimes;
-use common_meta_app::principal::StageFile;
-use common_meta_app::principal::StageInfo;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::ConditionResult::Eq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnRequest;
+use databend_common_base::base::escape_for_key;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::txn_cond_seq;
+use databend_common_meta_api::txn_op_del;
+use databend_common_meta_api::txn_op_put;
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::StageFile;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -85,11 +85,11 @@ impl StageApi for StageMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert_info.await?.added_or_else(|v| {
+        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
             ErrorCode::StageAlreadyExists(format!("Stage already exists, seq [{}]", v.seq))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]

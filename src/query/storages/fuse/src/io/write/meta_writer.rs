@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CachedObject;
-use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
-use storages_common_table_meta::meta::Versioned;
 
 #[async_trait::async_trait]
 pub trait MetaWriter<T> {
@@ -105,11 +105,11 @@ impl Marshal for TableSnapshotStatistics {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::panic::catch_unwind;
 
-    use common_expression::TableSchema;
-    use storages_common_table_meta::meta::SnapshotId;
-    use storages_common_table_meta::meta::Statistics;
+    use databend_common_base::runtime::catch_unwind;
+    use databend_common_expression::TableSchema;
+    use databend_storages_common_table_meta::meta::SnapshotId;
+    use databend_storages_common_table_meta::meta::Statistics;
 
     use super::*;
 

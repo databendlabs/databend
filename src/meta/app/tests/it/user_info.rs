@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::PasswordHashMethod;
-use common_meta_app::principal::UserInfo;
+use databend_common_exception::exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::UserInfo;
 
 #[test]
 fn test_user_info() -> Result<()> {

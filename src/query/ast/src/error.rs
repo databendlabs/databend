@@ -18,8 +18,8 @@ use std::fmt::Write;
 use std::num::IntErrorKind;
 use std::num::ParseIntError;
 
-use common_exception::pretty_print_error;
-use common_exception::Range;
+use databend_common_exception::pretty_print_error;
+use databend_common_exception::Range;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 
@@ -186,9 +186,14 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
     let mut labels = vec![];
 
     // Plain text error has the highest priority. Only display it if exists.
-    for kind in &inner.errors {
+    for (span, kind) in error
+        .errors
+        .iter()
+        .map(|err| (error.span, err))
+        .chain(inner.errors.iter().map(|err| (inner.span, err)))
+    {
         if let ErrorKind::Other(msg) = kind {
-            labels = vec![(inner.span, msg.to_string())];
+            labels = vec![(span, msg.to_string())];
             break;
         }
     }

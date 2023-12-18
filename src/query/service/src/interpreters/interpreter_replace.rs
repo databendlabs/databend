@@ -15,41 +15,45 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::table::TableExt;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::StageInfo;
-use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::physical_plans::OnConflictField;
-use common_sql::executor::physical_plans::ReplaceAsyncSourcer;
-use common_sql::executor::physical_plans::ReplaceDeduplicate;
-use common_sql::executor::physical_plans::ReplaceInto;
-use common_sql::executor::physical_plans::ReplaceSelectCtx;
-use common_sql::executor::PhysicalPlan;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::Plan;
-use common_sql::plans::Replace;
-use common_sql::BindContext;
-use common_sql::Metadata;
-use common_sql::NameResolutionContext;
-use common_sql::ScalarBinder;
-use common_storage::StageFileInfo;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
+use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
+use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
+use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::Replace;
+use databend_common_sql::BindContext;
+use databend_common_sql::Metadata;
+use databend_common_sql::NameResolutionContext;
+use databend_common_sql::ScalarBinder;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::TableSnapshot;
 
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_compact;
-use crate::interpreters::common::CompactHookTraceCtx;
-use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::hook::hook_compact;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::CompactHookTraceCtx;
+use crate::interpreters::hook::CompactTargetTableDescription;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -125,6 +129,18 @@ impl Interpreter for ReplaceInterpreter {
             .await;
         }
 
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
+        {
+            let refresh_desc = RefreshDesc {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            hook_refresh(self.ctx.clone(), &mut pipeline.main_pipeline, refresh_desc).await?;
+        }
+
         Ok(pipeline)
     }
 }
@@ -141,6 +157,13 @@ impl ReplaceInterpreter {
 
         // check mutability
         table.check_mutable()?;
+        // check change tracking
+        if table.change_tracking_enabled() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "change tracking is enabled for table '{}', does not support REPLACE",
+                table.name(),
+            )));
+        }
 
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
@@ -160,15 +183,13 @@ impl ReplaceInterpreter {
                 field_index,
             })
         }
-        let fuse_table =
-            table
-                .as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support REPLACE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                )))?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support REPLACE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
 
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
@@ -184,7 +205,12 @@ impl ReplaceInterpreter {
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
 
-        let (mut root, select_ctx, bind_context) = self
+        let ReplaceSourceCtx {
+            mut root,
+            select_ctx,
+            update_stream_meta,
+            bind_context,
+        } = self
             .connect_input_source(
                 self.ctx.clone(),
                 &self.plan.source,
@@ -264,6 +290,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: FragmentKind::Expansive,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
         }
@@ -317,6 +344,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
         }
@@ -326,6 +354,7 @@ impl ReplaceInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
+            update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
             need_lock: false,
         })));
@@ -341,6 +370,7 @@ impl ReplaceInterpreter {
             Ok(())
         }
     }
+
     #[async_backtrace::framed]
     async fn connect_input_source<'a>(
         &'a self,
@@ -348,15 +378,16 @@ impl ReplaceInterpreter {
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
-    ) -> Result<(
-        Box<PhysicalPlan>,
-        Option<ReplaceSelectCtx>,
-        Option<BindContext>,
-    )> {
+    ) -> Result<ReplaceSourceCtx> {
         match source {
             InsertInputSource::Values { data, start } => self
                 .connect_value_source(schema.clone(), data, *start)
-                .map(|x| (x, None, None)),
+                .map(|root| ReplaceSourceCtx {
+                    root,
+                    select_ctx: None,
+                    update_stream_meta: vec![],
+                    bind_context: None,
+                }),
 
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
@@ -365,10 +396,15 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, files) =
+                    let (physical_plan, files, _) =
                         interpreter.build_physical_plan(&copy_plan).await?;
                     *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
-                    Ok((Box::new(physical_plan), None, None))
+                    Ok(ReplaceSourceCtx {
+                        root: Box::new(physical_plan),
+                        select_ctx: None,
+                        update_stream_meta: vec![],
+                        bind_context: None,
+                    })
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
@@ -398,11 +434,7 @@ impl ReplaceInterpreter {
         &'a self,
         ctx: Arc<QueryContext>,
         query_plan: &Plan,
-    ) -> Result<(
-        Box<PhysicalPlan>,
-        Option<ReplaceSelectCtx>,
-        Option<BindContext>,
-    )> {
+    ) -> Result<ReplaceSourceCtx> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -413,6 +445,8 @@ impl ReplaceInterpreter {
             } => (s_expr, metadata, bind_context, formatted_ast),
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
+
+        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),
@@ -431,6 +465,18 @@ impl ReplaceInterpreter {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
         };
-        Ok((physical_plan, Some(select_ctx), Some(*bind_context.clone())))
+        Ok(ReplaceSourceCtx {
+            root: physical_plan,
+            select_ctx: Some(select_ctx),
+            update_stream_meta,
+            bind_context: Some(*bind_context.clone()),
+        })
     }
+}
+
+struct ReplaceSourceCtx {
+    root: Box<PhysicalPlan>,
+    select_ctx: Option<ReplaceSelectCtx>,
+    update_stream_meta: Vec<UpdateStreamMetaReq>,
+    bind_context: Option<BindContext>,
 }

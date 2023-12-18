@@ -14,9 +14,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::TopKSorter;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
@@ -33,6 +34,7 @@ use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 
 pub struct NoPretchPolicyBuilder {
     projection: ProjectionMask,
+    data_schema: DataSchema,
     field_levels: FieldLevels,
     field_paths: Arc<Option<FieldPaths>>,
 }
@@ -55,6 +57,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
         )?;
         Ok(Some(Box::new(NoPrefetchPolicy {
             field_paths: self.field_paths.clone(),
+            data_schema: self.data_schema.clone(),
             reader,
         })))
     }
@@ -63,12 +66,14 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
 impl NoPretchPolicyBuilder {
     pub fn create(
         schema: &SchemaDescriptor,
+        data_schema: DataSchema,
         projection: ProjectionMask,
         field_paths: Arc<Option<FieldPaths>>,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
         let field_levels = parquet_to_arrow_field_levels(schema, projection.clone(), None)?;
         Ok(Box::new(NoPretchPolicyBuilder {
             field_levels,
+            data_schema,
             projection,
             field_paths,
         }))
@@ -87,6 +92,7 @@ pub struct NoPrefetchPolicy {
     /// we should extract inner columns from the struct manually by traversing the nested column;
     /// if `field_paths` is [None], we can skip the traversing.
     field_paths: Arc<Option<FieldPaths>>,
+    data_schema: DataSchema,
 
     reader: ParquetRecordBatchReader,
 }
@@ -95,7 +101,7 @@ impl ReadPolicy for NoPrefetchPolicy {
     fn read_block(&mut self) -> Result<Option<DataBlock>> {
         let batch = self.reader.next().transpose()?;
         if let Some(batch) = batch {
-            let block = transform_record_batch(&batch, &self.field_paths)?;
+            let block = transform_record_batch(&self.data_schema, &batch, &self.field_paths)?;
             Ok(Some(block))
         } else {
             Ok(None)

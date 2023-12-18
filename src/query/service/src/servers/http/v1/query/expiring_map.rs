@@ -17,9 +17,9 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio::task;
-use common_base::base::tokio::time::sleep;
 use dashmap::DashMap;
+use databend_common_base::base::tokio::task;
+use databend_common_base::base::tokio::time::sleep;
 
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;

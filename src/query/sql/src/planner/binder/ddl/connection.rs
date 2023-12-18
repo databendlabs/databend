@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::CreateConnectionStmt;
-use common_ast::ast::UriLocation;
-use common_exception::Result;
+use databend_common_ast::ast::CreateConnectionStmt;
+use databend_common_ast::ast::UriLocation;
+use databend_common_exception::Result;
 
 use crate::binder::parse_uri_location;
 use crate::plans::CreateConnectionPlan;
@@ -34,7 +34,7 @@ impl Binder {
             "".to_string(),
             stmt.storage_params.clone(),
         );
-        parse_uri_location(&mut location).await?;
+        parse_uri_location(&mut location, None).await?;
         Ok(Plan::CreateConnection(Box::new(CreateConnectionPlan {
             if_not_exists: stmt.if_not_exists,
             name: stmt.name.to_string(),

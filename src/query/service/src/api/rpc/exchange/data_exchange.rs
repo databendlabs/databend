@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::RemoteExpr;
+use databend_common_expression::RemoteExpr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
@@ -58,13 +58,19 @@ impl ShuffleDataExchange {
 pub struct MergeExchange {
     pub destination_id: String,
     pub ignore_exchange: bool,
+    pub allow_adjust_parallelism: bool,
 }
 
 impl MergeExchange {
-    pub fn create(destination_id: String, ignore_exchange: bool) -> DataExchange {
+    pub fn create(
+        destination_id: String,
+        ignore_exchange: bool,
+        allow_adjust_parallelism: bool,
+    ) -> DataExchange {
         DataExchange::Merge(MergeExchange {
             destination_id,
             ignore_exchange,
+            allow_adjust_parallelism,
         })
     }
 }

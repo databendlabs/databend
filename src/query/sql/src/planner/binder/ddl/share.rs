@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::*;
-use common_exception::Result;
-use common_meta_app::share::ShareEndpointIdent;
+use databend_common_ast::ast::*;
+use databend_common_exception::Result;
+use databend_common_meta_app::share::ShareEndpointIdent;
 use itertools::Itertools;
 
 use crate::binder::Binder;

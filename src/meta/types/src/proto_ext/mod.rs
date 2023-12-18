@@ -15,5 +15,6 @@
 //! Extend protobuf generated code with some useful methods.
 
 mod seq_v_ext;
+mod snapshot_chunk_request_ext;
 mod stream_item_ext;
 mod txn_ext;

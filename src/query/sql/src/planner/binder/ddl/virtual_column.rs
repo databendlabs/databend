@@ -15,17 +15,17 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use common_ast::ast::AlterVirtualColumnStmt;
-use common_ast::ast::CreateVirtualColumnStmt;
-use common_ast::ast::DropVirtualColumnStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::RefreshVirtualColumnStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableDataType;
-use common_expression::TableSchemaRef;
+use databend_common_ast::ast::AlterVirtualColumnStmt;
+use databend_common_ast::ast::CreateVirtualColumnStmt;
+use databend_common_ast::ast::DropVirtualColumnStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::RefreshVirtualColumnStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRef;
 
 use crate::binder::Binder;
 use crate::plans::AlterVirtualColumnPlan;
@@ -161,6 +161,7 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                segment_locs: None,
             },
         )))
     }
@@ -186,9 +187,7 @@ impl Binder {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { lit, .. },
                     } => lit.clone(),
-                    MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
-                        Literal::String(key.name.clone())
-                    }
+                    MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                     MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {
                         return Err(ErrorCode::SemanticError(format!(
@@ -213,19 +212,20 @@ impl Binder {
                     }
                     let mut virtual_name = String::new();
                     virtual_name.push_str(column.name());
-                    while let Some(path) = paths.pop_front() {
+                    for path in paths {
+                        virtual_name.push('[');
                         match path {
                             Literal::UInt64(idx) => {
-                                virtual_name.push('[');
                                 virtual_name.push_str(&idx.to_string());
-                                virtual_name.push(']');
                             }
                             Literal::String(field) => {
-                                virtual_name.push(':');
+                                virtual_name.push('\'');
                                 virtual_name.push_str(field.as_ref());
+                                virtual_name.push('\'');
                             }
                             _ => unreachable!(),
                         }
+                        virtual_name.push(']');
                     }
                     virtual_names.insert(virtual_name);
                 } else {

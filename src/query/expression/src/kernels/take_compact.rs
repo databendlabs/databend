@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
 
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
@@ -228,8 +228,8 @@ impl Column {
         builder
     }
 
-    pub fn take_compact_string_types<'a>(
-        col: &'a StringColumn,
+    pub fn take_compact_string_types(
+        col: &StringColumn,
         indices: &[(u32, u32)],
         num_rows: usize,
     ) -> StringColumn {

@@ -16,18 +16,22 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::ProgressValues;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use storages_common_table_meta::meta::BlockMeta;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
@@ -53,9 +57,12 @@ enum State {
 pub struct CompactSource {
     state: State,
     ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
     storage_format: FuseStorageFormat,
     output: Arc<OutputPort>,
+    stream_columns: Vec<StreamColumn>,
+    stream_operators: Vec<BlockOperator>,
 }
 
 impl CompactSource {
@@ -63,14 +70,20 @@ impl CompactSource {
         ctx: Arc<dyn TableContext>,
         storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
+        stream_columns: Vec<StreamColumn>,
+        stream_operators: Vec<BlockOperator>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
+        let func_ctx = ctx.get_function_context()?;
         Ok(ProcessorPtr::create(Box::new(CompactSource {
             state: State::ReadData(None),
             ctx,
+            func_ctx,
             block_reader,
             storage_format,
             output,
+            stream_columns,
+            stream_operators,
         })))
     }
 }
@@ -134,11 +147,26 @@ impl Processor for CompactSource {
                     .into_iter()
                     .zip(metas.into_iter())
                     .map(|(data, meta)| {
-                        self.block_reader.deserialize_chunks_with_meta(
+                        let mut block = self.block_reader.deserialize_chunks_with_meta(
                             &meta,
                             &self.storage_format,
                             data,
-                        )
+                        )?;
+
+                        if self.block_reader.update_stream_columns() {
+                            let num_rows = block.num_rows();
+                            let stream_meta = gen_mutation_stream_meta(None, &meta.location.0)?;
+                            for stream_column in self.stream_columns.iter() {
+                                let entry =
+                                    stream_column.generate_column_values(&stream_meta, num_rows);
+                                block.add_column(entry);
+                            }
+                            block = self
+                                .stream_operators
+                                .iter()
+                                .try_fold(block, |input, op| op.execute(&self.func_ctx, input))?;
+                        }
+                        Ok(block)
                     })
                     .collect::<Result<Vec<_>>>()?;
 

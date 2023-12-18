@@ -1,5 +1,5 @@
 [package]
-name = "common-metrics"
+name = "databend-common-metrics"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -15,13 +15,12 @@ enable-histogram = ["metrics/enable-histogram"]
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../exception" }
+databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
-lazy_static = { workspace = true }
-metrics = "0.20.1"
+metrics = { workspace = true }
 metrics-exporter-prometheus = { version = "0.11.0", default-features = false }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 prometheus-client = { workspace = true }
 prometheus-parse = "0.2.3"
 serde = { workspace = true }

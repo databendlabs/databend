@@ -16,10 +16,10 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ptr::NonNull;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::FastHash;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::FastHash;
 use ethnum::i256;
 use ethnum::u256;
 
@@ -55,6 +55,14 @@ unsafe impl Send for KeysState {}
 
 unsafe impl Sync for KeysState {}
 
+pub trait KeyAccessor {
+    type Key: ?Sized;
+
+    /// # Safety
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key;
+}
+
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
 
@@ -71,10 +79,11 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)>;
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>>;
 }
 
 /// These methods are `generic` method to generate hash key,

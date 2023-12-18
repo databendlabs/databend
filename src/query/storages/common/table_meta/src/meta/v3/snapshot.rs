@@ -16,8 +16,8 @@ use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::Result;
-use common_io::prelude::BinaryRead;
+use databend_common_exception::Result;
+use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 

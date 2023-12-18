@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_formats::field_encoder::helpers::write_json_string;
-use common_formats::field_encoder::helpers::write_tsv_escaped_string;
-use common_formats::field_encoder::write_csv_string;
+use databend_common_formats::field_encoder::helpers::write_json_string;
+use databend_common_formats::field_encoder::helpers::write_tsv_escaped_string;
+use databend_common_formats::field_encoder::write_csv_string;
 
 #[test]
 fn test_escape() {

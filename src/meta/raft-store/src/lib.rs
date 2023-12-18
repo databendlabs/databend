@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(coroutines)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(lazy_cell)]
 #![allow(clippy::diverging_sub_expression)]
 
 // #![allow(incomplete_features)]

@@ -15,19 +15,27 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::ArgType;
-use common_expression::types::ValueType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
-use common_expression::Value;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::Value;
 
 use super::RowConverter;
 use super::Rows;
+
+pub type DateRows = SimpleRows<DateType>;
+pub type TimestampRows = SimpleRows<TimestampType>;
+pub type StringRows = SimpleRows<StringType>;
 
 /// Row structure for single simple types. (numbers, date, timestamp)
 #[derive(Clone, Copy)]
@@ -86,7 +94,7 @@ where
 
 impl<T> Rows for SimpleRows<T>
 where
-    T: ValueType,
+    T: ArgType,
     T::Scalar: Ord,
 {
     type Item<'a> = SimpleRow<T>;
@@ -107,14 +115,22 @@ where
         T::upcast_column(self.inner.clone())
     }
 
-    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self> {
-        let inner = T::try_downcast_column(&col)?;
+    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
+        let inner = T::try_downcast_column(col)?;
         Some(Self {
             inner,
             desc: !desc[0].asc,
         })
     }
+
+    fn data_type() -> DataType {
+        T::data_type()
+    }
 }
+
+pub type DateConverter = SimpleRowConverter<DateType>;
+pub type TimestampConverter = SimpleRowConverter<TimestampType>;
+pub type StringConverter = SimpleRowConverter<StringType>;
 
 /// If there is only one sort field and its type is a primitive type,
 /// use this converter.
@@ -129,7 +145,7 @@ where
     T::Scalar: Ord,
 {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         _: DataSchemaRef,
     ) -> Result<Self> {
         assert!(sort_columns_descriptions.len() == 1);

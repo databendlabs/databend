@@ -15,20 +15,20 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_license::license::Feature::Vacuum;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::GcDroppedTableReq;
-use common_meta_app::schema::ListDroppedTableReq;
-use common_meta_app::schema::TableInfoFilter;
-use common_sql::plans::VacuumDropTablePlan;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::TableInfoFilter;
+use databend_common_sql::plans::VacuumDropTablePlan;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::as_debug;
 use log::info;
-use vacuum_handler::get_vacuum_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -68,6 +68,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         };
         let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+        info!(
+            "vacuum drop table from db {:?}, retention_time: {:?}",
+            self.plan.database, retention_time
+        );
         // if database if empty, vacuum all tables
         let filter = if self.plan.database.is_empty() {
             TableInfoFilter::AllDroppedTables(Some(retention_time))
@@ -83,8 +87,16 @@ impl Interpreter for VacuumDropTablesInterpreter {
                     db_name: self.plan.database.clone(),
                 },
                 filter,
+                limit: self.plan.option.limit,
             })
             .await?;
+
+        info!(
+            "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?}, drop_ids: {:?}",
+            self.plan.database,
+            tables.len(),
+            drop_ids.len()
+        );
 
         // TODO buggy, table as catalog obj should be allowed to drop
         // also drop ids
@@ -107,6 +119,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .await?;
         // gc meta data only when not dry run
         if self.plan.option.dry_run.is_none() {
+            info!(
+                "vacuum drop table from db {:?}, gc_drop_tables",
+                self.plan.database,
+            );
             info!(drop_ids = as_debug!(&drop_ids); "vacuum drop table");
             let req = GcDroppedTableReq {
                 tenant: self.ctx.get_tenant(),
@@ -118,7 +134,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         match files_opt {
             None => return Ok(PipelineBuildResult::create()),
             Some(purge_files) => {
-                let len = min(purge_files.len(), DRY_RUN_LIMIT);
+                let mut len = min(purge_files.len(), DRY_RUN_LIMIT);
+                if let Some(limit) = self.plan.option.limit {
+                    len = min(len, limit);
+                }
                 let mut tables: Vec<Vec<u8>> = Vec::with_capacity(len);
                 let mut files: Vec<Vec<u8>> = Vec::with_capacity(len);
                 let purge_files = &purge_files[0..len];

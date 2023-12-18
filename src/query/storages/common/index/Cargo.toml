@@ -1,5 +1,5 @@
 [package]
-name = "storages-common-index"
+name = "databend-storages-common-index"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -15,16 +15,16 @@ test = false
 ignored = ["xorfilter-rs", "match-template"]
 
 [dependencies]
-common-arrow = { path = "../../../../common/arrow" }
-common-exception = { path = "../../../../common/exception" }
-common-expression = { path = "../../../expression" }
-common-functions = { path = "../../../functions" }
+databend-common-arrow = { path = "../../../../common/arrow" }
+databend-common-exception = { path = "../../../../common/exception" }
+databend-common-expression = { path = "../../../expression" }
+databend-common-functions = { path = "../../../functions" }
 
-storages-common-table-meta = { path = "../table_meta" }
+databend-storages-common-table-meta = { path = "../table_meta" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
-match-template = "0.0.1"
+match-template = { workspace = true }
 minitrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
@@ -34,9 +34,9 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 ], tag = "databend-alpha.4" }
 
 [dev-dependencies]
-common-arrow = { path = "../../../../common/arrow" }
 criterion = "0.4"
-rand = "0.8.5"
+databend-common-arrow = { path = "../../../../common/arrow" }
+rand = { workspace = true }
 
 [[bench]]
 name = "build_from_block"

@@ -19,8 +19,8 @@ use std::fmt::Formatter;
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
-use common_io::display_decimal_128;
-use common_io::display_decimal_256;
+use databend_common_io::display_decimal_128;
+use databend_common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use roaring::RoaringTreemap;
@@ -437,16 +437,22 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
                 }
                 write!(f, ")")
             }
-            RawExpr::UDFServerCall {
-                func_name, args, ..
+            RawExpr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_display,
+                ..
             } => {
-                write!(f, "{}(", func_name)?;
+                write!(f, "{name}")?;
+                write!(f, "(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{arg}")?;
                 }
+                write!(f, ", ")?;
+                write!(f, "{lambda_display}")?;
                 write!(f, ")")
             }
         }
@@ -652,16 +658,22 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 }
                 write!(f, ")")
             }
-            Expr::UDFServerCall {
-                func_name, args, ..
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_display,
+                ..
             } => {
-                write!(f, "{}(", func_name)?;
+                write!(f, "{name}")?;
+                write!(f, "(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{arg}")?;
                 }
+                write!(f, ", ")?;
+                write!(f, "{lambda_display}")?;
                 write!(f, ")")
             }
         }
@@ -796,11 +808,14 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s
                     }
                 },
-                Expr::UDFServerCall {
-                    func_name, args, ..
+                Expr::LambdaFunctionCall {
+                    name,
+                    args,
+                    lambda_display,
+                    ..
                 } => {
                     let mut s = String::new();
-                    s += func_name;
+                    s += &name;
                     s += "(";
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
@@ -808,6 +823,8 @@ impl<Index: ColumnIndex> Expr<Index> {
                         }
                         s += &arg.sql_display();
                     }
+                    s += ", ";
+                    s += &lambda_display;
                     s += ")";
                     s
                 }

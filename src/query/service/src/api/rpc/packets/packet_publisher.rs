@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_meta_types::NodeInfo;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_meta_types::NodeInfo;
 
 use crate::api::rpc::flight_actions::InitNodesChannel;
 use crate::api::rpc::packets::packet::create_client;
@@ -41,6 +41,7 @@ pub struct InitNodesChannelPacket {
     pub executor: Arc<NodeInfo>,
     pub fragment_connections_info: Vec<ConnectionInfo>,
     pub statistics_connections_info: Vec<ConnectionInfo>,
+    pub create_rpc_clint_with_current_rt: bool,
 }
 
 impl InitNodesChannelPacket {
@@ -49,12 +50,14 @@ impl InitNodesChannelPacket {
         executor: Arc<NodeInfo>,
         fragment_connections_info: Vec<ConnectionInfo>,
         statistics_connections_info: Vec<ConnectionInfo>,
+        create_rpc_clint_with_current_rt: bool,
     ) -> InitNodesChannelPacket {
         InitNodesChannelPacket {
             query_id,
             executor,
             fragment_connections_info,
             statistics_connections_info,
+            create_rpc_clint_with_current_rt,
         }
     }
 }

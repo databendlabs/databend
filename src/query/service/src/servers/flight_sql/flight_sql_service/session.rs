@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::UserIdentity;
-use common_users::UserApiProvider;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_users::UserApiProvider;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
 use tonic::Status;
@@ -64,7 +64,7 @@ impl FlightSqlServiceImpl {
     pub(super) fn get_user_password(metadata: &MetadataMap) -> Result<(String, String), String> {
         let basic = "Basic ";
         let authorization = Self::get_header_value(metadata, "authorization")
-            .ok_or_else(|| "authorization not parsable".to_string())?;
+            .ok_or("authorization not parsable".to_string())?;
 
         if !authorization.starts_with(basic) {
             return Err(format!("Auth type not implemented: {authorization}"));

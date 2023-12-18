@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::Family;
-use common_metrics::Histogram;
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
-lazy_static! {
-    static ref COMPACT_HOOK_EXECUTION_MS: Family<Vec<(&'static str, String)>, Histogram> =
-        register_histogram_family_in_milliseconds("compact_hook_execution_ms");
-    static ref COMPACT_HOOK_COMPACTION_MS: Family<Vec<(&'static str, String)>, Histogram> =
-        register_histogram_family_in_milliseconds("compact_hook_compaction_ms");
-}
+use databend_common_metrics::register_histogram_family_in_milliseconds;
+use databend_common_metrics::Family;
+use databend_common_metrics::Histogram;
+
+static COMPACT_HOOK_EXECUTION_MS: LazyLock<Family<Vec<(&'static str, String)>, Histogram>> =
+    LazyLock::new(|| register_histogram_family_in_milliseconds("compact_hook_execution_ms"));
+static COMPACT_HOOK_COMPACTION_MS: LazyLock<Family<Vec<(&'static str, String)>, Histogram>> =
+    LazyLock::new(|| register_histogram_family_in_milliseconds("compact_hook_compaction_ms"));
 
 // the time used in executing the main operation  (replace-into, copy-into, etc)
 // metrics names with pattern `compact_hook_{operation_name}_time_execution_ms`

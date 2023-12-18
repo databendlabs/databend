@@ -14,7 +14,7 @@
 
 use std::io::Cursor;
 
-use common_io::cursor_ext::*;
+use databend_common_io::cursor_ext::*;
 
 #[test]
 fn test_read_ext() {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use bumpalo::Bump;
-use common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use ethnum::i256;
 
 use crate::load;

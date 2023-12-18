@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::io;
 
-use common_meta_stoerr::MetaBytesError;
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::LogId;
-use common_meta_types::StoredMembership;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::StoredMembership;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;
@@ -38,8 +38,7 @@ pub struct Importer {
 }
 
 impl Importer {
-    // TODO(1): consider returning IO error
-    pub fn import(&mut self, entry: RaftStoreEntry) -> Result<(), MetaBytesError> {
+    pub fn import(&mut self, entry: RaftStoreEntry) -> Result<(), io::Error> {
         let d = &mut self.level_data;
 
         match entry {
@@ -65,10 +64,11 @@ impl Importer {
                 match key {
                     StateMachineMetaKey::LastApplied => {
                         let lid = TryInto::<LogId>::try_into(value).map_err(|e| {
-                            MetaBytesError::new(&AnyError::error(format_args!(
-                                "{} when import StateMachineMetaKey::LastApplied",
-                                e
-                            )))
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                AnyError::error(e)
+                                    .add_context(|| "import StateMachineMetaKey::LastApplied"),
+                            )
                         })?;
 
                         *d.sys_data_mut().last_applied_mut() = Some(lid);
@@ -79,10 +79,12 @@ impl Importer {
                     StateMachineMetaKey::LastMembership => {
                         let membership =
                             TryInto::<StoredMembership>::try_into(value).map_err(|e| {
-                                MetaBytesError::new(&AnyError::error(format_args!(
-                                    "{} when import StateMachineMetaKey::LastMembership",
-                                    e
-                                )))
+                                io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    AnyError::error(e).add_context(
+                                        || "import StateMachineMetaKey::LastMembership",
+                                    ),
+                                )
                             })?;
                         *d.sys_data_mut().last_membership_mut() = membership;
                     }

@@ -18,10 +18,12 @@
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
+#![feature(downcast_unchecked)]
+#![feature(lazy_cell)]
 
 use aggregates::AggregateFunctionFactory;
-use common_expression::FunctionRegistry;
 use ctor::ctor;
+use databend_common_expression::FunctionRegistry;
 
 pub mod aggregates;
 mod cast_rules;
@@ -54,7 +56,12 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "cume_dist",
 ];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 3] = ["array_transform", "array_apply", "array_filter"];
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 4] = [
+    "array_transform",
+    "array_apply",
+    "array_map",
+    "array_filter",
+];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

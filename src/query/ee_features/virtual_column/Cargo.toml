@@ -1,5 +1,5 @@
 [package]
-name = "virtual-column"
+name = "databend-enterprise-virtual-column"
 description = "virtual column handler"
 version = { workspace = true }
 authors = { workspace = true }
@@ -13,16 +13,14 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
-common-storages-fuse = { path = "../../storages/fuse" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-storages-fuse = { path = "../../storages/fuse" }
+databend-storages-common-table-meta = { path = "../../storages/common/table_meta" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 
 [build-dependencies]
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]

@@ -14,12 +14,9 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::io::ipc::write::default_ipc_fields;
-use common_arrow::arrow::io::ipc::write::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
+use databend_common_arrow::arrow::io::ipc::write::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_expression::DataSchemaRef;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::ExchangeInjector;
@@ -49,43 +46,13 @@ pub struct MergeExchangeParams {
     pub destination_id: String,
     pub schema: DataSchemaRef,
     pub ignore_exchange: bool,
+    pub allow_adjust_parallelism: bool,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
 pub enum ExchangeParams {
     MergeExchange(MergeExchangeParams),
     ShuffleExchange(ShuffleExchangeParams),
-}
-
-impl MergeExchangeParams {
-    pub fn create_serialize_params(&self) -> Result<SerializeParams> {
-        let arrow_schema = self.schema.to_arrow();
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        Ok(SerializeParams {
-            ipc_fields,
-            local_executor_pos: 0,
-            options: WriteOptions { compression: None },
-        })
-    }
-}
-
-impl ShuffleExchangeParams {
-    pub fn create_serialize_params(&self) -> Result<SerializeParams> {
-        let arrow_schema = self.schema.to_arrow();
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-
-        for (index, executor) in self.destination_ids.iter().enumerate() {
-            if executor == &self.executor_id {
-                return Ok(SerializeParams {
-                    ipc_fields,
-                    local_executor_pos: index,
-                    options: WriteOptions { compression: None },
-                });
-            }
-        }
-
-        Err(ErrorCode::Internal("Not found local executor."))
-    }
 }
 
 impl ExchangeParams {

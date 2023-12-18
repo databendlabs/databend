@@ -18,31 +18,33 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::ColumnId;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_types::MetaId;
-use common_pipeline_core::Pipeline;
-use common_storage::StorageMetrics;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::StorageMetrics;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
@@ -102,6 +104,25 @@ pub trait Table: Sync + Send {
 
     fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         vec![]
+    }
+
+    fn change_tracking_enabled(&self) -> bool {
+        false
+    }
+
+    fn stream_columns(&self) -> Vec<StreamColumn> {
+        vec![]
+    }
+
+    fn schema_with_stream(&self) -> Arc<TableSchema> {
+        let mut fields = self.schema().fields().clone();
+        for stream_column in self.stream_columns().iter() {
+            fields.push(stream_column.table_field());
+        }
+        Arc::new(TableSchema {
+            fields,
+            ..self.schema().as_ref().clone()
+        })
     }
 
     /// Whether the table engine supports prewhere optimization.
@@ -205,10 +226,18 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, copied_files, pipeline, overwrite, prev_snapshot_id);
+        let (_, _, _, _, _, _) = (
+            ctx,
+            copied_files,
+            update_stream_meta,
+            pipeline,
+            overwrite,
+            prev_snapshot_id,
+        );
 
         Ok(())
     }
@@ -260,35 +289,6 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    #[allow(clippy::too_many_arguments)]
-    #[async_backtrace::framed]
-    async fn update(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<FieldIndex>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let (_, _, _, _, _, _, _) = (
-            ctx,
-            filter,
-            col_indices,
-            update_list,
-            computed_list,
-            query_row_id_col,
-            pipeline,
-        );
-
-        Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support UPDATE",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
     fn get_block_thresholds(&self) -> BlockThresholds {
         BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
@@ -305,9 +305,10 @@ pub trait Table: Sync + Send {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (_, _) = (ctx, limit);
+        let (_, _, _) = (ctx, lock, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support compact segments",

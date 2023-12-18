@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -20,12 +19,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use common_config::GlobalConfig;
-use common_exception::Result;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_settings::ChangeValue;
-use common_settings::Settings;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_settings::Settings;
 use parking_lot::RwLock;
 
 use super::SessionType;
@@ -43,18 +41,20 @@ pub struct SessionContext {
     // The current user is determined by the authentication phase on each connection. It will not be
     // changed during a session.
     current_user: RwLock<Option<UserInfo>>,
-    // Each session have a current role which takes effects, the privileges from the user's other
-    // roles will not take effect. The user can switch to another available role by `SET ROLE`.
-    // If the current_role is not set, it takes the user's default role.
+    // Each session has a current role, by default all the users' granted roles will take effect,
+    // and the current role will become the owner of the database/table that the user created.
+    // The user can switch to another available role by `SET ROLE`. If the current_role is not set,
+    // it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    // The role restricted by external auth provider or sql client. When restricted_role is
-    // provided, the current user's all other roles are overridden by this role, all the other
-    // roles' privileges will not take effect.
-    // The difference between current_role and restricted_role is that current_role could be set
-    // by `SET ROLE`, user's DEFAULT ROLE or `restricted_role`, the other roles' privileges will
-    // still take effect, what the current_role does is to act as the owner on CREATE DATABASE/
-    // TABLE etc.
-    restricted_role: RwLock<Option<String>>,
+    // When an user comes from an external authenticator, the session is usually mapped to a single role.
+    auth_role: RwLock<Option<String>>,
+    // To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
+    // SET SEONCDARY ROLES NONE will disable all the roles except the current role.
+    // By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
+    // ROLES is preferred to be empty, which is Some([]) here:
+    // 1. The user comes from an external authenticator, which maps to a single role.
+    // 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
+    secondary_roles: RwLock<Option<Vec<String>>>,
     // The client IP from the client.
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Box<dyn FnOnce() + Send + Sync + 'static>>>,
@@ -72,7 +72,8 @@ impl SessionContext {
             abort: Default::default(),
             current_user: Default::default(),
             current_role: Default::default(),
-            restricted_role: Default::default(),
+            auth_role: Default::default(),
+            secondary_roles: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
             current_catalog: RwLock::new("default".to_string()),
@@ -96,17 +97,6 @@ impl SessionContext {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.settings.clone()
-    }
-
-    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.settings.get_changes()
-    }
-
-    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        unsafe {
-            self.settings.unchecked_apply_changes(changes);
-        }
-        Ok(())
     }
 
     // Get current catalog name.
@@ -142,6 +132,16 @@ impl SessionContext {
 
     pub fn set_current_role(&self, role: Option<RoleInfo>) {
         let mut lock = self.current_role.write();
+        *lock = role
+    }
+
+    pub fn get_auth_role(&self) -> Option<String> {
+        let lock = self.auth_role.read();
+        lock.clone()
+    }
+
+    pub fn set_auth_role(&self, role: Option<String>) {
+        let mut lock = self.auth_role.write();
         *lock = role
     }
 
@@ -184,14 +184,14 @@ impl SessionContext {
 
     // Get restricted role. Restricted role is the role granted by authenticator, or set
     // by sql client to restrict its privilege.
-    pub fn get_restricted_role(&self) -> Option<String> {
-        let lock = self.restricted_role.read();
+    pub fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        let lock = self.secondary_roles.read();
         lock.clone()
     }
 
-    pub fn set_restricted_role(&self, role: Option<String>) {
-        let mut lock = self.restricted_role.write();
-        *lock = role;
+    pub fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) {
+        let mut lock = self.secondary_roles.write();
+        *lock = secondary_roles;
     }
 
     pub fn get_client_host(&self) -> Option<SocketAddr> {

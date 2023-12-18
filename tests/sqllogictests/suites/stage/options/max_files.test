@@ -1,0 +1,11 @@
+statement ok
+drop table if exists it;
+
+statement ok
+create table it(a int, b string);
+
+# query error 2004.*max_files should be less than 15000
+# COPY INTO it FROM  @data/csv/it.csv FILE_FORMAT = (TYPE = CSV) max_files=15001;
+
+query error 2004.*max_files should be less than 15000
+COPY INTO i FROM (SELECT $1 FROM @data/csv/select.csv) FILE_FORMAT = (TYPE = CSV) max_files=15001;
