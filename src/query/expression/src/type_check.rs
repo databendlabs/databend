@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use itertools::Itertools;
 
 use crate::cast_scalar;
@@ -28,9 +28,12 @@ use crate::function::FunctionSignature;
 use crate::types::decimal::DecimalSize;
 use crate::types::decimal::MAX_DECIMAL128_PRECISION;
 use crate::types::decimal::MAX_DECIMAL256_PRECISION;
+use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
+use crate::types::Int64Type;
 use crate::types::Number;
+use crate::types::NumberScalar;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
@@ -122,6 +125,32 @@ pub fn check<Index: ColumnIndex>(
                     }
                     _ => {}
                 }
+            }
+
+            // inject the params
+            if ["round", "truncate"].contains(&name.as_str()) && params.is_empty() {
+                let mut scale = 0;
+                let mut new_args = args_expr.clone();
+
+                if args_expr.len() == 2 {
+                    let scalar_expr = &args_expr[1];
+                    scale = check_number::<_, i64>(
+                        scalar_expr.span(),
+                        &FunctionContext::default(),
+                        scalar_expr,
+                        fn_registry,
+                    )?;
+                } else {
+                    new_args.push(Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(NumberScalar::Int64(scale)),
+                        data_type: Int64Type::data_type(),
+                    })
+                }
+                scale = scale.clamp(-76, 76);
+                let add_on_scale = (scale + 76) as usize;
+                let params = vec![add_on_scale];
+                return check_function(*span, name, &params, &args_expr, fn_registry);
             }
 
             check_function(*span, name, params, &args_expr, fn_registry)

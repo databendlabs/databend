@@ -13,32 +13,32 @@ test = true
 
 [features]
 default = ["simd"]
-memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
-simd = ["common-arrow/simd"]
-tokio-console = ["common-tracing/console", "common-base/tracing"]
+memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
+simd = ["databend-common-arrow/simd"]
+tokio-console = ["databend-common-tracing/console", "databend-common-base/tracing"]
 io-uring = [
     "sled/io_uring",
-    "common-meta-sled-store/io-uring",
-    "common-meta-raft-store/io-uring",
+    "databend-common-meta-sled-store/io-uring",
+    "databend-common-meta-raft-store/io-uring",
 ]
 
-enable-histogram = ["common-metrics/enable-histogram"]
+enable-histogram = ["databend-common-metrics/enable-histogram"]
 
 [dependencies]
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
-common-grpc = { path = "../../common/grpc" }
-common-http = { path = "../../common/http" }
-common-meta-api = { path = "../api" }
-common-meta-client = { path = "../client" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-raft-store = { path = "../raft-store" }
-common-meta-sled-store = { path = "../sled-store" }
-common-meta-stoerr = { path = "../stoerr" }
-common-meta-types = { path = "../types" }
-common-metrics = { path = "../../common/metrics" }
-common-tracing = { path = "../../common/tracing" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
+databend-common-grpc = { path = "../../common/grpc" }
+databend-common-http = { path = "../../common/http" }
+databend-common-meta-api = { path = "../api" }
+databend-common-meta-client = { path = "../client" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-raft-store = { path = "../raft-store" }
+databend-common-meta-sled-store = { path = "../sled-store" }
+databend-common-meta-stoerr = { path = "../stoerr" }
+databend-common-meta-types = { path = "../types" }
+databend-common-metrics = { path = "../../common/metrics" }
+databend-common-tracing = { path = "../../common/tracing" }
 
 # GitHub dependencies
 sled = { workspace = true }
@@ -79,4 +79,4 @@ tempfile = "3.4.0"
 test-harness = "0.1.1"
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }

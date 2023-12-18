@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_types::MatchSeq;
-use common_sql::plans::SetOptionsPlan;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::SetOptionsPlan;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use log::error;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_bloom_index_columns;

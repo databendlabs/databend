@@ -14,13 +14,13 @@
 
 use std::sync::LazyLock;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check;
-use common_expression::types::DataType;
-use common_expression::ColumnIndex;
-use common_expression::Expr;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnIndex;
+use databend_common_expression::Expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use regex::Regex;
 
 use crate::IndexType;

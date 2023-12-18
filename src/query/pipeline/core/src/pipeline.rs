@@ -18,8 +18,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
@@ -139,11 +139,11 @@ impl Pipeline {
     pub fn finalize(mut self) -> Pipeline {
         for pipe in &mut self.pipes {
             if let Some(uninitialized_scope) = &mut pipe.scope {
-                if uninitialized_scope.parent_id == 0 {
+                if uninitialized_scope.parent_id.is_none() {
                     for (index, scope) in self.plans_scope.iter().enumerate() {
                         if scope.id == uninitialized_scope.id && index != 0 {
                             if let Some(parent_scope) = self.plans_scope.get(index - 1) {
-                                uninitialized_scope.parent_id = parent_scope.id;
+                                uninitialized_scope.parent_id = Some(parent_scope.id);
                             }
                         }
                     }
@@ -162,8 +162,8 @@ impl Pipeline {
             // set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
             for pipe in &mut self.pipes {
                 if let Some(children) = &mut pipe.scope {
-                    if children.parent_id == 0 && children.id != scope.id {
-                        children.parent_id = scope.id;
+                    if children.parent_id.is_none() && children.id != scope.id {
+                        children.parent_id = Some(scope.id);
                     }
                 }
             }

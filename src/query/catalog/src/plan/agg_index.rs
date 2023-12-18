@@ -14,11 +14,11 @@
 
 use std::fmt::Debug;
 
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::RemoteExpr;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchemaRef;
 
 use super::Projection;
 

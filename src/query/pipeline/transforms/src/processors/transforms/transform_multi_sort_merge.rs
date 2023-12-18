@@ -18,28 +18,28 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::string::StringColumn;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::with_number_mapped_type;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
-use common_profile::SharedProcessorProfiles;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_profile::SharedProcessorProfiles;
 
 use super::sort::utils::find_bigger_child_of_root;
 use super::sort::Cursor;
@@ -512,17 +512,7 @@ where R: Rows + Send + 'static
                         continue;
                     }
                     let mut block = block.convert_to_full();
-                    let order_col = block
-                        .columns()
-                        .last()
-                        .unwrap()
-                        .value
-                        .as_column()
-                        .unwrap()
-                        .clone();
-                    let rows = R::from_column(order_col, &self.sort_desc).ok_or_else(|| {
-                        ErrorCode::BadDataValueType("Order column type mismatched.")
-                    })?;
+                    let rows = R::from_column(block.get_last_column(), &self.sort_desc)?;
                     // Remove the order column
                     if self.remove_order_col {
                         block.pop_columns(1);

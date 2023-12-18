@@ -15,9 +15,9 @@
 use std::str;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 use databend_query::test_kits::*;
 
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {

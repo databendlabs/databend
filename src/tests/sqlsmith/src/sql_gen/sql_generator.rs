@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::GroupBy;
-use common_expression::types::DataType;
-use common_expression::FunctionSignature;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::GroupBy;
+use databend_common_expression::types::DataType;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use rand::Rng;
 
 #[derive(Clone, Debug)]

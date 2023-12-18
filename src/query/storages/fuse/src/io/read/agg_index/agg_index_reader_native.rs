@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::native::read as nread;
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::native::read as nread;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 use log::debug;
-use storages_common_table_meta::meta::ColumnMeta;
 
 use super::AggIndexReader;
 use crate::io::BlockReader;

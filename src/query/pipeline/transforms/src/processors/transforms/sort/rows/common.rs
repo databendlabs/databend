@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::DataSchemaRef;
-use common_expression::RowConverter as CommonRowConverter;
-use common_expression::Scalar;
-use common_expression::SortColumnDescription;
-use common_expression::SortField;
-use common_expression::Value;
+use databend_common_exception::Result;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RowConverter as CommonRowConverter;
+use databend_common_expression::Scalar;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortField;
+use databend_common_expression::Value;
 use jsonb::convert_to_comparable;
 
 use super::RowConverter;
@@ -48,8 +48,12 @@ impl Rows for StringColumn {
         Column::String(self.clone())
     }
 
-    fn from_column(col: Column, _: &[SortColumnDescription]) -> Option<Self> {
+    fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
         col.as_string().cloned()
+    }
+
+    fn data_type() -> DataType {
+        DataType::String
     }
 }
 

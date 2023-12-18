@@ -15,13 +15,13 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::KeyAccessor;
-use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::KeyAccessor;
+use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;

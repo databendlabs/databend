@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::Result;
-use common_meta_app::share::ShareDatabaseSpec;
-use common_meta_app::share::ShareSpec;
-use common_meta_app::share::ShareTableInfoMap;
-use common_meta_app::share::ShareTableSpec;
+use databend_common_exception::Result;
+use databend_common_meta_app::share::ShareDatabaseSpec;
+use databend_common_meta_app::share::ShareSpec;
+use databend_common_meta_app::share::ShareTableInfoMap;
+use databend_common_meta_app::share::ShareTableSpec;
 use opendal::Operator;
 
 const SHARE_CONFIG_PREFIX: &str = "_share_config";
@@ -96,10 +96,10 @@ pub async fn save_share_spec(
 }
 
 mod ext {
-    use common_meta_app::share::ShareGrantObjectPrivilege;
+    use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+    use databend_storages_common_table_meta::table::database_storage_prefix;
+    use databend_storages_common_table_meta::table::table_storage_prefix;
     use enumflags2::BitFlags;
-    use storages_common_table_meta::table::database_storage_prefix;
-    use storages_common_table_meta::table::table_storage_prefix;
 
     use super::*;
 

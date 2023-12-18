@@ -14,7 +14,7 @@
 
 use std::panic;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::runtime::catch_unwind;
 

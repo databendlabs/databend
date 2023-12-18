@@ -17,29 +17,29 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Filters;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::PrewhereInfo;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VirtualColumnInfo;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PrewhereInfo;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -517,7 +517,7 @@ impl PhysicalPlanBuilder {
     pub(crate) fn build_agg_index(
         agg: &crate::plans::AggIndexInfo,
         source_fields: &[DataField],
-    ) -> Result<common_catalog::plan::AggIndexInfo> {
+    ) -> Result<databend_common_catalog::plan::AggIndexInfo> {
         // Build projection
         let used_columns = agg.used_columns();
         let mut col_indices = Vec::with_capacity(used_columns.len());
@@ -564,7 +564,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(common_catalog::plan::AggIndexInfo {
+        Ok(databend_common_catalog::plan::AggIndexInfo {
             index_id: agg.index_id,
             filter,
             selection,

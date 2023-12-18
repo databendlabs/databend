@@ -16,11 +16,11 @@ use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::principal::StageType;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UserIdentity;
 use futures::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metadata;

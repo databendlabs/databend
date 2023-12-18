@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -65,7 +66,7 @@ impl Sort {
         if matches!(self.after_exchange, Some(true)) {
             // If the plan is after exchange plan in cluster mode,
             // the order column is at the last of the input schema.
-            debug_assert_eq!(fields.last().unwrap().name(), "_order_col");
+            debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
             debug_assert_eq!(
                 fields.last().unwrap().data_type(),
                 &self.order_col_type(&input_schema)?
@@ -88,7 +89,7 @@ impl Sort {
                 // If the plan is before exchange plan in cluster mode,
                 // the order column should be added to the output schema.
                 fields.push(DataField::new(
-                    "_order_col",
+                    ORDER_COL_NAME,
                     self.order_col_type(&input_schema)?,
                 ));
             }

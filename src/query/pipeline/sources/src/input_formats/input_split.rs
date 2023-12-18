@@ -21,8 +21,8 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfo;
-use common_compress::CompressAlgorithm;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_compress::CompressAlgorithm;
 
 #[typetag::serde(tag = "type")]
 pub trait DynData: Send + Sync + 'static {

@@ -15,7 +15,7 @@
 use std::fs::File;
 use std::io::Read;
 
-use common_base::base::Stoppable;
+use databend_common_base::base::Stoppable;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;

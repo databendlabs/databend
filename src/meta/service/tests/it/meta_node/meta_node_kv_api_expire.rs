@@ -14,15 +14,16 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio::time::sleep;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::Cmd;
-use common_meta_types::KVMeta;
-use common_meta_types::LogEntry;
-use common_meta_types::MatchSeq;
-use common_meta_types::SeqV;
-use common_meta_types::UpsertKV;
-use common_meta_types::With;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use log::info;
 use test_harness::test;
 
@@ -58,7 +59,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- write a kv expiring in 3 sec");
     {
-        let upsert = UpsertKV::update(key, key.as_bytes()).with(KVMeta::new_expire(now_sec + 3));
+        let upsert = UpsertKV::update(key, key.as_bytes()).with(MetaSpec::new_expire(now_sec + 3));
 
         leader.write(LogEntry::new(Cmd::UpsertKV(upsert))).await?;
         log_index += 1;
@@ -76,7 +77,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     {
         let upsert = UpsertKV::update(key, value2.as_bytes())
             .with(MatchSeq::Exact(seq))
-            .with(KVMeta::new_expire(now_sec + 1000));
+            .with(MetaSpec::new_expire(now_sec + 1000));
         leader.write(LogEntry::new(Cmd::UpsertKV(upsert))).await?;
         log_index += 1;
     }

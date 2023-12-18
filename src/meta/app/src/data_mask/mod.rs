@@ -123,7 +123,7 @@ pub struct MaskpolicyTableIdList {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use super::DatamaskId;
     use super::DatamaskNameIdent;

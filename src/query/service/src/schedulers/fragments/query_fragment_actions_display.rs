@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_profile::SharedProcessorProfiles;
-use common_sql::MetadataRef;
+use databend_common_profile::SharedProcessorProfiles;
+use databend_common_sql::MetadataRef;
 
 use crate::api::DataExchange;
 use crate::schedulers::QueryFragmentActions;

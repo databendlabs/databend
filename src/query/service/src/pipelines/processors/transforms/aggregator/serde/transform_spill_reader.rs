@@ -17,18 +17,18 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::arrow::deserialize_column;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_metrics::transform::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -199,7 +199,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
-                            read_data.push(common_base::base::tokio::spawn(
+                            read_data.push(databend_common_base::base::tokio::spawn(
                                 async_backtrace::frame!(async move {
                                     let instant = Instant::now();
                                     let data =

@@ -17,10 +17,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSettingValue;
 use dashmap::DashMap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSettingValue;
 use itertools::Itertools;
 
 use crate::settings_default::DefaultSettingValue;

@@ -14,6 +14,7 @@
 
 mod access;
 mod common;
+mod hook;
 mod interpreter;
 mod interpreter_catalog_create;
 mod interpreter_catalog_drop;

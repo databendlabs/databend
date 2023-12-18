@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::plan::FullParquetMeta;
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::ParquetTableColumnStatisticsProvider;
+use databend_common_catalog::plan::FullParquetMeta;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::ParquetTableColumnStatisticsProvider;
 
 pub fn create_stats_provider(
     metas: &[Arc<FullParquetMeta>],

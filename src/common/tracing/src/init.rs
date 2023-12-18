@@ -19,8 +19,8 @@ use std::io::Write;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
 use log::Log;
@@ -28,8 +28,8 @@ use minitrace::prelude::*;
 use serde_json::Map;
 
 use crate::loggers::new_file_log_writer;
-use crate::loggers::new_otlp_log_writer;
 use crate::loggers::MinitraceLogger;
+use crate::loggers::OpenTelemetryLogger;
 use crate::Config;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
@@ -176,7 +176,7 @@ pub fn init_logging(
         let mut labels = labels.clone();
         labels.insert("category".to_string(), "system".to_string());
         labels.extend(cfg.otlp.labels.clone());
-        let logger = new_otlp_log_writer(&cfg.otlp.endpoint, labels);
+        let logger = OpenTelemetryLogger::new(log_name, &cfg.otlp.endpoint, labels);
         let dispatch = fern::Dispatch::new()
             .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
             .format(formatter("json"))
@@ -211,7 +211,7 @@ pub fn init_logging(
             let mut labels = labels.clone();
             labels.insert("category".to_string(), "query".to_string());
             labels.extend(cfg.query.labels.clone());
-            let logger = new_otlp_log_writer(&cfg.query.otlp_endpoint, labels);
+            let logger = OpenTelemetryLogger::new(log_name, &cfg.query.otlp_endpoint, labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -229,7 +229,7 @@ pub fn init_logging(
             let mut labels = labels.clone();
             labels.insert("category".to_string(), "profile".to_string());
             labels.extend(cfg.profile.labels.clone());
-            let logger = new_otlp_log_writer(&cfg.profile.otlp_endpoint, labels);
+            let logger = OpenTelemetryLogger::new(log_name, &cfg.profile.otlp_endpoint, labels);
             profile_logger = profile_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -240,9 +240,7 @@ pub fn init_logging(
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
                 .filter(|meta| {
-                    if meta.target().starts_with("databend_")
-                        || meta.target().starts_with("common_")
-                    {
+                    if meta.target().starts_with("databend_") {
                         true
                     } else {
                         meta.level() <= LevelFilter::Error

@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-stream"
+name = "databend-common-storages-stream"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,19 +12,19 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-meta-app = { path = "../../../meta/app" }
-common-metrics = { path = "../../../common/metrics" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-sql = { path = "../../sql" }
-common-storages-fuse = { path = "../fuse" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-metrics = { path = "../../../common/metrics" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-sql = { path = "../../sql" }
+databend-common-storages-fuse = { path = "../fuse" }
 
-storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table_meta" }
+databend-storages-common-pruner = { path = "../common/pruner" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

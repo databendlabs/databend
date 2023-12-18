@@ -15,21 +15,21 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_exception::Result;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::DecimalDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::storage::StorageParams;
-use common_sql::resolve_type_name_by_str;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_sql::resolve_type_name_by_str;
 use hive_metastore as hms;
 
 use crate::hive_catalog::HIVE_CATALOG;

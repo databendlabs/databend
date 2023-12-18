@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::ColumnStatistics;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::statistics::column_statistic;
 
@@ -38,7 +38,7 @@ impl BlockStatistics {
         cluster_stats: Option<ClusterStatistics>,
         column_distinct_count: Option<HashMap<usize, usize>>,
         schema: &TableSchemaRef,
-    ) -> common_exception::Result<BlockStatistics> {
+    ) -> databend_common_exception::Result<BlockStatistics> {
         Ok(BlockStatistics {
             block_file_location: location,
             block_rows_size: data_block.num_rows() as u64,

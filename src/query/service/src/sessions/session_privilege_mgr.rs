@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeType;
-use common_users::GrantObjectVisibilityChecker;
-use common_users::RoleCacheManager;
-use common_users::BUILTIN_ROLE_PUBLIC;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 
 use crate::sessions::SessionContext;
 

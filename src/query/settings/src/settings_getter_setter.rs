@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::Dialect;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSettingValue;
+use databend_common_ast::Dialect;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSettingValue;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;

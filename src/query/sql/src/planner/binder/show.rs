@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::ShowLimit;
-use common_ast::ast::ShowLocksStmt;
-use common_ast::ast::ShowOptions;
-use common_exception::Result;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowLocksStmt;
+use databend_common_ast::ast::ShowOptions;
+use databend_common_exception::Result;
 use log::debug;
 
 use crate::plans::Plan;
@@ -65,7 +65,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name {}",
+            "SELECT name, value, default, `range`, level, description, type FROM system.settings {} ORDER BY name {}",
             show_limit, limit_str,
         );
 

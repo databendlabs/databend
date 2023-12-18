@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::Function;
-use common_expression::FunctionEval;
-use common_expression::FunctionKind;
-use common_expression::FunctionProperty;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
 
 use crate::srfs::variant::unnest_variant_array;
 

@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::utils::BitmapIter;
-use common_arrow::arrow::bitmap::utils::ZipValidity;
-use common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::utils::BitmapIter;
+use databend_common_arrow::arrow::bitmap::utils::ZipValidity;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 
 #[test]
 fn basic() {

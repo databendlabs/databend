@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableUtf8;
-use common_arrow::arrow::array::Utf8Array;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableUtf8;
+use databend_common_arrow::arrow::array::Utf8Array;
 
 /// tests extending from a variable-sized (strings and binary) array w/ offset with nulls
 #[test]

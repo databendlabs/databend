@@ -20,13 +20,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::DictionaryStringHashMap;
-use common_hashtable::HashMap;
-use common_hashtable::HashtableEntryMutRefLike;
-use common_hashtable::HashtableLike;
-use common_hashtable::ShortStringHashMap;
-use common_hashtable::StackHashMap;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::DictionaryStringHashMap;
+use databend_common_hashtable::HashMap;
+use databend_common_hashtable::HashtableEntryMutRefLike;
+use databend_common_hashtable::HashtableLike;
+use databend_common_hashtable::ShortStringHashMap;
+use databend_common_hashtable::StackHashMap;
 use rand::Rng;
 
 macro_rules! simple_test {

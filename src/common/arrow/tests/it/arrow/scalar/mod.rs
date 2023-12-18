@@ -24,8 +24,10 @@ mod primitive;
 mod struct_;
 mod utf8;
 
+use databend_common_arrow::arrow::scalar::Scalar;
+
 // check that `PartialEq` can be derived
 #[derive(PartialEq)]
 struct A {
-    array: Box<dyn common_arrow::arrow::scalar::Scalar>,
+    array: Box<dyn Scalar>,
 }

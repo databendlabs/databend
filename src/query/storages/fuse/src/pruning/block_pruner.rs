@@ -18,16 +18,16 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::tokio::sync::OwnedSemaphorePermit;
-use common_catalog::plan::block_id_in_segment;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BLOCK_NAME_COL_NAME;
-use common_metrics::storage::*;
+use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
+use databend_common_catalog::plan::block_id_in_segment;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_metrics::storage::*;
+use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use futures_util::future;
-use storages_common_pruner::BlockMetaIndex;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use super::SegmentLocation;
 use crate::pruning::BloomPruner;

@@ -1,5 +1,5 @@
 [package]
-name = "common-pipeline-transforms"
+name = "databend-common-pipeline-transforms"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,11 +9,11 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../../common/base" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-pipeline-core = { path = "../core" }
-common-profile = { path = "../../profile" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-pipeline-core = { path = "../core" }
+databend-common-profile = { path = "../../profile" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -21,6 +21,10 @@ jsonb = { workspace = true }
 match-template = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
+
+[dev-dependencies]
+itertools = { workspace = true }
+rand = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

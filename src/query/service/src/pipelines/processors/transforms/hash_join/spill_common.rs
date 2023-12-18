@@ -14,16 +14,16 @@
 
 // Define some methods that are used by both the build and probe spilling of the hash join.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodKind;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 

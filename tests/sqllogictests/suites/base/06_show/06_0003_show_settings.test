@@ -31,12 +31,12 @@ SHOW SETTINGS LIKE 'enable%'
 query TT
 SHOW SETTINGS LIKE 'max%' LIMIT 1
 ----
-max_block_size 65536 65536 SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 None SESSION Sets the maximum byte size of a single data block that can be read. UInt64
 
 query TT
 SHOW SETTINGS WHERE name='max_block_size' LIMIT 1
 ----
-max_block_size 65536 65536 SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 None SESSION Sets the maximum byte size of a single data block that can be read. UInt64
 
 statement error
 SHOW SETTINGS ilike 'ff%' LIMIT 1

@@ -15,8 +15,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_exception::Result;
-use common_settings::Settings;
+use databend_common_exception::Result;
+use databend_common_settings::Settings;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {

@@ -15,10 +15,10 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_catalog::plan::PartInfoPtr;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 

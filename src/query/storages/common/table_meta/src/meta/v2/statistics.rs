@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-use common_expression::converts::from_scalar;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
+use databend_common_expression::converts::from_scalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {

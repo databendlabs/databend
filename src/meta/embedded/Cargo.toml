@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-embedded"
+name = "databend-common-meta-embedded"
 description = "distributed meta data service"
 version = { workspace = true }
 authors = { workspace = true }
@@ -12,17 +12,17 @@ doctest = false
 test = true
 
 [features]
-io-uring = ["common-meta-sled-store/io-uring", "common-meta-raft-store/io-uring"]
+io-uring = ["databend-common-meta-sled-store/io-uring", "databend-common-meta-raft-store/io-uring"]
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../common/base" }
-common-meta-api = { path = "../api" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-raft-store = { path = "../raft-store" }
-common-meta-sled-store = { path = "../sled-store" }
-common-meta-stoerr = { path = "../stoerr" }
-common-meta-types = { path = "../types" }
+databend-common-base = { path = "../../common/base" }
+databend-common-meta-api = { path = "../api" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-raft-store = { path = "../raft-store" }
+databend-common-meta-sled-store = { path = "../sled-store" }
+databend-common-meta-stoerr = { path = "../stoerr" }
+databend-common-meta-types = { path = "../types" }
 
 # Crates.io dependencies
 async-trait = { workspace = true }
