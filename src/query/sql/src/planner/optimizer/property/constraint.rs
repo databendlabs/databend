@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_constraint::mir::MirBinaryOperator;
-use common_constraint::mir::MirConstant;
-use common_constraint::mir::MirDataType;
-use common_constraint::mir::MirExpr;
-use common_constraint::mir::MirUnaryOperator;
-use common_constraint::problem::variable_must_not_null;
-use common_constraint::simplify::simplify;
-use common_expression::cast_scalar;
-use common_expression::shrink_scalar;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_constraint::mir::MirBinaryOperator;
+use databend_common_constraint::mir::MirConstant;
+use databend_common_constraint::mir::MirDataType;
+use databend_common_constraint::mir::MirExpr;
+use databend_common_constraint::mir::MirUnaryOperator;
+use databend_common_constraint::problem::variable_must_not_null;
+use databend_common_constraint::simplify::simplify;
+use databend_common_expression::cast_scalar;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::plans::BoundColumnRef;
@@ -43,20 +43,12 @@ pub struct ConstraintSet {
 impl ConstraintSet {
     /// Build a `ConstraintSet` with conjunctions
     pub fn new(constraints: &[ScalarExpr]) -> Self {
+        let constraints = constraints
+            .iter()
+            .map(|constraint| (constraint.clone(), as_mir(constraint)))
+            .collect();
 
-        for constraint in constraints {
-            let mir_expr = as_mir(constraint);
-            if let Some(mir_expr) = mir_expr {
-                supported_constraints.push(Either::Right((constraint.clone(), mir_expr)));
-            } else {
-                supported_constraints.push(Either::Left(constraint.clone()));
-            }
-        }
-
-        Self {
-            constraints: supported_constraints,
-            unsupported_constraints,
-        }
+        Self { constraints }
     }
 
     /// Check if the given variable is null-rejected with current constraints.
@@ -78,7 +70,7 @@ impl ConstraintSet {
         let conjunctions = self
             .constraints
             .iter()
-            .map(|(_, mir)| mir.clone())
+            .filter_map(|(_, mir)| mir.clone())
             .reduce(|left, right| MirExpr::BinaryOperator {
                 op: MirBinaryOperator::And,
                 left: Box::new(left),
@@ -90,20 +82,26 @@ impl ConstraintSet {
     }
 
     pub fn simplify(&self) -> Vec<ScalarExpr> {
-        let mut new_exprs = self.unsupported_constraints.clone();
-        for (origin, constraint) in &self.constraints {
-            if let Some(new_constraints) = simplify(constraint) {
-                let columns = origin.used_column_refs();
-                for new_constraint in new_constraints {
-                    new_exprs.push(crate::optimizer::from_mir(&new_constraint, |col| {
-                        columns[&col.parse().unwrap()].clone()
-                    }));
+        self.constraints
+            .iter()
+            .flat_map(|(origin, mir)| {
+                if let Some(mir) = mir {
+                    if let Some(new_constraints) = simplify(mir) {
+                        let columns = origin.used_column_refs();
+                        let new_constraints = new_constraints
+                            .into_iter()
+                            .map(|new_constraint| {
+                                from_mir(&new_constraint, |col| {
+                                    columns[&col.parse().unwrap()].clone()
+                                })
+                            })
+                            .collect();
+                        return new_constraints;
+                    }
                 }
-            } else {
-                new_exprs.push(origin.clone());
-            }
-        }
-        new_exprs
+                vec![origin.clone()]
+            })
+            .collect()
     }
 }
 
