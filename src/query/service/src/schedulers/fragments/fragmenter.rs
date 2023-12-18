@@ -156,7 +156,7 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_update_source(
         &mut self,
-        plan: &common_sql::executor::physical_plans::UpdateSource,
+        plan: &databend_common_sql::executor::physical_plans::UpdateSource,
     ) -> Result<PhysicalPlan> {
         self.state = State::Update;
 

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
@@ -41,6 +40,7 @@ use crate::schedulers::QueryFragmentAction;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
+use crate::sql::executor::physical_plans::UpdateSource;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanReplacer;
 
