@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -93,7 +94,7 @@ where
 
 impl<T> Rows for SimpleRows<T>
 where
-    T: ValueType,
+    T: ArgType,
     T::Scalar: Ord,
 {
     type Item<'a> = SimpleRow<T>;
@@ -114,12 +115,16 @@ where
         T::upcast_column(self.inner.clone())
     }
 
-    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self> {
-        let inner = T::try_downcast_column(&col)?;
+    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
+        let inner = T::try_downcast_column(col)?;
         Some(Self {
             inner,
             desc: !desc[0].asc,
         })
+    }
+
+    fn data_type() -> DataType {
+        T::data_type()
     }
 }
 
