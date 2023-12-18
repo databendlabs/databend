@@ -185,10 +185,12 @@ impl MergeIntoInterpreter {
         let table_name = table_name.clone();
         let input = input.clone();
 
-        let input = if let RelOperator::Exchange(_) = input.plan() {
-            Box::new(input.child(0)?.clone())
+        // we need to extract join plan, but we need to give this exchage
+        // back at last.
+        let (input, extract_exchange) = if let RelOperator::Exchange(_) = input.plan() {
+            (Box::new(input.child(0)?.clone()), true)
         } else {
-            input
+            (input, false)
         };
 
         // let optimized_input =
@@ -260,11 +262,28 @@ impl MergeIntoInterpreter {
 
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
         // datablocks.
-        let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
-            input: Box::new(join_input),
-            row_id_idx: row_id_idx as u32,
-            merge_type: merge_type.clone(),
-        });
+        let merge_into_source = if !*distributed && extract_exchange {
+            // if we doesn't support distributed merge into, we should give the exchange merge back.
+            let rollback_join_input = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(join_input),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+            PhysicalPlan::MergeIntoSource(MergeIntoSource {
+                input: Box::new(rollback_join_input),
+                row_id_idx: row_id_idx as u32,
+                merge_type: merge_type.clone(),
+            })
+        } else {
+            PhysicalPlan::MergeIntoSource(MergeIntoSource {
+                input: Box::new(join_input),
+                row_id_idx: row_id_idx as u32,
+                merge_type: merge_type.clone(),
+            })
+        };
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`

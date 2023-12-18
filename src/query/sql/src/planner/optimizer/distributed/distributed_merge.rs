@@ -88,6 +88,16 @@ impl MergeSourceOptimizer {
         Ok(s_expr.replace_children(vec![Arc::new(join_s_expr)]))
     }
 
+    // Todo!(JackTan25): some join_input S_Expr doesn't match below pattern,
+    // but we can also treat it as distributed mode.
+    // for example:
+    // // Input:
+    //       Exchange(Merge)
+    //          |
+    //         Join
+    //         /  \
+    //        /    \
+    //       *   Exchange(broadcast) build_side
     fn merge_source_pattern() -> SExpr {
         // Input:
         //       Exchange(Merge)
