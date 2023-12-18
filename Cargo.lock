@@ -3381,7 +3381,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "opendal",
- "ordered-float 4.2.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "regex",
