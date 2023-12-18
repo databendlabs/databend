@@ -185,7 +185,7 @@ impl MergeIntoInterpreter {
         let table_name = table_name.clone();
         let input = input.clone();
 
-        // we need to extract join plan, but we need to give this exchage
+        // we need to extract join plan, but we need to give this exchange
         // back at last.
         let (input, extract_exchange) = if let RelOperator::Exchange(_) = input.plan() {
             (Box::new(input.child(0)?.clone()), true)
