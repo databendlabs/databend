@@ -155,8 +155,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     0 => "and_filters".to_string(),
                     1 => "regexp_like".to_string(),
                     2 => {
-                        let comp_func = ["eq", "gt", "gte", "lt", "lte", "ne", "noteq"];
-                        comp_func[self.rng.gen_range(0..=6)].to_string()
+                        let comp_func = ["eq", "gt", "gte", "lt", "lte", "noteq"];
+                        comp_func[self.rng.gen_range(0..=5)].to_string()
                     }
                     3 => "ignore".to_string(),
 
