@@ -59,6 +59,7 @@ use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
+use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -280,6 +281,15 @@ impl<T: ArgType> Value<T> {
         match self {
             Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar)),
             Value::Column(col) => Value::Column(T::upcast_column(col)),
+        }
+    }
+}
+
+impl<T: Decimal> Value<DecimalType<T>> {
+    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
+        match self {
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar, size)),
+            Value::Column(col) => Value::Column(T::upcast_column(col, size)),
         }
     }
 }

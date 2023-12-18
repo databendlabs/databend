@@ -136,7 +136,6 @@ macro_rules! binary_decimal {
                 )
             }
         };
-
         match result {
             Value::Scalar(x) => Value::Scalar(T::upcast_scalar(x, $size)),
             Value::Column(x) => Value::Column(T::upcast_column(x, $size)),
