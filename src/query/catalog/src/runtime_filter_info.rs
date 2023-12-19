@@ -15,37 +15,30 @@
 use databend_common_expression::Expr;
 use xorf::BinaryFuse8;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RuntimeFilterInfo {
-    inlist: Vec<Box<Expr<String>>>,
-    bloom: Vec<Box<(String, BinaryFuse8)>>,
+    inlist: Vec<Expr<String>>,
+    bloom: Vec<(String, BinaryFuse8)>,
 }
 
 impl RuntimeFilterInfo {
-    pub fn new() -> Self {
-        RuntimeFilterInfo {
-            inlist: vec![],
-            bloom: vec![],
-        }
-    }
-
     pub fn add_inlist(&mut self, expr: Expr<String>) {
-        self.inlist.push(Box::new(expr));
+        self.inlist.push(expr);
     }
 
-    pub fn add_bloom(&mut self, bloom: Box<(String, BinaryFuse8)>) {
+    pub fn add_bloom(&mut self, bloom: (String, BinaryFuse8)) {
         self.bloom.push(bloom);
     }
 
-    pub fn get_inlist(&self) -> &Vec<Box<Expr<String>>> {
+    pub fn get_inlist(&self) -> &Vec<Expr<String>> {
         &self.inlist
     }
 
-    pub fn get_bloom(&self) -> &Vec<Box<(String, BinaryFuse8)>> {
+    pub fn get_bloom(&self) -> &Vec<(String, BinaryFuse8)> {
         &self.bloom
     }
 
-    pub fn blooms(self) -> Vec<Box<(String, BinaryFuse8)>> {
+    pub fn blooms(self) -> Vec<(String, BinaryFuse8)> {
         self.bloom
     }
 

@@ -273,7 +273,7 @@ impl HashJoinState {
             data_blocks.clear();
             return Ok(());
         }
-        let mut runtime_filter = RuntimeFilterInfo::new();
+        let mut runtime_filter = RuntimeFilterInfo::default();
         for (build_key, probe_key) in self
             .hash_join_desc
             .build_keys
@@ -284,8 +284,7 @@ impl HashJoinState {
                 dedup_build_key_column(&func_ctx, data_blocks, build_key)?
             {
                 if num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
-                    if let Some(filter) = inlist_filter(&probe_key, distinct_build_column.clone())?
-                    {
+                    if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
                         runtime_filter.add_inlist(filter);
                     }
                 }
@@ -293,7 +292,7 @@ impl HashJoinState {
                     if let Some(filter) =
                         bloom_filter(build_key, probe_key, distinct_build_column, num_rows)?
                     {
-                        runtime_filter.add_bloom(Box::new(filter));
+                        runtime_filter.add_bloom(filter);
                     }
                 }
             }

@@ -164,7 +164,7 @@ typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 walkdir = { workspace = true }
-xorf = {git = "https://github.com/ayazhafiz/xorf", branch = "master"}
+xorf = { git = "https://github.com/ayazhafiz/xorf", branch = "master" }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
@@ -188,7 +188,6 @@ tempfile = "3.4.0"
 tower = "0.4.13"
 url = "2.3.1"
 wiremock = "0.5.14"
-
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }

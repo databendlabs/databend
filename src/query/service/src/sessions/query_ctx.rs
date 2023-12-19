@@ -912,11 +912,11 @@ impl TableContext for QueryContext {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
             Entry::Vacant(v) => {
-                v.insert(Box::new(filters.1));
+                v.insert(filters.1);
             }
             Entry::Occupied(mut v) => {
                 for filter in filters.1.get_inlist() {
-                    v.get_mut().add_inlist(*filter.clone());
+                    v.get_mut().add_inlist(filter.clone());
                 }
                 for filter in filters.1.blooms() {
                     v.get_mut().add_bloom(filter);
@@ -925,11 +925,11 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_runtime_filter_with_id(&self, id: IndexType) -> Box<RuntimeFilterInfo> {
+    fn get_runtime_filter_with_id(&self, id: IndexType) -> RuntimeFilterInfo {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (*v).clone(),
-            None => Box::new(RuntimeFilterInfo::new()),
+            None => RuntimeFilterInfo::default(),
         }
     }
 
