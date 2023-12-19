@@ -278,7 +278,7 @@ where TablesTable<T>: HistoryAware
                     .as_ref()
                     .map(|v| v.owner_role_name.as_bytes().to_vec()),
             );
-            let stats = match tbl.table_statistics().await {
+            let stats = match tbl.table_statistics(ctx.clone()).await {
                 Ok(stats) => stats,
                 Err(err) => {
                     ctx.push_warning(format!(

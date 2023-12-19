@@ -438,7 +438,7 @@ impl Table for FuseTable {
         Some(self.data_metrics.clone())
     }
 
-    fn support_internal_column_id(&self, column_id: ColumnId) -> bool {
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
         column_id >= SNAPSHOT_NAME_COLUMN_ID
     }
 
@@ -688,7 +688,10 @@ impl Table for FuseTable {
         self.do_analyze(&ctx).await
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
@@ -723,7 +726,10 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;

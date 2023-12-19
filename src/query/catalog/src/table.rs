@@ -59,7 +59,8 @@ pub trait Table: Sync + Send {
         self.get_table_info().engine()
     }
 
-    fn support_internal_column_id(&self, _column_id: ColumnId) -> bool {
+    /// Whether the table engine supports the given internal column.
+    fn supported_internal_column(&self, _column_id: ColumnId) -> bool {
         false
     }
 
@@ -127,12 +128,6 @@ pub trait Table: Sync + Send {
             fields,
             ..self.schema().as_ref().clone()
         })
-    }
-
-    async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Option<Arc<dyn Table>>> {
-        let _ = ctx;
-
-        Ok(None)
     }
 
     /// Whether the table engine supports prewhere optimization.
@@ -274,12 +269,22 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
+        let _ = ctx;
+
         Ok(None)
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let _ = ctx;
+
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 

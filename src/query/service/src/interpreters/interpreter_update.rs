@@ -108,7 +108,7 @@ impl Interpreter for UpdateInterpreter {
         tbl.check_mutable()?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
-            let support_row_id = tbl.support_internal_column_id(ROW_ID_COLUMN_ID);
+            let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(
                     "table doesn't support row_id, so it can't use delete with subquery"

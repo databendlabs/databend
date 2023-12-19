@@ -846,7 +846,7 @@ impl Binder {
         if !metadata
             .table(0)
             .table()
-            .support_internal_column_id(ROW_ID_COLUMN_ID)
+            .supported_internal_column(ROW_ID_COLUMN_ID)
         {
             return Ok(());
         }

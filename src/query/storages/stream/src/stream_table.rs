@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -30,7 +31,9 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::plan::StreamTablePart;
+use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -51,6 +54,7 @@ use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
@@ -160,6 +164,33 @@ impl StreamTable {
         })
     }
 
+    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        let table = ctx
+            .get_table(
+                self.stream_info.catalog(),
+                &self.table_database,
+                &self.table_name,
+            )
+            .await?;
+
+        if table.get_table_info().ident.table_id != self.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Table id mismatch, expect {}, got {}",
+                self.table_id,
+                table.get_table_info().ident.table_id
+            )));
+        }
+
+        if !table.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled for table '{}.{}'",
+                self.table_database, self.table_name
+            )));
+        }
+
+        Ok(table)
+    }
+
     pub fn offset(&self) -> u64 {
         self.table_version
     }
@@ -184,26 +215,18 @@ impl StreamTable {
         &self.table_database
     }
 
-    #[async_backtrace::framed]
-    async fn do_read_partitions(
+    async fn collect_incremental_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-    ) -> Result<(PartStatistics, Partitions)> {
-        let start = Instant::now();
-        let table = self.source_table(ctx.clone()).await?.unwrap();
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let latest_snapshot = fuse_table.read_table_snapshot().await?;
-        if latest_snapshot.is_none() {
-            return Ok((PartStatistics::default(), Partitions::default()));
-        }
-        let latest_snapshot = latest_snapshot.unwrap();
-        let latest_segments = HashSet::from_iter(latest_snapshot.segments.clone());
-
-        let summary = latest_snapshot.summary.block_count as usize;
-        drop(latest_snapshot);
+        fuse_table: &FuseTable,
+    ) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
         let operator = fuse_table.get_operator();
+        let latest_segments = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
+            HashSet::from_iter(snapshot.segments.clone())
+        } else {
+            HashSet::new()
+        };
+
         let base_segments = if let Some(snapshot_location) = &self.snapshot_location {
             let (base_snapshot, _) =
                 SnapshotsIO::read_snapshot(snapshot_location.clone(), operator.clone()).await?;
@@ -212,57 +235,74 @@ impl StreamTable {
             HashSet::new()
         };
 
-        let mut base_blocks = HashSet::new();
-        let mut latest_blocks = Vec::new();
-        {
-            let fuse_segment_io =
-                SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
-            let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+        let fuse_segment_io =
+            SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
 
-            let diff_in_base = base_segments
-                .difference(&latest_segments)
-                .cloned()
-                .collect::<Vec<_>>();
-            for chunk in diff_in_base.chunks(chunk_size) {
-                let segments = fuse_segment_io
-                    .read_segments::<SegmentInfo>(chunk, true)
-                    .await?;
-                for segment in segments {
-                    let segment = segment?;
-                    segment.blocks.into_iter().for_each(|block| {
-                        base_blocks.insert(block.location.clone());
-                    })
-                }
-            }
-
-            let diff_in_latest = latest_segments
-                .difference(&base_segments)
-                .cloned()
-                .collect::<Vec<_>>();
-            for chunk in diff_in_latest.chunks(chunk_size) {
-                let segments = fuse_segment_io
-                    .read_segments::<SegmentInfo>(chunk, true)
-                    .await?;
-
-                for segment in segments {
-                    let segment = segment?;
-                    segment.blocks.into_iter().for_each(|block| {
-                        if base_blocks.contains(&block.location) {
-                            base_blocks.remove(&block.location);
-                        } else {
-                            latest_blocks.push(block);
-                        }
-                    });
-                }
+        let mut base_blocks = HashMap::new();
+        let diff_in_base = base_segments
+            .difference(&latest_segments)
+            .cloned()
+            .collect::<Vec<_>>();
+        for chunk in diff_in_base.chunks(chunk_size) {
+            let segments = fuse_segment_io
+                .read_segments::<SegmentInfo>(chunk, true)
+                .await?;
+            for segment in segments {
+                let segment = segment?;
+                segment.blocks.into_iter().for_each(|block| {
+                    base_blocks.insert(block.location.clone(), block);
+                })
             }
         }
-        if latest_blocks.is_empty() {
+
+        let mut add_blocks = Vec::new();
+        let diff_in_latest = latest_segments
+            .difference(&base_segments)
+            .cloned()
+            .collect::<Vec<_>>();
+        for chunk in diff_in_latest.chunks(chunk_size) {
+            let segments = fuse_segment_io
+                .read_segments::<SegmentInfo>(chunk, true)
+                .await?;
+
+            for segment in segments {
+                let segment = segment?;
+                segment.blocks.into_iter().for_each(|block| {
+                    if base_blocks.contains_key(&block.location) {
+                        base_blocks.remove(&block.location);
+                    } else {
+                        add_blocks.push(block);
+                    }
+                });
+            }
+        }
+
+        let del_blocks = base_blocks.into_values().collect::<Vec<_>>();
+        Ok((del_blocks, add_blocks))
+    }
+
+    #[async_backtrace::framed]
+    async fn do_read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let start = Instant::now();
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        let (del_blocks, add_blocks) = self
+            .collect_incremental_blocks(ctx.clone(), fuse_table)
+            .await?;
+        let summary = add_blocks.len();
+        if summary == 0 {
             return Ok((PartStatistics::default(), Partitions::default()));
         }
 
-        let mut base_block_ids = Vec::with_capacity(base_blocks.len());
-        for base_block in base_blocks {
-            let block_id = block_id_from_location(&base_block.0)?;
+        let mut base_block_ids = Vec::with_capacity(del_blocks.len());
+        for base_block in del_blocks {
+            let block_id = block_id_from_location(&base_block.location.0)?;
             base_block_ids.push(block_id);
         }
         let base_block_ids_scalar = Scalar::Array(Decimal128Type::from_data(base_block_ids));
@@ -281,7 +321,7 @@ impl StreamTable {
             };
         let stream_pruner = StreamPruner::create(
             &ctx,
-            operator,
+            fuse_table.get_operator(),
             table_schema.clone(),
             push_downs.clone(),
             cluster_key_meta,
@@ -289,7 +329,7 @@ impl StreamTable {
             bloom_index_cols,
         )?;
 
-        let block_metas = stream_pruner.pruning(latest_blocks).await?;
+        let block_metas = stream_pruner.pruning(add_blocks).await?;
         let pruning_stats = stream_pruner.pruning_stats();
 
         log::info!(
@@ -321,7 +361,7 @@ impl StreamTable {
 
     #[minitrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let base_table = self.source_table(ctx).await?.unwrap();
+        let base_table = self.source_table(ctx).await?;
         let status = if base_table.get_table_info().ident.seq == self.table_version {
             StreamStatus::NoData
         } else {
@@ -341,7 +381,7 @@ impl Table for StreamTable {
         &self.stream_info
     }
 
-    fn support_internal_column_id(&self, column_id: ColumnId) -> bool {
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
         (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
     }
 
@@ -362,33 +402,6 @@ impl Table for StreamTable {
                 .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
                 .unwrap(),
         ]
-    }
-
-    async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Option<Arc<dyn Table>>> {
-        let table = ctx
-            .get_table(
-                self.stream_info.catalog(),
-                &self.table_database,
-                &self.table_name,
-            )
-            .await?;
-
-        if table.get_table_info().ident.table_id != self.table_id {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Table id mismatch, expect {}, got {}",
-                self.table_id,
-                table.get_table_info().ident.table_id
-            )));
-        }
-
-        if !table.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
-                self.table_database, self.table_name
-            )));
-        }
-
-        Ok(Some(table))
     }
 
     #[minitrace::trace]
@@ -418,6 +431,59 @@ impl Table for StreamTable {
             ))
         })?;
         table.read_data(ctx, plan, pipeline, put_cache)
+    }
+
+    async fn table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        let latest_summary = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
+            snapshot.summary.clone()
+        } else {
+            return Ok(None);
+        };
+
+        let base_summary = if let Some(snapshot_location) = &self.snapshot_location {
+            let (base_snapshot, _) =
+                SnapshotsIO::read_snapshot(snapshot_location.clone(), fuse_table.get_operator())
+                    .await?;
+            base_snapshot.summary.clone()
+        } else {
+            return fuse_table.table_statistics(ctx).await;
+        };
+
+        let num_rows = latest_summary.row_count.abs_diff(base_summary.row_count);
+        let data_size = latest_summary
+            .uncompressed_byte_size
+            .abs_diff(base_summary.uncompressed_byte_size);
+        let data_size_compressed = latest_summary
+            .compressed_byte_size
+            .abs_diff(base_summary.compressed_byte_size);
+        let index_size = latest_summary.index_size.abs_diff(base_summary.index_size);
+        let number_of_blocks = latest_summary
+            .block_count
+            .abs_diff(base_summary.block_count);
+
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            data_size: Some(data_size),
+            data_size_compressed: Some(data_size_compressed),
+            index_size: Some(index_size),
+            number_of_blocks: Some(number_of_blocks),
+            number_of_segments: None,
+        }))
+    }
+
+    #[async_backtrace::framed]
+    async fn column_statistics_provider(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let table = self.source_table(ctx.clone()).await?;
+        table.column_statistics_provider(ctx).await
     }
 }
 

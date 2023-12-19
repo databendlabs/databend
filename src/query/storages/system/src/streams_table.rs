@@ -182,8 +182,7 @@ impl AsyncSystemTable for StreamsTable {
                         let mut reason = "".to_string();
                         match stream_table.source_table(ctx.clone()).await {
                             Ok(source) => {
-                                let table = source.unwrap();
-                                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                                let fuse_table = FuseTable::try_from_table(source.as_ref())?;
                                 if let Some(location) = stream_table.snapshot_loc() {
                                     reason = SnapshotsIO::read_snapshot(
                                         location,
