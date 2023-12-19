@@ -20,9 +20,13 @@ use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
+use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -34,19 +38,32 @@ use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::DeltaPartInfo;
 
+pub type PartitionColumnIndex = usize;
+
 pub struct DeltaTableSource {
-    // Source processor related fields.
     output: Arc<OutputPort>,
-    scan_progress: Arc<Progress>,
-    // Used for event transforming.
-    ctx: Arc<dyn TableContext>,
     generated_data: Option<DataBlock>,
     is_finished: bool,
 
-    // Used to read parquet.
-    output_schema: DataSchemaRef,
+    scan_progress: Arc<Progress>,
+    // Used for get partition
+    ctx: Arc<dyn TableContext>,
+
+    // Used to read parquet file.
     parquet_reader: Arc<ParquetRSFullReader>,
+
+    // Used to insert partition_block_entries to data block
+    // FieldIndex is the index in the output_schema
+    // PartitionColumnIndex is the index of in partition_fields and partition_block_entries
+    // order by FieldIndex so we can insert in order
+    output_partition_columns: Vec<(FieldIndex, PartitionColumnIndex)>,
+    partition_fields: Vec<TableField>,
+    // Used to check schema
+    output_schema: DataSchemaRef,
+
+    // Per partition
     stream: Option<ParquetRecordBatchStream<Reader>>,
+    partition_block_entries: Vec<BlockEntry>,
 }
 
 impl DeltaTableSource {
@@ -55,7 +72,19 @@ impl DeltaTableSource {
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
         parquet_reader: Arc<ParquetRSFullReader>,
+        partition_fields: Vec<TableField>,
     ) -> Result<ProcessorPtr> {
+        let output_partition_columns = output_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter_map(|(fi, f)| {
+                partition_fields
+                    .iter()
+                    .position(|p| p.name() == f.name())
+                    .map(|pi| (fi, pi))
+            })
+            .collect();
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeltaTableSource {
             output,
@@ -63,8 +92,11 @@ impl DeltaTableSource {
             ctx,
             parquet_reader,
             output_schema,
+            partition_fields,
+            output_partition_columns,
             stream: None,
             generated_data: None,
+            partition_block_entries: vec![],
             is_finished: false,
         })))
     }
@@ -115,6 +147,13 @@ impl Processor for DeltaTableSource {
                 .parquet_reader
                 .read_block_from_stream(&mut stream)
                 .await?
+                .map(|b| {
+                    let mut columns = b.columns().to_vec();
+                    for (fi, pi) in self.output_partition_columns.iter() {
+                        columns.insert(*fi, self.partition_block_entries[*pi].clone());
+                    }
+                    DataBlock::new(columns, b.num_rows())
+                })
                 .map(|b| check_block_schema(&self.output_schema, b))
                 .transpose()?
             {
@@ -129,9 +168,17 @@ impl Processor for DeltaTableSource {
             match &part.data {
                 ParquetPart::ParquetFiles(files) => {
                     assert_eq!(files.files.len(), 1);
+                    self.partition_block_entries = part
+                        .partition_values
+                        .iter()
+                        .zip(&self.partition_fields)
+                        .map(|(v, f)| {
+                            BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
+                        })
+                        .collect();
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(&files.files[0].0)
+                        .prepare_data_stream(&files.files[0].0, &self.partition_block_entries)
                         .await?;
                     self.stream = Some(stream);
                 }

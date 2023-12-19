@@ -32,6 +32,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
@@ -56,6 +57,7 @@ use url::Url;
 use crate::dal::OpendalStore;
 use crate::partition::DeltaPartInfo;
 use crate::partition_columns::get_partition_values;
+use crate::partition_columns::get_pushdown_without_partition_columns;
 use crate::table_source::DeltaTableSource;
 
 pub const DELTA_ENGINE: &str = "DELTA";
@@ -179,6 +181,14 @@ impl DeltaTable {
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let table_schema = self.schema();
+        let non_partition_fields = table_schema
+            .fields()
+            .iter()
+            .filter(|field| !self.meta.partition_columns.contains(&field.name))
+            .cloned()
+            .collect();
+        let table_schema = Arc::new(TableSchema::new(non_partition_fields));
+
         let arrow_schema = table_schema.to_arrow();
         let arrow_fields = arrow_schema
             .fields
@@ -212,11 +222,27 @@ impl DeltaTable {
 
         let sp = self.get_storage_params()?;
         let op = init_operator(sp)?;
+        let partition_field_indexes: Result<Vec<FieldIndex>> = self
+            .meta
+            .partition_columns
+            .iter()
+            .map(|name| self.info.meta.schema.index_of(name))
+            .collect();
+        let partition_field_indexes = partition_field_indexes?;
+        let push_downs = if let Some(ref p) = plan.push_downs {
+            Some(get_pushdown_without_partition_columns(
+                p.clone(),
+                &partition_field_indexes[..],
+            )?)
+        } else {
+            None
+        };
         let mut builder =
             ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, &arrow_schema)?
                 .with_options(read_options)
-                .with_push_downs(plan.push_downs.as_ref())
-                .with_pruner(Some(pruner));
+                .with_push_downs(push_downs.as_ref())
+                .with_pruner(Some(pruner))
+                .with_partition_columns(self.meta.partition_columns.clone());
 
         let parquet_reader = Arc::new(builder.build_full_reader()?);
 
@@ -228,6 +254,7 @@ impl DeltaTable {
                     output,
                     output_schema.clone(),
                     parquet_reader.clone(),
+                    self.get_partition_fields()?.into_iter().cloned().collect(),
                 )
             },
             max_threads.max(1),

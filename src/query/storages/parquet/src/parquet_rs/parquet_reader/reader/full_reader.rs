@@ -17,6 +17,7 @@ use std::sync::Arc;
 use arrow_schema::ArrowError;
 use bytes::Bytes;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
@@ -64,7 +65,11 @@ pub struct ParquetRSFullReader {
 }
 
 impl ParquetRSFullReader {
-    pub async fn prepare_data_stream(&self, loc: &str) -> Result<ParquetRecordBatchStream<Reader>> {
+    pub async fn prepare_data_stream(
+        &self,
+        loc: &str,
+        partition_block_entries: &[BlockEntry],
+    ) -> Result<ParquetRecordBatchStream<Reader>> {
         let reader: Reader = self.op.reader(loc).await?;
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
@@ -102,9 +107,10 @@ impl ParquetRSFullReader {
             if let Some(predicate) = self.predicate.as_ref() {
                 let projection = predicate.projection().clone();
                 let predicate = predicate.clone();
+                let partition_block_entries = partition_block_entries.to_vec();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch)
+                        .evaluate(&batch, partition_block_entries.clone())
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
@@ -169,7 +175,7 @@ impl ParquetRSFullReader {
                 let predicate = predicate.clone();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch)
+                        .evaluate(&batch, vec![])
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
