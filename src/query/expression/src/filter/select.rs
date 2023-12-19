@@ -176,8 +176,6 @@ impl<'a> Selector<'a> {
                 }
             }
             _ => {
-                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
-                // Generic has been converted to a specific DataType.
                 return Err(ErrorCode::UnsupportedDataType(format!(
                     "Filtering by single Value only supports Boolean or Nullable(Boolean), but getting {:?}",
                     &data_type
