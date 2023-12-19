@@ -53,6 +53,7 @@ pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
         }
     }
     match data_type {
+        DataType::Nullable(t) => str_to_scalar(value, t),
         DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
         DataType::Number(num_ty) => match num_ty {
             NumberDataType::UInt8 => {
