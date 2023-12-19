@@ -3432,7 +3432,6 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "bytes",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",

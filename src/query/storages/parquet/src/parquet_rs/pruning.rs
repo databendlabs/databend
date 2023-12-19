@@ -136,16 +136,11 @@ impl ParquetRSPruner {
                 let mut omits = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep_with_partition_columns(
-                            row_group,
-                            partition_values.as_deref(),
-                        ) {
+                        if pruner.should_keep_with_partition_columns(row_group, partition_values) {
                             selection.push(i);
 
-                            let omit = !inverted_pruner.should_keep_with_partition_columns(
-                                row_group,
-                                partition_values.as_deref(),
-                            );
+                            let omit = !inverted_pruner
+                                .should_keep_with_partition_columns(row_group, partition_values);
                             omits.push(omit);
                         }
                     }
@@ -156,16 +151,11 @@ impl ParquetRSPruner {
                     Some(&self.predicate_columns),
                 ) {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep_with_partition_columns(
-                            row_group,
-                            partition_values.as_deref(),
-                        ) {
+                        if pruner.should_keep_with_partition_columns(row_group, partition_values) {
                             selection.push(i);
 
-                            let omit = !inverted_pruner.should_keep_with_partition_columns(
-                                row_group,
-                                partition_values.as_deref(),
-                            );
+                            let omit = !inverted_pruner
+                                .should_keep_with_partition_columns(row_group, partition_values);
                             omits.push(omit);
                         }
                     }
