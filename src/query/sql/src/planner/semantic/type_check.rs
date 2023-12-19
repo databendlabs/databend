@@ -861,7 +861,7 @@ impl<'a> TypeChecker<'a> {
                     let params = params
                         .iter()
                         .map(|literal| match literal {
-                            Literal::UInt64(n) => Ok(*n as usize),
+                            Literal::UInt64(n) => Ok(*n as i64),
                             lit => Err(ErrorCode::SemanticError(format!(
                                 "invalid parameter {lit} for scalar function"
                             ))
@@ -1054,7 +1054,7 @@ impl<'a> TypeChecker<'a> {
             if let databend_common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: databend_common_expression::Scalar::Number(NumberScalar::Int64(1)),
+                    value: databend_common_expression::Scalar::Number(1i64.into()),
                 }
                 .into();
             }
@@ -1819,7 +1819,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        params: Vec<usize>,
+        params: Vec<i64>,
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
@@ -1885,7 +1885,7 @@ impl<'a> TypeChecker<'a> {
         &self,
         span: Span,
         func_name: &str,
-        params: Vec<usize>,
+        params: Vec<i64>,
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
@@ -1893,7 +1893,7 @@ impl<'a> TypeChecker<'a> {
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
-            params: params.clone(),
+            params: params.iter().map(|x| Scalar::Number((*x).into())).collect(),
             args: arguments,
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
@@ -2947,7 +2947,7 @@ impl<'a> TypeChecker<'a> {
 
                     let value = FunctionCall {
                         span,
-                        params: vec![idx + 1],
+                        params: vec![(idx + 1) as _],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -3073,7 +3073,7 @@ impl<'a> TypeChecker<'a> {
                 scalar = FunctionCall {
                     span: expr.span(),
                     func_name: "get".to_string(),
-                    params: vec![idx],
+                    params: vec![idx as _],
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -3189,7 +3189,7 @@ impl<'a> TypeChecker<'a> {
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
                         span,
-                        params: vec![idx],
+                        params: vec![idx as _],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }

@@ -378,7 +378,7 @@ impl Binder {
                     let field_expr = ScalarExpr::FunctionCall(FunctionCall {
                         span: *span,
                         func_name: "get".to_string(),
-                        params: vec![i + 1],
+                        params: vec![(i + 1) as i64],
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;
