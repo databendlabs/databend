@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use common_meta_api::SchemaApi;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::PushDownInfo;
@@ -202,10 +201,11 @@ pub(crate) async fn dump_tables(
     if databases.is_empty() {
         let all_databases = catalog.list_databases(tenant.as_str()).await?;
         for db in all_databases {
-
             let db_id = db.get_db_info().ident.db_id;
             let db_name = db.name();
-            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id)
+                || db_name.to_lowercase() == "information_schema"
+            {
                 final_dbs.push((db_name.to_string(), db_id));
             }
         }
@@ -220,14 +220,6 @@ pub(crate) async fn dump_tables(
             final_dbs.push((db, db_id));
         }
     }
-
-    let visibility_checker = ctx.get_visibility_checker().await?;
-
-    let final_dbs: Vec<String> = databases
-        .iter()
-        .filter(|db| visibility_checker.check_database_visibility(CATALOG_DEFAULT, db))
-        .cloned()
-        .collect();
 
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
     for (database, db_id) in final_dbs {
@@ -248,7 +240,14 @@ pub(crate) async fn dump_tables(
         };
         let mut filtered_tables = Vec::with_capacity(tables.len());
         for table in tables {
-            if visibility_checker.check_table_visibility(CATALOG_DEFAULT, &database, table.name(), db_id, table.get_id()) {
+            if visibility_checker.check_table_visibility(
+                CATALOG_DEFAULT,
+                &database,
+                table.name(),
+                db_id,
+                table.get_id(),
+            ) || database.to_lowercase() == "information_schema"
+            {
                 filtered_tables.push(table);
             }
         }
