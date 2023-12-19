@@ -54,7 +54,6 @@ use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
@@ -255,37 +254,17 @@ impl FuseTable {
 
     pub async fn mutation_read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
         snapshot: Arc<TableSnapshot>,
-        col_indices: Vec<FieldIndex>,
-        filters: Option<Filters>,
-        is_lazy: bool,
-        is_delete: bool,
     ) -> Result<Partitions> {
-        let partitions = if is_lazy {
-            let mut segments = Vec::with_capacity(snapshot.segments.len());
-            for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
-            }
-            Partitions::create(PartitionsShuffleKind::Mod, segments, true)
-        } else {
-            let projection = Projection::Columns(col_indices.clone());
-            let prune_ctx = MutationBlockPruningContext {
-                segment_locations: create_segment_location_vector(snapshot.segments.clone(), None),
-                block_count: Some(snapshot.summary.block_count as usize),
-            };
-            let (partitions, info) = self
-                .do_mutation_block_pruning(ctx, filters, projection, prune_ctx, true, is_delete)
-                .await?;
-            if is_delete {
-                log::info!(
-                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
-                    info.num_whole_block_mutation
-                );
-            }
-            partitions
-        };
-        Ok(partitions)
+        let mut segments = Vec::with_capacity(snapshot.segments.len());
+        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+            segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+        }
+        Ok(Partitions::create(
+            PartitionsShuffleKind::Mod,
+            segments,
+            true,
+        ))
     }
 
     #[async_backtrace::framed]
