@@ -36,6 +36,8 @@ use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
 
+pub const UNKNOWN_CATALOG: u16 = 1119;
+pub const UNKNOWN_DATABASE: u16 = 1003;
 pub const UNKNOWN_TABLE: u16 = 1025;
 
 #[async_trait::async_trait]
