@@ -114,6 +114,8 @@ impl ParquetRSPruner {
     /// Return the selected row groups' indices in the meta and omit filter flags.
     ///
     /// If `stats` is not [None], we use this statistics to prune but not collect again.
+    ///
+    /// `partition_values` is used only for Delta table engine.
     pub fn prune_row_groups(
         &self,
         meta: &ParquetMetaData,
@@ -178,6 +180,7 @@ impl ParquetRSPruner {
     /// Prune pages of a parquet file.
     ///
     /// Return a vector of [`RowSelection`] to represent rows to read.
+    /// `partition_values` is used only for Delta table engine.
     pub fn prune_pages(
         &self,
         meta: &ParquetMetaData,
