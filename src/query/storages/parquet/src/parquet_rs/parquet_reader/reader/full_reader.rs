@@ -20,6 +20,9 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_expression::Value;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use futures::StreamExt;
@@ -68,8 +71,13 @@ impl ParquetRSFullReader {
     pub async fn prepare_data_stream(
         &self,
         loc: &str,
-        partition_block_entries: &[BlockEntry],
+        partition_fields: Option<&[(TableField, Scalar)]>,
     ) -> Result<ParquetRecordBatchStream<Reader>> {
+        let partition_values_map = partition_fields.map(|arr| {
+            arr.iter()
+                .map(|(f, v)| (f.name().to_string(), v.clone()))
+                .collect::<std::collections::HashMap<String, Scalar>>()
+        });
         let reader: Reader = self.op.reader(loc).await?;
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
@@ -87,12 +95,17 @@ impl ParquetRSFullReader {
 
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
+            let (selected_row_groups, omits) =
+                pruner.prune_row_groups(&file_meta, None, partition_values_map.as_ref())?;
             all_pruned = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !all_pruned {
-                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
+                let row_selection = pruner.prune_pages(
+                    &file_meta,
+                    &selected_row_groups,
+                    partition_values_map.as_ref(),
+                )?;
 
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
@@ -107,7 +120,13 @@ impl ParquetRSFullReader {
             if let Some(predicate) = self.predicate.as_ref() {
                 let projection = predicate.projection().clone();
                 let predicate = predicate.clone();
-                let partition_block_entries = partition_block_entries.to_vec();
+                let partition_block_entries = partition_fields.map(|arr| {
+                    arr.iter()
+                        .map(|(f, v)| {
+                            BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
+                        })
+                        .collect::<Vec<_>>()
+                });
                 let predicate_fn = move |batch| {
                     predicate
                         .evaluate(&batch, partition_block_entries.clone())
@@ -152,13 +171,13 @@ impl ParquetRSFullReader {
 
         let mut full_match = false;
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
+            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None, None)?;
 
             full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !full_match {
-                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
+                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups, None)?;
 
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
@@ -175,7 +194,7 @@ impl ParquetRSFullReader {
                 let predicate = predicate.clone();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch, vec![])
+                        .evaluate(&batch, None)
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(

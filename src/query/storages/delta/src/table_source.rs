@@ -96,8 +96,8 @@ impl DeltaTableSource {
             output_partition_columns,
             stream: None,
             generated_data: None,
-            partition_block_entries: vec![],
             is_finished: false,
+            partition_block_entries: vec![],
         })))
     }
 }
@@ -168,17 +168,22 @@ impl Processor for DeltaTableSource {
             match &part.data {
                 ParquetPart::ParquetFiles(files) => {
                     assert_eq!(files.files.len(), 1);
-                    self.partition_block_entries = part
-                        .partition_values
+                    let partition_fields = self
+                        .partition_fields
                         .iter()
-                        .zip(&self.partition_fields)
-                        .map(|(v, f)| {
+                        .cloned()
+                        .zip(part.partition_values.iter().cloned())
+                        .collect::<Vec<_>>();
+                    self.partition_block_entries = partition_fields
+                        .iter()
+                        .map(|(f, v)| {
+
                             BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
                         })
-                        .collect();
+                        .collect::<Vec<_>>();
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(&files.files[0].0, &self.partition_block_entries)
+                        .prepare_data_stream(&files.files[0].0, Some(&partition_fields))
                         .await?;
                     self.stream = Some(stream);
                 }
