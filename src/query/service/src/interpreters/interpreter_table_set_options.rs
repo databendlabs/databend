@@ -105,7 +105,6 @@ impl Interpreter for SetOptionsInterpreter {
                         &catalog.name()
                     )));
                 } else {
-                    if 1 > 2 {}
                     return Err(error);
                 }
             }
