@@ -62,4 +62,9 @@ message IndexMeta {
   // if true, index will create after data written to databend,
   // no need execute refresh index manually.
   bool sync_creation = 7;
+
+  string original_query = 8;
+
+  /// if user already use the internal column name `_block_name` in their sql.
+  bool user_defined_block_name = 9;
 }

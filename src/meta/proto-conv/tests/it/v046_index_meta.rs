@@ -44,6 +44,7 @@ fn test_decode_v46_index() -> anyhow::Result<()> {
         let table_id = 7;
         let index_type = IndexType::AGGREGATING;
         let created_on = Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap();
+        let original_query = "".to_string();
         let query = "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string();
 
         IndexMeta {
@@ -51,9 +52,11 @@ fn test_decode_v46_index() -> anyhow::Result<()> {
             index_type,
             created_on,
             dropped_on: None,
+            original_query,
             query,
             updated_on: None,
             sync_creation: false,
+            user_defined_block_name: false,
         }
     };
 

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
@@ -24,9 +26,13 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::Window;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::walk_expr;
+use databend_common_ast::walk_expr_mut;
 use databend_common_ast::walk_select_target;
 use databend_common_ast::walk_select_target_mut;
+use databend_common_ast::Dialect;
 use databend_common_ast::Visitor;
 use databend_common_ast::VisitorMut;
 use databend_common_exception::Span;
@@ -36,59 +42,49 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AggregatingIndexRewriter {
+    pub sql_dialect: Dialect,
     pub user_defined_block_name: bool,
     has_agg_function: bool,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct AggregatingIndexChecker {
-    not_support: bool,
-}
-
-impl AggregatingIndexChecker {
-    pub fn is_supported(&self) -> bool {
-        !self.not_support
-    }
+    extracted_aggs: HashSet<String>,
 }
 
 impl VisitorMut for AggregatingIndexRewriter {
     fn visit_expr(&mut self, expr: &mut Expr) {
+        // rewrite children
+        walk_expr_mut(self, expr);
+
         match expr {
             Expr::FunctionCall {
                 distinct,
                 name,
                 args,
                 window,
+                lambda,
                 ..
             } if !*distinct
                 && args.len() == 1
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
                     .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
-                && window.is_none() =>
+                && window.is_none()
+                && lambda.is_none() =>
             {
                 self.has_agg_function = true;
-                name.name = format!("{}_STATE", name.name);
+                if name.name.eq_ignore_ascii_case("avg") {
+                    self.extract_avg(args);
+                } else {
+                    let agg = format!("{}({})", name.name.to_ascii_uppercase(), args[0]);
+                    self.extracted_aggs.insert(agg);
+                }
             }
             Expr::CountAll { window, .. } if window.is_none() => {
                 self.has_agg_function = true;
-                *expr = Expr::FunctionCall {
-                    span: None,
-                    distinct: false,
-                    name: Identifier {
-                        name: "COUNT_STATE".to_string(),
-                        quote: None,
-                        span: None,
-                    },
-                    args: vec![],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
-                };
+                let count = "COUNT()".to_string();
+                self.extracted_aggs.insert(count);
             }
             _ => {}
-        }
+        };
     }
 
     fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
@@ -99,9 +95,42 @@ impl VisitorMut for AggregatingIndexRewriter {
             ..
         } = stmt;
 
+        let mut new_select_list: Vec<SelectTarget> = vec![];
         for target in select_list.iter_mut() {
             walk_select_target_mut(self, target);
         }
+
+        for target in select_list.iter() {
+            match target {
+                SelectTarget::AliasedExpr { box expr, .. } => match expr {
+                    Expr::FunctionCall { .. } => {}
+                    Expr::BinaryOp {
+                        box left,
+                        box right,
+                        ..
+                    } => match (left, right) {
+                        (Expr::FunctionCall { .. }, Expr::FunctionCall { .. }) => {}
+                        (_, _) => new_select_list.push(target.clone()),
+                    },
+                    _ => new_select_list.push(target.clone()),
+                },
+                _ => new_select_list.push(target.clone()),
+            }
+        }
+
+        self.extracted_aggs.iter().for_each(|agg| {
+            if let Ok(tokens) = tokenize_sql(agg) {
+                if let Ok(new_expr) = parse_expr(&tokens, self.sql_dialect) {
+                    let target = SelectTarget::AliasedExpr {
+                        expr: Box::new(new_expr),
+                        alias: None,
+                    };
+                    new_select_list.push(target);
+                }
+            }
+        });
+
+        *select_list = new_select_list;
 
         let table = {
             let table_ref = from.first().unwrap();
@@ -157,6 +186,35 @@ impl VisitorMut for AggregatingIndexRewriter {
             }
             _ => {}
         }
+    }
+}
+
+impl AggregatingIndexRewriter {
+    pub fn new(sql_dialect: Dialect) -> Self {
+        Self {
+            sql_dialect,
+            user_defined_block_name: false,
+            has_agg_function: false,
+            extracted_aggs: Default::default(),
+        }
+    }
+
+    pub fn extract_avg(&mut self, args: &[Expr]) {
+        let sum = format!("SUM({})", args[0]);
+        let count = format!("COUNT({})", args[0]);
+        self.extracted_aggs.insert(sum);
+        self.extracted_aggs.insert(count);
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AggregatingIndexChecker {
+    not_support: bool,
+}
+
+impl AggregatingIndexChecker {
+    pub fn is_supported(&self) -> bool {
+        !self.not_support
     }
 }
 
@@ -245,6 +303,30 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
 
         for order_by in &query.order_by {
             self.visit_order_by(order_by);
+        }
+    }
+}
+#[derive(Debug, Clone, Default)]
+pub struct RefreshAggregatingIndexRewriter {}
+
+impl VisitorMut for RefreshAggregatingIndexRewriter {
+    fn visit_expr(&mut self, expr: &mut Expr) {
+        match expr {
+            Expr::FunctionCall {
+                distinct,
+                name,
+                args,
+                window,
+                ..
+            } if !*distinct
+                && args.len() == 1
+                && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
+                    .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
+                && window.is_none() =>
+            {
+                name.name = format!("{}_STATE", name.name);
+            }
+            _ => {}
         }
     }
 }
