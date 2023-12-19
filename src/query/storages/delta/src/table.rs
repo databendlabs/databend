@@ -78,9 +78,9 @@ impl DeltaTable {
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let meta_string = info
             .meta
-            .options
+            .engine_options
             .get(OPT_KEY_ENGINE_META)
-            .ok_or_else(|| ErrorCode::Internal("missing table option OPT_KEY_ENGINE_META"))?;
+            .ok_or_else(|| ErrorCode::Internal("missing engine option OPT_KEY_ENGINE_META"))?;
         let meta: DeltaTableMeta = serde_json::from_str(meta_string).map_err(|e| {
             ErrorCode::Internal(format!(
                 "fail to deserialize DeltaTableMeta({meta_string}): {e:?}"
