@@ -45,6 +45,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         table: fixture.default_table_name(),
         schema: TestFixture::default_table_schema(),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),

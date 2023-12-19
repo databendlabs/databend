@@ -57,12 +57,13 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
         ParquetReadOptions::default()
             .with_prune_row_groups(false)
             .with_prune_pages(true),
+        vec![],
     )
     .unwrap();
 
     let row_groups = (0..parquet_meta.num_row_groups()).collect::<Vec<_>>();
     let selection = pruner
-        .prune_pages(parquet_meta, &row_groups)
+        .prune_pages(parquet_meta, &row_groups, None)
         .unwrap()
         .unwrap();
 

@@ -71,6 +71,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
             TableField::new("c", TableDataType::Number(NumberDataType::Int32)),
         ]),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),
