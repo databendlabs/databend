@@ -752,8 +752,8 @@ impl<'a> Evaluator<'a> {
 
         let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![
-                Scalar::Number(NumberScalar::Int64(ty.precision())),
-                Scalar::Number(NumberScalar::Int64(ty.scale())),
+                Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
+                Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
             ]
         } else {
             vec![]
