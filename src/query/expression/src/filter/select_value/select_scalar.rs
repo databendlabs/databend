@@ -17,11 +17,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::filter::empty_array_compare_value;
-use crate::filter::selection_op;
-use crate::filter::selection_op_boolean;
-use crate::filter::selection_op_string;
-use crate::filter::selection_op_tuple;
-use crate::filter::selection_op_variant;
+use crate::filter::select_op;
+use crate::filter::select_op_boolean;
+use crate::filter::select_op_string;
+use crate::filter::select_op_tuple;
+use crate::filter::select_op_variant;
 use crate::filter::tuple_compare_default_value;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
@@ -67,27 +67,27 @@ impl<'a> Selector<'a> {
             | DataType::Decimal(_)
             | DataType::Date
             | DataType::Timestamp
-            | DataType::Array(_) => selection_op(op)(left, right),
+            | DataType::Array(_) => select_op(op)(left, right),
             DataType::Boolean => {
                 let left = left.into_boolean().unwrap();
                 let right = right.into_boolean().unwrap();
-                selection_op_boolean(op)(left, right)
+                select_op_boolean(op)(left, right)
             }
             DataType::String => {
                 let left = left.into_string().unwrap();
                 let right = right.into_string().unwrap();
-                selection_op_string(op)(&left, &right)
+                select_op_string(op)(&left, &right)
             }
             DataType::Variant => {
                 let left = left.into_variant().unwrap();
                 let right = right.into_variant().unwrap();
-                selection_op_variant(op)(&left, &right)
+                select_op_variant(op)(&left, &right)
             }
             DataType::Tuple(_) => {
                 let left = left.into_tuple().unwrap();
                 let right = right.into_tuple().unwrap();
                 let mut ret = tuple_compare_default_value(op);
-                let op = selection_op_tuple::<Scalar>(op);
+                let op = select_op_tuple::<Scalar>(op);
                 for (lhs, rhs) in left.into_iter().zip(right.into_iter()) {
                     if let Some(result) = op(lhs, rhs) {
                         ret = result;

@@ -18,11 +18,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::arrow::and_validities;
-use crate::filter::selection_op;
-use crate::filter::selection_op_boolean;
-use crate::filter::selection_op_string;
-use crate::filter::selection_op_tuple;
-use crate::filter::selection_op_variant;
+use crate::filter::select_op;
+use crate::filter::select_op_boolean;
+use crate::filter::select_op_string;
+use crate::filter::select_op_tuple;
+use crate::filter::select_op_variant;
 use crate::filter::tuple_compare_default_value;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
@@ -755,7 +755,7 @@ impl<'a> Selector<'a> {
     where
         T: std::cmp::PartialOrd + Copy,
     {
-        let op = selection_op::<T>(op);
+        let op = select_op::<T>(op);
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {
@@ -906,9 +906,9 @@ impl<'a> Selector<'a> {
         is_variant: bool,
     ) -> usize {
         let op = if is_variant {
-            selection_op_variant(op)
+            select_op_variant(op)
         } else {
-            selection_op_string(op)
+            select_op_string(op)
         };
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
@@ -1058,7 +1058,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let op = selection_op_boolean(op);
+        let op = select_op_boolean(op);
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {
@@ -1207,7 +1207,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let op = selection_op::<Column>(op);
+        let op = select_op::<Column>(op);
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {
@@ -1357,7 +1357,7 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> usize {
         let default = tuple_compare_default_value(op);
-        let op = selection_op_tuple::<ScalarRef>(op);
+        let op = select_op_tuple::<ScalarRef>(op);
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {
