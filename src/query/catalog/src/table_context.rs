@@ -27,7 +27,6 @@ use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;

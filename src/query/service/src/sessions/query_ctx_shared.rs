@@ -25,11 +25,11 @@ use databend_common_base::base::Progress;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Expr;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
@@ -46,7 +46,6 @@ use databend_common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -113,7 +112,8 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
-    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, Box<RuntimeFilterInfo>>>>,
+    pub(in crate::sessions) runtime_filters:
+        Arc<RwLock<HashMap<IndexType, Box<RuntimeFilterInfo>>>>,
 }
 
 impl QueryContextShared {

@@ -23,10 +23,11 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{Column, DataBlock, DataSchemaRef, Evaluator, RawExpr, type_check};
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleString;
@@ -38,13 +39,14 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use ethnum::U256;
 use parking_lot::RwLock;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
-use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::{BLOOM_RUNTIME_FILTER_THRESHOLD, INLIST_RUNTIME_FILTER_THRESHOLD};
+use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::BLOOM_RUNTIME_FILTER_THRESHOLD;
+use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::INLIST_RUNTIME_FILTER_THRESHOLD;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
-use crate::pipelines::processors::transforms::hash_join::util::{bloom_filter, build_schema_wrap_nullable, dedup_build_key_column};
+use crate::pipelines::processors::transforms::hash_join::util::bloom_filter;
+use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
 use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
@@ -278,14 +280,19 @@ impl HashJoinState {
             .iter()
             .zip(self.hash_join_desc.probe_keys_rt.iter())
         {
-            if let Some(distinct_build_column) = dedup_build_key_column(&func_ctx, data_blocks, build_key)? {
+            if let Some(distinct_build_column) =
+                dedup_build_key_column(&func_ctx, data_blocks, build_key)?
+            {
                 if num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
-                    if let Some(filter) = inlist_filter(&probe_key, distinct_build_column.clone())? {
+                    if let Some(filter) = inlist_filter(&probe_key, distinct_build_column.clone())?
+                    {
                         runtime_filter.add_inlist(filter);
                     }
                 }
                 if num_rows <= BLOOM_RUNTIME_FILTER_THRESHOLD {
-                    if let Some(filter) = bloom_filter(build_key, probe_key, distinct_build_column, num_rows)? {
+                    if let Some(filter) =
+                        bloom_filter(build_key, probe_key, distinct_build_column, num_rows)?
+                    {
                         runtime_filter.add_bloom(Box::new(filter));
                     }
                 }

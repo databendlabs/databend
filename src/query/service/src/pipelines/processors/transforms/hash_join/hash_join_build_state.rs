@@ -697,7 +697,8 @@ impl HashJoinBuildState {
             let data_blocks = &mut build_state.generation_state.chunks;
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Inner
-                && self.ctx.get_settings().get_join_spilling_threshold()? == 0 && self.ctx.get_settings().get_runtime_filter()?
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
+                && self.ctx.get_settings().get_runtime_filter()?
             {
                 let is_cluster = !self.ctx.get_cluster().is_empty();
                 let is_broadcast_join = self.hash_join_state.hash_join_desc.broadcast;

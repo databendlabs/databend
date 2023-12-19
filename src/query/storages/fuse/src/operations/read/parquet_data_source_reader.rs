@@ -123,12 +123,8 @@ impl SyncSource for ReadParquetDataSource<true> {
                     .ctx
                     .get_runtime_filter_with_id(self.table_index);
                 let filters = filters.get_inlist();
-                if runtime_filter_pruner(
-                    self.table_schema.clone(),
-                    &part,
-                    filters,
-                    &self.func_ctx,
-                )? {
+                if runtime_filter_pruner(self.table_schema.clone(), &part, filters, &self.func_ctx)?
+                {
                     return Ok(Some(DataBlock::empty()));
                 }
 

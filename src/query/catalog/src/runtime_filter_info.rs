@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Expr;
 use xorf::BinaryFuse8;
-use databend_common_expression::{DataBlock, Evaluator, Expr, FunctionContext, Value};
-use databend_common_expression::types::AnyType;
-use databend_common_exception::Result;
 
 #[derive(Clone, Debug)]
 pub struct RuntimeFilterInfo {
     inlist: Vec<Box<Expr<String>>>,
     bloom: Vec<Box<(String, BinaryFuse8)>>,
 }
-
 
 impl RuntimeFilterInfo {
     pub fn new() -> Self {
