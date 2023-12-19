@@ -218,6 +218,7 @@ impl DeltaTable {
             leaf_fields,
             &plan.push_downs,
             read_options,
+            self.meta.partition_columns.clone(),
         )?;
 
         let sp = self.get_storage_params()?;
