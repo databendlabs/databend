@@ -59,6 +59,7 @@ mod temp_files_table;
 mod tracing_table;
 mod users_table;
 mod util;
+mod virtual_columns_table;
 
 pub use background_jobs_table::BackgroundJobTable;
 pub use background_tasks_table::BackgroundTaskTable;
@@ -112,3 +113,4 @@ pub use tasks_table::TasksTable;
 pub use temp_files_table::TempFilesTable;
 pub use tracing_table::TracingTable;
 pub use users_table::UsersTable;
+pub use virtual_columns_table::VirtualColumnsTable;

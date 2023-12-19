@@ -124,6 +124,7 @@ use databend_common_meta_types::UpsertKV;
 use log::debug;
 use log::info;
 
+use crate::deserialize_struct;
 use crate::is_all_db_data_removed;
 use crate::kv_app_error::KVAppError;
 use crate::serialize_struct;
@@ -285,6 +286,10 @@ impl SchemaApiTestSuite {
         suite.table_create_get_drop(&b.build().await).await?;
         suite
             .table_drop_without_db_id_to_name(&b.build().await)
+            .await?;
+        suite.list_db_without_db_id_list(&b.build().await).await?;
+        suite
+            .drop_table_without_table_id_list(&b.build().await)
             .await?;
         suite.table_rename(&b.build().await).await?;
         suite.table_update_meta(&b.build().await).await?;
@@ -1907,6 +1912,118 @@ impl SchemaApiTestSuite {
 
         info!("--- drop table to ensure dropping table does not rely on db-id-to-name");
         util.drop_table_by_id().await?;
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn list_db_without_db_id_list<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        // test drop a db without db_id_list
+        {
+            let tenant = "tenant1";
+            let db = "db1";
+            let mut util = Util::new(mt, tenant, db, "tb2", "JSON");
+            util.create_db().await?;
+
+            // remove db id list
+            let dbid_idlist = DbIdListKey {
+                tenant: tenant.to_string(),
+                db_name: db.to_string(),
+            };
+            util.mt
+                .as_kv_api()
+                .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
+                .await?;
+
+            // drop db
+            util.drop_db().await?;
+
+            // after drop db, check if db id list has been added
+            let value = util
+                .mt
+                .as_kv_api()
+                .get_kv(&dbid_idlist.to_string_key())
+                .await?;
+
+            assert!(value.is_some());
+            let seqv = value.unwrap();
+            let db_id_list: DbIdList = deserialize_struct(&seqv.data)?;
+            assert_eq!(db_id_list.id_list[0], util.db_id);
+        }
+        // test get_database_history can return db without db_id_list
+        {
+            let tenant = "tenant2";
+            let db = "db2";
+            let mut util = Util::new(mt, tenant, db, "tb2", "JSON");
+            util.create_db().await?;
+
+            // remove db id list
+            let dbid_idlist = DbIdListKey {
+                tenant: tenant.to_string(),
+                db_name: db.to_string(),
+            };
+            util.mt
+                .as_kv_api()
+                .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
+                .await?;
+
+            let res = mt
+                .get_database_history(ListDatabaseReq {
+                    tenant: tenant.to_string(),
+                    filter: None,
+                })
+                .await?;
+
+            // check if get_database_history return db_id
+            let mut found = false;
+            for db_info in res {
+                if db_info.ident.db_id == util.db_id {
+                    found = true;
+                    break;
+                }
+            }
+
+            assert!(found);
+        }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn drop_table_without_table_id_list<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        // test drop a table without table_id_list
+        let tenant = "tenant1";
+        let db = "db1";
+        let table = "tb1";
+        let mut util = Util::new(mt, tenant, db, table, "JSON");
+        util.create_db().await?;
+        let (tid, _table_meta) = util.create_table().await?;
+
+        // remove db id list
+        let table_id_idlist = TableIdListKey {
+            db_id: util.db_id,
+            table_name: table.to_string(),
+        };
+        util.mt
+            .as_kv_api()
+            .upsert_kv(UpsertKV::delete(table_id_idlist.to_string_key()))
+            .await?;
+
+        // drop table
+        util.drop_table_by_id().await?;
+
+        // after drop table, check if table id list has been added
+        let value = util
+            .mt
+            .as_kv_api()
+            .get_kv(&table_id_idlist.to_string_key())
+            .await?;
+
+        assert!(value.is_some());
+        let seqv = value.unwrap();
+        let id_list: TableIdList = deserialize_struct(&seqv.data)?;
+        assert_eq!(id_list.id_list[0], tid);
+
         Ok(())
     }
 
@@ -5651,6 +5768,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create virtual column");
             let req = CreateVirtualColumnReq {
+                if_not_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5659,6 +5777,7 @@ impl SchemaApiTestSuite {
 
             info!("--- create virtual column again");
             let req = CreateVirtualColumnReq {
+                if_not_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5693,6 +5812,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- update virtual column");
             let req = UpdateVirtualColumnReq {
+                if_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
             };
@@ -5718,6 +5838,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- drop virtual column");
             let req = DropVirtualColumnReq {
+                if_exists: false,
                 name_ident: name_ident.clone(),
             };
 
@@ -5738,6 +5859,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- update virtual column after drop");
             let req = UpdateVirtualColumnReq {
+                if_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k3".to_string(), "variant[3]".to_string()],
             };

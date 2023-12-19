@@ -59,6 +59,7 @@ use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
+use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -284,6 +285,15 @@ impl<T: ArgType> Value<T> {
     }
 }
 
+impl<T: Decimal> Value<DecimalType<T>> {
+    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
+        match self {
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar, size)),
+            Value::Column(col) => Value::Column(T::upcast_column(col, size)),
+        }
+    }
+}
+
 impl Value<AnyType> {
     pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
         match self {
@@ -396,6 +406,23 @@ impl Scalar {
             Scalar::Timestamp(t) => *t > 0,
             Scalar::Date(d) => *d > 0,
             _ => unreachable!("is_positive() called on non-numeric scalar"),
+        }
+    }
+
+    pub fn get_i64(&self) -> Option<i64> {
+        match self {
+            Scalar::Number(n) => match n {
+                NumberScalar::Int8(x) => Some(*x as _),
+                NumberScalar::Int16(x) => Some(*x as _),
+                NumberScalar::Int32(x) => Some(*x as _),
+                NumberScalar::Int64(x) => Some(*x as _),
+                NumberScalar::UInt8(x) => Some(*x as _),
+                NumberScalar::UInt16(x) => Some(*x as _),
+                NumberScalar::UInt32(x) => Some(*x as _),
+                NumberScalar::UInt64(x) => i64::try_from(*x).ok(),
+                _ => None,
+            },
+            _ => None,
         }
     }
 }

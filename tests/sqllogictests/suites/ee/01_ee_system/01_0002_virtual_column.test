@@ -22,9 +22,6 @@ statement ok
 USE test_virtual_column
 
 statement ok
-SET enable_refresh_virtual_column_after_write=1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -38,6 +35,11 @@ create virtual column (val['a'], val['b']) for t1
 
 statement ok
 refresh virtual column for t1
+
+query TTT
+show virtual columns from t1
+----
+test_virtual_column t1 val['a'], val['b']
 
 statement ok
 insert into t1 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
@@ -138,6 +140,11 @@ create virtual column (val['a'], val['b']) for t2
 statement ok
 refresh virtual column for t2
 
+query TTT
+show virtual columns from t2
+----
+test_virtual_column t2 val['a'], val['b']
+
 statement ok
 insert into t2 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
 
@@ -221,9 +228,6 @@ SELECT r.id, r.val['a'], r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM 
 4 44 44
 5 55 55
 6 NULL NULL
-
-statement ok
-SET enable_refresh_virtual_column_after_write=0;
 
 statement ok
 DROP DATABASE test_virtual_column
