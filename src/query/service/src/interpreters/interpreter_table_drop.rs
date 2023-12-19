@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::f32::consts::E;
 use std::sync::Arc;
 
 use databend_common_catalog::table::TableExt;
@@ -27,7 +26,6 @@ use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
-use jwt_simple::reexports::anyhow::Ok;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -59,13 +57,12 @@ impl Interpreter for DropTableInterpreter {
         let tbl = match self.ctx.get_table(catalog_name, db_name, tbl_name).await {
             Ok(table) => table,
             Err(error) => {
-                if matches!(error.code(), ErrorCode::UnknownTable) {
+                // UnknownTable Code
+                if error.code() == 1025 {
                     if !self.plan.if_exists {
                         return Err(ErrorCode::UnknownTable(format!(
                             "Unknown table `{}`.`{}` in catalog '{}'",
-                            database,
-                            self.plan.table.as_str(),
-                            &catalog.name()
+                            db_name, tbl_name, catalog_name
                         )));
                     }
                     return Ok(PipelineBuildResult::create());

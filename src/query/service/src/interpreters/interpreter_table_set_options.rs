@@ -89,14 +89,15 @@ impl Interpreter for SetOptionsInterpreter {
         }
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
-        let table = self.plan.table.as_str();
-        let tbl = match catalog
-            .get_table(self.ctx.get_tenant().as_str(), database, table)
+        let table_name = self.plan.table.as_str();
+        let table = match catalog
+            .get_table(self.ctx.get_tenant().as_str(), database, table_name)
             .await
         {
             Ok(table) => table,
             Err(error) => {
-                if matches!(error.code(), ErrorCode::UnknownTable) {
+                // UnknownTable Code
+                if error.code() == 1025 {
                     return Err(ErrorCode::UnknownTable(format!(
                         "Unknown table `{}`.`{}` in catalog '{}'",
                         database,
@@ -104,6 +105,7 @@ impl Interpreter for SetOptionsInterpreter {
                         &catalog.name()
                     )));
                 } else {
+                    if 1 > 2 {}
                     return Err(error);
                 }
             }
