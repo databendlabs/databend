@@ -238,178 +238,117 @@ impl UserApiProvider {
 
 // Check whether the values of options in the password policy are valid
 fn check_password_policy(password_policy: &PasswordPolicy) -> Result<()> {
-    check_password_min_length(password_policy.min_length)?;
-    check_password_max_length(password_policy.max_length)?;
-    check_password_min_upper_case_chars(password_policy.min_upper_case_chars)?;
-    check_password_min_lower_case_chars(password_policy.min_lower_case_chars)?;
-    check_password_min_numeric_chars(password_policy.min_numeric_chars)?;
-    check_password_min_special_chars(password_policy.min_special_chars)?;
-    check_password_min_age_days(password_policy.min_age_days)?;
-    check_password_max_age_days(password_policy.max_age_days)?;
-    check_password_max_retries(password_policy.max_retries)?;
-    check_password_lockout_time_mins(password_policy.lockout_time_mins)?;
-    check_password_history(password_policy.history)?;
-
-    check_length(
-        password_policy.min_length,
-        password_policy.max_length,
-        password_policy.min_upper_case_chars,
-        password_policy.min_lower_case_chars,
-        password_policy.min_numeric_chars,
-        password_policy.min_special_chars,
-    )?;
-    check_age_days(password_policy.min_age_days, password_policy.max_age_days)?;
-
-    Ok(())
-}
-
-fn check_password_min_length(min_length: u64) -> Result<()> {
-    if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&min_length) {
+    if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&password_policy.min_length) {
         return Err(ErrorCode::InvalidArgument(format!(
             "invalid password min length, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, min_length
+            MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, password_policy.min_length
         )));
     }
-    Ok(())
-}
 
-fn check_password_max_length(max_length: u64) -> Result<()> {
-    if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&max_length) {
+    if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&password_policy.max_length) {
         return Err(ErrorCode::InvalidArgument(format!(
             "invalid password max length, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, max_length
+            MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, password_policy.max_length
         )));
     }
-    Ok(())
-}
 
-fn check_password_min_upper_case_chars(min_upper_case_chars: u64) -> Result<()> {
-    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&min_upper_case_chars) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password min upper case chars, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, min_upper_case_chars
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_min_lower_case_chars(min_lower_case_chars: u64) -> Result<()> {
-    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&min_lower_case_chars) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password min lower case chars, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, min_lower_case_chars
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_min_numeric_chars(min_numeric_chars: u64) -> Result<()> {
-    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&min_numeric_chars) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password min numeric chars, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, min_numeric_chars
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_min_special_chars(min_special_chars: u64) -> Result<()> {
-    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&min_special_chars) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password min special chars, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, min_special_chars
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_min_age_days(min_age_days: u64) -> Result<()> {
-    if !(MIN_PASSWORD_AGE_DAYS..=MAX_PASSWORD_AGE_DAYS).contains(&min_age_days) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password min age days, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_AGE_DAYS, MAX_PASSWORD_AGE_DAYS, min_age_days
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_max_age_days(max_age_days: u64) -> Result<()> {
-    if !(MIN_PASSWORD_AGE_DAYS..=MAX_PASSWORD_AGE_DAYS).contains(&max_age_days) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password max age days, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_AGE_DAYS, MAX_PASSWORD_AGE_DAYS, max_age_days
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_max_retries(max_retries: u64) -> Result<()> {
-    if !(MIN_PASSWORD_MAX_RETRIES..=MAX_PASSWORD_MAX_RETRIES).contains(&max_retries) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password max retries, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_MAX_RETRIES, MAX_PASSWORD_MAX_RETRIES, max_retries
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_lockout_time_mins(lockout_time_mins: u64) -> Result<()> {
-    if !(MIN_PASSWORD_LOCKOUT_TIME_MINS..=MAX_PASSWORD_LOCKOUT_TIME_MINS)
-        .contains(&lockout_time_mins)
-    {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password lockout time mins, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_LOCKOUT_TIME_MINS, MAX_PASSWORD_LOCKOUT_TIME_MINS, lockout_time_mins
-        )));
-    }
-    Ok(())
-}
-
-fn check_password_history(history: u64) -> Result<()> {
-    if !(MIN_PASSWORD_HISTORY..=MAX_PASSWORD_HISTORY).contains(&history) {
-        return Err(ErrorCode::InvalidArgument(format!(
-            "invalid password history, supported range: {} to {}, but got {}",
-            MIN_PASSWORD_HISTORY, MAX_PASSWORD_HISTORY, history
-        )));
-    }
-    Ok(())
-}
-
-fn check_length(
-    min_length: u64,
-    max_length: u64,
-    min_upper_case_chars: u64,
-    min_lower_case_chars: u64,
-    min_numeric_chars: u64,
-    min_special_chars: u64,
-) -> Result<()> {
-    if min_length > max_length {
+    // min length can't greater than max length
+    if password_policy.min_length > password_policy.max_length {
         return Err(ErrorCode::InvalidArgument(format!(
             "invalid password length, min length must be less than max length, but got {} and {}",
-            min_length, max_length
+            password_policy.min_length, password_policy.max_length
         )));
     }
 
-    let char_length =
-        min_upper_case_chars + min_lower_case_chars + min_numeric_chars + min_special_chars;
-    if char_length > max_length {
+    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&password_policy.min_upper_case_chars) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password min upper case chars, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, password_policy.min_upper_case_chars
+        )));
+    }
+
+    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&password_policy.min_lower_case_chars) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password min lower case chars, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, password_policy.min_lower_case_chars
+        )));
+    }
+
+    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&password_policy.min_numeric_chars) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password min numeric chars, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, password_policy.min_numeric_chars
+        )));
+    }
+
+    if !(MIN_PASSWORD_CHARS..=MAX_PASSWORD_CHARS).contains(&password_policy.min_special_chars) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password min special chars, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_CHARS, MAX_PASSWORD_CHARS, password_policy.min_special_chars
+        )));
+    }
+
+    // sum min length of chars can't greater than max length
+    let char_length = password_policy.min_upper_case_chars
+        + password_policy.min_lower_case_chars
+        + password_policy.min_numeric_chars
+        + password_policy.min_special_chars;
+    if char_length > password_policy.max_length {
         return Err(ErrorCode::InvalidArgument(format!(
             "invalid password length, sum of min chars length must be less than max length, but got 
             min upper case chars {}, min lower case chars {}, min numeric chars {}, min special chars {} 
             and max length {}",
-            min_upper_case_chars, min_lower_case_chars, min_numeric_chars, min_special_chars, max_length
+            password_policy.min_upper_case_chars, password_policy.min_lower_case_chars,
+            password_policy.min_numeric_chars, password_policy.min_special_chars, password_policy.max_length
         )));
     }
 
-    Ok(())
-}
+    if !(MIN_PASSWORD_AGE_DAYS..=MAX_PASSWORD_AGE_DAYS).contains(&password_policy.min_age_days) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password min age days, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_AGE_DAYS, MAX_PASSWORD_AGE_DAYS, password_policy.min_age_days
+        )));
+    }
 
-fn check_age_days(min_age_days: u64, max_age_days: u64) -> Result<()> {
-    if min_age_days > max_age_days {
+    if !(MIN_PASSWORD_AGE_DAYS..=MAX_PASSWORD_AGE_DAYS).contains(&password_policy.max_age_days) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password max age days, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_AGE_DAYS, MAX_PASSWORD_AGE_DAYS, password_policy.max_age_days
+        )));
+    }
+
+    if password_policy.min_age_days > password_policy.max_age_days {
         return Err(ErrorCode::InvalidArgument(format!(
             "invalid password age days, min age days must be less than max age days, but got {} and {}",
-            min_age_days, max_age_days
+            password_policy.min_age_days, password_policy.max_age_days
         )));
     }
+
+    if !(MIN_PASSWORD_MAX_RETRIES..=MAX_PASSWORD_MAX_RETRIES).contains(&password_policy.max_retries)
+    {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password max retries, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_MAX_RETRIES, MAX_PASSWORD_MAX_RETRIES, password_policy.max_retries
+        )));
+    }
+
+    if !(MIN_PASSWORD_LOCKOUT_TIME_MINS..=MAX_PASSWORD_LOCKOUT_TIME_MINS)
+        .contains(&password_policy.lockout_time_mins)
+    {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password lockout time mins, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_LOCKOUT_TIME_MINS,
+            MAX_PASSWORD_LOCKOUT_TIME_MINS,
+            password_policy.lockout_time_mins
+        )));
+    }
+
+    if !(MIN_PASSWORD_HISTORY..=MAX_PASSWORD_HISTORY).contains(&password_policy.history) {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "invalid password history, supported range: {} to {}, but got {}",
+            MIN_PASSWORD_HISTORY, MAX_PASSWORD_HISTORY, password_policy.history
+        )));
+    }
+
     Ok(())
 }

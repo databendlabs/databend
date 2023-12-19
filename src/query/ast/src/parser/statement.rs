@@ -1521,10 +1521,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_network_policy = map(
         rule! {
-            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
-             ~ ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")"
-             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+            CREATE ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+             ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
+             ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
@@ -1558,10 +1558,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let alter_network_policy = map(
         rule! {
-            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident ~ SET
-             ~ ( ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+            ALTER ~ NETWORK ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident ~ SET
+             ~ ( ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
@@ -1595,7 +1595,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let drop_network_policy = map(
         rule! {
-            DROP ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ NETWORK ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
         },
         |(_, _, _, opt_if_exists, name)| {
             let stmt = DropNetworkPolicyStmt {
@@ -1607,7 +1607,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let describe_network_policy = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ #ident
+            ( DESC | DESCRIBE ) ~ NETWORK ~ ^POLICY ~ ^#ident
         },
         |(_, _, _, name)| {
             Statement::DescNetworkPolicy(DescNetworkPolicyStmt {
@@ -1617,12 +1617,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let show_network_policies = value(
         Statement::ShowNetworkPolicies,
-        rule! { SHOW ~ NETWORK ~ POLICIES },
+        rule! { SHOW ~ NETWORK ~ ^POLICIES },
     );
 
     let create_password_policy = map(
         rule! {
-            CREATE ~ PASSWORD ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
+            CREATE ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ #password_set_options
         },
         |(_, _, _, opt_if_not_exists, name, set_options)| {
@@ -1636,7 +1636,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let alter_password_policy = map(
         rule! {
-            ALTER ~ PASSWORD ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+            ALTER ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
              ~ #alter_password_action
         },
         |(_, _, _, opt_if_exists, name, action)| {
@@ -1650,7 +1650,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let drop_password_policy = map(
         rule! {
-            DROP ~ PASSWORD ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
         },
         |(_, _, _, opt_if_exists, name)| {
             let stmt = DropPasswordPolicyStmt {
@@ -1662,7 +1662,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let describe_password_policy = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ PASSWORD ~ POLICY ~ #ident
+            ( DESC | DESCRIBE ) ~ PASSWORD ~ ^POLICY ~ ^#ident
         },
         |(_, _, _, name)| {
             Statement::DescPasswordPolicy(DescPasswordPolicyStmt {
@@ -1672,7 +1672,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let show_password_policies = map(
         rule! {
-            SHOW ~ PASSWORD ~ POLICIES ~ #show_options?
+            SHOW ~ PASSWORD ~ ^POLICIES ~ ^#show_options?
         },
         |(_, _, _, show_options)| Statement::ShowPasswordPolicies { show_options },
     );
@@ -3107,25 +3107,25 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let set_network_policy = map(
         rule! {
-            SET ~ NETWORK ~ POLICY ~ "=" ~ #literal_string
+            SET ~ NETWORK ~ ^POLICY ~ ^"=" ~ ^#literal_string
         },
         |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
     );
     let unset_network_policy = map(
         rule! {
-            UNSET ~ NETWORK ~ POLICY
+            UNSET ~ NETWORK ~ ^POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
     let set_password_policy = map(
         rule! {
-            SET ~ PASSWORD ~ POLICY ~ "=" ~ #literal_string
+            SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
         },
         |(_, _, _, _, policy)| UserOptionItem::SetPasswordPolicy(policy),
     );
     let unset_password_policy = map(
         rule! {
-            UNSET ~ PASSWORD ~ POLICY
+            UNSET ~ PASSWORD ~ ^POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetPasswordPolicy,
     );
@@ -3298,18 +3298,18 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
 pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
     map(
         rule! {
-             ( PASSWORD_MIN_LENGTH ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ #literal_u64 ) ?
-             ~ ( PASSWORD_HISTORY ~ Eq ~ #literal_u64 ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( COMMENT ~ Eq ~ ^#literal_string)?
         },
         |(
             opt_min_length,
