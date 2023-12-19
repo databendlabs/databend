@@ -77,6 +77,7 @@ impl FuseTable {
         )
     }
 
+    #[allow(unused)]
     fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -146,7 +147,6 @@ impl FuseTable {
         put_cache: bool,
     ) -> Result<()> {
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
-        let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let topk = plan
             .push_downs
@@ -194,7 +194,6 @@ impl FuseTable {
             block_reader,
             plan,
             topk,
-            max_io_requests,
             index_reader,
             virtual_reader,
         )?;
@@ -214,22 +213,16 @@ impl FuseTable {
         block_reader: Arc<BlockReader>,
         plan: &DataSourcePlan,
         top_k: Option<TopK>,
-        max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let table_schema = self.schema_with_stream();
         match storage_format {
             FuseStorageFormat::Native => build_fuse_native_source_pipeline(
                 ctx,
-                table_schema,
                 pipeline,
                 block_reader,
-                max_threads,
                 plan,
                 top_k,
-                max_io_requests,
                 index_reader,
                 virtual_reader,
             ),
@@ -238,8 +231,6 @@ impl FuseTable {
                 pipeline,
                 block_reader,
                 plan,
-                max_threads,
-                max_io_requests,
                 index_reader,
                 virtual_reader,
             ),
