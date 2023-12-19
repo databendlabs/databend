@@ -19,4 +19,11 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
+
+# If RUN_DIR is tpcds, run benchmark tests
+if [ "$RUN_DIR" == "--run_dir tpcds" ]; then
+  ./target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8 --bench
+  exit 0
+fi
+
 target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee --enable_sandbox --parallel 8
