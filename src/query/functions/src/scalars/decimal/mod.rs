@@ -20,6 +20,7 @@ mod math;
 pub(crate) use arithmetic::register_decimal_arithmetic;
 pub(crate) use cast::register_decimal_to_float;
 pub(crate) use cast::register_decimal_to_int;
+pub(crate) use cast::register_decimal_to_string;
 pub(crate) use cast::register_to_decimal;
 pub(crate) use comparison::register_decimal_compare_op;
 pub(crate) use math::register_decimal_math;
