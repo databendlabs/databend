@@ -413,6 +413,7 @@ impl Binder {
         // Take FUSE engine AS default engine
         let engine = engine.unwrap_or(Engine::Fuse);
         let mut options: BTreeMap<String, String> = BTreeMap::new();
+        let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -525,7 +526,7 @@ impl Binder {
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
-                        options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
+                        engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
                         (Arc::new(table_schema), vec![])
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -622,6 +623,7 @@ impl Binder {
             table,
             schema: schema.clone(),
             engine,
+            engine_options,
             storage_params,
             read_only_attach: false,
             part_prefix,
@@ -701,6 +703,7 @@ impl Binder {
             table,
             schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            engine_options: BTreeMap::new(),
             storage_params: Some(sp),
             read_only_attach: stmt.read_only,
             part_prefix,
