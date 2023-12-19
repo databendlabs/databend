@@ -751,7 +751,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Box<RuntimeFilterInfo> {
+    fn get_runtime_filter_with_id(&self, _id: IndexType) -> RuntimeFilterInfo {
         todo!()
     }
 

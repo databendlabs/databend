@@ -112,8 +112,7 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
-    pub(in crate::sessions) runtime_filters:
-        Arc<RwLock<HashMap<IndexType, Box<RuntimeFilterInfo>>>>,
+    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
 }
 
 impl QueryContextShared {

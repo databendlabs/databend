@@ -31,7 +31,7 @@ use crate::FusePartInfo;
 pub fn runtime_filter_pruner(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
-    filters: &Vec<Box<Expr<String>>>,
+    filters: &Vec<Expr<String>>,
     func_ctx: &FunctionContext,
 ) -> Result<bool> {
     if filters.is_empty() {

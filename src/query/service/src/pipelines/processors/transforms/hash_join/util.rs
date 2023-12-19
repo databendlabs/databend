@@ -136,7 +136,7 @@ pub(crate) fn bloom_filter(
     Ok(None)
 }
 
-// Deduplicate build key colum
+// Deduplicate build key column
 pub(crate) fn dedup_build_key_column(
     func_ctx: &FunctionContext,
     data_blocks: &[DataBlock],
@@ -148,7 +148,7 @@ pub(crate) fn dedup_build_key_column(
         if block.num_columns() == 0 {
             continue;
         }
-        let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
         let column = evaluator
             .run(build_key)?
             .convert_to_full_column(build_key.data_type(), block.num_rows());
@@ -180,7 +180,7 @@ pub(crate) fn dedup_build_key_column(
 
     // Deduplicate build key column
     let empty_key_block = DataBlock::empty();
-    let evaluator = Evaluator::new(&empty_key_block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let evaluator = Evaluator::new(&empty_key_block, func_ctx, &BUILTIN_FUNCTIONS);
     Ok(Some(evaluator.run(&type_check::check(
         &distinct_list,
         &BUILTIN_FUNCTIONS,

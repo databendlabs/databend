@@ -138,12 +138,12 @@ impl DeserializeDataTransform {
             let bloom_filters = bloom_filters
                 .into_iter()
                 .filter_map(|filter| {
-                    let name = filter.as_ref().0.as_str();
+                    let name = filter.0.as_str();
                     // Some probe keys are not in the schema, they are derived from expressions.
                     self.src_schema
                         .index_of(name)
                         .ok()
-                        .and_then(|idx| Some((idx, (filter).1.clone())))
+                        .map(|idx| (idx, filter.1.clone()))
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
@@ -154,7 +154,7 @@ impl DeserializeDataTransform {
 
         let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
         for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
-            let probe_block_entry = data_block.get_by_offset(*idx as usize);
+            let probe_block_entry = data_block.get_by_offset(*idx);
             let probe_column = probe_block_entry
                 .value
                 .convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());

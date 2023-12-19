@@ -233,7 +233,7 @@ impl Processor for ReadNativeDataSource<false> {
                 .get_runtime_filter_with_id(self.table_index);
             let filters = filters.get_inlist();
             for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
+                if runtime_filter_pruner(self.table_schema.clone(), part, filters, &self.func_ctx)?
                 {
                     continue;
                 }
