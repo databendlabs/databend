@@ -67,8 +67,8 @@ impl AsyncSystemTable for VirtualColumnsTable {
         let mut database_names = Vec::with_capacity(virtual_column_metas.len());
         let mut table_names = Vec::with_capacity(virtual_column_metas.len());
         let mut virtual_columns = Vec::with_capacity(virtual_column_metas.len());
-        let mut created_ons = Vec::with_capacity(virtual_column_metas.len());
-        let mut updated_ons = Vec::with_capacity(virtual_column_metas.len());
+        let mut created_on_columns = Vec::with_capacity(virtual_column_metas.len());
+        let mut updated_on_columns = Vec::with_capacity(virtual_column_metas.len());
         if !virtual_column_metas.is_empty() {
             let mut virtual_column_meta_map: HashMap<MetaId, VirtualColumnMeta> =
                 virtual_column_metas
@@ -90,8 +90,8 @@ impl AsyncSystemTable for VirtualColumnsTable {
                                 .as_bytes()
                                 .to_vec(),
                         );
-                        created_ons.push(virtual_column_meta.created_on.timestamp_micros());
-                        updated_ons
+                        created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
+                        updated_on_columns
                             .push(virtual_column_meta.updated_on.map(|u| u.timestamp_micros()));
                     }
                 }
@@ -102,8 +102,8 @@ impl AsyncSystemTable for VirtualColumnsTable {
             StringType::from_data(database_names),
             StringType::from_data(table_names),
             StringType::from_data(virtual_columns),
-            TimestampType::from_data(created_ons),
-            TimestampType::from_opt_data(updated_ons),
+            TimestampType::from_data(created_on_columns),
+            TimestampType::from_opt_data(updated_on_columns),
         ]))
     }
 }
