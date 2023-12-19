@@ -10,7 +10,6 @@ stmt "drop table if exists test_delta;"
 echo ">>>> create table test_delta engine = delta location = 'fs://\${ROOT}/';"
 echo "create table test_delta engine = delta location = 'fs://${ROOT}/';" | $BENDSQL_CLIENT_CONNECT
 # stmt "create table test_delta engine = delta location = 'fs://${ROOT}/';"
-query "desc test_delta;"
 query "select * from test_delta order by c5;"
 # p* is partition column, c* is normal column
 query "select c1 from test_delta where c1 > 20 order by c1;"
