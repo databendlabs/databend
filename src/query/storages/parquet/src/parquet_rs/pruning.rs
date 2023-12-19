@@ -19,6 +19,7 @@ use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -117,6 +118,7 @@ impl ParquetRSPruner {
         &self,
         meta: &ParquetMetaData,
         stats: Option<&[StatisticsOfColumns]>,
+        partition_values: Option<&HashMap<String, Scalar>>,
     ) -> Result<(Vec<usize>, Vec<bool>)> {
         let default_selection = (0..meta.num_row_groups()).collect();
         let default_omits = vec![false; meta.num_row_groups()];
@@ -132,10 +134,16 @@ impl ParquetRSPruner {
                 let mut omits = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep(row_group, None) {
+                        if pruner.should_keep_with_partition_columns(
+                            row_group,
+                            partition_values.as_deref(),
+                        ) {
                             selection.push(i);
 
-                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            let omit = !inverted_pruner.should_keep_with_partition_columns(
+                                row_group,
+                                partition_values.as_deref(),
+                            );
                             omits.push(omit);
                         }
                     }
@@ -146,10 +154,16 @@ impl ParquetRSPruner {
                     Some(&self.predicate_columns),
                 ) {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep(row_group, None) {
+                        if pruner.should_keep_with_partition_columns(
+                            row_group,
+                            partition_values.as_deref(),
+                        ) {
                             selection.push(i);
 
-                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            let omit = !inverted_pruner.should_keep_with_partition_columns(
+                                row_group,
+                                partition_values.as_deref(),
+                            );
                             omits.push(omit);
                         }
                     }
@@ -168,6 +182,7 @@ impl ParquetRSPruner {
         &self,
         meta: &ParquetMetaData,
         row_groups: &[usize],
+        partition_values: Option<&HashMap<String, Scalar>>,
     ) -> Result<Option<RowSelection>> {
         if !self.prune_pages {
             return Ok(None);
@@ -207,9 +222,10 @@ impl ParquetRSPruner {
                             let page_num_rows = pages_num_rows[page_idx];
                             match stat {
                                 Some(s) => {
-                                    if !pruner
-                                        .should_keep(&HashMap::from([(*col_idx as u32, s)]), None)
-                                    {
+                                    if !pruner.should_keep_with_partition_columns(
+                                        &HashMap::from([(*col_idx as u32, s)]),
+                                        partition_values,
+                                    ) {
                                         sel_of_cur_col.push(RowSelector::skip(page_num_rows));
                                     } else {
                                         sel_of_cur_col.push(RowSelector::select(page_num_rows));

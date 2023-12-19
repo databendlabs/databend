@@ -80,13 +80,17 @@ impl ParquetPredicate {
     pub fn evaluate(
         &self,
         batch: &RecordBatch,
-        partition_block_entries: Vec<BlockEntry>,
+        partition_block_entries: Option<Vec<BlockEntry>>,
     ) -> Result<BooleanArray> {
         let data_schema = DataSchema::from(&self.schema);
         let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
-        let mut columns = block.columns().to_vec();
-        columns.extend_from_slice(&partition_block_entries);
-        let block = DataBlock::new(columns, block.num_rows());
+        let block = if let Some(partition_block_entries) = partition_block_entries {
+            let mut columns = block.columns().to_vec();
+            columns.extend_from_slice(&partition_block_entries);
+            DataBlock::new(columns, block.num_rows())
+        } else {
+            block
+        };
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
     }
