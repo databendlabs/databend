@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -52,8 +51,6 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
 
     output: Arc<OutputPort>,
     output_data: Option<(Vec<PartInfoPtr>, Vec<DataSource>)>,
-    partitions: StealablePartitions,
-
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
@@ -69,7 +66,6 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         table_schema: Arc<TableSchema>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
-        partitions: StealablePartitions,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
@@ -85,7 +81,6 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 block_reader,
                 finished: false,
                 output_data: None,
-                partitions,
                 index_reader,
                 virtual_reader,
                 table_schema,
@@ -102,7 +97,6 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 block_reader,
                 finished: false,
                 output_data: None,
-                partitions,
                 index_reader,
                 virtual_reader,
                 table_schema,

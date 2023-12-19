@@ -156,9 +156,6 @@ pub fn build_fuse_parquet_source_pipeline(
 
     match block_reader.support_blocking_api() {
         true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
-
             for i in 0..max_threads {
                 let output = OutputPort::create();
                 source_builder.add_source(
@@ -170,7 +167,6 @@ pub fn build_fuse_parquet_source_pipeline(
                         table_schema.clone(),
                         output,
                         block_reader.clone(),
-                        partitions.clone(),
                         index_reader.clone(),
                         virtual_reader.clone(),
                     )?,
@@ -180,10 +176,6 @@ pub fn build_fuse_parquet_source_pipeline(
         }
         false => {
             info!("read block data adjust max io requests:{}", max_io_requests);
-
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
-
             for i in 0..max_io_requests {
                 let output = OutputPort::create();
                 source_builder.add_source(
@@ -195,7 +187,6 @@ pub fn build_fuse_parquet_source_pipeline(
                         table_schema.clone(),
                         output,
                         block_reader.clone(),
-                        partitions.clone(),
                         index_reader.clone(),
                         virtual_reader.clone(),
                     )?,
