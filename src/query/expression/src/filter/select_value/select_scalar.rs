@@ -32,7 +32,7 @@ use crate::Scalar;
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     // Select indices by comparing two scalars.
-    pub fn select_scalars(
+    pub(crate) fn select_scalars(
         &self,
         op: &SelectOp,
         left: Scalar,
@@ -40,8 +40,8 @@ impl<'a> Selector<'a> {
         data_type: DataType,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
@@ -50,8 +50,8 @@ impl<'a> Selector<'a> {
                 return Ok(self.select_null(
                     true_selection,
                     false_selection.0,
-                    true_idx,
-                    false_idx,
+                    mutable_true_idx,
+                    mutable_false_idx,
                     select_strategy,
                     count,
                 ));
@@ -110,28 +110,28 @@ impl<'a> Selector<'a> {
             result,
             true_selection,
             false_selection,
-            true_idx,
-            false_idx,
+            mutable_true_idx,
+            mutable_false_idx,
             select_strategy,
             count,
         );
         Ok(count)
     }
 
-    pub fn select_null(
+    pub(crate) fn select_null(
         &self,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
-        true_start_idx: &mut usize,
-        false_start_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let mut false_idx = *false_start_idx;
+        let mut false_idx = *mutable_false_idx;
         match select_strategy {
             SelectStrategy::True => unsafe {
-                let start = *true_start_idx;
-                let end = *true_start_idx + count;
+                let start = *mutable_true_idx;
+                let end = *mutable_true_idx + count;
                 for i in start..end {
                     let idx = *true_selection.get_unchecked(i);
                     *false_selection.get_unchecked_mut(false_idx) = idx;
@@ -139,8 +139,8 @@ impl<'a> Selector<'a> {
                 }
             },
             SelectStrategy::False => unsafe {
-                let start = *false_start_idx;
-                let end = *false_start_idx + count;
+                let start = *mutable_false_idx;
+                let end = *mutable_false_idx + count;
                 for i in start..end {
                     let idx = *false_selection.get_unchecked(i);
                     *false_selection.get_unchecked_mut(false_idx) = idx;
@@ -154,7 +154,7 @@ impl<'a> Selector<'a> {
                 }
             },
         }
-        *false_start_idx = false_idx;
+        *mutable_false_idx = false_idx;
         0
     }
 
@@ -163,8 +163,8 @@ impl<'a> Selector<'a> {
         scalar: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
@@ -175,8 +175,8 @@ impl<'a> Selector<'a> {
                 scalar,
                 true_selection,
                 false_selection.0,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )
@@ -185,8 +185,8 @@ impl<'a> Selector<'a> {
                 scalar,
                 true_selection,
                 false_selection.0,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )
@@ -195,8 +195,8 @@ impl<'a> Selector<'a> {
                 scalar,
                 true_selection,
                 false_selection.0,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )
@@ -208,17 +208,17 @@ impl<'a> Selector<'a> {
         scalar: bool,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
-        true_start_idx: &mut usize,
-        false_start_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let mut true_idx = *true_start_idx;
-        let mut false_idx = *false_start_idx;
+        let mut true_idx = *mutable_true_idx;
+        let mut false_idx = *mutable_false_idx;
         match select_strategy {
             SelectStrategy::True => unsafe {
-                let start = *true_start_idx;
-                let end = *true_start_idx + count;
+                let start = *mutable_true_idx;
+                let end = *mutable_true_idx + count;
                 if scalar {
                     if TRUE {
                         for i in start..end {
@@ -236,8 +236,8 @@ impl<'a> Selector<'a> {
                 }
             },
             SelectStrategy::False => unsafe {
-                let start = *false_start_idx;
-                let end = *false_start_idx + count;
+                let start = *mutable_false_idx;
+                let end = *mutable_false_idx + count;
                 if scalar {
                     if TRUE {
                         for i in start..end {
@@ -270,10 +270,10 @@ impl<'a> Selector<'a> {
                 }
             }
         }
-        let true_count = true_idx - *true_start_idx;
-        let false_count = false_idx - *false_start_idx;
-        *true_start_idx = true_idx;
-        *false_start_idx = false_idx;
+        let true_count = true_idx - *mutable_true_idx;
+        let false_count = false_idx - *mutable_false_idx;
+        *mutable_true_idx = true_idx;
+        *mutable_false_idx = false_idx;
         if TRUE {
             true_count
         } else {
@@ -288,7 +288,7 @@ impl<'a> Selector<'a> {
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
+        mutable_true_idx: &mut usize,
         false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
@@ -301,7 +301,7 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection.0,
-                true_idx,
+                mutable_true_idx,
                 false_idx,
                 select_strategy,
                 count,
@@ -312,7 +312,7 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection.0,
-                true_idx,
+                mutable_true_idx,
                 false_idx,
                 select_strategy,
                 count,
@@ -323,7 +323,7 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection.0,
-                true_idx,
+                mutable_true_idx,
                 false_idx,
                 select_strategy,
                 count,
@@ -338,18 +338,18 @@ impl<'a> Selector<'a> {
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
-        true_start_idx: &mut usize,
-        false_start_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
         let ret = empty_array_compare_value(op);
-        let mut true_idx = *true_start_idx;
-        let mut false_idx = *false_start_idx;
+        let mut true_idx = *mutable_true_idx;
+        let mut false_idx = *mutable_false_idx;
         match select_strategy {
             SelectStrategy::True => unsafe {
-                let start = *true_start_idx;
-                let end = *true_start_idx + count;
+                let start = *mutable_true_idx;
+                let end = *mutable_true_idx + count;
                 match validity {
                     Some(validity) => {
                         for i in start..end {
@@ -381,8 +381,8 @@ impl<'a> Selector<'a> {
                 }
             },
             SelectStrategy::False => unsafe {
-                let start = *false_start_idx;
-                let end = *false_start_idx + count;
+                let start = *mutable_false_idx;
+                let end = *mutable_false_idx + count;
                 match validity {
                     Some(validity) => {
                         for i in start..end {
@@ -443,10 +443,10 @@ impl<'a> Selector<'a> {
                 }
             },
         }
-        let true_count = true_idx - *true_start_idx;
-        let false_count = false_idx - *false_start_idx;
-        *true_start_idx = true_idx;
-        *false_start_idx = false_idx;
+        let true_count = true_idx - *mutable_true_idx;
+        let false_count = false_idx - *mutable_false_idx;
+        *mutable_true_idx = true_idx;
+        *mutable_false_idx = false_idx;
         if TRUE {
             true_count
         } else {

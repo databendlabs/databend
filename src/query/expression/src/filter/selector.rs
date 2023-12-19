@@ -59,15 +59,15 @@ impl<'a> Selector<'a> {
         true_selection: &mut [u32],
         false_selection: &mut [u32],
     ) -> Result<usize> {
-        let mut true_idx = 0;
-        let mut false_idx = 0;
+        let mut mutable_true_idx = 0;
+        let mut mutable_false_idx = 0;
         self.process_select_expr(
             select_expr,
             None,
             true_selection,
             (false_selection, false),
-            &mut true_idx,
-            &mut false_idx,
+            &mut mutable_true_idx,
+            &mut mutable_false_idx,
             SelectStrategy::All,
             self.num_rows,
         )
@@ -75,14 +75,14 @@ impl<'a> Selector<'a> {
 
     // Process `SelectExpr`.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_select_expr(
+    fn process_select_expr(
         &self,
         select_expr: &SelectExpr,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
@@ -92,8 +92,8 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )?,
@@ -102,8 +102,8 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )?,
@@ -114,8 +114,8 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )?,
@@ -124,8 +124,8 @@ impl<'a> Selector<'a> {
                 validity,
                 true_selection,
                 false_selection,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )?,
@@ -134,8 +134,8 @@ impl<'a> Selector<'a> {
                 data_type,
                 true_selection,
                 false_selection,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )?,
@@ -144,8 +144,8 @@ impl<'a> Selector<'a> {
                 data_type,
                 true_selection,
                 false_selection,
-                true_idx,
-                false_idx,
+                mutable_true_idx,
+                mutable_false_idx,
                 select_strategy,
                 count,
             )?,
@@ -156,19 +156,19 @@ impl<'a> Selector<'a> {
 
     // Process SelectExpr::And.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_and(
+    fn process_and(
         &self,
         exprs: &Vec<SelectExpr>,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         mut select_strategy: SelectStrategy,
         mut count: usize,
     ) -> Result<usize> {
-        let mut temp_true_idx = *true_idx;
-        let mut temp_false_idx = *false_idx;
+        let mut temp_mutable_true_idx = *mutable_true_idx;
+        let mut temp_mutable_false_idx = *mutable_false_idx;
         let exprs_len = exprs.len();
         for (i, expr) in exprs.iter().enumerate() {
             let true_count = self.process_select_expr(
@@ -176,8 +176,8 @@ impl<'a> Selector<'a> {
                 validity.clone(),
                 true_selection,
                 (false_selection.0, false_selection.1),
-                &mut temp_true_idx,
-                &mut temp_false_idx,
+                &mut temp_mutable_true_idx,
+                &mut temp_mutable_false_idx,
                 select_strategy,
                 count,
             )?;
@@ -188,34 +188,34 @@ impl<'a> Selector<'a> {
             }
             count = true_count;
             if count == 0 {
-                *true_idx = temp_true_idx;
+                *mutable_true_idx = temp_mutable_true_idx;
                 break;
             }
             if i != exprs_len - 1 {
-                temp_true_idx = *true_idx;
+                temp_mutable_true_idx = *mutable_true_idx;
             } else {
-                *true_idx = temp_true_idx;
+                *mutable_true_idx = temp_mutable_true_idx;
             }
         }
-        *false_idx = temp_false_idx;
+        *mutable_false_idx = temp_mutable_false_idx;
         Ok(count)
     }
 
     // Process SelectExpr::Or.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_or(
+    fn process_or(
         &self,
         exprs: &Vec<SelectExpr>,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         mut select_strategy: SelectStrategy,
         mut count: usize,
     ) -> Result<usize> {
-        let mut temp_true_idx = *true_idx;
-        let mut temp_false_idx = *false_idx;
+        let mut temp_mutable_true_idx = *mutable_true_idx;
+        let mut temp_mutable_false_idx = *mutable_false_idx;
         let exprs_len = exprs.len();
         for (i, expr) in exprs.iter().enumerate() {
             let true_count = self.process_select_expr(
@@ -223,8 +223,8 @@ impl<'a> Selector<'a> {
                 validity.clone(),
                 true_selection,
                 (false_selection.0, true),
-                &mut temp_true_idx,
-                &mut temp_false_idx,
+                &mut temp_mutable_true_idx,
+                &mut temp_mutable_false_idx,
                 select_strategy,
                 count,
             )?;
@@ -235,23 +235,23 @@ impl<'a> Selector<'a> {
             }
             count -= true_count;
             if count == 0 {
-                *false_idx = temp_false_idx;
+                *mutable_false_idx = temp_mutable_false_idx;
                 break;
             }
             if i != exprs_len - 1 {
-                temp_false_idx = *false_idx;
+                temp_mutable_false_idx = *mutable_false_idx;
             } else {
-                *false_idx = temp_false_idx;
+                *mutable_false_idx = temp_mutable_false_idx;
             }
         }
-        let count = temp_true_idx - *true_idx;
-        *true_idx = temp_true_idx;
+        let count = temp_mutable_true_idx - *mutable_true_idx;
+        *mutable_true_idx = temp_mutable_true_idx;
         Ok(count)
     }
 
     // Process SelectExpr::Compare.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_compare(
+    fn process_compare(
         &self,
         select_op: &SelectOp,
         exprs: &[Expr],
@@ -259,8 +259,8 @@ impl<'a> Selector<'a> {
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
@@ -281,8 +281,8 @@ impl<'a> Selector<'a> {
             right_data_type,
             true_selection,
             false_selection,
-            true_idx,
-            false_idx,
+            mutable_true_idx,
+            mutable_false_idx,
             select_strategy,
             count,
         )
@@ -290,14 +290,14 @@ impl<'a> Selector<'a> {
 
     // Process SelectExpr::Others.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_others(
+    fn process_others(
         &self,
         expr: &Expr,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
@@ -317,8 +317,8 @@ impl<'a> Selector<'a> {
                     &data_type,
                     true_selection,
                     false_selection,
-                    true_idx,
-                    false_idx,
+                    mutable_true_idx,
+                    mutable_false_idx,
                     select_strategy,
                     count,
                 )
@@ -363,8 +363,8 @@ impl<'a> Selector<'a> {
                     &data_type,
                     true_selection,
                     false_selection,
-                    true_idx,
-                    false_idx,
+                    mutable_true_idx,
+                    mutable_false_idx,
                     select_strategy,
                     count,
                 )
@@ -388,8 +388,8 @@ impl<'a> Selector<'a> {
                     dest_type,
                     true_selection,
                     false_selection,
-                    true_idx,
-                    false_idx,
+                    mutable_true_idx,
+                    mutable_false_idx,
                     select_strategy,
                     count,
                 )
@@ -419,8 +419,8 @@ impl<'a> Selector<'a> {
                     return_type,
                     true_selection,
                     false_selection,
-                    true_idx,
-                    false_idx,
+                    mutable_true_idx,
+                    mutable_false_idx,
                     select_strategy,
                     count,
                 )
@@ -433,14 +433,14 @@ impl<'a> Selector<'a> {
 
     // Process SelectExpr::BooleanColumn.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_boolean_column(
+    fn process_boolean_column(
         &self,
         id: usize,
         data_type: &DataType,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
@@ -450,8 +450,8 @@ impl<'a> Selector<'a> {
             data_type,
             true_selection,
             false_selection,
-            true_idx,
-            false_idx,
+            mutable_true_idx,
+            mutable_false_idx,
             select_strategy,
             count,
         )
@@ -459,14 +459,14 @@ impl<'a> Selector<'a> {
 
     // Process SelectExpr::BooleanScalar.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_boolean_constant(
+    fn process_boolean_constant(
         &self,
         constant: Scalar,
         data_type: &DataType,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
-        true_idx: &mut usize,
-        false_idx: &mut usize,
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
@@ -475,8 +475,8 @@ impl<'a> Selector<'a> {
             data_type,
             true_selection,
             false_selection,
-            true_idx,
-            false_idx,
+            mutable_true_idx,
+            mutable_false_idx,
             select_strategy,
             count,
         )
