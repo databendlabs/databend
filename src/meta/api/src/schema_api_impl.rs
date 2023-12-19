@@ -14,6 +14,8 @@
 
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -185,7 +187,6 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnPutRequest;
 use databend_common_meta_types::TxnRequest;
 use futures::TryStreamExt;
 use log::as_debug;
@@ -486,6 +487,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                     if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?)); // (db_id) -> db_meta
                 }
+
+                // add DbIdListKey if not exists
+                let dbid_idlist = DbIdListKey {
+                    tenant: tenant_dbname.tenant.clone(),
+                    db_name: tenant_dbname.db_name.clone(),
+                };
+                let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+                    get_pb_value(self, &dbid_idlist).await?;
+
+                if db_id_list_seq == 0 || db_id_list_opt.is_none() {
+                    warn!(
+                        "drop db:{:?}, db_id:{:?} has no DbIdListKey",
+                        tenant_dbname, db_id
+                    );
+
+                    let mut db_id_list = DbIdList::new();
+                    db_id_list.append(db_id);
+
+                    condition.push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
+                    // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+                    if_then.push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
+                };
             }
 
             let txn_req = TxnRequest {
@@ -796,7 +819,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // List tables by tenant, db_id, table_name.
         let dbid_tbname_idlist = DbIdListKey {
-            tenant: req.tenant,
+            tenant: req.tenant.clone(),
             // Using a empty db to to list all
             db_name: "".to_string(),
         };
@@ -864,6 +887,77 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         };
 
                         db_info_list.push(Arc::new(db));
+                    }
+                }
+            }
+        }
+
+        // `list_database` can list db which has no `DbIdListKey`
+        if include_drop_db {
+            // if `include_drop_db` is true, return all db info which not exist in db_info_list
+            let db_id_set: HashSet<u64> = db_info_list
+                .iter()
+                .map(|db_info| db_info.ident.db_id)
+                .collect();
+
+            let all_dbs = self.list_databases(req).await?;
+            for db_info in all_dbs {
+                if !db_id_set.contains(&db_info.ident.db_id) {
+                    warn!(
+                        "get db history db:{:?}, db_id:{:?} has no DbIdListKey",
+                        db_info.name_ident, db_info.ident.db_id
+                    );
+                    db_info_list.push(db_info);
+                }
+            }
+        } else {
+            // if `include_drop_db` is false, filter out db which drop_on time out of retention time
+            let db_id_set: HashSet<u64> = db_info_list
+                .iter()
+                .map(|db_info| db_info.ident.db_id)
+                .collect();
+
+            let all_dbs = self.list_databases(req).await?;
+            let mut add_dbinfo_map = HashMap::new();
+            let mut db_id_list = Vec::new();
+            for db_info in all_dbs {
+                if !db_id_set.contains(&db_info.ident.db_id) {
+                    warn!(
+                        "get db history db:{:?}, db_id:{:?} has no DbIdListKey",
+                        db_info.name_ident, db_info.ident.db_id
+                    );
+                    db_id_list.push(DatabaseId {
+                        db_id: db_info.ident.db_id,
+                    });
+                    add_dbinfo_map.insert(db_info.ident.db_id, db_info);
+                }
+            }
+            let inner_keys: Vec<String> = db_id_list
+                .iter()
+                .map(|db_id| db_id.to_string_key())
+                .collect();
+            let mut db_id_list_iter = db_id_list.into_iter();
+            for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
+                let db_meta_seq_meta_vec: Vec<(u64, Option<DatabaseMeta>)> =
+                    mget_pb_values(self, c).await?;
+
+                for (db_meta_seq, db_meta) in db_meta_seq_meta_vec {
+                    let db_id = db_id_list_iter.next().unwrap().db_id;
+                    if db_meta_seq == 0 || db_meta.is_none() {
+                        error!("get_database_history cannot find {:?} db_meta", db_id);
+                        continue;
+                    }
+                    let db_meta = db_meta.unwrap();
+                    // if include drop db, then no need to fill out of retention time db
+                    if is_drop_time_out_of_retention_time(&db_meta.drop_on, &now) {
+                        continue;
+                    }
+                    if let Some(db_info) = add_dbinfo_map.get(&db_id) {
+                        warn!(
+                            "get db history db:{:?}, db_id:{:?} has no DbIdListKey",
+                            db_info.name_ident, db_info.ident.db_id
+                        );
+                        db_info_list.push(db_info.clone());
                     }
                 }
             }
@@ -2525,6 +2619,31 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     }
                 }
 
+                // add TableIdListKey if not exist
+                {
+                    // get table id list from _fd_table_id_list/db_id/table_name
+                    let dbid_tbname_idlist = TableIdListKey {
+                        db_id,
+                        table_name: dbid_tbname.table_name.clone(),
+                    };
+                    let (tb_id_list_seq, _tb_id_list_opt): (_, Option<TableIdList>) =
+                        get_pb_value(self, &dbid_tbname_idlist).await?;
+                    if tb_id_list_seq == 0 {
+                        let mut tb_id_list = TableIdList::new();
+                        tb_id_list.append(table_id);
+
+                        warn!(
+                            "drop table:{:?}, table_id:{:?} has no TableIdList",
+                            dbid_tbname, table_id
+                        );
+
+                        condition.push(txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq));
+                        if_then.push(txn_op_put(
+                            &dbid_tbname_idlist,
+                            serialize_struct(&tb_id_list)?,
+                        ));
+                    }
+                }
                 let txn_req = TxnRequest {
                     condition,
                     if_then,
@@ -4176,14 +4295,7 @@ fn build_upsert_table_copied_file_info_conditions(
 
 fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     let expire_at = Some(SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60);
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: deduplicated_label,
-            value: 1_i8.to_le_bytes().to_vec(),
-            prev_value: false,
-            expire_at,
-        })),
-    }
+    TxnOp::put_with_expire(deduplicated_label, 1_i8.to_le_bytes().to_vec(), expire_at)
 }
 
 fn set_update_expire_operation(

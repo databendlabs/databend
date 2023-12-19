@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,15 +21,18 @@ use databend_common_meta_types::new_log_id;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Cmd;
+use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use log::info;
@@ -125,7 +128,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         key: String,
         seq: MatchSeq,
         value: Vec<u8>,
-        value_meta: Option<KVMeta>,
+        value_meta: Option<MetaSpec>,
         // want:
         prev: Option<SeqV<Vec<u8>>>,
         result: Option<SeqV<Vec<u8>>>,
@@ -139,14 +142,20 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
     ) -> T {
-        let m = meta.map(KVMeta::new_expire);
+        let m = meta.map(MetaSpec::new_expire);
         T {
             key: name.to_string(),
             seq,
             value: value.to_string().into_bytes(),
             value_meta: m.clone(),
             prev: prev.map(|(a, b)| SeqV::new(a, b.into())),
-            result: result.map(|(a, b)| SeqV::with_meta(a, m, b.into())),
+            result: result.map(|(a, b)| {
+                SeqV::with_meta(
+                    a,
+                    m.map(|m| m.to_kv_meta(&CmdContext::from_millis(0))),
+                    b.into(),
+                )
+            }),
         }
     }
 
@@ -281,7 +290,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(KVMeta::new_expire(now + 10)),
+                    value_meta: Some(MetaSpec::new_expire(now + 10)),
                 }),
                 &mut t,
                 None,
@@ -306,7 +315,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::Update(b"value_meta_bar".to_vec()),
-                    value_meta: Some(KVMeta::new_expire(now + 10)),
+                    value_meta: Some(MetaSpec::new_expire(now + 10)),
                 }),
                 &mut t,
                 None,
@@ -323,7 +332,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(KVMeta::new_expire(now + 20)),
+                    value_meta: Some(MetaSpec::new_expire(now + 20)),
                 }),
                 &mut t,
                 None,

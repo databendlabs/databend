@@ -57,7 +57,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
-    decimal::register(registry);
+    decimal::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
 }

@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,7 +26,6 @@ use ethnum::i256;
 use ethnum::AsI256;
 use itertools::Itertools;
 use num_traits::NumCast;
-use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -195,7 +196,17 @@ pub enum DecimalDataType {
     Decimal256(DecimalSize),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumAsInner,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum DecimalScalar {
     Decimal128(i128, DecimalSize),
     Decimal256(i256, DecimalSize),
@@ -240,7 +251,18 @@ pub enum DecimalDomain {
     Decimal256(SimpleDomain<i256>, DecimalSize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub struct DecimalSize {
     pub precision: u8,
     pub scale: u8,
@@ -282,8 +304,8 @@ pub trait Decimal:
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
-    fn from_u64(value: u64) -> Self;
-    fn from_i64(value: i64) -> Self;
+    fn from_i128<U: Into<i128>>(value: U) -> Self;
+
     fn de_binary(bytes: &mut &[u8]) -> Self;
 
     fn to_float32(self, scale: u8) -> f32;
@@ -419,12 +441,8 @@ impl Decimal for i128 {
         }
     }
 
-    fn from_u64(value: u64) -> Self {
-        value.to_i128().unwrap()
-    }
-
-    fn from_i64(value: i64) -> Self {
-        value.to_i128().unwrap()
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        value.into()
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -588,12 +606,8 @@ impl Decimal for i256 {
         value.as_i256()
     }
 
-    fn from_u64(value: u64) -> Self {
-        i256::from(value.to_i128().unwrap())
-    }
-
-    fn from_i64(value: i64) -> Self {
-        i256::from(value.to_i128().unwrap())
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        i256::from(value.into())
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {

@@ -17,7 +17,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Profile {
     /// The id of processor
     pub pid: usize,
@@ -33,6 +33,9 @@ pub struct Profile {
     /// The time spent to wait in nanoseconds, usually used to
     /// measure the time spent on waiting for I/O
     pub wait_time: AtomicU64,
+
+    pub exchange_rows: AtomicUsize,
+    pub exchange_bytes: AtomicUsize,
 }
 
 impl Profile {
@@ -42,9 +45,11 @@ impl Profile {
             p_name,
             cpu_time: AtomicU64::new(0),
             wait_time: AtomicU64::new(0),
+            exchange_rows: AtomicUsize::new(0),
+            exchange_bytes: AtomicUsize::new(0),
             plan_id: scope.as_ref().map(|x| x.id),
             plan_name: scope.as_ref().map(|x| x.name.clone()),
-            plan_parent_id: scope.as_ref().map(|x| x.parent_id),
+            plan_parent_id: scope.as_ref().and_then(|x| x.parent_id),
         }
     }
 }
@@ -60,6 +65,9 @@ pub struct PlanProfile {
     /// The time spent to wait in nanoseconds, usually used to
     /// measure the time spent on waiting for I/O
     pub wait_time: usize,
+
+    pub exchange_rows: usize,
+    pub exchange_bytes: usize,
 }
 
 impl PlanProfile {
@@ -70,17 +78,23 @@ impl PlanProfile {
             parent_id: profile.plan_parent_id,
             cpu_time: profile.cpu_time.load(Ordering::SeqCst) as usize,
             wait_time: profile.wait_time.load(Ordering::SeqCst) as usize,
+            exchange_rows: profile.exchange_rows.load(Ordering::SeqCst),
+            exchange_bytes: profile.exchange_bytes.load(Ordering::SeqCst),
         }
     }
 
     pub fn accumulate(&mut self, profile: &Profile) {
         self.cpu_time += profile.cpu_time.load(Ordering::SeqCst) as usize;
         self.wait_time += profile.wait_time.load(Ordering::SeqCst) as usize;
+        self.exchange_rows += profile.exchange_rows.load(Ordering::SeqCst);
+        self.exchange_bytes += profile.exchange_bytes.load(Ordering::SeqCst);
     }
 
     pub fn merge(&mut self, profile: &PlanProfile) {
         self.cpu_time += profile.cpu_time;
         self.wait_time += profile.wait_time;
+        self.exchange_rows += profile.exchange_rows;
+        self.exchange_bytes += profile.exchange_bytes;
     }
 }
 
@@ -109,14 +123,14 @@ impl Drop for PlanScopeGuard {
 pub struct PlanScope {
     pub id: u32,
     pub name: String,
-    pub parent_id: u32,
+    pub parent_id: Option<u32>,
 }
 
 impl PlanScope {
     pub fn create(id: u32, name: String) -> PlanScope {
         PlanScope {
             id,
-            parent_id: 0,
+            parent_id: None,
             name,
         }
     }

@@ -43,6 +43,22 @@ impl pb::TxnOp {
                 value,
                 prev_value: true,
                 expire_at,
+                ttl_ms: None,
+            })),
+        }
+    }
+
+    /// Create a txn operation that puts a record with ttl.
+    ///
+    /// `ttl` is relative expire time while `expire_at` is absolute expire time.
+    pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl_ms: Option<u64>) -> pb::TxnOp {
+        pb::TxnOp {
+            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
+                key: key.to_string(),
+                value,
+                prev_value: true,
+                expire_at: None,
+                ttl_ms,
             })),
         }
     }

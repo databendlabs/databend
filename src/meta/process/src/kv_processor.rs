@@ -218,6 +218,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             value,
             prev_value: p.prev_value,
             expire_at: p.expire_at,
+            ttl_ms: p.ttl_ms,
         };
 
         Ok(pr)

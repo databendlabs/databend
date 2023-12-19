@@ -15,5 +15,6 @@
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(binary_heap_as_slice)]
+#![feature(let_chains)]
 
 pub mod processors;

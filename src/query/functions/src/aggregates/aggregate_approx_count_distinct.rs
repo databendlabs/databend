@@ -31,8 +31,8 @@ use streaming_algorithms::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -82,12 +82,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.hll)
+        borsh_serialize_state(writer, &self.hll)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        let hll = deserialize_state(reader)?;
+        let hll = borsh_deserialize_state(reader)?;
         Ok(Self { hll })
     }
 }

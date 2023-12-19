@@ -570,6 +570,13 @@ impl DataBlock {
         }
         DataBlock::new_with_meta(columns, self.num_rows, self.meta)
     }
+
+    #[inline]
+    pub fn get_last_column(&self) -> &Column {
+        debug_assert!(!self.columns.is_empty());
+        debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
+        self.columns.last().unwrap().value.as_column().unwrap()
+    }
 }
 
 impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
