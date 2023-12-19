@@ -56,7 +56,7 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
         ParquetReadOptions::default()
             .with_prune_row_groups(prune)
             .with_prune_pages(false),
-        vec![]
+        vec![],
     )
     .unwrap();
 
