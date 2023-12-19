@@ -45,4 +45,4 @@ Error: APIError: ResponseError with 1065: error:
   |                                 ^ column c specified in USING clause does not exist in left table
 
 
-Error: APIError: ResponseError with 1025: Unknown table `default`.`t` in catalog 'default'
+Error: APIError: ResponseError with 1025: Unknown table 't'
