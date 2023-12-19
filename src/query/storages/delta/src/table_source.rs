@@ -177,7 +177,6 @@ impl Processor for DeltaTableSource {
                     self.partition_block_entries = partition_fields
                         .iter()
                         .map(|(f, v)| {
-
                             BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
                         })
                         .collect::<Vec<_>>();
