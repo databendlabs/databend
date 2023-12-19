@@ -13,13 +13,15 @@
 // limitations under the License.
 
 mod filter_executor;
-mod selection_op;
 mod select;
 mod select_expr;
 mod select_value;
+mod selection_op;
 mod selector;
 
 pub use filter_executor::FilterExecutor;
+pub use select_expr::build_select_expr;
+pub use select_expr::SelectExpr;
 pub use selection_op::empty_array_compare_value;
 pub use selection_op::selection_op;
 pub use selection_op::selection_op_boolean;
@@ -28,7 +30,5 @@ pub use selection_op::selection_op_tuple;
 pub use selection_op::selection_op_variant;
 pub use selection_op::tuple_compare_default_value;
 pub use selection_op::SelectOp;
-pub use select_expr::build_select_expr;
-pub use select_expr::SelectExpr;
 pub use selector::SelectStrategy;
 pub use selector::Selector;
