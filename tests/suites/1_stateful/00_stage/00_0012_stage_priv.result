@@ -27,4 +27,3 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege READ is r
 1	1
 2	2
 === check access user's local stage ===
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'system'.'stage' for user 'b'@'%' with roles [public]

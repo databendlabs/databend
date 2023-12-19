@@ -59,8 +59,6 @@ query T
 SHOW GRANTS FOR 'test-priv'
 ----
 GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-priv'@'%'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'test-priv'@'%'
 
 statement ok
 REVOKE SELECT ON a.* FROM 'test-priv'
@@ -69,8 +67,6 @@ query T
 SHOW GRANTS FOR 'test-priv'
 ----
 GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-priv'@'%'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'test-priv'@'%'
 
 statement ok
 REVOKE SELECT ON b.* FROM 'test-priv'

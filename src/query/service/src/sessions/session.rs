@@ -241,6 +241,11 @@ impl Session {
     }
 
     #[async_backtrace::framed]
+    pub async fn get_all_effective_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
+        self.privilege_mgr.get_all_effective_roles().await
+    }
+
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
