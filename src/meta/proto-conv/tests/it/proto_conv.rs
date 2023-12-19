@@ -224,8 +224,10 @@ fn new_index_meta() -> mt::IndexMeta {
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
         dropped_on: None,
         updated_on: None,
-        query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
+        original_query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
+        query: "SELECT a, SUM(b), t1._block_name FROM default.t1 WHERE a > 3 GROUP BY b, t1._block_name".to_string(),
         sync_creation: false,
+        user_defined_block_name:false,
     }
 }
 
@@ -457,7 +459,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         databend_common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("index:{buf:?}");
+        println!("index meta:{buf:?}");
     }
 
     // TableCopiedFileInfo

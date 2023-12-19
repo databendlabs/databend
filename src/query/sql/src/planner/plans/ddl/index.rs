@@ -25,9 +25,11 @@ pub struct CreateIndexPlan {
     pub if_not_exists: bool,
     pub index_type: TableIndexType,
     pub index_name: String,
+    pub original_query: String,
     pub query: String,
     pub table_id: MetaId,
     pub sync_creation: bool,
+    pub user_defined_block_name: bool,
 }
 
 /// Drop.
@@ -45,6 +47,5 @@ pub struct RefreshIndexPlan {
     pub limit: Option<u64>,
     pub table_info: TableInfo,
     pub query_plan: Box<Plan>,
-    pub user_defined_block_name: bool,
     pub segment_locs: Option<Vec<Location>>,
 }

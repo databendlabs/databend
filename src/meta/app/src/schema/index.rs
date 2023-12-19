@@ -101,10 +101,13 @@ pub struct IndexMeta {
     // if used in CreateIndexReq, `dropped_on` and `updated_on` MUST set to None.
     pub dropped_on: Option<DateTime<Utc>>,
     pub updated_on: Option<DateTime<Utc>>,
+    pub original_query: String,
     pub query: String,
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
+    // if user already use the internal column name `_block_name` in their sql.
+    pub user_defined_block_name: bool,
 }
 
 impl Default for IndexMeta {
@@ -115,8 +118,10 @@ impl Default for IndexMeta {
             created_on: Utc::now(),
             dropped_on: None,
             updated_on: None,
+            original_query: "".to_string(),
             query: "".to_string(),
             sync_creation: false,
+            user_defined_block_name: false,
         }
     }
 }

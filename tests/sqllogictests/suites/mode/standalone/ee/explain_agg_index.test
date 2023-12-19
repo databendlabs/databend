@@ -289,6 +289,39 @@ EvalScalar
                 ├── rewritten query: [selection: [index_col_0 (#0)]]
                 └── estimated rows: 0.00
 
+statement ok
+DROP AGGREGATING INDEX idx1
+
+statement ok
+CREATE AGGREGATING INDEX idx1 AS SELECT avg(a), sum(b) from t1
+
+query T
+EXPLAIN SELECT avg(a) from t1
+----
+EvalScalar
+├── output columns: [(sum(a) / if((count(a) = 0), 1, count(a))) (#4)]
+├── expressions: [sum(a) (#2) / CAST(if(CAST(count(a) (#3) = 0 AS Boolean NULL), 1, count(a) (#3)) AS UInt64 NULL)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [sum(a) (#2), count(a) (#3)]
+    ├── group by: []
+    ├── aggregate functions: [sum(a), count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── output columns: [sum(a) (#2), count(a) (#3)]
+        ├── group by: []
+        ├── aggregate functions: [sum(a), count()]
+        ├── estimated rows: 1.00
+        └── TableScan
+            ├── table: default.test_index_db.t1
+            ├── output columns: [a (#0)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
 # for sync aggregating index
 
 statement ok
