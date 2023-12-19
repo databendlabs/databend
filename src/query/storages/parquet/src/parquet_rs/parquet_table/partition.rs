@@ -97,6 +97,7 @@ impl ParquetRSTable {
             self.leaf_fields.clone(),
             &push_down,
             self.read_options,
+            vec![],
         )?);
 
         let copy_status = if matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable) {

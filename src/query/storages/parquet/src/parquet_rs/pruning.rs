@@ -57,6 +57,7 @@ impl ParquetRSPruner {
         leaf_fields: Arc<Vec<TableField>>,
         push_down: &Option<PushDownInfo>,
         options: ParquetReadOptions,
+        partition_columns: Vec<String>,
     ) -> Result<Self> {
         // Build `RangePruner` by `filter`.
         let filter = push_down.as_ref().and_then(|p| p.filters.as_ref());
@@ -74,11 +75,18 @@ impl ParquetRSPruner {
                 predicate_columns = filter_expr
                     .column_refs()
                     .into_keys()
-                    .map(|name| {
+                    .filter_map(|name| {
                         leaf_fields
                             .iter()
                             .position(|f| f.name.eq_ignore_ascii_case(&name))
-                            .unwrap()
+                            .or_else(|| {
+                                // check partition columns
+                                partition_columns
+                                    .iter()
+                                    .position(|c| c.eq_ignore_ascii_case(&name))
+                                    .unwrap();
+                                None
+                            })
                     })
                     .collect::<Vec<_>>();
                 predicate_columns.sort();
