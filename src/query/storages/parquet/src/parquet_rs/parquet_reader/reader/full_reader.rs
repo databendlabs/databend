@@ -68,6 +68,7 @@ pub struct ParquetRSFullReader {
 }
 
 impl ParquetRSFullReader {
+    // partition_fields is only used for delta table engine.
     pub async fn prepare_data_stream(
         &self,
         loc: &str,
