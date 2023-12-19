@@ -17,16 +17,24 @@ use crate::types::DataType;
 use crate::Expr;
 use crate::Scalar;
 
+// The `SelectExpr` is used to represent the predicates expression.
 #[derive(Clone, Debug)]
 pub enum SelectExpr {
+    // And SelectExprs.
     And(Vec<SelectExpr>),
+    // Or SelectExprs.
     Or(Vec<SelectExpr>),
+    // Compare operations: ((Equal | NotEqual | Gt | Lt | Gte | Lte), args, data type of args).
     Compare((SelectOp, Vec<Expr>, Vec<DataType>)),
+    // Other operations: for example, like, is_null, is_not_null, etc.
     Others(Expr),
+    // Boolean column: (column id, data type of column).
     BooleanColumn((usize, DataType)),
+    // Boolean scalar: (scalar, data type of scalar).
     BooleanScalar((Scalar, DataType)),
 }
 
+// Build `SelectExpr` from `Expr`, return the `SelectExpr` and whether the `SelectExpr` contains `Or` operation.
 pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
     match expr {
         Expr::FunctionCall {
