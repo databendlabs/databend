@@ -10,7 +10,7 @@
 >>>> drop table test_delta;
 >>>> drop connection if exists s3_conn;
 >>>> create connection s3_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' ENDPOINT_URL='http://127.0.0.1:9900';
->>>> create table test_delta engine = delta location = 's3://testbucket/admin/data/delta/delta-table/' connection_name = 's3_conn';
+>>>> create table test_delta engine = delta location = 's3://testbucket/admin/data/delta/simple/' connection_name = 's3_conn';
 >>>> select * from test_delta order by id;
 0
 1
@@ -21,6 +21,6 @@
 >>>> show create table test_delta;
 test_delta	CREATE TABLE `test_delta` (
   `id` INT NULL
-) ENGINE=DELTA CONNECTION_NAME='s3_conn' LOCATION='s3://testbucket/admin/data/delta/delta-table/'
+) ENGINE=DELTA CONNECTION_NAME='s3_conn' LOCATION='s3://testbucket/admin/data/delta/simple/'
 <<<<
 >>>> drop table test_delta;
