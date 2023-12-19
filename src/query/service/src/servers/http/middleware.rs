@@ -210,6 +210,8 @@ impl<E> HTTPSessionEndpoint<E> {
             node_id,
             deduplicate_label,
             user_agent,
+            req.method().to_string(),
+            req.uri().to_string(),
         ))
     }
 }
@@ -321,10 +323,10 @@ impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
         let output = self.ep.call(req).await?;
         let resp = output.into_response();
         let status_code = resp.status().to_string();
-        let duration = start_time.elapsed().as_secs_f64();
+        let duration = start_time.elapsed();
         metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
         metrics_observe_http_response_duration(method.clone(), self.api.clone(), duration);
-        if duration > 60.0 {
+        if duration.as_secs_f64() > 60.0 {
             // TODO: replace this into histogram
             metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
         }
