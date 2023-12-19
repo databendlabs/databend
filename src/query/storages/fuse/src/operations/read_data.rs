@@ -149,55 +149,6 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let snapshot_loc = plan.statistics.snapshot.clone();
-        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
-
-        for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(SegmentLocation {
-                    segment_idx: lazy_part_info.segment_index,
-                    location: lazy_part_info.segment_location.clone(),
-                    snapshot_loc: snapshot_loc.clone(),
-                });
-            }
-        }
-
-        if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-            let dal = self.operator.clone();
-
-            // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_schema = table_schema.clone();
-                let ctx = query_ctx.clone();
-                let dal = dal.clone();
-                let push_downs = push_downs.clone();
-                // let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(
-                            ctx,
-                            dal,
-                            push_downs,
-                            table_schema,
-                            lazy_init_segments,
-                            0,
-                        )
-                        .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
-
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        }
-
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
