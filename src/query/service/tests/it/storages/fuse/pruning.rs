@@ -94,6 +94,7 @@ async fn test_block_pruner() -> Result<()> {
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),
