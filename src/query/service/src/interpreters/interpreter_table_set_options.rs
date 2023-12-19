@@ -90,23 +90,27 @@ impl Interpreter for SetOptionsInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
         let table = self.plan.table.as_str();
-        let tbl = catalog
+        let tbl = match catalog
             .get_table(self.ctx.get_tenant().as_str(), database, table)
             .await
-            .ok();
-
-        let table = if let Some(table) = &tbl {
-            // check mutability
-            table.check_mutable()?;
-            table
-        } else {
-            return Err(ErrorCode::UnknownTable(format!(
-                "Unknown table `{}`.`{}` in catalog '{}'",
-                database,
-                self.plan.table.as_str(),
-                &catalog.name()
-            )));
+        {
+            Ok(table) => table,
+            Err(error) => {
+                if matches!(error.code(), ErrorCode::UnknownTable) {
+                    return Err(ErrorCode::UnknownTable(format!(
+                        "Unknown table `{}`.`{}` in catalog '{}'",
+                        database,
+                        self.plan.table.as_str(),
+                        &catalog.name()
+                    )));
+                } else {
+                    return Err(error);
+                }
+            }
         };
+
+        // check mutability
+        table.check_mutable()?;
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
