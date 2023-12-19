@@ -55,6 +55,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
@@ -239,9 +240,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
-    fn set_runtime_filter(&self, filters: (usize, Vec<Expr<String>>));
+    fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
-    fn get_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+    fn get_runtime_filter_with_id(&self, id: usize) -> Box<RuntimeFilterInfo>;
 
     fn has_runtime_filters(&self, id: usize) -> bool;
 }

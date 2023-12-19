@@ -90,6 +90,7 @@ use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -908,36 +909,36 @@ impl TableContext for QueryContext {
         queries_profile
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, Vec<Expr<String>>)) {
+    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
             Entry::Vacant(v) => {
-                info!(
-                    "set {:?} runtime filters for {:?}",
-                    filters.1.len(),
-                    filters.0
-                );
-                v.insert(filters.1);
+                v.insert(Box::new(filters.1));
             }
             Entry::Occupied(mut v) => {
-                info!(
-                    "add {:?} runtime filters for {:?}",
-                    filters.1.len(),
-                    filters.0
-                );
-                v.get_mut().extend(filters.1);
+                for filter in filters.1.get_inlist() {
+                    v.get_mut().add_inlist(*filter.clone());
+                }
+                for filter in filters.1.blooms() {
+                    v.get_mut().add_bloom(filter);
+                }
             }
         }
     }
 
-    fn get_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+    fn get_runtime_filter_with_id(&self, id: IndexType) -> Box<RuntimeFilterInfo> {
         let runtime_filters = self.shared.runtime_filters.read();
-        // If don't find the runtime filters, return empty vector.
-        runtime_filters.get(&id).cloned().unwrap_or_default()
+        match runtime_filters.get(&id) {
+            Some(v) => (*v).clone(),
+            None => Box::new(RuntimeFilterInfo::new()),
+        }
     }
 
     fn has_runtime_filters(&self, id: usize) -> bool {
-        self.shared.runtime_filters.read().get(&id).is_some()
+        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
+            return !runtime_filter.get_bloom().is_empty();
+        }
+        false
     }
 }
 

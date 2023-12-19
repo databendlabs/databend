@@ -130,13 +130,15 @@ impl SyncSource for ReadNativeDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
+                let filters = &self
+                    .partitions
+                    .ctx
+                    .get_runtime_filter_with_id(self.table_index);
+                let filters = filters.get_inlist();
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
-                    &self
-                        .partitions
-                        .ctx
-                        .get_runtime_filter_with_id(self.table_index),
+                    filters,
                     &self.func_ctx,
                 )? {
                     return Ok(Some(DataBlock::empty()));

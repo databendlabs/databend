@@ -30,6 +30,7 @@ databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
 databend-common-sharing = { path = "../../sharing" }
 databend-common-sql = { path = "../../sql" }
 databend-common-storage = { path = "../../../common/storage" }
+databend-common-hashtable = { path = "../../../common/hashtable" }
 jsonb = { workspace = true }
 
 databend-storages-common-blocks = { path = "../common/blocks" }
@@ -62,6 +63,6 @@ sha2 = "0.10.6"
 siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
 sys-info = "0.9"
-
+xorf = {git = "https://github.com/ayazhafiz/xorf", branch = "master"}
 typetag = { workspace = true }
 uuid = { workspace = true }

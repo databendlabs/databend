@@ -15,6 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
+use log::info;
+use xorf::{BinaryFuse8, Filter, HashProxy};
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -25,9 +28,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::{BooleanType, NumberColumn, NumberDataType};
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::{BlockMetaInfoDowncast, Column, eval_function, FieldIndex, HashMethod, HashMethodKind, KeysState, Value};
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -52,6 +55,7 @@ use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
+use databend_common_hashtable::traits::FastHash;
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
@@ -72,57 +76,7 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    cached_runtime_filter: Option<Expr>,
-}
-
-#[macro_export]
-macro_rules! impl_runtime_filter {
-    () => {
-        fn runtime_filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-            // Check if already cached runtime filters
-            if self.cached_runtime_filter.is_none() {
-                let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
-                let runtime_filters = runtime_filters
-                    .iter()
-                    .filter_map(|filter| {
-                        let column_refs = filter.column_refs();
-                        debug_assert!(column_refs.len() == 1);
-                        let name = column_refs.keys().last().unwrap();
-                        // Some probe keys are not in the schema, they are derived from expressions.
-                        self.src_schema.index_of(name).ok().and_then(|idx| {
-                            Some(
-                                cast_expr_to_non_null_boolean(filter.project_column_ref(|_| idx))
-                                    .unwrap(),
-                            )
-                        })
-                    })
-                    .collect::<Vec<Expr>>();
-                if runtime_filters.is_empty() {
-                    return Ok(data_block);
-                }
-                let combined_filter = runtime_filters
-                    .into_iter()
-                    .try_reduce(|lhs, rhs| {
-                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    })
-                    .transpose()
-                    .unwrap_or_else(|| {
-                        Err(ErrorCode::Internal(
-                            "Invalid empty predicate list".to_string(),
-                        ))
-                    })?;
-                self.cached_runtime_filter = Some(combined_filter);
-            }
-            // Using runtime filter to filter data_block
-            let func_ctx = self.ctx.get_function_context()?;
-            let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
-            let filter = evaluator
-                .run(self.cached_runtime_filter.as_ref().unwrap())?
-                .try_downcast::<BooleanType>()
-                .unwrap();
-            data_block.filter_boolean_value(&filter)
-        }
-    };
+    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -177,7 +131,104 @@ impl DeserializeDataTransform {
         })))
     }
 
-    impl_runtime_filter!();
+
+    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        // Check if already cached runtime filters
+        if self.cached_runtime_filter.is_none() {
+            let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
+            let bloom_filters = runtime_filters.blooms();
+            let bloom_filters = bloom_filters
+                .into_iter()
+                .filter_map(|filter| {
+                    let name = filter.as_ref().0.as_str();
+                    // Some probe keys are not in the schema, they are derived from expressions.
+                    self.src_schema.index_of(name).ok().and_then(|idx| {
+                        Some(
+                           (idx, (filter).1.clone())
+                        )
+                    })
+                })
+                .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
+            if bloom_filters.is_empty() {
+                return Ok(data_block);
+            }
+            self.cached_runtime_filter = Some(bloom_filters);
+        }
+
+        let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
+        for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
+            let probe_block_entry = data_block.get_by_offset(*idx as usize);
+            let probe_column = probe_block_entry.value.convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
+            let data_type = probe_column.data_type();
+            let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
+            let mut idx = 0;
+            match method {
+                HashMethodKind::KeysU8(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                HashMethodKind::KeysU16(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                HashMethodKind::KeysU32(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                HashMethodKind::KeysU64(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                _ => unreachable!()
+            }
+        }
+        data_block.filter_with_bitmap(&bitmap.into())
+    }
+
 }
 
 #[async_trait::async_trait]
@@ -273,6 +324,10 @@ impl Processor for DeserializeDataTransform {
                         Some(self.uncompressed_buffer.clone()),
                     )?;
 
+                    if self.ctx.has_runtime_filters(self.table_index) {
+                        data_block = self.runtime_filter(data_block)?;
+                    }
+
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                         data_block = virtual_reader.deserialize_virtual_columns(
@@ -313,10 +368,6 @@ impl Processor for DeserializeDataTransform {
                         let inner_meta = data_block.take_meta();
                         let meta = gen_mutation_stream_meta(inner_meta, &part.location)?;
                         data_block = data_block.add_meta(Some(Box::new(meta)))?;
-                    }
-
-                    if self.ctx.has_runtime_filters(self.table_index) {
-                        data_block = self.runtime_filter(data_block)?;
                     }
 
                     self.output_data = Some(data_block);

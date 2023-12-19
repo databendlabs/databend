@@ -27,3 +27,4 @@ pub mod table_context;
 pub mod table_function;
 
 pub mod table;
+pub mod runtime_filter_info;

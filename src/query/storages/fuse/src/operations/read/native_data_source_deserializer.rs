@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use xorf::{BinaryFuse8, Filter};
 
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -33,10 +34,10 @@ use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::eval_function;
+use databend_common_expression::{eval_function, FieldIndex, HashMethod, HashMethodKind, KeysState};
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::{BooleanType, NumberColumn};
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -52,6 +53,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::FastHash;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -64,7 +66,6 @@ use databend_common_sql::IndexType;
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
 use crate::fuse_part::FusePartInfo;
-use crate::impl_runtime_filter;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -122,7 +123,7 @@ pub struct NativeDeserializeDataTransform {
 
     base_block_ids: Option<Scalar>,
 
-    cached_runtime_filter: Option<Expr>,
+    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -518,7 +519,103 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 
-    impl_runtime_filter!();
+    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        // Check if already cached runtime filters
+        if self.cached_runtime_filter.is_none() {
+            let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
+            let bloom_filters = runtime_filters.blooms();
+            let bloom_filters = bloom_filters
+                .into_iter()
+                .filter_map(|filter| {
+                    let name = filter.as_ref().0.as_str();
+                    // Some probe keys are not in the schema, they are derived from expressions.
+                    self.src_schema.index_of(name).ok().and_then(|idx| {
+                        Some(
+                            (idx, (filter).1.clone())
+                        )
+                    })
+                })
+                .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
+            if bloom_filters.is_empty() {
+                return Ok(data_block);
+            }
+            self.cached_runtime_filter = Some(bloom_filters);
+        }
+
+        let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
+        for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
+            let probe_block_entry = data_block.get_by_offset(*idx as usize);
+            let probe_column = probe_block_entry.value.convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
+            let data_type = probe_column.data_type();
+            let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
+            let mut idx = 0;
+            match method {
+                HashMethodKind::KeysU8(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                HashMethodKind::KeysU16(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                HashMethodKind::KeysU32(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                HashMethodKind::KeysU64(hash_method) => {
+                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
+                            c.iter().for_each(|key|{
+                                let hash = key.fast_hash();
+                                if filter.contains(&hash) {
+                                    bitmap.set(idx, true);
+                                }
+                                idx += 1;
+                            })
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                _ => unreachable!()
+            }
+        }
+        data_block.filter_with_bitmap(&bitmap.into())
+    }
+
 }
 
 impl Processor for NativeDeserializeDataTransform {
@@ -813,11 +910,22 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-            let block = if let Some(filter) = &filter {
+            let mut block = if let Some(filter) = &filter {
                 block.filter_boolean_value(filter)?
             } else {
                 block
             };
+
+            // Step 9: runtime filter
+            if self.ctx.has_runtime_filters(self.table_index) {
+                block = self.runtime_filter(block)?;
+            }
+
+            let progress_values = ProgressValues {
+                rows: block.num_rows(),
+                bytes: block.memory_size(),
+            };
+            self.scan_progress.incr(&progress_values);
 
             // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
             // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
@@ -845,11 +953,6 @@ impl Processor for NativeDeserializeDataTransform {
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
                 let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
                 block = block.add_meta(Some(Box::new(meta)))?;
-            }
-
-            // Step 9: runtime filter
-            if self.ctx.has_runtime_filters(self.table_index) {
-                block = self.runtime_filter(block)?;
             }
 
             // Step 10: Add the block to output data
