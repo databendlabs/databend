@@ -13,15 +13,20 @@
 // limitations under the License.
 
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use crate::register_counter;
 use crate::register_counter_family;
+use crate::register_histogram_family_in_seconds;
 use crate::Counter;
 use crate::Family;
+use crate::Histogram;
 use crate::VecLabels;
 
 static QUERY_HTTP_REQUESTS_COUNT: LazyLock<Family<VecLabels, Counter>> =
     LazyLock::new(|| register_counter_family("query_http_requests_count"));
+static QUERY_HTTP_RESPONSE_DURATION: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| register_histogram_family_in_seconds("query_http_response_duration_seconds"));
 static QUERY_HTTP_SLOW_REQUESTS_COUNT: LazyLock<Family<VecLabels, Counter>> =
     LazyLock::new(|| register_counter_family("query_http_slow_requests_count"));
 static QUERY_HTTP_RESPONSE_ERRORS_COUNT: LazyLock<Family<VecLabels, Counter>> =
@@ -44,6 +49,13 @@ pub fn metrics_incr_http_response_errors_count(err: String, code: u16) {
     QUERY_HTTP_RESPONSE_ERRORS_COUNT
         .get_or_create(&labels)
         .inc();
+}
+
+pub fn metrics_observe_http_response_duration(method: String, api: String, duration: Duration) {
+    let labels = vec![("method", method), ("api", api)];
+    QUERY_HTTP_RESPONSE_DURATION
+        .get_or_create(&labels)
+        .observe(duration.as_secs_f64());
 }
 
 pub fn metrics_incr_http_response_panics_count() {
