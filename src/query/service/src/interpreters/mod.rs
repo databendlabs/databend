@@ -132,6 +132,7 @@ pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
+pub use interpreter::UNKNOWN_TABLE;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
 pub use interpreter_clustering_history::InterpreterClusteringHistory;

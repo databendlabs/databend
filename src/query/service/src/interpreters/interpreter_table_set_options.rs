@@ -96,17 +96,7 @@ impl Interpreter for SetOptionsInterpreter {
         {
             Ok(table) => table,
             Err(error) => {
-                // UnknownTable Code
-                if error.code() == 1025 {
-                    return Err(ErrorCode::UnknownTable(format!(
-                        "Unknown table `{}`.`{}` in catalog '{}'",
-                        database,
-                        self.plan.table.as_str(),
-                        &catalog.name()
-                    )));
-                } else {
-                    return Err(error);
-                }
+                return Err(error);
             }
         };
 

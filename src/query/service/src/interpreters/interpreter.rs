@@ -36,6 +36,8 @@ use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
 
+pub const UNKNOWN_TABLE: u16 = 1025;
+
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
 /// Each type of planNode has its own corresponding interpreter

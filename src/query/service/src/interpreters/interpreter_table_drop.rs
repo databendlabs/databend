@@ -28,6 +28,7 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::UNKNOWN_TABLE;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -57,14 +58,7 @@ impl Interpreter for DropTableInterpreter {
         let tbl = match self.ctx.get_table(catalog_name, db_name, tbl_name).await {
             Ok(table) => table,
             Err(error) => {
-                // UnknownTable Code
-                if error.code() == 1025 {
-                    if !self.plan.if_exists {
-                        return Err(ErrorCode::UnknownTable(format!(
-                            "Unknown table `{}`.`{}` in catalog '{}'",
-                            db_name, tbl_name, catalog_name
-                        )));
-                    }
+                if error.code() == UNKNOWN_TABLE && self.plan.if_exists {
                     return Ok(PipelineBuildResult::create());
                 } else {
                     return Err(error);
