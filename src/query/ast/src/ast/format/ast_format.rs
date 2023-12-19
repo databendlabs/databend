@@ -1839,6 +1839,32 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_show_virtual_columns(&mut self, stmt: &'ast ShowVirtualColumnsStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            let database_name = format!("Database {}", database);
+            let database_format_ctx = AstFormatContext::new(database_name);
+            let database_node = FormatTreeNode::new(database_format_ctx);
+            children.push(database_node);
+        }
+
+        if let Some(table) = &stmt.database {
+            let table_name = format!("Table {}", table);
+            let table_format_ctx = AstFormatContext::new(table_name);
+            let table_node = FormatTreeNode::new(table_format_ctx);
+            children.push(table_node);
+        }
+
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "ShowVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_show_users(&mut self) {
         let name = "ShowUsers".to_string();
         let format_ctx = AstFormatContext::new(name);

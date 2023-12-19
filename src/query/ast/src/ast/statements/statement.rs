@@ -157,6 +157,7 @@ pub enum Statement {
     AlterVirtualColumn(AlterVirtualColumnStmt),
     DropVirtualColumn(DropVirtualColumnStmt),
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
+    ShowVirtualColumns(ShowVirtualColumnsStmt),
 
     // User
     ShowUsers,
@@ -469,6 +470,7 @@ impl Display for Statement {
             Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
