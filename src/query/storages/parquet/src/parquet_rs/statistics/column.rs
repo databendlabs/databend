@@ -58,14 +58,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(
-                            I256::from_i64(max as i64),
-                            *size,
-                        )),
-                        Scalar::Decimal(DecimalScalar::Decimal256(
-                            I256::from_i64(min as i64),
-                            *size,
-                        )),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
                     _ => (Scalar::Null, Scalar::Null),
                 }
@@ -95,8 +89,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
                     _ => (Scalar::Null, Scalar::Null),
                 }

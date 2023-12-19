@@ -43,6 +43,7 @@ use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMBER_CLASSES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
+use databend_common_expression::types::F32;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::values::Value;
@@ -72,10 +73,9 @@ use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
-use super::decimal::register_decimal_to_float32;
-use super::decimal::register_decimal_to_float64;
 use super::decimal::register_decimal_to_int;
 use crate::scalars::decimal::register_decimal_arithmetic;
+use crate::scalars::decimal::register_decimal_to_float;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
@@ -717,10 +717,10 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                 NumberClass::Decimal128 => {
                     // todo(youngsofun): add decimal try_cast and decimal to int and float
                     if matches!(dest_type, NumberDataType::Float32) {
-                        register_decimal_to_float32(registry);
+                        register_decimal_to_float::<F32>(registry);
                     }
                     if matches!(dest_type, NumberDataType::Float64) {
-                        register_decimal_to_float64(registry);
+                        register_decimal_to_float::<F64>(registry);
                     }
 
                     with_number_mapped_type!(|DEST_TYPE| match dest_type {
