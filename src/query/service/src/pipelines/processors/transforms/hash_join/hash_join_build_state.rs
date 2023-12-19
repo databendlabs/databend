@@ -64,6 +64,7 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
 pub(crate) const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 1024;
+pub(crate) const BLOOM_RUNTIME_FILTER_THRESHOLD: usize = 1_000_000_000;
 
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
@@ -231,7 +232,7 @@ impl HashJoinBuildState {
 
             let build_chunks =
                 &mut unsafe { &mut *self.hash_join_state.build_state.get() }.build_chunks;
-            if build_num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
+            if build_num_rows <= BLOOM_RUNTIME_FILTER_THRESHOLD {
                 *build_chunks = unsafe {
                     (*self.hash_join_state.build_state.get())
                         .generation_state
@@ -696,7 +697,7 @@ impl HashJoinBuildState {
             let data_blocks = &mut build_state.generation_state.chunks;
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Inner
-                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0 && self.ctx.get_settings().get_runtime_filter()?
             {
                 let is_cluster = !self.ctx.get_cluster().is_empty();
                 let is_broadcast_join = self.hash_join_state.hash_join_desc.broadcast;

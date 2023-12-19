@@ -46,6 +46,7 @@ use databend_common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -112,7 +113,7 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
-    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, Vec<Expr<String>>>>>,
+    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, Box<RuntimeFilterInfo>>>>,
 }
 
 impl QueryContextShared {

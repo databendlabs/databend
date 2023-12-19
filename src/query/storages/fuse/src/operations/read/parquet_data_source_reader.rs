@@ -118,13 +118,15 @@ impl SyncSource for ReadParquetDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
+                let filters = &self
+                    .partitions
+                    .ctx
+                    .get_runtime_filter_with_id(self.table_index);
+                let filters = filters.get_inlist();
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
-                    &self
-                        .partitions
-                        .ctx
-                        .get_runtime_filter_with_id(self.table_index),
+                    filters,
                     &self.func_ctx,
                 )? {
                     return Ok(Some(DataBlock::empty()));
@@ -228,8 +230,9 @@ impl Processor for ReadParquetDataSource<false> {
                 .partitions
                 .ctx
                 .get_runtime_filter_with_id(self.table_index);
+            let filters = filters.get_inlist();
             for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
+                if runtime_filter_pruner(self.table_schema.clone(), part, filters, &self.func_ctx)?
                 {
                     continue;
                 }

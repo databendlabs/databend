@@ -128,6 +128,7 @@ use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
 use walkdir::WalkDir;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -697,11 +698,11 @@ impl TableContext for CtxDelegation {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
-    fn set_runtime_filter(&self, _filters: (IndexType, Vec<Expr<String>>)) {
+    fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
         todo!()
     }
 
-    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Vec<Expr<String>> {
+    fn get_runtime_filter_with_id(&self, _id: IndexType) -> RuntimeFilterInfo {
         todo!()
     }
 
