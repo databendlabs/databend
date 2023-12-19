@@ -12,25 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::TableSchema;
+use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_sql::IndexType;
+use databend_common_pipeline_transforms::processors::Transformer;
 
 use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
@@ -42,69 +38,44 @@ use crate::io::VirtualColumnReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
-    func_ctx: FunctionContext,
-    id: usize,
-    table_index: IndexType,
-    finished: bool,
-    batch_size: usize,
     block_reader: Arc<BlockReader>,
-
-    output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<DataSource>)>,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-
-    table_schema: Arc<TableSchema>,
     ctx: Arc<dyn TableContext>,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
-        id: usize,
-        table_index: IndexType,
         ctx: Arc<dyn TableContext>,
-        table_schema: Arc<TableSchema>,
+        input: Arc<InputPort>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
-        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        let func_ctx = ctx.get_function_context()?;
-        if BLOCKING_IO {
-            SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
-                func_ctx,
-                id,
-                table_index,
-                output,
-                batch_size,
-                block_reader,
-                finished: false,
-                output_data: None,
-                index_reader,
-                virtual_reader,
-                table_schema,
-                ctx,
-            })
+        let transformer = if BLOCKING_IO {
+            Transformer::create(
+                input.clone(),
+                output.clone(),
+                ReadParquetDataSource::<true> {
+                    block_reader,
+                    index_reader,
+                    virtual_reader,
+                    ctx,
+                },
+            )
         } else {
-            Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
+            AsyncTransformer::create(input.clone(), output.clone(), ReadParquetDataSource::<
                 false,
             > {
-                func_ctx,
-                id,
-                table_index,
-                output,
-                batch_size,
                 block_reader,
-                finished: false,
-                output_data: None,
                 index_reader,
                 virtual_reader,
-                table_schema,
                 ctx,
-            })))
-        }
+            })
+        };
+        Ok(ProcessorPtr::create(transformer))
     }
 }
 

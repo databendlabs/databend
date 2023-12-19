@@ -140,66 +140,40 @@ pub fn build_fuse_native_source_pipeline(
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
-    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     plan: &DataSourcePlan,
-    mut max_threads: usize,
+    max_threads: usize,
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 ) -> Result<()> {
-    (max_threads, max_io_requests) =
-        adjust_threads_and_request(false, max_threads, max_io_requests, plan);
-
-    let mut source_builder = SourcePipeBuilder::create();
-
+    (_, max_io_requests) = adjust_threads_and_request(false, max_threads, max_io_requests, plan);
     match block_reader.support_blocking_api() {
         true => {
-            for i in 0..max_threads {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadParquetDataSource::<true>::create(
-                        i,
-                        plan.table_index,
-                        ctx.clone(),
-                        table_schema.clone(),
-                        output,
-                        block_reader.clone(),
-                        index_reader.clone(),
-                        virtual_reader.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
+            pipeline.add_transform(|input, output| {
+                ReadParquetDataSource::<true>::create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    block_reader.clone(),
+                    index_reader.clone(),
+                    virtual_reader.clone(),
+                )
+            })?;
         }
         false => {
             info!("read block data adjust max io requests:{}", max_io_requests);
-            for i in 0..max_io_requests {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadParquetDataSource::<false>::create(
-                        i,
-                        plan.table_index,
-                        ctx.clone(),
-                        table_schema.clone(),
-                        output,
-                        block_reader.clone(),
-                        index_reader.clone(),
-                        virtual_reader.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
-            pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
-
-            info!(
-                "read block pipeline resize from:{} to:{}",
-                max_io_requests,
-                pipeline.output_len()
-            );
+            pipeline.add_transform(|input, output| {
+                ReadParquetDataSource::<false>::create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    block_reader.clone(),
+                    index_reader.clone(),
+                    virtual_reader.clone(),
+                )
+            })?;
         }
     };
 
