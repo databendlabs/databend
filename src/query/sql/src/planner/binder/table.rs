@@ -260,6 +260,12 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
+                if e.code() == 1025 {
+                    return Err(ErrorCode::UnknownTable(format!(
+                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
+                    ))
+                    .set_span(*span));
+                }
                 return Err(e);
             }
         };
