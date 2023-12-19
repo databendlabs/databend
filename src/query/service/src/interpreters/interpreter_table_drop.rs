@@ -27,10 +27,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 
-use super::interpreter::UNKNOWN_CATALOG;
-use super::interpreter::UNKNOWN_DATABASE;
 use crate::interpreters::Interpreter;
-use crate::interpreters::UNKNOWN_TABLE;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -60,9 +57,9 @@ impl Interpreter for DropTableInterpreter {
         let tbl = match self.ctx.get_table(catalog_name, db_name, tbl_name).await {
             Ok(table) => table,
             Err(error) => {
-                if (error.code() == UNKNOWN_TABLE
-                    || error.code() == UNKNOWN_CATALOG
-                    || error.code() == UNKNOWN_DATABASE)
+                if (error.code() == ErrorCode::UNKNOWN_TABLE
+                    || error.code() == ErrorCode::UNKNOWN_CATALOG
+                    || error.code() == ErrorCode::UNKNOWN_DATABASE)
                     && self.plan.if_exists
                 {
                     return Ok(PipelineBuildResult::create());
@@ -86,18 +83,6 @@ impl Interpreter for DropTableInterpreter {
         }
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        // drop the ownership
-        let tenant = self.ctx.get_tenant();
-        let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
-        let db = catalog.get_database(&tenant, &self.plan.database).await?;
-        role_api
-            .drop_ownership(&GrantObjectByID::Table {
-                catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().ident.db_id,
-                table_id: tbl.get_table_info().ident.table_id,
-            })
-            .await?;
-
         // Although even if data is in READ_ONLY mode,
         // as a catalog object, the table itself is allowed to be dropped (and undropped later),
         // `drop table ALL` is NOT allowed, which implies that the table data need to be truncated.
@@ -108,6 +93,8 @@ impl Interpreter for DropTableInterpreter {
                 })?
         }
 
+        let tenant = self.ctx.get_tenant();
+        let db = catalog.get_database(&tenant, &self.plan.database).await?;
         // actually drop table
         let resp = catalog
             .drop_table_by_id(DropTableByIdReq {
@@ -116,6 +103,18 @@ impl Interpreter for DropTableInterpreter {
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().ident.db_id,
+            })
+            .await?;
+
+        // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
+        // but the table still exists, in the interval maybe some unexpected things will happen.
+        // drop the ownership
+        let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
+        role_api
+            .drop_ownership(&GrantObjectByID::Table {
+                catalog_name: self.plan.catalog.clone(),
+                db_id: db.get_db_info().ident.db_id,
+                table_id: tbl.get_table_info().ident.table_id,
             })
             .await?;
 

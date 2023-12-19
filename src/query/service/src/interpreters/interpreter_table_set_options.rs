@@ -90,15 +90,9 @@ impl Interpreter for SetOptionsInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
         let table_name = self.plan.table.as_str();
-        let table = match catalog
+        let table = catalog
             .get_table(self.ctx.get_tenant().as_str(), database, table_name)
-            .await
-        {
-            Ok(table) => table,
-            Err(error) => {
-                return Err(error);
-            }
-        };
+            .await?;
 
         // check mutability
         table.check_mutable()?;
