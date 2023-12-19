@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::{eval_function, HashMethod, HashMethodKind, type_check, Value};
+use databend_common_expression::type_check;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -22,11 +23,12 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use xorf::BinaryFuse8;
-use databend_common_expression::types::{AnyType, DataType, NumberDataType, ValueType};
-use databend_common_hashtable::FastHash;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(build_schema.fields().len());
@@ -89,7 +91,6 @@ pub(crate) fn inlist_filter(
     Ok(None)
 }
 
-
 pub(crate) fn bloom_filter(
     build_key: &Expr,
     probe_key: &Expr<String>,
@@ -99,9 +100,7 @@ pub(crate) fn bloom_filter(
     if !build_key.data_type().is_numeric() {
         return Ok(None);
     }
-    if let Expr::ColumnRef {
-        id, ..
-    } = probe_key {
+    if let Expr::ColumnRef { id, .. } = probe_key {
         // Generate bloom filter using build column
         let data_type = build_key.data_type().clone();
         let build_key_column = build_column.convert_to_full_column(&data_type, num_rows);
@@ -110,31 +109,39 @@ pub(crate) fn bloom_filter(
         let mut hashes = Vec::with_capacity(num_rows);
         match method {
             HashMethodKind::KeysU8(hash_method) => {
-                let key_state = hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
+                let key_state =
+                    hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
                 hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
             }
             HashMethodKind::KeysU16(hash_method) => {
-                let key_state = hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
+                let key_state =
+                    hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
                 hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
             }
             HashMethodKind::KeysU32(hash_method) => {
-                let key_state = hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
+                let key_state =
+                    hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
                 hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
             }
             HashMethodKind::KeysU64(hash_method) => {
-                let key_state = hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
+                let key_state =
+                    hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
                 hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
         let filter = BinaryFuse8::try_from(hashes)?;
-        return Ok(Some((id.to_string(),filter)));
+        return Ok(Some((id.to_string(), filter)));
     }
     Ok(None)
 }
 
 // Deduplicate build key colum
-pub(crate) fn dedup_build_key_column(func_ctx: &FunctionContext, data_blocks: &[DataBlock], build_key: &Expr) -> Result<Option<Value<AnyType>>> {
+pub(crate) fn dedup_build_key_column(
+    func_ctx: &FunctionContext,
+    data_blocks: &[DataBlock],
+    build_key: &Expr,
+) -> Result<Option<Value<AnyType>>> {
     // Dedup build key column
     let mut columns = Vec::with_capacity(data_blocks.len());
     for block in data_blocks.iter() {
@@ -174,5 +181,8 @@ pub(crate) fn dedup_build_key_column(func_ctx: &FunctionContext, data_blocks: &[
     // Deduplicate build key column
     let empty_key_block = DataBlock::empty();
     let evaluator = Evaluator::new(&empty_key_block, &func_ctx, &BUILTIN_FUNCTIONS);
-    Ok(Some(evaluator.run(&type_check::check(&distinct_list, &BUILTIN_FUNCTIONS)?)?))
+    Ok(Some(evaluator.run(&type_check::check(
+        &distinct_list,
+        &BUILTIN_FUNCTIONS,
+    )?)?))
 }

@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use xorf::{BinaryFuse8, Filter};
 
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -32,13 +31,12 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{eval_function, FieldIndex, HashMethod, HashMethodKind, KeysState};
+use databend_common_expression::eval_function;
 use databend_common_expression::filter_helper::FilterHelpers;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::{BooleanType, NumberColumn};
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
@@ -48,7 +46,11 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodKind;
+use databend_common_expression::KeysState;
 use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
@@ -60,8 +62,9 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::IndexType;
+use xorf::BinaryFuse8;
+use xorf::Filter;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
@@ -529,11 +532,10 @@ impl NativeDeserializeDataTransform {
                 .filter_map(|filter| {
                     let name = filter.as_ref().0.as_str();
                     // Some probe keys are not in the schema, they are derived from expressions.
-                    self.src_schema.index_of(name).ok().and_then(|idx| {
-                        Some(
-                            (idx, (filter).1.clone())
-                        )
-                    })
+                    self.src_schema
+                        .index_of(name)
+                        .ok()
+                        .and_then(|idx| Some((idx, (filter).1.clone())))
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
@@ -545,16 +547,19 @@ impl NativeDeserializeDataTransform {
         let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
         for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
             let probe_block_entry = data_block.get_by_offset(*idx as usize);
-            let probe_column = probe_block_entry.value.convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
+            let probe_column = probe_block_entry
+                .value
+                .convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
             let data_type = probe_column.data_type();
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut idx = 0;
             match method {
                 HashMethodKind::KeysU8(hash_method) => {
-                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
-                            c.iter().for_each(|key|{
+                            c.iter().for_each(|key| {
                                 let hash = key.fast_hash();
                                 if filter.contains(&hash) {
                                     bitmap.set(idx, true);
@@ -562,14 +567,15 @@ impl NativeDeserializeDataTransform {
                                 idx += 1;
                             })
                         }
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     }
                 }
                 HashMethodKind::KeysU16(hash_method) => {
-                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
-                            c.iter().for_each(|key|{
+                            c.iter().for_each(|key| {
                                 let hash = key.fast_hash();
                                 if filter.contains(&hash) {
                                     bitmap.set(idx, true);
@@ -577,14 +583,15 @@ impl NativeDeserializeDataTransform {
                                 idx += 1;
                             })
                         }
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     }
                 }
                 HashMethodKind::KeysU32(hash_method) => {
-                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
-                            c.iter().for_each(|key|{
+                            c.iter().for_each(|key| {
                                 let hash = key.fast_hash();
                                 if filter.contains(&hash) {
                                     bitmap.set(idx, true);
@@ -592,14 +599,15 @@ impl NativeDeserializeDataTransform {
                                 idx += 1;
                             })
                         }
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     }
                 }
                 HashMethodKind::KeysU64(hash_method) => {
-                    let key_state = hash_method.build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
-                            c.iter().for_each(|key|{
+                            c.iter().for_each(|key| {
                                 let hash = key.fast_hash();
                                 if filter.contains(&hash) {
                                     bitmap.set(idx, true);
@@ -607,15 +615,14 @@ impl NativeDeserializeDataTransform {
                                 idx += 1;
                             })
                         }
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     }
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
         data_block.filter_with_bitmap(&bitmap.into())
     }
-
 }
 
 impl Processor for NativeDeserializeDataTransform {

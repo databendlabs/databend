@@ -29,6 +29,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -37,7 +38,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -122,7 +122,6 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 
 type MetaType = (String, String, String);
 
@@ -752,7 +751,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_runtime_filter_with_id(&self, _id: IndexType) -> RuntimeFilterInfo {
+    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Box<RuntimeFilterInfo> {
         todo!()
     }
 
