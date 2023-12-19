@@ -25,12 +25,10 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
-use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::IndexType;
 
@@ -42,7 +40,6 @@ use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     func_ctx: FunctionContext,
@@ -163,119 +160,63 @@ impl Transform for ReadParquetDataSource<true> {
 }
 
 #[async_trait::async_trait]
-impl Processor for ReadParquetDataSource<false> {
-    fn name(&self) -> String {
-        String::from("AsyncReadParquetDataSource")
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.finished {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if self.output.is_finished() {
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-
-        if let Some((part, data)) = self.output_data.take() {
-            let output = DataBlock::empty_with_meta(DataSourceMeta::create(part, data));
-
-            self.output.push_data(Ok(output));
-            // return Ok(Event::NeedConsume);
-        }
-
-        Ok(Event::Async)
-    }
+impl AsyncTransform for ReadParquetDataSource<false> {
+    const NAME: &'static str = "AsyncReadParquetDataSource";
 
     #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        let parts = self.partitions.steal(self.id, self.batch_size);
-
-        if !parts.is_empty() {
-            let mut chunks = Vec::with_capacity(parts.len());
-            let filters = self
-                .partitions
-                .ctx
-                .get_runtime_filter_with_id(self.table_index);
-            for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
-                {
-                    continue;
-                }
-                let part = part.clone();
-                let block_reader = self.block_reader.clone();
-                let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
-                let index_reader = self.index_reader.clone();
-                let virtual_reader = self.virtual_reader.clone();
-
-                chunks.push(async move {
-                    tokio::spawn(async_backtrace::location!().frame(async move {
-                        let part = FusePartInfo::from_part(&part)?;
-
-                        if let Some(index_reader) = index_reader.as_ref() {
-                            let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &part.location,
-                            index_reader.index_id(),
-                        );
-                            if let Some(data) = index_reader
-                                .read_parquet_data_by_merge_io(&settings, &loc)
-                                .await
-                            {
-                                // Read from aggregating index.
-                                return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
-                            }
-                        }
-
-                        // If virtual column file exists, read the data from the virtual columns directly.
-                        let virtual_source = if let Some(virtual_reader) = virtual_reader.as_ref() {
-                            let loc = TableMetaLocationGenerator::gen_virtual_block_location(
-                                &part.location,
-                            );
-
-                            virtual_reader
-                                .read_parquet_data_by_merge_io(&settings, &loc)
-                                .await
-                        } else {
-                            None
-                        };
-
-                        let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
-                            &virtual_source.ignore_column_ids
-                        } else {
-                            &None
-                        };
-
-                        let source = block_reader
-                            .read_columns_data_by_merge_io(
-                                &settings,
-                                &part.location,
-                                &part.columns_meta,
-                                ignore_column_ids,
-                            )
-                            .await?;
-
-                        Ok(DataSource::Normal((source, virtual_source)))
-                    }))
-                    .await
-                    .unwrap()
-                });
+    async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
+        let part: PartInfoPtr = Arc::new(Box::new(
+            FusePartInfo::downcast_from(data.take_meta().unwrap()).unwrap(),
+        ));
+        let fuse_part = FusePartInfo::from_part(&part)?;
+        let settings = ReadSettings::from_ctx(&self.ctx)?;
+        if let Some(index_reader) = self.index_reader.as_ref() {
+            let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                &fuse_part.location,
+                index_reader.index_id(),
+            );
+            if let Some(data) = index_reader
+                .read_parquet_data_by_merge_io(&settings, &loc)
+                .await
+            {
+                // Read from aggregating index.
+                return Ok::<_, ErrorCode>(DataBlock::empty_with_meta(DataSourceMeta::create(
+                    vec![part],
+                    vec![DataSource::AggIndex(data)],
+                )));
             }
-
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
-            return Ok(());
         }
 
-        self.finished = true;
-        Ok(())
+        // If virtual column file exists, read the data from the virtual columns directly.
+        let virtual_source = if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+            let loc = TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
+
+            virtual_reader
+                .read_parquet_data_by_merge_io(&settings, &loc)
+                .await
+        } else {
+            None
+        };
+
+        let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
+            &virtual_source.ignore_column_ids
+        } else {
+            &None
+        };
+
+        let source = self
+            .block_reader
+            .read_columns_data_by_merge_io(
+                &settings,
+                &fuse_part.location,
+                &fuse_part.columns_meta,
+                ignore_column_ids,
+            )
+            .await?;
+
+        Ok(DataBlock::empty_with_meta(DataSourceMeta::create(
+            vec![part],
+            vec![DataSource::Normal((source, virtual_source))],
+        )))
     }
 }
