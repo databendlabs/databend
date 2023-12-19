@@ -35,10 +35,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::ColumnId;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
+use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -157,33 +160,6 @@ impl StreamTable {
         })
     }
 
-    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
-        let table = ctx
-            .get_table(
-                self.stream_info.catalog(),
-                &self.table_database,
-                &self.table_name,
-            )
-            .await?;
-
-        if table.get_table_info().ident.table_id != self.table_id {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Table id mismatch, expect {}, got {}",
-                self.table_id,
-                table.get_table_info().ident.table_id
-            )));
-        }
-
-        if !table.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
-                self.table_database, self.table_name
-            )));
-        }
-
-        Ok(table)
-    }
-
     pub fn offset(&self) -> u64 {
         self.table_version
     }
@@ -215,13 +191,13 @@ impl StreamTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
-        let table = self.source_table(ctx.clone()).await?;
+        let table = self.source_table(ctx.clone()).await?.unwrap();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
         let latest_snapshot = fuse_table.read_table_snapshot().await?;
         if latest_snapshot.is_none() {
             return Ok((PartStatistics::default(), Partitions::default()));
         }
-
         let latest_snapshot = latest_snapshot.unwrap();
         let latest_segments = HashSet::from_iter(latest_snapshot.segments.clone());
 
@@ -345,7 +321,7 @@ impl StreamTable {
 
     #[minitrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let base_table = self.source_table(ctx).await?;
+        let base_table = self.source_table(ctx).await?.unwrap();
         let status = if base_table.get_table_info().ident.seq == self.table_version {
             StreamStatus::NoData
         } else {
@@ -365,12 +341,12 @@ impl Table for StreamTable {
         &self.stream_info
     }
 
-    /// whether column prune(projection) can help in table read
-    fn support_column_projection(&self) -> bool {
-        true
+    fn support_internal_column_id(&self, column_id: ColumnId) -> bool {
+        (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
     }
 
-    fn support_row_id_column(&self) -> bool {
+    /// whether column prune(projection) can help in table read
+    fn support_column_projection(&self) -> bool {
         true
     }
 
@@ -386,6 +362,33 @@ impl Table for StreamTable {
                 .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
                 .unwrap(),
         ]
+    }
+
+    async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Option<Arc<dyn Table>>> {
+        let table = ctx
+            .get_table(
+                self.stream_info.catalog(),
+                &self.table_database,
+                &self.table_name,
+            )
+            .await?;
+
+        if table.get_table_info().ident.table_id != self.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Table id mismatch, expect {}, got {}",
+                self.table_id,
+                table.get_table_info().ident.table_id
+            )));
+        }
+
+        if !table.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled for table '{}.{}'",
+                self.table_database, self.table_name
+            )));
+        }
+
+        Ok(Some(table))
     }
 
     #[minitrace::trace]

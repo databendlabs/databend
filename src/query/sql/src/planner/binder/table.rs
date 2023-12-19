@@ -1203,7 +1203,12 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let table = table.table();
-        let statistics_provider = table.column_statistics_provider().await?;
+        let source = table.source_table(self.ctx.clone()).await?;
+        let statistics_provider = if let Some(source) = source {
+            source.column_statistics_provider().await?
+        } else {
+            table.column_statistics_provider().await?
+        };
         let table_version = if table.engine() == "STREAM" {
             let options = table.options();
             let table_version = options

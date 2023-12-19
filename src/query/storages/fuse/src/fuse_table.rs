@@ -32,10 +32,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_meta_app::schema::DatabaseType;
@@ -436,6 +438,10 @@ impl Table for FuseTable {
         Some(self.data_metrics.clone())
     }
 
+    fn support_internal_column_id(&self, column_id: ColumnId) -> bool {
+        column_id >= SNAPSHOT_NAME_COLUMN_ID
+    }
+
     fn support_column_projection(&self) -> bool {
         true
     }
@@ -810,10 +816,6 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        true
-    }
-
-    fn support_row_id_column(&self) -> bool {
         true
     }
 

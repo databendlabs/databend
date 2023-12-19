@@ -59,6 +59,10 @@ pub trait Table: Sync + Send {
         self.get_table_info().engine()
     }
 
+    fn support_internal_column_id(&self, _column_id: ColumnId) -> bool {
+        false
+    }
+
     fn schema(&self) -> Arc<TableSchema> {
         self.get_table_info().schema()
     }
@@ -125,6 +129,12 @@ pub trait Table: Sync + Send {
         })
     }
 
+    async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Option<Arc<dyn Table>>> {
+        let _ = ctx;
+
+        Ok(None)
+    }
+
     /// Whether the table engine supports prewhere optimization.
     /// only Fuse Engine supports this.
     fn support_prewhere(&self) -> bool {
@@ -137,11 +147,6 @@ pub trait Table: Sync + Send {
 
     /// Whether the table engine supports virtual columns optimization.
     fn support_virtual_columns(&self) -> bool {
-        false
-    }
-
-    /// Whether the table engine supports virtual column `_row_id`.
-    fn support_row_id_column(&self) -> bool {
         false
     }
 
