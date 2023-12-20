@@ -100,7 +100,6 @@ async fn create_index(
                 original_query: original_query.to_string(),
                 query: query.to_string(),
                 sync_creation,
-                user_defined_block_name: false,
             },
         };
 

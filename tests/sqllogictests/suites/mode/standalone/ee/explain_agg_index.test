@@ -320,7 +320,39 @@ EvalScalar
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
+            ├── aggregating index: [SELECT COUNT(), SUM(a), SUM(b) FROM test_index_db.t1]
+            ├── rewritten query: [selection: [index_col_1 (#1), index_col_0 (#0)]]
             └── estimated rows: 0.00
+
+statement ok
+DROP AGGREGATING INDEX idx1
+
+statement ok
+CREATE AGGREGATING INDEX idx1 AS SELECT min(a), max(a), count(*), avg(a) FROM t1 GROUP BY b
+
+query T
+EXPLAIN SELECT min(a), max(a), count(*) FROM t1 GROUP BY b
+----
+AggregateFinal
+├── output columns: [min(a) (#2), max(a) (#3), COUNT(*) (#4), t1.b (#1)]
+├── group by: [b]
+├── aggregate functions: [min(a), max(a), count()]
+├── estimated rows: 0.00
+└── AggregatePartial
+    ├── output columns: [min(a) (#2), max(a) (#3), COUNT(*) (#4), #_group_by_key]
+    ├── group by: [b]
+    ├── aggregate functions: [min(a), max(a), count()]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.test_index_db.t1
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+
 
 # for sync aggregating index
 

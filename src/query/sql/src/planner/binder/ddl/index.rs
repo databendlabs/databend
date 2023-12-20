@@ -114,14 +114,14 @@ impl Binder {
 
                     let mut s_exprs = Vec::with_capacity(indexes.len());
                     for (index_id, _, index_meta) in indexes {
-                        let tokens = tokenize_sql(&index_meta.original_query)?;
+                        let tokens = tokenize_sql(&index_meta.query)?;
                         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
                         if let Statement::Query(query) = &stmt {
                             let (s_expr, _) = self.bind_query(&mut new_bind_context, query).await?;
-                            s_exprs.push((index_id, index_meta.original_query.clone(), s_expr));
+                            s_exprs.push((index_id, index_meta.query.clone(), s_expr));
                         }
                     }
                     agg_indexes.extend(s_exprs);
@@ -180,6 +180,7 @@ impl Binder {
         // NOTE: if user already use the `_block_name` in their sql
         // we no need add it and **MUST NOT** drop this column in sink phase.
         let mut query = query.clone();
+        // TODO(ariesdevil): unify the checker and rewriter.
         let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
         agg_index_rewritter.visit_query(&mut query);
 
@@ -219,7 +220,6 @@ impl Binder {
             query: query.to_string(),
             table_id,
             sync_creation: *sync_creation,
-            user_defined_block_name: agg_index_rewritter.user_defined_block_name,
         };
         Ok(Plan::CreateIndex(Box::new(plan)))
     }
@@ -323,6 +323,7 @@ impl Binder {
             table_info: table.get_table_info().clone(),
             query_plan: Box::new(plan),
             segment_locs,
+            user_defined_block_name: index_rewriter.user_defined_block_name,
         };
 
         Ok(plan)

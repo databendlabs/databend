@@ -64,7 +64,4 @@ message IndexMeta {
   bool sync_creation = 7;
 
   string original_query = 8;
-
-  /// if user already use the internal column name `_block_name` in their sql.
-  bool user_defined_block_name = 9;
 }

@@ -106,8 +106,6 @@ pub struct IndexMeta {
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
-    // if user already use the internal column name `_block_name` in their sql.
-    pub user_defined_block_name: bool,
 }
 
 impl Default for IndexMeta {
@@ -121,7 +119,6 @@ impl Default for IndexMeta {
             original_query: "".to_string(),
             query: "".to_string(),
             sync_creation: false,
-            user_defined_block_name: false,
         }
     }
 }
