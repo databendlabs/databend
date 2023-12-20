@@ -95,7 +95,6 @@ pub(crate) fn bloom_filter(
     build_key: &Expr,
     probe_key: &Expr<String>,
     build_column: Value<AnyType>,
-    num_rows: usize,
 ) -> Result<Option<(String, BinaryFuse8)>> {
     if !build_key.data_type().is_numeric() {
         return Ok(None);
@@ -103,7 +102,12 @@ pub(crate) fn bloom_filter(
     if let Expr::ColumnRef { id, .. } = probe_key {
         // Generate bloom filter using build column
         let data_type = build_key.data_type().clone();
-        let build_key_column = build_column.convert_to_full_column(&data_type, num_rows);
+        let build_key_column = build_column
+            .as_scalar()
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .clone();
         let num_rows = build_key_column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
         let mut hashes = Vec::with_capacity(num_rows);
