@@ -24,6 +24,7 @@ use itertools::Itertools;
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
@@ -392,35 +393,55 @@ impl Column {
         StringColumn::new(data.into(), offsets.into())
     }
 
-    pub fn concat_boolean_types(cols: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
+    pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_len = 0;
+        let mut builder_ptr = builder.as_mut_ptr();
+        let mut builder_idx = 0;
         let mut unset_bits = 0;
-        let mut value = 0;
-        let mut i = 0;
+        let mut buf = 0;
 
         unsafe {
-            for col in cols {
-                for item in col.iter() {
-                    if item {
-                        value |= BIT_MASK[i % 8];
-                    } else {
-                        unset_bits += 1;
-                    }
-                    i += 1;
-                    if i % 8 == 0 {
-                        *builder.get_unchecked_mut(builder_len) = value;
-                        builder_len += 1;
-                        value = 0;
+            for bitmap in bitmaps {
+                let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
+                let mut idx = 0;
+                let len = bitmap.len();
+                if builder_idx % 8 != 0 {
+                    while idx < len {
+                        if bitmap.get_bit_unchecked(idx) {
+                            buf |= BIT_MASK[builder_idx % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        builder_idx += 1;
+                        idx += 1;
+                        if builder_idx % 8 == 0 {
+                            store_advance_aligned(buf, &mut builder_ptr);
+                            buf = 0;
+                            break;
+                        }
                     }
                 }
+                let remaining = len - idx;
+                if remaining > 0 {
+                    let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                        &mut builder_ptr,
+                        bitmap_slice,
+                        builder_idx,
+                        idx + bitmap_offset,
+                        remaining,
+                    );
+                    builder_idx += remaining;
+                    unset_bits += cur_unset_bits;
+                    buf = cur_buf;
+                }
             }
-            if i % 8 != 0 {
-                *builder.get_unchecked_mut(builder_len) = value;
-                builder_len += 1;
+
+            if builder_idx % 8 != 0 {
+                store_advance_aligned(buf, &mut builder_ptr);
             }
-            builder.set_len(builder_len);
+
+            set_vec_len_by_ptr(&mut builder, builder_ptr);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()
