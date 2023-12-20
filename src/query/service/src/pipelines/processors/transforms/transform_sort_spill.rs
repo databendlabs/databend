@@ -123,21 +123,21 @@ where R: Rows + Send + Sync + 'static
             return Ok(Event::Finished);
         }
 
-        if matches!(self.state, State::Finish) {
-            debug_assert!(self.input.is_finished());
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
         if !self.output.can_push() {
             self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
 
         if let Some(block) = self.output_data.take() {
-            debug_assert!(matches!(self.state, State::MergeFinal));
+            debug_assert!(matches!(self.state, State::MergeFinal | State::Finish));
             self.output_block(block);
             return Ok(Event::NeedConsume);
+        }
+
+        if matches!(self.state, State::Finish) {
+            debug_assert!(self.input.is_finished());
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input_data.is_some() {
@@ -323,6 +323,28 @@ where R: Rows + Sync + Send + 'static
         while (self.unmerged_blocks.len() + block.is_some() as usize) > self.num_merge {
             let b = block.take();
             self.merge_sort_one_round(b).await?;
+        }
+
+        // Deal with a corner case:
+        // If this thread only has one spilled file.
+        if self.unmerged_blocks.len() == 1 {
+            let files = self.unmerged_blocks.pop_front().unwrap();
+            debug_assert!(files.len() == 1);
+
+            let ins = Instant::now();
+            let (block, bytes) = self.spiller.read_spilled(&files[0]).await?;
+
+            // perf
+            {
+                metrics_inc_sort_spill_read_count();
+                metrics_inc_sort_spill_read_bytes(bytes);
+                metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
+            }
+
+            self.output_data = Some(block);
+            self.state = State::Finish;
+
+            return Ok(());
         }
 
         let num_streams = self.unmerged_blocks.len() + block.is_some() as usize;
