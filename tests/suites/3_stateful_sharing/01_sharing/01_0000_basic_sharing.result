@@ -58,5 +58,4 @@ drop shared database and query data from share
 6
 ERROR 1105 (HY000) at line 1: ShareStorageError. Code: 2719, Text = share "test_share" storage error: HTTP status "Bad Request".
 ERROR 1105 (HY000) at line 1: ShareStorageError. Code: 2719, Text = share "test_share" storage error: HTTP status "Bad Request".
-
 all is good
