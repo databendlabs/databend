@@ -260,7 +260,7 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                if e.code() == 1025 {
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
                     return Err(ErrorCode::UnknownTable(format!(
                         "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
                     ))
