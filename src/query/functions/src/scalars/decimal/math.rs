@@ -44,6 +44,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         let from_decimal_type = from_type.as_decimal().unwrap();
 
         let scale = if params.is_empty() {
+            debug_assert!(matches!(round_mode, RoundMode::Ceil | RoundMode::Floor));
             0
         } else {
             params[0].get_i64()?
