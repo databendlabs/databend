@@ -686,6 +686,16 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_network_policies(&mut self) {}
 
+    fn visit_create_password_policy(&mut self, _stmt: &mut CreatePasswordPolicyStmt) {}
+
+    fn visit_alter_password_policy(&mut self, _stmt: &mut AlterPasswordPolicyStmt) {}
+
+    fn visit_drop_password_policy(&mut self, _stmt: &mut DropPasswordPolicyStmt) {}
+
+    fn visit_desc_password_policy(&mut self, _stmt: &mut DescPasswordPolicyStmt) {}
+
+    fn visit_show_password_policies(&mut self, _show_options: &mut Option<ShowOptions>) {}
+
     fn visit_create_task(&mut self, _stmt: &mut CreateTaskStmt) {}
 
     fn visit_drop_task(&mut self, _stmt: &mut DropTaskStmt) {}

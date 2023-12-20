@@ -471,6 +471,20 @@ impl InterpreterFactory {
             Plan::ShowNetworkPolicies(_) => {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
+            Plan::CreatePasswordPolicy(p) => Ok(Arc::new(
+                CreatePasswordPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterPasswordPolicy(p) => Ok(Arc::new(
+                AlterPasswordPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropPasswordPolicy(p) => Ok(Arc::new(DropPasswordPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescPasswordPolicy(p) => Ok(Arc::new(DescPasswordPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
 
             Plan::CreateTask(p) => Ok(Arc::new(CreateTaskInterpreter::try_create(
                 ctx,

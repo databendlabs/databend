@@ -70,3 +70,4 @@ mod v063_connection;
 mod v064_ndjson_format_params;
 mod v065_least_visible_time;
 mod v066_stage_create_on;
+mod v067_password_policy;

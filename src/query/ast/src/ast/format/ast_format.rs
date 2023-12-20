@@ -2604,6 +2604,50 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_password_policy(&mut self, stmt: &'ast CreatePasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "CreatePasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_alter_password_policy(&mut self, stmt: &'ast AlterPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "AlterPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_password_policy(&mut self, stmt: &'ast DropPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DropPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_desc_password_policy(&mut self, stmt: &'ast DescPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DescPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_password_policies(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowPasswordPolicies".to_string());
+    }
+
     fn visit_with(&mut self, with: &'ast With) {
         let mut children = Vec::with_capacity(with.ctes.len());
         for cte in with.ctes.iter() {
