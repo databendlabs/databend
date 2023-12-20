@@ -140,11 +140,21 @@ impl ShareEndpointManager {
         let resp = self.client.send(req).await;
         match resp {
             Ok(resp) => {
+                if !resp.status().is_success() {
+                    return Err(ErrorCode::ShareStorageError(format!(
+                        "share {:?} storage error: HTTP status {:?}",
+                        share_name,
+                        match resp.status().canonical_reason() {
+                            Some(reason) => reason.to_string(),
+                            None => resp.status().to_string(),
+                        }
+                    )));
+                }
                 let bs = resp.into_body().bytes().await?;
                 match serde_json::from_slice(&bs) {
                     Ok(table_info_map) => Ok(table_info_map),
-                    Err(e) => Err(ErrorCode::UnknownShareTable(format!(
-                        "Fail to get TableInfoMap from share {:?}: {:?}",
+                    Err(e) => Err(ErrorCode::ShareStorageError(format!(
+                        "share {:?} storage error: deser json file error: {:?}",
                         share_name, e
                     ))),
                 }

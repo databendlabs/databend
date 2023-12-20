@@ -56,7 +56,7 @@ drop shared database and query data from share
 4
 5
 6
-ERROR 1105 (HY000): UnknownShareTable. Code: 2717, Text = Fail to get TableInfoMap from share "test_share": Error("expected value", line: 1, column: 1).
-ERROR 1105 (HY000): UnknownShareTable. Code: 2717, Text = Fail to get TableInfoMap from share "test_share": Error("expected value", line: 1, column: 1).
+ERROR 1105 (HY000): ShareStorageError. Code: 2719, Text = share "test_share" storage error: HTTP status "Bad Request".
+ERROR 1105 (HY000): ShareStorageError. Code: 2719, Text = share "test_share" storage error: HTTP status "Bad Request".
 
 all is good
