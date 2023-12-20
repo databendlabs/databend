@@ -516,7 +516,7 @@ impl MergeIntoInterpreter {
                 plans::INSERT_NAME => {
                     columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
                 }
-                plans::UPDTAE_NAME => {
+                plans::UPDATE_NAME => {
                     columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
                 }
                 plans::DELETE_NAME => {
