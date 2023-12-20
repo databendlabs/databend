@@ -66,7 +66,7 @@ enum MutationKind {
 // if we use hash shuffle join strategy, the enum
 // type can't be parser when transform data between nodes.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct MixRowNumberKindAndLog {
+pub struct MixRowIdKindAndLog {
     pub log: Option<MutationLogs>,
     // kind's range is [0,1,2], 0 stands for log
     // 1 stands for row_id_update, 2 stands for row_id_delete,
@@ -74,9 +74,9 @@ pub struct MixRowNumberKindAndLog {
 }
 
 #[typetag::serde(name = "mix_row_id_kind_and_log")]
-impl BlockMetaInfo for MixRowNumberKindAndLog {
+impl BlockMetaInfo for MixRowIdKindAndLog {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        MixRowNumberKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
+        MixRowIdKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
