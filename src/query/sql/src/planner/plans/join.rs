@@ -505,7 +505,7 @@ impl Operator for Join {
         {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-            if right_stat_info.cardinality * 10.0 <= left_stat_info.cardinality {
+            if right_stat_info.cardinality * 20.0 <= left_stat_info.cardinality {
                 required.distribution = Distribution::Broadcast;
                 return Ok(required);
             }
