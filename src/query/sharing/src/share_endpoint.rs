@@ -141,9 +141,13 @@ impl ShareEndpointManager {
         match resp {
             Ok(resp) => {
                 let bs = resp.into_body().bytes().await?;
-                let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
-
-                Ok(table_info_map)
+                match serde_json::from_slice(&bs) {
+                    Ok(table_info_map) => Ok(table_info_map),
+                    Err(e) => Err(ErrorCode::UnknownShareTable(format!(
+                        "Fail to get TableInfoMap from share {:?}: {:?}",
+                        share_name, e
+                    ))),
+                }
             }
             Err(err) => Err(err.into()),
         }
