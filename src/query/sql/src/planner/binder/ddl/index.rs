@@ -170,15 +170,8 @@ impl Binder {
         }
         let mut original_query = query.clone();
         // pass checker, rewrite aggregate function
-        // The file name and block only correspond to each other at the time of table_scan,
-        // after multiple transformations, this correspondence does not exist,
-        // aggregating index needs to know which file the data comes from at the time of final sink
-        // to generate the index file corresponding to the source table data file,
-        // so we rewrite the sql here to add `_block_name` to select targets,
-        // so that we inline the file name into the data block.
-
-        // NOTE: if user already use the `_block_name` in their sql
-        // we no need add it and **MUST NOT** drop this column in sink phase.
+        // we will extract all agg function that select targets have
+        // and rewrite some agg functions like `avg`.
         let mut query = query.clone();
         // TODO(ariesdevil): unify the checker and rewriter.
         let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
@@ -289,6 +282,17 @@ impl Binder {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, self.dialect)?;
 
+        // The file name and block only correspond to each other at the time of table_scan,
+        // after multiple transformations, this correspondence does not exist,
+        // aggregating index needs to know which file the data comes from at the time of final sink
+        // to generate the index file corresponding to the source table data file,
+        // so we rewrite the sql here to add `_block_name` to select targets,
+        // so that we inline the file name into the data block.
+
+        // NOTE: if user already use the `_block_name` in their sql
+        // we no need add it and **MUST NOT** drop this column in sink phase.
+
+        // And we will rewrite the agg function to agg state func in this rewriter.
         let mut index_rewriter = RefreshAggregatingIndexRewriter::default();
         walk_statement_mut(&mut index_rewriter, &mut stmt);
 
