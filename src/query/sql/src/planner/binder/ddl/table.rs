@@ -998,9 +998,9 @@ impl Binder {
         let (new_catalog, new_database, new_table) =
             self.normalize_object_identifier_triple(new_catalog, new_database, new_table);
 
-        if new_catalog != catalog {
+        if new_catalog != catalog || new_database != database {
             return Err(ErrorCode::BadArguments(
-                "alter catalog not allowed while rename table",
+                "Rename table not allow modify catalog or database",
             ));
         }
 
