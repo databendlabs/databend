@@ -65,7 +65,6 @@ impl VisitorMut for AggregatingIndexRewriter {
                 lambda,
                 ..
             } if !*distinct
-                && args.len() == 1
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
                     .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
                 && window.is_none()
@@ -75,23 +74,49 @@ impl VisitorMut for AggregatingIndexRewriter {
                 if name.name.eq_ignore_ascii_case("avg") {
                     self.extract_avg(args);
                 } else {
-                    let agg = format!("{}({})", name.name.to_ascii_uppercase(), args[0]);
+                    let agg = format!(
+                        "{}({})",
+                        name.name.to_ascii_uppercase(),
+                        args.iter().map(|arg| arg.to_string()).join(",")
+                    );
                     self.extracted_aggs.insert(agg);
                 }
+            }
+            Expr::CountAll { window, .. } if window.is_none() => {
+                self.has_agg_function = true;
+                self.extracted_aggs.insert("COUNT()".to_string());
             }
             _ => {}
         };
     }
 
     fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
-        let SelectStmt { select_list, .. } = stmt;
+        let SelectStmt {
+            select_list,
+            group_by,
+            ..
+        } = stmt;
 
+        // we save the targets' expr to a hashset, so if the group by
+        // items not in targets, we will add to target.
+        let mut select_list_exprs: HashSet<String> = HashSet::new();
+        select_list.iter().for_each(|target| {
+            if let SelectTarget::AliasedExpr { expr, alias } = target {
+                select_list_exprs.insert(expr.to_string());
+                if let Some(alias) = alias {
+                    select_list_exprs.insert(alias.to_string());
+                }
+            }
+        });
         let mut new_select_list: Vec<SelectTarget> = vec![];
         for (position, target) in select_list.iter_mut().enumerate() {
             walk_select_target_mut(self, target);
             if self.has_agg_function {
+                // if target has agg function, we will extract the func to a hashset
+                // see `visit_expr` above for detail.
                 // we save the position of target that has agg function here,
-                // so that we can skip this target after.
+                // so that we can skip this target after and replace this skipped
+                // target with extracted agg function.
                 self.agg_func_positions.insert(position);
                 self.has_agg_function = false;
             }
@@ -122,6 +147,26 @@ impl VisitorMut for AggregatingIndexRewriter {
             }
         });
 
+        match group_by {
+            Some(group_by) => match group_by {
+                GroupBy::Normal(groups) => {
+                    groups.iter().for_each(|expr| {
+                        // if group by item not in targets, we will add it in.
+                        if !select_list_exprs.contains(&expr.to_string()) {
+                            let target = SelectTarget::AliasedExpr {
+                                expr: Box::new(expr.clone()),
+                                alias: None,
+                            };
+                            new_select_list.push(target);
+                        }
+                    });
+                }
+                _ => unreachable!(),
+            },
+            None => {}
+        }
+
+        // replace the select list with our rewritten new select list.
         *select_list = new_select_list;
     }
 }
@@ -255,11 +300,9 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
             Expr::FunctionCall {
                 distinct,
                 name,
-                args,
                 window,
                 ..
             } if !*distinct
-                && args.len() == 1
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
                     .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
                 && window.is_none() =>

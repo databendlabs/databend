@@ -225,7 +225,7 @@ fn new_index_meta() -> mt::IndexMeta {
         dropped_on: None,
         updated_on: None,
         original_query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
-        query: "SELECT a, SUM(b), t1._block_name FROM default.t1 WHERE a > 3 GROUP BY b, t1._block_name".to_string(),
+        query: "SELECT a, SUM(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
         sync_creation: false,
     }
 }

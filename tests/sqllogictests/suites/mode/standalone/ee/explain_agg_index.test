@@ -351,6 +351,8 @@ AggregateFinal
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
+        ├── aggregating index: [SELECT COUNT(), MAX(a), MIN(a), SUM(a), b FROM test_index_db.t1 GROUP BY b]
+        ├── rewritten query: [selection: [index_col_0 (#0), index_col_3 (#3), index_col_2 (#2), index_col_1 (#1)]]
         └── estimated rows: 0.00
 
 

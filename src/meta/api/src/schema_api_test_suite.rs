@@ -3529,8 +3529,7 @@ impl SchemaApiTestSuite {
                 dropped_on: None,
                 updated_on: None,
                 original_query: "select sum(number) from tb1".to_string(),
-                query: "select sum(number), tb1._block_name from tb1 group by tb1._block_name"
-                    .to_string(),
+                query: "select sum(number) from tb1".to_string(),
                 sync_creation: false,
             },
         };
@@ -5543,9 +5542,7 @@ impl SchemaApiTestSuite {
             dropped_on: None,
             updated_on: None,
             original_query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
-            query:
-                "SELECT a, SUM(b), tb1._block_name FROM tb1 WHERE a > 1 GROUP BY b, tb1._block_name"
-                    .to_string(),
+            query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
             sync_creation: false,
         };
 
@@ -5557,9 +5554,7 @@ impl SchemaApiTestSuite {
             dropped_on: None,
             updated_on: None,
             original_query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
-            query:
-                "SELECT a, SUM(b), tb1._block_name FROM tb1 WHERE b > 1 GROUP BY b, tb1._block_name"
-                    .to_string(),
+            query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
             sync_creation: false,
         };
 
