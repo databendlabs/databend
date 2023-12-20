@@ -709,6 +709,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_auto_compact_after_write(&self, _enable: bool) {
+        todo!()
+    }
+
+    fn get_auto_compact_after_write(&self) -> bool {
+        todo!()
+    }
+
     fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
         todo!()
     }

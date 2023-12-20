@@ -74,6 +74,9 @@ async fn do_hook_compact(
 
     if !pipeline.is_empty() && ctx.get_settings().get_enable_recluster_after_write()? {
         pipeline.set_on_finished(move |err| {
+            if !ctx.get_auto_compact_after_write() {
+                return Ok(());
+            }
 
             let op_name = &trace_ctx.operation_name;
             metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
