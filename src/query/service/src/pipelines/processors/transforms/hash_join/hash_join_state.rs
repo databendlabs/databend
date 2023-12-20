@@ -280,19 +280,18 @@ impl HashJoinState {
             .iter()
             .zip(self.hash_join_desc.probe_keys_rt.iter())
         {
-            if let Some(distinct_build_column) =
-                dedup_build_key_column(&func_ctx, data_blocks, build_key)?
-            {
-                if num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
+            if num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
+                if let Some(distinct_build_column) =
+                    dedup_build_key_column(&func_ctx, data_blocks, build_key)?
+                {
                     if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
                         runtime_filter.add_inlist(filter);
                     }
                 }
-                if num_rows <= BLOOM_RUNTIME_FILTER_THRESHOLD {
-                    if let Some(filter) = bloom_filter(build_key, probe_key, distinct_build_column)?
-                    {
-                        runtime_filter.add_bloom(filter);
-                    }
+            }
+            if num_rows <= BLOOM_RUNTIME_FILTER_THRESHOLD {
+                if let Some(filter) = bloom_filter(&func_ctx, build_key, probe_key, data_blocks)? {
+                    runtime_filter.add_bloom(filter);
                 }
             }
         }

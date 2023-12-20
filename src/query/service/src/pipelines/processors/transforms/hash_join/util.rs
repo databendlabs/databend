@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -25,9 +28,11 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::KeysState;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::FastHash;
 use xorf::BinaryFuse8;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
@@ -92,49 +97,81 @@ pub(crate) fn inlist_filter(
 }
 
 pub(crate) fn bloom_filter(
+    func_ctx: &FunctionContext,
     build_key: &Expr,
     probe_key: &Expr<String>,
-    build_column: Value<AnyType>,
+    data_blocks: &[DataBlock],
 ) -> Result<Option<(String, BinaryFuse8)>> {
     if !build_key.data_type().is_numeric() {
         return Ok(None);
     }
     if let Expr::ColumnRef { id, .. } = probe_key {
+        // Dedup build key column
+        let mut columns = Vec::with_capacity(data_blocks.len());
+        for block in data_blocks.iter() {
+            if block.num_columns() == 0 {
+                continue;
+            }
+            let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
+            let column = evaluator
+                .run(build_key)?
+                .convert_to_full_column(build_key.data_type(), block.num_rows());
+            columns.push(column);
+        }
+        if columns.is_empty() {
+            return Ok(None);
+        }
+        let build_key_column = Column::concat_columns(columns.into_iter())?;
         // Generate bloom filter using build column
         let data_type = build_key.data_type().clone();
-        let build_key_column = build_column
-            .as_scalar()
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .clone();
         let num_rows = build_key_column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
-        let mut hashes = Vec::with_capacity(num_rows);
+        let mut hashes = HashSet::with_capacity(num_rows);
         match method {
             HashMethodKind::KeysU8(hash_method) => {
-                let key_state =
+                let keys_state =
                     hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
-                hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::UInt8(col))) => {
+                        hashes.extend(col.iter().map(|key| key.fast_hash()));
+                    }
+                    _ => unreachable!(),
+                }
             }
             HashMethodKind::KeysU16(hash_method) => {
-                let key_state =
+                let keys_state =
                     hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
-                hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::UInt16(col))) => {
+                        hashes.extend(col.iter().map(|key| key.fast_hash()));
+                    }
+                    _ => unreachable!(),
+                }
             }
             HashMethodKind::KeysU32(hash_method) => {
-                let key_state =
+                let keys_state =
                     hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
-                hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::UInt32(col))) => {
+                        hashes.extend(col.iter().map(|key| key.fast_hash()));
+                    }
+                    _ => unreachable!(),
+                }
             }
             HashMethodKind::KeysU64(hash_method) => {
-                let key_state =
+                let keys_state =
                     hash_method.build_keys_state(&[(build_key_column, data_type)], num_rows)?;
-                hash_method.build_keys_accessor_and_hashes(key_state, &mut hashes)?;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::UInt64(col))) => {
+                        hashes.extend(col.iter().map(|key| key.fast_hash()));
+                    }
+                    _ => unreachable!(),
+                }
             }
             _ => unreachable!(),
         }
-        let filter = BinaryFuse8::try_from(hashes)?;
+        let hashes: Vec<u64> = hashes.into_iter().collect();
+        let filter = BinaryFuse8::try_from(&hashes)?;
         return Ok(Some((id.to_string(), filter)));
     }
     Ok(None)
