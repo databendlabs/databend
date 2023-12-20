@@ -177,6 +177,12 @@ impl Plan {
             Plan::DescNetworkPolicy(_) => Ok("DescNetworkPolicy".to_string()),
             Plan::ShowNetworkPolicies(_) => Ok("ShowNetworkPolicies".to_string()),
 
+            // password policy
+            Plan::CreatePasswordPolicy(_) => Ok("CreatePasswordPolicy".to_string()),
+            Plan::AlterPasswordPolicy(_) => Ok("AlterPasswordPolicy".to_string()),
+            Plan::DropPasswordPolicy(_) => Ok("DropPasswordPolicy".to_string()),
+            Plan::DescPasswordPolicy(_) => Ok("DescPasswordPolicy".to_string()),
+
             // task
             Plan::CreateTask(_) => Ok("CreateTask".to_string()),
             Plan::DropTask(_) => Ok("DropTask".to_string()),

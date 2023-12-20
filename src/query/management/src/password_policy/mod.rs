@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod jwt;
-mod network_policy;
-mod password_policy;
-mod role_cache_mgr;
-mod role_mgr;
-mod user_mgr;
-mod user_udf;
+mod password_policy_api;
+mod password_policy_mgr;
+
+pub use password_policy_api::PasswordPolicyApi;
+pub use password_policy_mgr::PasswordPolicyMgr;

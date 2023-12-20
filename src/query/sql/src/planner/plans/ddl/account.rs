@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::AlterPasswordAction;
+use databend_common_ast::ast::PasswordSetOptions;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
@@ -192,6 +194,63 @@ impl ShowNetworkPoliciesPlan {
             DataField::new("Allowed Ip List", DataType::String),
             DataField::new("Blocked Ip List", DataType::String),
             DataField::new("Comment", DataType::String),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreatePasswordPolicyPlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub name: String,
+    pub set_options: PasswordSetOptions,
+}
+
+impl CreatePasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlterPasswordPolicyPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub name: String,
+    pub action: AlterPasswordAction,
+}
+
+impl AlterPasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropPasswordPolicyPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub name: String,
+}
+
+impl DropPasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DescPasswordPolicyPlan {
+    pub name: String,
+}
+
+impl DescPasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("Property", DataType::String),
+            DataField::new("Value", DataType::String),
+            DataField::new("Default", DataType::Nullable(Box::new(DataType::String))),
+            DataField::new("Description", DataType::String),
         ])
     }
 }

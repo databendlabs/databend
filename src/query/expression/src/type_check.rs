@@ -28,10 +28,8 @@ use crate::function::FunctionSignature;
 use crate::types::decimal::DecimalSize;
 use crate::types::decimal::MAX_DECIMAL128_PRECISION;
 use crate::types::decimal::MAX_DECIMAL256_PRECISION;
-use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
-use crate::types::Int64Type;
 use crate::types::Number;
 use crate::types::NumberScalar;
 use crate::AutoCastRules;
@@ -125,31 +123,6 @@ pub fn check<Index: ColumnIndex>(
                     }
                     _ => {}
                 }
-            }
-
-            // inject the params
-            if ["round", "truncate"].contains(&name.as_str()) && params.is_empty() {
-                let mut scale = 0;
-                let mut new_args = args_expr.clone();
-
-                if args_expr.len() == 2 {
-                    let scalar_expr = &args_expr[1];
-                    scale = check_number::<_, i64>(
-                        scalar_expr.span(),
-                        &FunctionContext::default(),
-                        scalar_expr,
-                        fn_registry,
-                    )?;
-                } else {
-                    new_args.push(Expr::Constant {
-                        span: None,
-                        scalar: Scalar::Number(scale.into()),
-                        data_type: Int64Type::data_type(),
-                    })
-                }
-                scale = scale.clamp(-76, 76);
-                let params = vec![Scalar::Number(scale.into())];
-                return check_function(*span, name, &params, &args_expr, fn_registry);
             }
 
             check_function(*span, name, params, &args_expr, fn_registry)
