@@ -214,7 +214,7 @@ impl PrivilegeAccess {
 
         match object {
             GrantObject::Database(_, db_name) => {
-                if db_name == "information_schema"
+                if db_name.to_lowercase() == "information_schema"
                     && privileges.contains(&UserPrivilegeType::Select)
                     && len == 1
                 {
@@ -222,7 +222,10 @@ impl PrivilegeAccess {
                 }
             }
             GrantObject::Table(_, db_name, table_name) => {
-                if (db_name == "information_schema" || (db_name == "system" && table_name == "one"))
+                let db_name = db_name.to_lowercase();
+                let table_name = table_name.to_lowercase();
+                if (db_name.to_lowercase() == "information_schema"
+                    || (db_name == "system" && table_name == "one"))
                     && privileges.contains(&UserPrivilegeType::Select)
                     && len == 1
                 {
@@ -231,7 +234,7 @@ impl PrivilegeAccess {
             }
             GrantObject::DatabaseById(catalog_name, db_id) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                db_name = catalog.get_db_name_by_id(*db_id).await?;
+                db_name = catalog.get_db_name_by_id(*db_id).await?.to_lowercase();
                 if db_name == "information_schema"
                     && privileges.contains(&UserPrivilegeType::Select)
                     && len == 1
@@ -241,8 +244,11 @@ impl PrivilegeAccess {
             }
             GrantObject::TableById(catalog_name, db_id, table_id) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                db_name = catalog.get_db_name_by_id(*db_id).await?;
-                table_name = catalog.get_table_name_by_id(*table_id).await?;
+                db_name = catalog.get_db_name_by_id(*db_id).await?.to_lowercase();
+                table_name = catalog
+                    .get_table_name_by_id(*table_id)
+                    .await?
+                    .to_lowercase();
                 if (db_name == "information_schema" || (db_name == "system" && table_name == "one"))
                     && privileges.contains(&UserPrivilegeType::Select)
                     && len == 1
@@ -958,7 +964,7 @@ async fn has_priv(
     table_id: Option<u64>,
     grant_set: UserGrantSet,
 ) -> Result<bool> {
-    if db_name == "information_schema" {
+    if db_name.to_lowercase() == "information_schema" {
         return Ok(true);
     }
     Ok(RoleCacheManager::instance()
