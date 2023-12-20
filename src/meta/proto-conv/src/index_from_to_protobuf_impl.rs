@@ -84,7 +84,6 @@ impl FromToProto for mt::IndexMeta {
             original_query: p.original_query,
             query: p.query,
             sync_creation: p.sync_creation,
-            user_defined_block_name: p.user_defined_block_name,
         };
         Ok(v)
     }
@@ -107,7 +106,6 @@ impl FromToProto for mt::IndexMeta {
             original_query: self.original_query.clone(),
             query: self.query.clone(),
             sync_creation: self.sync_creation,
-            user_defined_block_name: self.user_defined_block_name,
         };
         Ok(p)
     }

@@ -341,7 +341,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         // Build the final sink schema.
         let mut sink_schema = TableSchema::new(fields);
-        if !self.plan.index_meta.user_defined_block_name {
+        if !self.plan.user_defined_block_name {
             sink_schema.drop_column(&block_name_col.column_name)?;
         }
         let sink_schema = Arc::new(sink_schema);
@@ -359,7 +359,7 @@ impl Interpreter for RefreshIndexInterpreter {
                 write_settings.clone(),
                 sink_schema.clone(),
                 block_name_offset,
-                self.plan.index_meta.user_defined_block_name,
+                self.plan.user_defined_block_name,
             )
         })?;
 

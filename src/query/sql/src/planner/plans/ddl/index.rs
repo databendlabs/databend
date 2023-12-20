@@ -29,7 +29,6 @@ pub struct CreateIndexPlan {
     pub query: String,
     pub table_id: MetaId,
     pub sync_creation: bool,
-    pub user_defined_block_name: bool,
 }
 
 /// Drop.
@@ -48,4 +47,5 @@ pub struct RefreshIndexPlan {
     pub table_info: TableInfo,
     pub query_plan: Box<Plan>,
     pub segment_locs: Option<Vec<Location>>,
+    pub user_defined_block_name: bool,
 }

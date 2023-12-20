@@ -56,7 +56,6 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
             query,
             updated_on: None,
             sync_creation: false,
-            user_defined_block_name: false,
         }
     };
 

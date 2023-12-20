@@ -78,7 +78,6 @@ impl Interpreter for CreateIndexInterpreter {
                 original_query: self.plan.original_query.clone(),
                 query: self.plan.query.clone(),
                 sync_creation: self.plan.sync_creation,
-                user_defined_block_name: self.plan.user_defined_block_name,
             },
         };
 

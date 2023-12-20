@@ -3532,7 +3532,6 @@ impl SchemaApiTestSuite {
                 query: "select sum(number), tb1._block_name from tb1 group by tb1._block_name"
                     .to_string(),
                 sync_creation: false,
-                user_defined_block_name: false,
             },
         };
 
@@ -5548,7 +5547,6 @@ impl SchemaApiTestSuite {
                 "SELECT a, SUM(b), tb1._block_name FROM tb1 WHERE a > 1 GROUP BY b, tb1._block_name"
                     .to_string(),
             sync_creation: false,
-            user_defined_block_name: false,
         };
 
         let index_name_2 = "idx2";
@@ -5563,7 +5561,6 @@ impl SchemaApiTestSuite {
                 "SELECT a, SUM(b), tb1._block_name FROM tb1 WHERE b > 1 GROUP BY b, tb1._block_name"
                     .to_string(),
             sync_creation: false,
-            user_defined_block_name: false,
         };
 
         let name_ident_1 = IndexNameIdent {

@@ -45,9 +45,9 @@ use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 #[derive(Debug, Clone)]
 pub struct AggregatingIndexRewriter {
     pub sql_dialect: Dialect,
-    pub user_defined_block_name: bool,
     has_agg_function: bool,
     extracted_aggs: HashSet<String>,
+    agg_func_positions: HashSet<usize>,
 }
 
 impl VisitorMut for AggregatingIndexRewriter {
@@ -78,46 +78,36 @@ impl VisitorMut for AggregatingIndexRewriter {
                     self.extracted_aggs.insert(agg);
                 }
             }
-            Expr::CountAll { window, .. } if window.is_none() => {
-                self.has_agg_function = true;
-                let count = "COUNT()".to_string();
-                self.extracted_aggs.insert(count);
-            }
             _ => {}
         };
     }
 
     fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
-        let SelectStmt {
-            select_list,
-            from,
-            group_by,
-            ..
-        } = stmt;
+        let SelectStmt { select_list, .. } = stmt;
 
         let mut new_select_list: Vec<SelectTarget> = vec![];
-        for target in select_list.iter_mut() {
+        for (position, target) in select_list.iter_mut().enumerate() {
             walk_select_target_mut(self, target);
-        }
-
-        for target in select_list.iter() {
-            match target {
-                SelectTarget::AliasedExpr { box expr, .. } => match expr {
-                    Expr::FunctionCall { .. } => {}
-                    Expr::BinaryOp {
-                        box left,
-                        box right,
-                        ..
-                    } => match (left, right) {
-                        (Expr::FunctionCall { .. }, Expr::FunctionCall { .. }) => {}
-                        (_, _) => new_select_list.push(target.clone()),
-                    },
-                    _ => new_select_list.push(target.clone()),
-                },
-                _ => new_select_list.push(target.clone()),
+            if self.has_agg_function {
+                // we save the position of target that has agg function here,
+                // so that we can skip this target after.
+                self.agg_func_positions.insert(position);
+                self.has_agg_function = false;
             }
         }
 
+        if !self.agg_func_positions.is_empty() {
+            self.has_agg_function = true;
+        }
+
+        for (position, target) in select_list.iter().enumerate() {
+            // add targets that not have agg function to new select list.
+            if !self.agg_func_positions.contains(&position) {
+                new_select_list.push(target.clone());
+            }
+        }
+
+        // add agg functions that extracted from target to new select list.
         self.extracted_aggs.iter().for_each(|agg| {
             if let Ok(tokens) = tokenize_sql(agg) {
                 if let Ok(new_expr) = parse_expr(&tokens, self.sql_dialect) {
@@ -131,61 +121,6 @@ impl VisitorMut for AggregatingIndexRewriter {
         });
 
         *select_list = new_select_list;
-
-        let table = {
-            let table_ref = from.first().unwrap();
-            match table_ref {
-                TableReference::Table { table, .. } => table.clone(),
-                _ => unreachable!(),
-            }
-        };
-
-        let block_name_expr = Expr::ColumnRef {
-            span: None,
-            database: None,
-            table: Some(table),
-            column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
-        };
-
-        // if select list already contains `BLOCK_NAME_COL_NAME`
-        if select_list.iter().any(|target| match target {
-            SelectTarget::AliasedExpr { expr, .. } => match (*expr).clone().as_ref() {
-                Expr::ColumnRef { column, .. } => {
-                    column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
-                }
-
-                _ => false,
-            },
-            SelectTarget::StarColumns { .. } => false,
-        }) {
-            self.user_defined_block_name = true;
-        } else {
-            select_list.extend_one(SelectTarget::AliasedExpr {
-                expr: Box::new(block_name_expr.clone()),
-                alias: None,
-            });
-        }
-
-        match group_by {
-            Some(group_by) => match group_by {
-                GroupBy::Normal(groups) => {
-                    if !groups.iter().any(|expr| match (*expr).clone() {
-                        Expr::ColumnRef { column, .. } => {
-                            column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
-                        }
-                        _ => false,
-                    }) {
-                        groups.extend_one(block_name_expr)
-                    }
-                }
-                _ => unreachable!(),
-            },
-            None if self.has_agg_function => {
-                let groups = vec![block_name_expr];
-                *group_by = Some(GroupBy::Normal(groups));
-            }
-            _ => {}
-        }
     }
 }
 
@@ -193,15 +128,15 @@ impl AggregatingIndexRewriter {
     pub fn new(sql_dialect: Dialect) -> Self {
         Self {
             sql_dialect,
-            user_defined_block_name: false,
             has_agg_function: false,
             extracted_aggs: Default::default(),
+            agg_func_positions: Default::default(),
         }
     }
 
     pub fn extract_avg(&mut self, args: &[Expr]) {
         let sum = format!("SUM({})", args[0]);
-        let count = format!("COUNT({})", args[0]);
+        let count = "COUNT()".to_string();
         self.extracted_aggs.insert(sum);
         self.extracted_aggs.insert(count);
     }
@@ -307,7 +242,10 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
     }
 }
 #[derive(Debug, Clone, Default)]
-pub struct RefreshAggregatingIndexRewriter {}
+pub struct RefreshAggregatingIndexRewriter {
+    pub user_defined_block_name: bool,
+    has_agg_function: bool,
+}
 
 impl VisitorMut for RefreshAggregatingIndexRewriter {
     fn visit_expr(&mut self, expr: &mut Expr) {
@@ -324,7 +262,92 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
                     .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
                 && window.is_none() =>
             {
+                self.has_agg_function = true;
                 name.name = format!("{}_STATE", name.name);
+            }
+            Expr::CountAll { window, .. } if window.is_none() => {
+                self.has_agg_function = true;
+                *expr = Expr::FunctionCall {
+                    span: None,
+                    distinct: false,
+                    name: Identifier {
+                        name: "COUNT_STATE".to_string(),
+                        quote: None,
+                        span: None,
+                    },
+                    args: vec![],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+        let SelectStmt {
+            select_list,
+            from,
+            group_by,
+            ..
+        } = stmt;
+
+        for target in select_list.iter_mut() {
+            walk_select_target_mut(self, target);
+        }
+
+        let table = {
+            let table_ref = from.first().unwrap();
+            match table_ref {
+                TableReference::Table { table, .. } => table.clone(),
+                _ => unreachable!(),
+            }
+        };
+
+        let block_name_expr = Expr::ColumnRef {
+            span: None,
+            database: None,
+            table: Some(table),
+            column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
+        };
+
+        // if select list already contains `BLOCK_NAME_COL_NAME`
+        if select_list.iter().any(|target| match target {
+            SelectTarget::AliasedExpr { expr, .. } => match (*expr).clone().as_ref() {
+                Expr::ColumnRef { column, .. } => {
+                    column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
+                }
+
+                _ => false,
+            },
+            SelectTarget::StarColumns { .. } => false,
+        }) {
+            self.user_defined_block_name = true;
+        } else {
+            select_list.extend_one(SelectTarget::AliasedExpr {
+                expr: Box::new(block_name_expr.clone()),
+                alias: None,
+            });
+        }
+
+        match group_by {
+            Some(group_by) => match group_by {
+                GroupBy::Normal(groups) => {
+                    if !groups.iter().any(|expr| match (*expr).clone() {
+                        Expr::ColumnRef { column, .. } => {
+                            column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
+                        }
+                        _ => false,
+                    }) {
+                        groups.extend_one(block_name_expr)
+                    }
+                }
+                _ => unreachable!(),
+            },
+            None if self.has_agg_function => {
+                let groups = vec![block_name_expr];
+                *group_by = Some(GroupBy::Normal(groups));
             }
             _ => {}
         }
