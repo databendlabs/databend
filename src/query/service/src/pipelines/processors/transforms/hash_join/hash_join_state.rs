@@ -289,8 +289,7 @@ impl HashJoinState {
                     }
                 }
                 if num_rows <= BLOOM_RUNTIME_FILTER_THRESHOLD {
-                    if let Some(filter) =
-                        bloom_filter(build_key, probe_key, distinct_build_column, num_rows)?
+                    if let Some(filter) = bloom_filter(build_key, probe_key, distinct_build_column)?
                     {
                         runtime_filter.add_bloom(filter);
                     }
