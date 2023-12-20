@@ -665,6 +665,11 @@ fn test_cast_between_string_and_decimal(file: &mut impl Write, is_try: bool) {
         format!("{prefix}CAST('-1.0e+10' AS DECIMAL(11, 0))"),
         &[],
     );
+    run_ast(
+        file,
+        format!("{prefix}CAST('-0.000000' AS DECIMAL(11, 0))"),
+        &[],
+    );
 }
 
 fn gen_bitmap_data() -> Column {

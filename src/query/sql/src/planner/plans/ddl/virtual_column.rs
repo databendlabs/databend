@@ -20,6 +20,7 @@ use databend_storages_common_table_meta::meta::Location;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnPlan {
+    pub if_not_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -34,6 +35,7 @@ impl CreateVirtualColumnPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterVirtualColumnPlan {
+    pub if_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -48,6 +50,7 @@ impl AlterVirtualColumnPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnPlan {
+    pub if_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,

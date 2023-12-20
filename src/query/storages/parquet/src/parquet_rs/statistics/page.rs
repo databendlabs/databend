@@ -151,8 +151,8 @@ fn convert_page_index_int32(
                     Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                 ),
                 TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max as i64), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min as i64), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                 ),
                 _ => unreachable!(),
             };
@@ -187,8 +187,8 @@ fn convert_page_index_int64(
                     Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                 ),
                 TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                 ),
                 _ => unreachable!(),
             };

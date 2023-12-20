@@ -65,7 +65,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name {}",
+            "SELECT name, value, default, `range`, level, description, type FROM system.settings {} ORDER BY name {}",
             show_limit, limit_str,
         );
 

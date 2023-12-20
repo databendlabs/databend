@@ -3233,8 +3233,10 @@ dependencies = [
  "databend-common-expression",
  "databend-common-pipeline-core",
  "databend-common-profile",
+ "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "match-template",
+ "rand 0.8.5",
  "serde",
  "typetag",
 ]
@@ -3814,6 +3816,7 @@ dependencies = [
  "databend-common-functions",
  "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",

@@ -81,7 +81,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_function_factory("get", |params, args_type| {
         // Tuple index starts from 1
-        let idx = params.first()?.checked_sub(1)?;
+        let idx = (params.first()?.get_i64()? as usize).checked_sub(1)?;
+
         let fields_ty = match args_type.first()? {
             DataType::Tuple(tys) => tys,
             _ => return None,
@@ -117,7 +118,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_function_factory("get", |params, args_type| {
         // Tuple index starts from 1
-        let idx = params.first()?.checked_sub(1)?;
+        let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
         let fields_ty = match args_type.first()? {
             DataType::Nullable(box DataType::Tuple(tys)) => tys,
             _ => return None,
@@ -179,7 +180,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_function_factory("get", |params, args_type| {
         // Tuple index starts from 1
-        let idx = params.first()?.checked_sub(1)?;
+        let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
         let fields_ty = match args_type.first()? {
             DataType::Nullable(box DataType::Tuple(tys)) => tys,
             _ => return None,

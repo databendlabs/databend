@@ -35,7 +35,11 @@ use num_traits::Float;
 use num_traits::Pow;
 use ordered_float::OrderedFloat;
 
+use crate::scalars::decimal::register_decimal_math;
+
 pub fn register(registry: &mut FunctionRegistry) {
+    register_decimal_math(registry);
+
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "sin",
         |_, _| {
