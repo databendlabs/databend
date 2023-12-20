@@ -1885,11 +1885,35 @@ impl<'a> TypeChecker<'a> {
         &self,
         span: Span,
         func_name: &str,
-        params: Vec<i64>,
+        mut params: Vec<i64>,
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
         let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+
+        // inject the params
+        if ["round", "truncate"].contains(&func_name)
+            && !args.is_empty()
+            && params.is_empty()
+            && args[0].data_type()?.remove_nullable().is_decimal()
+        {
+            let scale = if args.len() == 2 {
+                let scalar_expr = &arguments[1];
+                let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
+
+                let scale = check_number::<_, i64>(
+                    expr.span(),
+                    &FunctionContext::default(),
+                    &expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                scale.clamp(-76, 76)
+            } else {
+                0
+            };
+            params.push(scale);
+        }
+
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
