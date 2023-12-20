@@ -399,42 +399,6 @@ impl Scalar {
         }
     }
 
-    pub fn data_type(&self) -> DataType {
-        match self {
-            Scalar::Null => DataType::Null,
-            Scalar::EmptyArray => DataType::EmptyArray,
-            Scalar::EmptyMap => DataType::EmptyMap,
-            Scalar::Number(NumberScalar::UInt8(_)) => DataType::Number(NumberDataType::UInt8),
-            Scalar::Number(NumberScalar::UInt16(_)) => DataType::Number(NumberDataType::UInt16),
-            Scalar::Number(NumberScalar::UInt32(_)) => DataType::Number(NumberDataType::UInt32),
-            Scalar::Number(NumberScalar::UInt64(_)) => DataType::Number(NumberDataType::UInt64),
-            Scalar::Number(NumberScalar::Int8(_)) => DataType::Number(NumberDataType::Int8),
-            Scalar::Number(NumberScalar::Int16(_)) => DataType::Number(NumberDataType::Int16),
-            Scalar::Number(NumberScalar::Int32(_)) => DataType::Number(NumberDataType::Int32),
-            Scalar::Number(NumberScalar::Int64(_)) => DataType::Number(NumberDataType::Int64),
-            Scalar::Number(NumberScalar::Float32(_)) => DataType::Number(NumberDataType::Float32),
-            Scalar::Number(NumberScalar::Float64(_)) => DataType::Number(NumberDataType::Float64),
-            Scalar::Decimal(DecimalScalar::Decimal128(_, size)) => {
-                DataType::Decimal(DecimalDataType::Decimal128(*size))
-            }
-            Scalar::Decimal(DecimalScalar::Decimal256(_, size)) => {
-                DataType::Decimal(DecimalDataType::Decimal256(*size))
-            }
-            Scalar::Timestamp(_) => DataType::Timestamp,
-            Scalar::Date(_) => DataType::Date,
-            Scalar::String(_) => DataType::String,
-            Scalar::Variant(_) => DataType::Variant,
-            Scalar::Bitmap(_) => DataType::Bitmap,
-            Scalar::Boolean(_) => DataType::Boolean,
-            Scalar::Array(col) => DataType::Array(Box::new(col.data_type())),
-            Scalar::Map(col) => DataType::Map(Box::new(col.data_type())),
-            Scalar::Tuple(scalars) => {
-                let inner = scalars.iter().map(Scalar::data_type).collect::<Vec<_>>();
-                DataType::Tuple(inner)
-            }
-        }
-    }
-
     pub fn is_positive(&self) -> bool {
         match self {
             Scalar::Number(n) => n.is_positive(),

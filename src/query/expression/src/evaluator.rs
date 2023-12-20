@@ -1101,9 +1101,10 @@ impl<'a> Evaluator<'a> {
         self.check_expr(expr);
 
         let result = match expr {
-            Expr::Constant { scalar, .. } => {
-                Ok((Value::Scalar(scalar.clone()), scalar.data_type()))
-            }
+            Expr::Constant { scalar, .. } => Ok((
+                Value::Scalar(scalar.clone()),
+                scalar.as_ref().infer_data_type(),
+            )),
             Expr::ColumnRef { id, .. } => {
                 let entry = self.input_columns.get_by_offset(*id);
                 Ok((entry.value.clone(), entry.data_type.clone()))
