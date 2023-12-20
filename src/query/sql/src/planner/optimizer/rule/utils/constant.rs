@@ -204,7 +204,7 @@ pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarE
                                 (**argument).clone(),
                                 ScalarExpr::ConstantExpr(ConstantExpr {
                                     span: *span,
-                                    value: Scalar::Number(NumberScalar::Int64(v)),
+                                    value: Scalar::Number(v.into()),
                                 }),
                             );
                         }

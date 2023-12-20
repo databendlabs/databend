@@ -149,8 +149,8 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             params: params
                 .into_iter()
                 .map(|param| match param {
-                    ASTLiteral::UInt64(u) => u as usize,
-                    ASTLiteral::Decimal256 { .. } => 0_usize,
+                    ASTLiteral::UInt64(u) => Scalar::Number((u as i64).into()),
+                    ASTLiteral::Decimal256 { .. } => Scalar::Number(0i64.into()),
                     _ => unimplemented!(),
                 })
                 .collect(),
@@ -349,9 +349,13 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {
-                    (vec![key as usize], vec![transform_expr(*expr, columns)])
+                    (vec![key as i64], vec![transform_expr(*expr, columns)])
                 }
             };
+            let params = params
+                .into_iter()
+                .map(|x| Scalar::Number(x.into()))
+                .collect();
             RawExpr::FunctionCall {
                 span,
                 name: "get".to_string(),

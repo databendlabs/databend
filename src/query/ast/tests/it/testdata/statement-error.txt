@@ -131,7 +131,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `STREAM`, `VIRTUAL`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `PIPE`, or `CONNECTION`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `STREAM`, `VIRTUAL`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -197,7 +197,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `TASK`, `MASKING`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `TASK`, `MASKING`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -237,7 +237,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `STREAMS`, `CATALOGS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `USERS`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `STREAMS`, `CATALOGS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `USERS`, `FILE`, or `FULL`
 
 
 ---------- Input ----------

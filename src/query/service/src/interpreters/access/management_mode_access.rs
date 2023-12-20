@@ -104,6 +104,10 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateNetworkPolicy(_)
                 | Plan::AlterNetworkPolicy(_)
                 | Plan::DropNetworkPolicy(_)
+                // Password policy.
+                | Plan::CreatePasswordPolicy(_)
+                | Plan::AlterPasswordPolicy(_)
+                | Plan::DropPasswordPolicy(_)
 
                 // UDF
                 | Plan::CreateUDF(_)

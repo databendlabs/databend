@@ -17,12 +17,14 @@ use std::sync::Arc;
 
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FromData;
@@ -32,6 +34,7 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use ethnum::i256;
@@ -40,7 +43,7 @@ use ordered_float::OrderedFloat;
 
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
-    let factory = |params: &[usize], args_type: &[DataType]| {
+    let factory = |params: &[Scalar], args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -58,8 +61,8 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         }
 
         let decimal_size = DecimalSize {
-            precision: params[0] as u8,
-            scale: params[1] as u8,
+            precision: params[0].get_i64()? as _,
+            scale: params[1].get_i64()? as _,
         };
 
         let decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
@@ -108,7 +111,7 @@ pub(crate) fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegist
 
     let is_f32 = matches!(data_type, DataType::Number(NumberDataType::Float32));
 
-    let factory = |_params: &[usize], args_type: &[DataType], data_type: DataType| {
+    let factory = |_params: &[Scalar], args_type: &[DataType], data_type: DataType| {
         if args_type.len() != 1 {
             return None;
         }
@@ -203,7 +206,7 @@ pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry
     let name = format!("to_{}", T::data_type().to_string().to_lowercase());
     let try_name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
 
-    let factory = |_params: &[usize], args_type: &[DataType]| {
+    let factory = |_params: &[Scalar], args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -261,6 +264,68 @@ pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry
         f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
         Some(Arc::new(f.error_to_null().passthrough_nullable()))
     });
+}
+
+pub(crate) fn register_decimal_to_string(registry: &mut FunctionRegistry) {
+    // decimal to string
+    let factory = |_params: &[Scalar], args_type: &[DataType]| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_decimal() {
+            return None;
+        }
+
+        let function = Function {
+            signature: FunctionSignature {
+                name: "to_string".to_string(),
+                args_type: vec![arg_type.clone()],
+                return_type: StringType::data_type(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
+            },
+        };
+
+        if args_type[0].is_nullable() {
+            Some(Arc::new(function.passthrough_nullable()))
+        } else {
+            Some(Arc::new(function))
+        }
+    };
+    registry.register_function_factory("to_string", factory);
+}
+
+fn decimal_to_string(
+    args: &[ValueRef<AnyType>],
+    from_type: DataType,
+    _ctx: &mut EvalContext,
+) -> Value<AnyType> {
+    let arg = &args[0];
+    let from_type = from_type.as_decimal().unwrap();
+
+    with_decimal_mapped_type!(|DECIMAL_TYPE| match from_type {
+        DecimalDataType::DECIMAL_TYPE(from_size) => {
+            let arg: ValueRef<DecimalType<DECIMAL_TYPE>> = arg.try_downcast().unwrap();
+
+            match arg {
+                ValueRef::Column(col) => {
+                    let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
+                    for x in DecimalType::<DECIMAL_TYPE>::iter_column(&col) {
+                        builder.put_str(&DECIMAL_TYPE::display(x, from_size.scale));
+                        builder.commit_row();
+                    }
+                    Value::Column(Column::String(builder.build()))
+                }
+                ValueRef::Scalar(x) => Value::Scalar(Scalar::String(
+                    DECIMAL_TYPE::display(x, from_size.scale).into(),
+                )),
+            }
+        }
+    })
 }
 
 fn convert_to_decimal(

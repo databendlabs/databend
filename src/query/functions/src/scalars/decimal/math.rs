@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ord;
 use std::ops::*;
 use std::sync::Arc;
 
@@ -26,12 +25,13 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use ethnum::i256;
 
 pub fn register_decimal_math(registry: &mut FunctionRegistry) {
-    let factory = |params: &[usize], args_type: &[DataType], round_mode: RoundMode| {
+    let factory = |params: &[Scalar], args_type: &[DataType], round_mode: RoundMode| {
         if args_type.is_empty() {
             return None;
         }
@@ -44,9 +44,10 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         let from_decimal_type = from_type.as_decimal().unwrap();
 
         let scale = if params.is_empty() {
+            debug_assert!(matches!(round_mode, RoundMode::Ceil | RoundMode::Floor));
             0
         } else {
-            params[0] as i64 - 76
+            params[0].get_i64()?
         };
 
         let decimal_size = DecimalSize {

@@ -578,6 +578,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_refresh_virtual_column(&mut self, _stmt: &'ast RefreshVirtualColumnStmt) {}
 
+    fn visit_show_virtual_columns(&mut self, _stmt: &'ast ShowVirtualColumnsStmt) {}
+
     fn visit_show_users(&mut self) {}
 
     fn visit_create_user(&mut self, _stmt: &'ast CreateUserStmt) {}
@@ -669,6 +671,16 @@ pub trait Visitor<'ast>: Sized {
     fn visit_desc_network_policy(&mut self, _stmt: &'ast DescNetworkPolicyStmt) {}
 
     fn visit_show_network_policies(&mut self) {}
+
+    fn visit_create_password_policy(&mut self, _stmt: &'ast CreatePasswordPolicyStmt) {}
+
+    fn visit_alter_password_policy(&mut self, _stmt: &'ast AlterPasswordPolicyStmt) {}
+
+    fn visit_drop_password_policy(&mut self, _stmt: &'ast DropPasswordPolicyStmt) {}
+
+    fn visit_desc_password_policy(&mut self, _stmt: &'ast DescPasswordPolicyStmt) {}
+
+    fn visit_show_password_policies(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_create_task(&mut self, _stmt: &'ast CreateTaskStmt) {}
 

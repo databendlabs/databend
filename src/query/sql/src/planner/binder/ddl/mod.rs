@@ -20,6 +20,7 @@ mod data_mask;
 mod database;
 mod index;
 mod network_policy;
+mod password_policy;
 mod role;
 mod share;
 mod stage;
