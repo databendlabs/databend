@@ -39,6 +39,7 @@ use databend_common_exception::Span;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
@@ -108,7 +109,8 @@ impl VisitorMut for AggregatingIndexRewriter {
         }
 
         // add agg functions that extracted from target to new select list.
-        self.extracted_aggs.iter().for_each(|agg| {
+        // here we sort the `extracted_aggs` for explain test stable.
+        self.extracted_aggs.iter().sorted().for_each(|agg| {
             if let Ok(tokens) = tokenize_sql(agg) {
                 if let Ok(new_expr) = parse_expr(&tokens, self.sql_dialect) {
                     let target = SelectTarget::AliasedExpr {
