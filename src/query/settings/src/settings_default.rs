@@ -540,12 +540,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh aggregating index after new data written",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "If columns are default nullable when create or alter table",
@@ -627,6 +621,12 @@ impl DefaultSettings {
                 ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh virtual column after new data written",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("manual_refresh_aggregating_index", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh aggregating index manually",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

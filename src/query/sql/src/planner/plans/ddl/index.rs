@@ -28,7 +28,6 @@ pub struct CreateIndexPlan {
     pub original_query: String,
     pub query: String,
     pub table_id: MetaId,
-    pub sync_creation: bool,
 }
 
 /// Drop.

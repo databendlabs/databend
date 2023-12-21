@@ -58,9 +58,7 @@ pub async fn hook_refresh(
         return Ok(());
     }
 
-    let refresh_agg_index = ctx
-        .get_settings()
-        .get_enable_refresh_aggregating_index_after_write()?;
+    let refresh_agg_index = !ctx.get_settings().get_manual_refresh_aggregating_index()?;
 
     let refresh_virtual_column = ctx
         .get_settings()
@@ -182,12 +180,7 @@ async fn generate_refresh_index_plan(
         })
         .await?;
 
-    let sync_indexes = indexes
-        .into_iter()
-        .filter(|(_, _, meta)| meta.sync_creation)
-        .collect::<Vec<_>>();
-
-    for (index_id, index_name, index_meta) in sync_indexes {
+    for (index_id, index_name, index_meta) in indexes {
         let plan = build_refresh_index_plan(
             ctx.clone(),
             index_id,

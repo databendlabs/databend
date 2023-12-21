@@ -35,9 +35,6 @@ INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
 statement ok
 CREATE AGGREGATING INDEX testi AS select c + 1 from t
 
-statement ok
-REFRESH AGGREGATING INDEX testi
-
 query T
 select to_string(c + 1) from t
 ----
@@ -53,9 +50,6 @@ DROP AGGREGATING INDEX testi
 
 statement ok
 CREATE AGGREGATING INDEX testi AS select a, b from t
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query T
 select a from t where b > 1
@@ -81,9 +75,6 @@ DROP AGGREGATING INDEX testi
 statement ok
 CREATE AGGREGATING INDEX testi AS select a, b from t where b > 1
 
-statement ok
-REFRESH AGGREGATING INDEX testi
-
 query T
 select a, b from t where b > 2
 ----
@@ -94,9 +85,6 @@ DROP AGGREGATING INDEX testi
 # query: eval-agg-eval-scan, index: eval-filter-scan
 statement ok
 CREATE AGGREGATING INDEX testi AS select a + 1, b from t
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query I
 select sum(a + 1) as s from t group by b order by s
@@ -115,9 +103,6 @@ DROP AGGREGATING INDEX testi
 # query: eval-agg-eval-filter-scan, index: eval-filter-scan
 statement ok
 CREATE AGGREGATING INDEX testi AS select a + 1, b from t where b > 1
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query I
 select sum(a + 1) as s from t where b > 1 group by b order by s
@@ -143,9 +128,6 @@ DROP AGGREGATING INDEX testi
 statement ok
 CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
 
-statement ok
-REFRESH AGGREGATING INDEX testi
-
 query I
 select sum(a) + 1 as s from t group by b order by s
 ----
@@ -159,9 +141,6 @@ DROP AGGREGATING INDEX testi
 
 statement ok
 CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query I
 select sum(a) + 1 from t where b > 1 group by b
@@ -184,9 +163,6 @@ DROP AGGREGATING INDEX testi
 
 statement ok
 CREATE AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query I
 select sum(a) + 1 as s from t where c > 1 group by b order by s
@@ -213,10 +189,6 @@ INSERT INTO t VALUES (1,1,6), (1,2,7), (1,2,8), (2,2,9)
 
 statement ok
 CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
-
-# partial refresh
-statement ok
-REFRESH AGGREGATING INDEX testi LIMIT 1
 
 query I
 select sum(a) + 1 as s from t group by b order by s
@@ -246,10 +218,6 @@ INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
 statement ok
 CREATE AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
 
-# partial refresh
-statement ok
-REFRESH AGGREGATING INDEX testi
-
 query II
 SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
 ----
@@ -274,9 +242,6 @@ INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
 
 statement ok
 CREATE AGGREGATING INDEX testi AS select b, sum(a), max(c) from t where c > 1 group by b
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query II
 SELECT b, SUM(a), MAX(c) from t WHERE c > 1 GROUP BY b ORDER BY b
@@ -306,9 +271,6 @@ CREATE AGGREGATING INDEX testi AS select abs(b) as bs, sum(a) from t where c > 1
 statement ok
 UPDATE t SET c = 3 where b = -1
 
-statement ok
-REFRESH AGGREGATING INDEX testi
-
 query TI rowsort
 SELECT ABS(b) as bs, SUM(a) from t WHERE c > 1 GROUP BY bs
 ----
@@ -337,9 +299,6 @@ VALUES (1, 1, 'Login'),
 
 statement ok
 CREATE AGGREGATING INDEX testi AS select approx_count_distinct(user_id) from t
-
-statement ok
-REFRESH AGGREGATING INDEX testi
 
 query I
 SELECT approx_count_distinct(user_id) from t

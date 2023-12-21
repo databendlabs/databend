@@ -356,13 +356,12 @@ AggregateFinal
         └── estimated rows: 0.00
 
 
-# for sync aggregating index
 
 statement ok
 DROP AGGREGATING INDEX idx1
 
 statement ok
-CREATE SYNC AGGREGATING INDEX idx1 AS SELECT a + 1 from t1
+CREATE AGGREGATING INDEX idx1 AS SELECT a + 1 from t1
 
 statement ok
 INSERT INTO t1 VALUES (1,1), (1,2), (2,4), (2,5)

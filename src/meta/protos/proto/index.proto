@@ -33,6 +33,8 @@ message IndexNameIdent {
 
 // IndexMeta is a container of all non-identity information.
 message IndexMeta {
+  // used for sync_creation before
+  reserved 7;
   enum IndexType {
     None = 0;
     AGGREGATING = 1;
@@ -58,10 +60,6 @@ message IndexMeta {
 
   // The time index updated.
   optional string updated_on = 6;
-
-  // if true, index will create after data written to databend,
-  // no need execute refresh index manually.
-  bool sync_creation = 7;
 
   string original_query = 8;
 }

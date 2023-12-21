@@ -99,6 +99,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (67, "2023-12-19: Add: user.proto/PasswordPolicy and UserOption::password_policy", ),
     (68, "2023-12-19: Add: index.proto/IndexMeta add field `original_query` and `user_defined_block_name`"),
     (69, "2023-12-21: Add: user.proto/GrantTableIdObject and GrantDatabaseIdObject", ),
+    (70, "2023-12-22: Remove: index.proto/IndexMeta::sync_creation"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

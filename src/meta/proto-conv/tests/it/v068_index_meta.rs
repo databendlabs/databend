@@ -57,7 +57,6 @@ fn test_decode_v68_index() -> anyhow::Result<()> {
             original_query,
             query,
             updated_on: None,
-            sync_creation: false,
         }
     };
 

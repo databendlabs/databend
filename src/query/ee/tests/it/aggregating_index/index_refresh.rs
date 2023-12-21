@@ -43,93 +43,13 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
-async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
-    let mut planner = Planner::new(ctx);
-    let (plan, _) = planner.plan_sql(sql).await?;
-
-    Ok(plan)
-}
-
-async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBlockStream> {
-    let plan = plan_sql(ctx.clone(), sql).await?;
-    execute_plan(ctx, &plan).await
-}
-
-async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDataBlockStream> {
-    let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
-    interpreter.execute(ctx).await
-}
-
-fn rewrite_original_query(ctx: Arc<QueryContext>, original_query: &str) -> Result<String> {
-    let tokens = tokenize_sql(original_query)?;
-    let (mut stmt, _) = parse_sql(&tokens, ctx.get_settings().get_sql_dialect()?)?;
-    let mut index_rewriter = AggregatingIndexRewriter::new(ctx.get_settings().get_sql_dialect()?);
-    walk_statement_mut(&mut index_rewriter, &mut stmt);
-    if let Statement::Query(q) = &stmt {
-        Ok(q.to_string())
-    } else {
-        Err(ErrorCode::SemanticError("not a query"))
-    }
-}
-
-async fn create_index(
-    ctx: Arc<QueryContext>,
-    index_name: &str,
-    original_query: &str,
-    query: &str,
-    sync_creation: bool,
-) -> Result<u64> {
-    let sql = format!("CREATE AGGREGATING INDEX {index_name} AS {original_query}");
-
-    let plan = plan_sql(ctx.clone(), &sql).await?;
-
-    if let Plan::CreateIndex(plan) = plan {
-        let catalog = ctx.get_catalog("default").await?;
-        let create_index_req = CreateIndexReq {
-            if_not_exists: plan.if_not_exists,
-            name_ident: IndexNameIdent {
-                tenant: ctx.get_tenant(),
-                index_name: index_name.to_string(),
-            },
-            meta: IndexMeta {
-                table_id: plan.table_id,
-                index_type: IndexType::AGGREGATING,
-                created_on: Utc::now(),
-                dropped_on: None,
-                updated_on: None,
-                original_query: original_query.to_string(),
-                query: query.to_string(),
-                sync_creation,
-            },
-        };
-
-        let handler = get_agg_index_handler();
-        let res = handler.do_create_index(catalog, create_index_req).await?;
-
-        return Ok(res.index_id);
-    }
-
-    unreachable!()
-}
-
-async fn refresh_index(
-    ctx: Arc<QueryContext>,
-    index_name: &str,
-    limit: Option<usize>,
-) -> Result<()> {
-    let sql = match limit {
-        Some(l) => format!("REFRESH AGGREGATING INDEX {index_name} LIMIT {l}"),
-        None => format!("REFRESH AGGREGATING INDEX {index_name}"),
-    };
-    execute_sql(ctx, &sql).await?;
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_agg_index() -> Result<()> {
+async fn test_manual_refresh_agg_index() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-
+    fixture
+        .default_session()
+        .get_settings()
+        .set_manual_refresh_aggregating_index(true)?;
     fixture
         .execute_command("CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'")
         .await?;
@@ -146,7 +66,7 @@ async fn test_refresh_agg_index() -> Result<()> {
     let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id = create_index(ctx, index_name, original_query, query.as_str(), false).await?;
+    let index_id = create_index(ctx, index_name, original_query, query.as_str()).await?;
 
     // Refresh Index
     let ctx = fixture.new_query_ctx().await?;
@@ -241,8 +161,12 @@ async fn test_refresh_agg_index() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_agg_index_with_limit() -> Result<()> {
+async fn test_manual_refresh_agg_index_with_limit() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_manual_refresh_aggregating_index(true)?;
 
     // Create table
     fixture
@@ -261,7 +185,7 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
     let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id = create_index(ctx, index_name, original_query, query.as_str(), false).await?;
+    let index_id = create_index(ctx, index_name, original_query, query.as_str()).await?;
 
     // Insert more data
     fixture
@@ -309,13 +233,90 @@ async fn test_sync_agg_index() -> Result<()> {
     Ok(())
 }
 
+async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
+    let mut planner = Planner::new(ctx);
+    let (plan, _) = planner.plan_sql(sql).await?;
+
+    Ok(plan)
+}
+
+async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBlockStream> {
+    let plan = plan_sql(ctx.clone(), sql).await?;
+    execute_plan(ctx, &plan).await
+}
+
+async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDataBlockStream> {
+    let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
+    interpreter.execute(ctx).await
+}
+
+fn rewrite_original_query(ctx: Arc<QueryContext>, original_query: &str) -> Result<String> {
+    let tokens = tokenize_sql(original_query)?;
+    let (mut stmt, _) = parse_sql(&tokens, ctx.get_settings().get_sql_dialect()?)?;
+    let mut index_rewriter = AggregatingIndexRewriter::new(ctx.get_settings().get_sql_dialect()?);
+    walk_statement_mut(&mut index_rewriter, &mut stmt);
+    if let Statement::Query(q) = &stmt {
+        Ok(q.to_string())
+    } else {
+        Err(ErrorCode::SemanticError("not a query"))
+    }
+}
+
+async fn create_index(
+    ctx: Arc<QueryContext>,
+    index_name: &str,
+    original_query: &str,
+    query: &str,
+) -> Result<u64> {
+    let sql = format!("CREATE AGGREGATING INDEX {index_name} AS {original_query}");
+
+    let plan = plan_sql(ctx.clone(), &sql).await?;
+
+    if let Plan::CreateIndex(plan) = plan {
+        let catalog = ctx.get_catalog("default").await?;
+        let create_index_req = CreateIndexReq {
+            if_not_exists: plan.if_not_exists,
+            name_ident: IndexNameIdent {
+                tenant: ctx.get_tenant(),
+                index_name: index_name.to_string(),
+            },
+            meta: IndexMeta {
+                table_id: plan.table_id,
+                index_type: IndexType::AGGREGATING,
+                created_on: Utc::now(),
+                dropped_on: None,
+                updated_on: None,
+                original_query: original_query.to_string(),
+                query: query.to_string(),
+            },
+        };
+
+        let handler = get_agg_index_handler();
+        let res = handler.do_create_index(catalog, create_index_req).await?;
+
+        return Ok(res.index_id);
+    }
+
+    unreachable!()
+}
+
+async fn refresh_index(
+    ctx: Arc<QueryContext>,
+    index_name: &str,
+    limit: Option<usize>,
+) -> Result<()> {
+    let sql = match limit {
+        Some(l) => format!("REFRESH AGGREGATING INDEX {index_name} LIMIT {l}"),
+        None => format!("REFRESH AGGREGATING INDEX {index_name}"),
+    };
+    execute_sql(ctx, &sql).await?;
+
+    Ok(())
+}
+
 async fn test_sync_agg_index_after_update() -> Result<()> {
     // let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_refresh_aggregating_index_after_write(true)?;
 
     // Create table
     fixture
@@ -329,7 +330,7 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
     let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
+    let index_id0 = create_index(ctx, index_name, original_query, query.as_str()).await?;
 
     // Insert data
     fixture
@@ -424,10 +425,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     //    .set_enable_refresh_aggregating_index_after_write(true)?;
 
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_refresh_aggregating_index_after_write(true)?;
+
     // Create table
     fixture
         .execute_command("CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'")
@@ -441,7 +439,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
+    let index_id0 = create_index(ctx, index_name, original_query, query.as_str()).await?;
 
     // Create agg index `index1`
     let index_name = "index1";
@@ -451,7 +449,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id1 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
+    let index_id1 = create_index(ctx, index_name, original_query, query.as_str()).await?;
 
     // Insert data
     fixture
@@ -537,7 +535,6 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     let settings = fixture.default_session().get_settings();
-    settings.set_enable_refresh_aggregating_index_after_write(true)?;
     settings.set_auto_compaction_imperfect_blocks_threshold(1)?;
 
     // Create table
@@ -554,7 +551,7 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
+    let index_id0 = create_index(ctx, index_name, original_query, query.as_str()).await?;
 
     // Copy into data
     fixture.execute_query(

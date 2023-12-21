@@ -151,7 +151,6 @@ impl Binder {
             if_not_exists,
             index_name,
             query,
-            sync_creation,
         } = stmt;
 
         // check if query support index
@@ -212,7 +211,6 @@ impl Binder {
             original_query: original_query.to_string(),
             query: query.to_string(),
             table_id,
-            sync_creation: *sync_creation,
         };
         Ok(Plan::CreateIndex(Box::new(plan)))
     }
