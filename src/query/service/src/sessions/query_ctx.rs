@@ -464,11 +464,12 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    fn get_auto_compact_after_write(&self) -> bool {
+    // Need compact after write, over the threshold.
+    fn get_need_compact_after_write(&self) -> bool {
         self.shared.auto_compact_after_write.load(Ordering::Acquire)
     }
 
-    fn set_auto_compact_after_write(&self, enable: bool) {
+    fn set_need_compact_after_write(&self, enable: bool) {
         self.shared
             .auto_compact_after_write
             .store(enable, Ordering::Release);
