@@ -90,7 +90,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         args: &'ast [Expr],
         _params: &'ast [Literal],
         over: &'ast Option<Window>,
-        lambda: &'ast Option<Lambda>,
+        _lambda: &'ast Option<Lambda>,
     ) {
         let name = name.to_string();
         if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(&name) {
@@ -121,9 +121,6 @@ impl<'ast> Visitor<'ast> for UDFValidator {
                     self.visit_identifier(&reference.window_name);
                 }
             }
-        }
-        if let Some(lambda) = lambda {
-            walk_expr(self, &lambda.expr)
         }
     }
 }
