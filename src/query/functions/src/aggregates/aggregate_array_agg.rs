@@ -17,46 +17,44 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_expression::types::decimal::*;
-use common_expression::types::number::*;
-use common_expression::types::DataType;
-use common_expression::types::ValueType;
-use common_expression::types::*;
-use common_expression::with_number_mapped_type;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use ethnum::i256;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct ArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
     values: Vec<T::Scalar>,
 }
 
 impl<T> Default for ArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self { values: Vec::new() }
@@ -66,7 +64,7 @@ where
 impl<T> ScalarStateFunc<T> for ArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
 {
     fn new() -> Self {
         Self::default()
@@ -126,20 +124,19 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct NullableArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
     values: Vec<Option<T::Scalar>>,
 }
 
 impl<T> Default for NullableArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self { values: Vec::new() }
@@ -149,7 +146,7 @@ where
 impl<T> ScalarStateFunc<T> for NullableArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
 {
     fn new() -> Self {
         Self::default()
@@ -338,12 +335,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = deserialize_state(reader)?;
+        let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }

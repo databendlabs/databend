@@ -1,5 +1,5 @@
 [package]
-name = "common-constraint"
+name = "databend-common-constraint"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -16,8 +16,8 @@ test = false
 z3 = { version = "0.12.1", features = ["static-link-z3"] }
 
 [dev-dependencies]
-common-ast = { path = "../ast" }
 criterion = "0.4"
+databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 
 [[bench]]

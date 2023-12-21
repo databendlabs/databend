@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::CompletedAsyncTask;

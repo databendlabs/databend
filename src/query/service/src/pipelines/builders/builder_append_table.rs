@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::AppendMode;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::Pipeline;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline_core::Pipeline;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;

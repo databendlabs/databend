@@ -15,20 +15,20 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::base::tokio::sync::RwLock;
-use common_base::base::ProgressValues;
-use common_base::runtime::CatchUnwindFuture;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Scalar;
-use common_settings::Settings;
-use common_sql::plans::Plan;
-use common_sql::PlanExtras;
-use common_sql::Planner;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::CatchUnwindFuture;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
+use databend_common_settings::Settings;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::PlanExtras;
+use databend_common_sql::Planner;
 use futures::StreamExt;
 use log::error;
 use log::info;
@@ -325,7 +325,7 @@ async fn execute(
         // duplicate codes, but there is an async call
         let data = BlockEntry::new(
             DataType::String,
-            common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+            databend_common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
         );
         block_sender.send(DataBlock::new(vec![data], 1), 1).await;
         return Err(err);
@@ -342,7 +342,9 @@ async fn execute(
             // duplicate codes, but there is an async call
             let data = BlockEntry::new(
                 DataType::String,
-                common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+                databend_common_expression::Value::Scalar(Scalar::String(
+                    err.to_string().into_bytes(),
+                )),
             );
             block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
@@ -360,7 +362,7 @@ async fn execute(
                         // duplicate codes, but there is an async call
                         let data = BlockEntry::new(
                             DataType::String,
-                            common_expression::Value::Scalar(Scalar::String(
+                            databend_common_expression::Value::Scalar(Scalar::String(
                                 err.to_string().into_bytes(),
                             )),
                         );

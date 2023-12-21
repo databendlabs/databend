@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::mask_connection_info;
-use common_exception::ErrorCode;
-use common_expression::DataSchemaRef;
-use common_metrics::http::metrics_incr_http_response_errors_count;
+use databend_common_base::base::mask_connection_info;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataSchemaRef;
+use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use highway::HighwayHash;
 use log::error;
 use log::info;

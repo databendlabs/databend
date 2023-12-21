@@ -15,21 +15,20 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_ast::ast::Identifier;
-use common_ast::ast::InsertSource;
-use common_ast::ast::InsertStmt;
-use common_ast::ast::Statement;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::OnErrorMode;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::InsertSource;
+use databend_common_ast::ast::InsertStmt;
+use databend_common_ast::ast::Statement;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
@@ -150,9 +149,8 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
-                }));
+                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
 
                 if let Plan::Query { s_expr, .. } = &select_plan {
                     if !self.check_sexpr_top(s_expr)? {
@@ -162,7 +160,7 @@ impl Binder {
                     }
                 }
 
-                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
+                let optimized_plan = optimize(opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };

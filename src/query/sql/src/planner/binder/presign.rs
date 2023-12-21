@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::PresignAction as AstPresignAction;
-use common_ast::ast::PresignLocation;
-use common_ast::ast::PresignStmt;
-use common_exception::Result;
+use databend_common_ast::ast::PresignAction as AstPresignAction;
+use databend_common_ast::ast::PresignLocation;
+use databend_common_ast::ast::PresignStmt;
+use databend_common_exception::Result;
 
 use crate::binder::resolve_stage_location;
 use crate::binder::Binder;

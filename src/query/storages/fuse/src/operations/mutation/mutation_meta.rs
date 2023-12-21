@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use storages_common_table_meta::meta::ClusterStatistics;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::compact::CompactExtraInfo;

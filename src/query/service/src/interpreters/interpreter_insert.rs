@@ -14,26 +14,30 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
-use common_catalog::table::AppendMode;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchema;
-use common_meta_app::principal::StageFileFormatType;
-use common_pipeline_sources::AsyncSourcer;
-use common_sql::executor::physical_plans::DistributedInsertSelect;
-use common_sql::executor::PhysicalPlan;
-use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::Insert;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::Plan;
-use common_sql::NameResolutionContext;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::plans::Insert;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::NameResolutionContext;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_refresh;
-use crate::interpreters::common::RefreshDesc;
+use crate::interpreters::hook::hook_compact;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::CompactHookTraceCtx;
+use crate::interpreters::hook::CompactTargetTableDescription;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
@@ -94,6 +98,7 @@ impl Interpreter for InsertInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
 
+        let start = Instant::now();
         match &self.plan.source {
             InsertInputSource::Stage(_) => {
                 unreachable!()
@@ -247,6 +252,29 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
+                // Compact if 'enable_recluster_after_write' on.
+                {
+                    let compact_target = CompactTargetTableDescription {
+                        catalog: self.plan.catalog.clone(),
+                        database: self.plan.database.clone(),
+                        table: self.plan.table.clone(),
+                    };
+
+                    let trace_ctx = CompactHookTraceCtx {
+                        start,
+                        operation_name: "insert_into_table".to_owned(),
+                    };
+
+                    hook_compact(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        compact_target,
+                        trace_ctx,
+                        true,
+                    )
+                    .await;
+                }
+
                 let refresh_desc = RefreshDesc {
                     catalog: self.plan.catalog.clone(),
                     database: self.plan.database.clone(),
@@ -275,6 +303,29 @@ impl Interpreter for InsertInterpreter {
             self.plan.overwrite,
             append_mode,
         )?;
+
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            let trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "insert_into_table".to_owned(),
+            };
+
+            hook_compact(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                compact_target,
+                trace_ctx,
+                true,
+            )
+            .await;
+        }
 
         let refresh_desc = RefreshDesc {
             catalog: self.plan.catalog.clone(),

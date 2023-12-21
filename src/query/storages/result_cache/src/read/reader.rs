@@ -15,16 +15,16 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::infer_schema;
-use common_arrow::arrow::io::parquet::read::{self as pread};
-use common_arrow::parquet::read::read_metadata;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::TableSchema;
-use common_meta_store::MetaStore;
-use common_storage::DataOperator;
+use databend_common_arrow::arrow::io::parquet::read::infer_schema;
+use databend_common_arrow::arrow::io::parquet::read::{self as pread};
+use databend_common_arrow::parquet::read::read_metadata;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchema;
+use databend_common_meta_store::MetaStore;
+use databend_common_storage::DataOperator;
 use opendal::Operator;
 
 use crate::common::gen_result_cache_meta_key;

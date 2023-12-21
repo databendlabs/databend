@@ -16,18 +16,19 @@ use std::sync::Arc;
 
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_catalog::plan::PrewhereInfo;
-use common_catalog::plan::Projection;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_catalog::plan::PrewhereInfo;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
@@ -76,9 +77,20 @@ impl ParquetPredicate {
         Ok(res)
     }
 
-    pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
+    pub fn evaluate(
+        &self,
+        batch: &RecordBatch,
+        partition_block_entries: Option<Vec<BlockEntry>>,
+    ) -> Result<BooleanArray> {
         let data_schema = DataSchema::from(&self.schema);
         let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
+        let block = if let Some(partition_block_entries) = partition_block_entries {
+            let mut columns = block.columns().to_vec();
+            columns.extend_from_slice(&partition_block_entries);
+            DataBlock::new(columns, block.num_rows())
+        } else {
+            block
+        };
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
     }
@@ -94,13 +106,19 @@ pub fn build_predicate(
     prewhere: &PrewhereInfo,
     table_schema: &TableSchema,
     schema_desc: &SchemaDescriptor,
+    partition_columns: &[String],
 ) -> Result<(Arc<ParquetPredicate>, Vec<usize>)> {
     let inner_projection = matches!(prewhere.output_columns, Projection::InnerColumns(_));
     let schema = prewhere.prewhere_columns.project_schema(table_schema);
     let filter = prewhere
         .filter
         .as_expr(&BUILTIN_FUNCTIONS)
-        .project_column_ref(|name| schema.index_of(name).unwrap());
+        .project_column_ref(
+            |name| match partition_columns.iter().position(|x| x == name) {
+                Some(i) => i + schema.fields.len(),
+                None => schema.index_of(name).unwrap(),
+            },
+        );
     let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;

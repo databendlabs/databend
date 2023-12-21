@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_expression::TableSchema;
-use common_meta_app::schema::TableInfo;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 
 use crate::plan::Parquet2TableInfo;
 use crate::plan::ParquetTableInfo;

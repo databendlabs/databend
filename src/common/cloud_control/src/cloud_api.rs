@@ -15,9 +15,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::GlobalInstance;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::task_client::TaskClient;
 

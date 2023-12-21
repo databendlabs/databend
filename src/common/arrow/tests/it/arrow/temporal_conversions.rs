@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use chrono::NaiveDateTime;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::temporal_conversions;
-use common_arrow::arrow::types::months_days_ns;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::TimeUnit;
+use databend_common_arrow::arrow::temporal_conversions;
+use databend_common_arrow::arrow::types::months_days_ns;
 
 #[test]
 fn naive() {

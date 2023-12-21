@@ -15,11 +15,11 @@
 
 use std::iter::FromIterator;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn from_and_into_data() {

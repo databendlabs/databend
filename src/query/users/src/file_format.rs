@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserDefinedFileFormat;
-use common_meta_types::MatchSeq;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserDefinedFileFormat;
+use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
 

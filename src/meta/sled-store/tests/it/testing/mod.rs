@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@ pub mod fake_state_machine_meta;
 use std::collections::BTreeMap;
 use std::sync::Once;
 
-use common_base::base::GlobalSequence;
-use common_meta_sled_store::get_sled_db;
-use common_tracing::closure_name;
-use common_tracing::init_logging;
-use common_tracing::Config;
+use databend_common_base::base::GlobalSequence;
+use databend_common_meta_sled_store::get_sled_db;
+use databend_common_tracing::closure_name;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::Config;
 use minitrace::prelude::*;
 
 pub struct SledTestContext {
@@ -65,7 +65,7 @@ fn setup_test() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        common_meta_sled_store::init_temp_sled_db(t);
+        databend_common_meta_sled_store::init_temp_sled_db(t);
 
         let guards = init_logging("meta_unittests", &Config::new_testing(), BTreeMap::new());
         Box::leak(Box::new(guards));

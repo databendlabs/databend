@@ -22,7 +22,7 @@ DROP TABLE t0
 statement ok
 SELECT * FROM t1
 
-statement error 1002
+statement error 1006
 RENAME TABLE t1 to system.t1
 
 statement ok
@@ -56,7 +56,7 @@ SELECT * FROM t1
 ----
 1
 
-statement error 1002
+statement error 1006
 RENAME TABLE t1 to system.t1
 
 statement ok
@@ -90,7 +90,7 @@ SELECT * FROM t1
 ----
 1
 
-statement error 1002
+statement error 1006
 RENAME TABLE t1 to system.t1
 
 statement ok

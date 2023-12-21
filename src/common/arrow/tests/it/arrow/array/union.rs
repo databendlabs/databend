@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::*;
-use common_arrow::arrow::error::Result;
-use common_arrow::arrow::scalar::new_scalar;
-use common_arrow::arrow::scalar::PrimitiveScalar;
-use common_arrow::arrow::scalar::Scalar;
-use common_arrow::arrow::scalar::UnionScalar;
-use common_arrow::arrow::scalar::Utf8Scalar;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::datatypes::*;
+use databend_common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::scalar::new_scalar;
+use databend_common_arrow::arrow::scalar::PrimitiveScalar;
+use databend_common_arrow::arrow::scalar::Scalar;
+use databend_common_arrow::arrow::scalar::UnionScalar;
+use databend_common_arrow::arrow::scalar::Utf8Scalar;
 
 fn next_unwrap<T, I>(iter: &mut I) -> T
 where

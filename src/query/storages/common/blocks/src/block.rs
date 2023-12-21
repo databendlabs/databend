@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::io::parquet::write::transverse;
-use common_arrow::arrow::io::parquet::write::RowGroupIterator;
-use common_arrow::arrow::io::parquet::write::WriteOptions;
-use common_arrow::parquet::encoding::Encoding;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_arrow::parquet::write::Version;
-use common_arrow::write_parquet_file;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::TableSchema;
-use storages_common_table_meta::table::TableCompression;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::io::parquet::write::transverse;
+use databend_common_arrow::arrow::io::parquet::write::RowGroupIterator;
+use databend_common_arrow::arrow::io::parquet::write::WriteOptions;
+use databend_common_arrow::parquet::encoding::Encoding;
+use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
+use databend_common_arrow::parquet::write::Version;
+use databend_common_arrow::write_parquet_file;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::table::TableCompression;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -66,7 +66,7 @@ pub fn blocks_to_parquet(
         encodings,
     )?;
 
-    use common_arrow::parquet::write::WriteOptions as FileWriteOption;
+    use databend_common_arrow::parquet::write::WriteOptions as FileWriteOption;
     let options = FileWriteOption {
         write_statistics: false,
         version: Version::V2,

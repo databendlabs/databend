@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_pipeline_core::Pipeline;
-use common_settings::FlightCompression;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::FlightCompression;
 
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;

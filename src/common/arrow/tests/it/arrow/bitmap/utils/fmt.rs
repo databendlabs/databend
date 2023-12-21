@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::utils::fmt;
+use databend_common_arrow::arrow::bitmap::utils::fmt;
 
 struct A<'a>(&'a [u8], usize, usize);
 

@@ -16,48 +16,45 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::plan::Filters;
-use common_catalog::plan::Partitions;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataBlock;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::DeleteSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::PhysicalPlan;
-use common_sql::optimizer::CascadesOptimizer;
-use common_sql::optimizer::DPhpy;
-use common_sql::optimizer::HeuristicOptimizer;
-use common_sql::optimizer::SExpr;
-use common_sql::optimizer::DEFAULT_REWRITE_RULES;
-use common_sql::optimizer::RESIDUAL_RULES;
-use common_sql::plans::BoundColumnRef;
-use common_sql::plans::ConstantExpr;
-use common_sql::plans::EvalScalar;
-use common_sql::plans::FunctionCall;
-use common_sql::plans::RelOperator;
-use common_sql::plans::ScalarItem;
-use common_sql::plans::SubqueryDesc;
-use common_sql::BindContext;
-use common_sql::ColumnBinding;
-use common_sql::MetadataRef;
-use common_sql::ScalarExpr;
-use common_sql::Visibility;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::binder::ColumnBindingBuilder;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::DeleteSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::optimizer::optimize_query;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::BoundColumnRef;
+use databend_common_sql::plans::ConstantExpr;
+use databend_common_sql::plans::EvalScalar;
+use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarItem;
+use databend_common_sql::plans::SubqueryDesc;
+use databend_common_sql::BindContext;
+use databend_common_sql::ColumnBinding;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::ScalarExpr;
+use databend_common_sql::Visibility;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::debug;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
@@ -298,7 +295,7 @@ pub async fn subquery_filter(
     // Select `_row_id` column
     let input_expr = subquery_desc.input_expr.clone();
 
-    let expr = SExpr::create_unary(
+    let mut s_expr = SExpr::create_unary(
         Arc::new(RelOperator::EvalScalar(EvalScalar {
             items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -314,26 +311,18 @@ pub async fn subquery_filter(
     let mut bind_context = Box::new(BindContext::new());
     bind_context.add_column_binding(row_id_column_binding.clone());
 
-    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
-    let mut expr = heuristic.optimize(expr, &DEFAULT_REWRITE_RULES)?;
-    let mut dphyp_optimized = false;
-    if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(expr.clone()))?;
-        if optimized {
-            expr = (*dp_res).clone();
-            dphyp_optimized = true;
-        }
-    }
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone(), dphyp_optimized)?;
-    expr = cascades.optimize(expr)?;
-    expr = heuristic.optimize(expr, &RESIDUAL_RULES)?;
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
+        .with_enable_distributed_optimization(false)
+        .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
+        .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
+
+    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
         ctx.clone(),
         *bind_context,
-        expr,
+        s_expr,
         metadata.clone(),
         None,
         false,

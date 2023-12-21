@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_sql::executor::physical_plans::RowFetch;
-use common_sql::executor::PhysicalPlan;
-use common_storages_fuse::operations::build_row_fetcher_pipeline;
+use databend_common_exception::Result;
+use databend_common_sql::executor::physical_plans::RowFetch;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_storages_fuse::operations::build_row_fetcher_pipeline;
 
 use crate::pipelines::PipelineBuilder;
 

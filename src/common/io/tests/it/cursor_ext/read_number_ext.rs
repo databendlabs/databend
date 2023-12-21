@@ -14,8 +14,8 @@
 
 use std::io::Cursor;
 
-use common_exception::Result;
-use common_io::cursor_ext::*;
+use databend_common_exception::Result;
+use databend_common_io::cursor_ext::*;
 
 #[test]
 fn test_collect_number() -> Result<()> {

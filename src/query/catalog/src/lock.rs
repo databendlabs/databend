@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::schema::CreateLockRevReq;
-use common_meta_app::schema::DeleteLockRevReq;
-use common_meta_app::schema::ExtendLockRevReq;
-use common_meta_app::schema::ListLockRevReq;
-use common_meta_app::schema::LockKey;
-use common_meta_app::schema::LockType;
-use common_pipeline_core::LockGuard;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::LockType;
+use databend_common_pipeline_core::LockGuard;
 
 use crate::catalog::Catalog;
 use crate::table_context::TableContext;

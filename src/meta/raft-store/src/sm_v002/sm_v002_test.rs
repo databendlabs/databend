@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
-use common_meta_types::UpsertKV;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -159,7 +159,7 @@ async fn test_update_expire_index() -> anyhow::Result<()> {
 ///
 ///    | kv             | expire
 ///    | ---            | ---
-/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
+/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
 async fn build_sm_with_expire() -> anyhow::Result<SMV002> {

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_license::license::Feature;
-use common_license::license::LicenseInfo;
-use common_license::license_manager::LicenseManager;
+use databend_common_base::base::tokio;
+use databend_common_license::license::Feature;
+use databend_common_license::license::LicenseInfo;
+use databend_common_license::license_manager::LicenseManager;
+use databend_enterprise_query::license::RealLicenseManager;
 use databend_query::test_kits::*;
-use enterprise_query::license::RealLicenseManager;
 use jwt_simple::algorithms::ES256KeyPair;
 use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
@@ -38,7 +38,7 @@ fn build_custom_claims(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_parse_license() -> common_exception::Result<()> {
+async fn test_parse_license() -> databend_common_exception::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let key_pair = ES256KeyPair::generate();
@@ -86,7 +86,7 @@ async fn test_parse_license() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_license_features() -> common_exception::Result<()> {
+async fn test_license_features() -> databend_common_exception::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let key_pair = ES256KeyPair::generate();

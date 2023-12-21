@@ -15,7 +15,7 @@
 use std::collections::HashSet;
 
 use ahash::HashMap;
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;

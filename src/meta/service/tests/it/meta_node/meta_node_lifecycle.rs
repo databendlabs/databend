@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,17 +15,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio::time::sleep;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_sled_store::openraft::LogIdOptionExt;
-use common_meta_sled_store::openraft::ServerState;
-use common_meta_types::new_log_id;
-use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::Cmd;
-use common_meta_types::Endpoint;
-use common_meta_types::LogEntry;
-use common_meta_types::NodeId;
-use common_meta_types::UpsertKV;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_sled_store::openraft::LogIdOptionExt;
+use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::UpsertKV;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;

@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::*;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -93,12 +93,17 @@ fn test_exp(file: &mut impl Write) {
 }
 
 fn test_round(file: &mut impl Write) {
-    run_ast(file, "round(-1.23)", &[]);
-    run_ast(file, "round(1.298, 1)", &[]);
-    run_ast(file, "round(1.298, 0)", &[]);
-    run_ast(file, "round(23.298, -1)", &[]);
-    run_ast(file, "round(0.12345678901234567890123456789012345, 35)", &[
-    ]);
+    run_ast(file, "round(0)(-1.23)", &[]);
+    run_ast(file, "round(1)(1.298, 1)", &[]);
+    run_ast(file, "round(0)(1.298, 0)", &[]);
+
+    // Currently we don't support negative param
+    // run_ast(file, "round(-1)(23.298, -1)", &[]);
+    run_ast(
+        file,
+        "round(35)(0.12345678901234567890123456789012345, 35)",
+        &[],
+    );
     run_ast(file, "round(a)", &[(
         "a",
         Float64Type::from_data(vec![22.22f64, -22.23, 10.0]),
@@ -131,11 +136,12 @@ fn test_factorial(file: &mut impl Write) {
 }
 
 fn test_truncate(file: &mut impl Write) {
-    run_ast(file, "truncate(1.223, 1)", &[]);
-    run_ast(file, "truncate(1.999)", &[]);
-    run_ast(file, "truncate(1.999, 1)", &[]);
-    run_ast(file, "truncate(122, -2)", &[]);
-    run_ast(file, "truncate(10.28*100, 0)", &[]);
+    run_ast(file, "truncate(1)(1.223, 1)", &[]);
+    run_ast(file, "truncate(0)(1.999)", &[]);
+    run_ast(file, "truncate(1)(1.999, 1)", &[]);
+    // todo(negative param)
+    // run_ast(file, "truncate(-2)(122, -2)", &[]);
+    run_ast(file, "truncate(0)(10.28*100, 0)", &[]);
     run_ast(file, "truncate(a, 1)", &[(
         "a",
         Float64Type::from_data(vec![22.22f64, -22.23, 10.0]),

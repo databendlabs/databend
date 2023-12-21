@@ -17,25 +17,30 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aggregating_index::get_agg_index_handler;
 use chrono::Utc;
-use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::block_debug::assert_two_blocks_sorted_eq_with_name;
-use common_expression::DataBlock;
-use common_expression::SendableDataBlockStream;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use common_meta_app::schema::IndexType;
-use common_sql::plans::Plan;
-use common_sql::Planner;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_statement_mut;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::assert_two_blocks_sorted_eq_with_name;
+use databend_common_expression::DataBlock;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::schema::CreateIndexReq;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexType;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::AggregatingIndexRewriter;
+use databend_common_sql::Planner;
+use databend_enterprise_aggregating_index::get_agg_index_handler;
+use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
-use enterprise_query::test_kits::context::EESetup;
 use futures_util::TryStreamExt;
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
@@ -55,13 +60,26 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
     interpreter.execute(ctx).await
 }
 
+fn rewrite_original_query(ctx: Arc<QueryContext>, original_query: &str) -> Result<String> {
+    let tokens = tokenize_sql(original_query)?;
+    let (mut stmt, _) = parse_sql(&tokens, ctx.get_settings().get_sql_dialect()?)?;
+    let mut index_rewriter = AggregatingIndexRewriter::new(ctx.get_settings().get_sql_dialect()?);
+    walk_statement_mut(&mut index_rewriter, &mut stmt);
+    if let Statement::Query(q) = &stmt {
+        Ok(q.to_string())
+    } else {
+        Err(ErrorCode::SemanticError("not a query"))
+    }
+}
+
 async fn create_index(
     ctx: Arc<QueryContext>,
     index_name: &str,
+    original_query: &str,
     query: &str,
     sync_creation: bool,
 ) -> Result<u64> {
-    let sql = format!("CREATE AGGREGATING INDEX {index_name} AS {query}");
+    let sql = format!("CREATE AGGREGATING INDEX {index_name} AS {original_query}");
 
     let plan = plan_sql(ctx.clone(), &sql).await?;
 
@@ -79,6 +97,7 @@ async fn create_index(
                 created_on: Utc::now(),
                 dropped_on: None,
                 updated_on: None,
+                original_query: original_query.to_string(),
                 query: query.to_string(),
                 sync_creation,
             },
@@ -122,15 +141,12 @@ async fn test_refresh_agg_index() -> Result<()> {
 
     // Create index
     let index_name = "index0";
+    let original_query = "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b";
+    let ctx = fixture.new_query_ctx().await?;
+    let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id = create_index(
-        ctx,
-        index_name,
-        "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b",
-        false,
-    )
-    .await?;
+    let index_id = create_index(ctx, index_name, original_query, query.as_str(), false).await?;
 
     // Refresh Index
     let ctx = fixture.new_query_ctx().await?;
@@ -240,14 +256,12 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
 
     // Create index
     let index_name = "index1";
+    let original_query = "SELECT b, SUM(a) from t1 WHERE c > 1 GROUP BY b";
     let ctx = fixture.new_query_ctx().await?;
-    let index_id = create_index(
-        ctx,
-        index_name,
-        "SELECT b, SUM(a) from t1 WHERE c > 1 GROUP BY b",
-        false,
-    )
-    .await?;
+    let query = rewrite_original_query(ctx, original_query)?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let index_id = create_index(ctx, index_name, original_query, query.as_str(), false).await?;
 
     // Insert more data
     fixture
@@ -303,11 +317,6 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
         .get_settings()
         .set_enable_refresh_aggregating_index_after_write(true)?;
 
-    // ctx.get_settings()
-    //     .set_enable_refresh_aggregating_index_after_write(true)?;
-    // let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-    // let ctx = fixture.ctx();
-
     // Create table
     fixture
         .execute_command("CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'")
@@ -315,15 +324,12 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     // Create agg index `index0`
     let index_name = "index0";
+    let original_query = "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b";
+    let ctx = fixture.new_query_ctx().await?;
+    let query = rewrite_original_query(ctx, original_query)?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let index_id0 = create_index(
-        ctx,
-        index_name,
-        "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b",
-        true,
-    )
-    .await?;
+    let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
     // Insert data
     fixture
@@ -430,26 +436,22 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     // Create agg index `index0`
     let index_name = "index0";
 
+    let original_query = "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b";
     let ctx = fixture.new_query_ctx().await?;
-    let index_id0 = create_index(
-        ctx,
-        index_name,
-        "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b",
-        true,
-    )
-    .await?;
+    let query = rewrite_original_query(ctx, original_query)?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
     // Create agg index `index1`
     let index_name = "index1";
 
+    let original_query = "SELECT a, SUM(b) from t0 WHERE c > 1 GROUP BY a";
     let ctx = fixture.new_query_ctx().await?;
-    let index_id1 = create_index(
-        ctx,
-        index_name,
-        "SELECT a, SUM(b) from t0 WHERE c > 1 GROUP BY a",
-        true,
-    )
-    .await?;
+    let query = rewrite_original_query(ctx, original_query)?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let index_id1 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
     // Insert data
     fixture
@@ -534,10 +536,9 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
 async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_refresh_aggregating_index_after_write(true)?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_enable_refresh_aggregating_index_after_write(true)?;
+    settings.set_auto_compaction_threshold(1)?;
 
     // Create table
     fixture.execute_command(
@@ -548,8 +549,12 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     // Create agg index `index0`
     let index_name = "index0";
 
+    let original_query = "SELECT MAX(title) from books";
     let ctx = fixture.new_query_ctx().await?;
-    let index_id0 = create_index(ctx, index_name, "SELECT MAX(title) from books", true).await?;
+    let query = rewrite_original_query(ctx, original_query)?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
     // Copy into data
     fixture.execute_query(

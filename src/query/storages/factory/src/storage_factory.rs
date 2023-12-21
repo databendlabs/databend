@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-pub use common_catalog::catalog::StorageDescription;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::TableInfo;
-use common_storages_delta::DeltaTable;
-use common_storages_iceberg::IcebergTable;
-use common_storages_memory::MemoryTable;
-use common_storages_null::NullTable;
-use common_storages_random::RandomTable;
-use common_storages_stream::stream_table::StreamTable;
-use common_storages_view::view_table::ViewTable;
 use dashmap::DashMap;
+pub use databend_common_catalog::catalog::StorageDescription;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_storages_delta::DeltaTable;
+use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_memory::MemoryTable;
+use databend_common_storages_null::NullTable;
+use databend_common_storages_random::RandomTable;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_view::view_table::ViewTable;
 
 use crate::fuse::FuseTable;
 use crate::Table;

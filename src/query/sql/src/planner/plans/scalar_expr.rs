@@ -15,14 +15,14 @@
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use common_ast::ast::BinaryOperator;
-use common_exception::ErrorCode;
-use common_exception::Range;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::types::DataType;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Range;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::types::DataType;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use educe::Educe;
 use itertools::Itertools;
 
@@ -526,7 +526,7 @@ pub struct FunctionCall {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
     pub func_name: String,
-    pub params: Vec<usize>,
+    pub params: Vec<i64>,
     pub arguments: Vec<ScalarExpr>,
 }
 

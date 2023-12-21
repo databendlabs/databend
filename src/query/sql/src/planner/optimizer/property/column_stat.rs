@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_storage::Datum;
+use databend_common_storage::Datum;
 
 use crate::optimizer::property::histogram::Histogram;
 use crate::IndexType;

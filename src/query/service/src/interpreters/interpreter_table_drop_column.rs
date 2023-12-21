@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchema;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
-use common_sql::plans::DropTableColumnPlan;
-use common_sql::BloomIndexColumns;
-use common_storages_share::save_share_table_info;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use common_storages_view::view_table::VIEW_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::DropTableColumnPlan;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_share::save_share_table_info;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;

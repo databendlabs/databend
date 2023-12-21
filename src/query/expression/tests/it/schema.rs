@@ -14,16 +14,16 @@
 
 use std::collections::BTreeMap;
 
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_exception::Result;
-use common_expression::create_test_complex_schema;
-use common_expression::types::NumberDataType;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_exception::Result;
+use databend_common_expression::create_test_complex_schema;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -211,22 +211,22 @@ fn test_field_leaf_default_values() -> Result<()> {
     let schema = TableSchema::new(fields);
 
     let default_values = vec![
-        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+        Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(1)),
         Scalar::Tuple(vec![
             Scalar::Tuple(vec![
                 Scalar::Boolean(true),
                 Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
             ]),
-            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::Int64(2)),
         ]),
-        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+        Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(10)),
     ];
 
     let leaf_default_values = schema.field_leaf_default_values(&default_values);
     let expected_leaf_default_values: Vec<(ColumnId, Scalar)> = vec![
         (
             0,
-            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(1)),
         ),
         (1, Scalar::Boolean(true)),
         (
@@ -235,11 +235,11 @@ fn test_field_leaf_default_values() -> Result<()> {
         ),
         (
             3,
-            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::Int64(2)),
         ),
         (
             4,
-            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(10)),
         ),
     ];
     expected_leaf_default_values

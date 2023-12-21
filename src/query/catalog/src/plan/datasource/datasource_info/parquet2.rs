@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_expression::TableSchema;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::TableInfo;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
 use crate::table::Parquet2TableColumnStatisticsProvider;

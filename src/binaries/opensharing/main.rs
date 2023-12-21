@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_config::DATABEND_COMMIT_VERSION;
+use databend_common_base::base::tokio;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_sharing_endpoint::configs::Config;
+use databend_sharing_endpoint::handlers::share_spec;
+use databend_sharing_endpoint::handlers::share_table_meta;
+use databend_sharing_endpoint::handlers::share_table_presign_files;
+use databend_sharing_endpoint::middlewares::SharingAuth;
+use databend_sharing_endpoint::services::SharingServices;
 use poem::listener::TcpListener;
 use poem::EndpointExt;
 use poem::Route;
 use poem::Server;
-use sharing_endpoint::configs::Config;
-use sharing_endpoint::handlers::share_spec;
-use sharing_endpoint::handlers::share_table_meta;
-use sharing_endpoint::handlers::share_table_presign_files;
-use sharing_endpoint::middlewares::SharingAuth;
-use sharing_endpoint::services::SharingServices;
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {

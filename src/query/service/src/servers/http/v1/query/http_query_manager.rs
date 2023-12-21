@@ -21,13 +21,13 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio::sync::RwLock;
-use common_base::base::tokio::time::sleep;
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_config::InnerConfig;
-use common_exception::Result;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
 use log::warn;
 use parking_lot::Mutex;
 

@@ -19,24 +19,24 @@ mod optimizer;
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use common_ast::ast::UriLocation;
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
-use common_config::GlobalConfig;
-use common_config::InnerConfig;
-use common_meta_app::storage::StorageFsConfig;
-// use common_storage::StorageFtpConfig;
-use common_meta_app::storage::StorageGcsConfig;
-use common_meta_app::storage::StorageHttpConfig;
-use common_meta_app::storage::StorageIpfsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
-use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
-use common_sql::planner::binder::parse_uri_location;
+use databend_common_ast::ast::UriLocation;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+// use databend_common_storage::StorageFtpConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
+use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageIpfsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use databend_common_sql::planner::binder::parse_uri_location;
 
 #[tokio::test]
 async fn test_parse_uri_location() -> Result<()> {

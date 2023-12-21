@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::StructArray;
-use common_arrow::arrow::array::Utf8Array;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::scalar::MapScalar;
-use common_arrow::arrow::scalar::Scalar;
+use databend_common_arrow::arrow::array::BooleanArray;
+use databend_common_arrow::arrow::array::StructArray;
+use databend_common_arrow::arrow::array::Utf8Array;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::scalar::MapScalar;
+use databend_common_arrow::arrow::scalar::Scalar;
 
 #[allow(clippy::eq_op)]
 #[test]

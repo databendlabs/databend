@@ -16,11 +16,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::ExprContext;
 use crate::binder::aggregate::AggregateRewriter;

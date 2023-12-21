@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 use std::io::Cursor;
 
-use common_exception::Result;
-use common_io::prelude::*;
+use databend_common_exception::Result;
+use databend_common_io::prelude::*;
 
 #[test]
 fn test_write_and_read() -> Result<()> {

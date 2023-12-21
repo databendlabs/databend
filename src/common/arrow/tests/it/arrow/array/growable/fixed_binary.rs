@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableFixedSizeBinary;
-use common_arrow::arrow::array::FixedSizeBinaryArray;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableFixedSizeBinary;
+use databend_common_arrow::arrow::array::FixedSizeBinaryArray;
 
 /// tests extending from a variable-sized (strings and binary) array w/ offset with nulls
 #[test]

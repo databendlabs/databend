@@ -14,28 +14,28 @@
 
 use std::sync::Arc;
 
-use common_expression::types::nullable::NullableColumnBuilder;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::types::VariantType;
-use common_expression::Column;
-use common_expression::FromData;
-use common_expression::Function;
-use common_expression::FunctionEval;
-use common_expression::FunctionKind;
-use common_expression::FunctionProperty;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use jsonb::array_length;
 use jsonb::array_values;
 use jsonb::as_str;
@@ -269,7 +269,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         {
             return None;
         }
-        let params = params.to_vec();
+        let params: Vec<i64> = params.iter().map(|x| x.get_i64().unwrap()).collect();
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -707,7 +707,7 @@ impl FlattenGenerator {
         }
     }
 
-    fn generate(&mut self, seq: u64, input: &[u8], path: &str, params: &[usize]) -> Vec<Column> {
+    fn generate(&mut self, seq: u64, input: &[u8], path: &str, params: &[i64]) -> Vec<Column> {
         // Only columns required by parent plan need a builder.
         let mut key_builder = if params.is_empty() || params.contains(&2) {
             Some(NullableColumnBuilder::<StringType>::with_capacity(0, &[]))

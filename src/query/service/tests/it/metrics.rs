@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
 
 use std::net::SocketAddr;
 
-use common_base::base::tokio;
-use common_metrics::register_counter;
+use databend_common_base::base::tokio;
+use databend_common_metrics::register_counter;
 use databend_query::metrics::MetricService;
 use databend_query::servers::Server;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_metric_server() -> common_exception::Result<()> {
+async fn test_metric_server() -> databend_common_exception::Result<()> {
     let mut service = MetricService::create();
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = service.start(listening).await?;

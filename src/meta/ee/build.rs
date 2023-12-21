@@ -13,5 +13,5 @@
 // limitations under the License.
 
 fn main() {
-    common_building::setup();
+    databend_common_building::setup();
 }

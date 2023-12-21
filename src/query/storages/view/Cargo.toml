@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-view"
+name = "databend-common-storages-view"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,9 +12,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
 
 async-trait = { workspace = true }
 

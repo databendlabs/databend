@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutableBooleanArray;
-use common_arrow::arrow::array::TryExtendFromSelf;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::MutableArray;
+use databend_common_arrow::arrow::array::MutableBooleanArray;
+use databend_common_arrow::arrow::array::TryExtendFromSelf;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn set() {

@@ -16,9 +16,9 @@ use std::io::Cursor;
 use std::io::Read;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::prelude::BinaryRead;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 

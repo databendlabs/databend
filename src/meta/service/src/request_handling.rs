@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_client::RequestFor;
-use common_meta_types::ForwardRPCError;
-use common_meta_types::MetaOperationError;
-use common_meta_types::NodeId;
+use databend_common_meta_client::RequestFor;
+use databend_common_meta_types::ForwardRPCError;
+use databend_common_meta_types::MetaOperationError;
+use databend_common_meta_types::NodeId;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;

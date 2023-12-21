@@ -41,7 +41,7 @@ fn test_decode_v39_data_mask() -> anyhow::Result<()> {
         84, 67, 160, 6, 39, 168, 6, 24,
     ];
 
-    let want = || common_meta_app::data_mask::DatamaskMeta {
+    let want = || databend_common_meta_app::data_mask::DatamaskMeta {
         args: vec![("a".to_string(), "String".to_string())],
         return_type: "String".to_string(),
         body: "CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END".to_string(),

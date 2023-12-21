@@ -17,13 +17,13 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::FunctionContext;
-use common_sql::optimizer::ColumnSet;
-use common_sql::plans::JoinType;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::plans::JoinType;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;

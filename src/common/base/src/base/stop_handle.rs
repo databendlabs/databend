@@ -17,7 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
 use futures::Future;
 use log::error;
 use log::info;

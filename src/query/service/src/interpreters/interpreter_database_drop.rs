@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObjectByID;
-use common_sql::plans::DropDatabasePlan;
-use common_storages_share::save_share_spec;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_sql::plans::DropDatabasePlan;
+use databend_common_storages_share::save_share_spec;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -17,12 +17,12 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::parquet::error::Error;
-use common_arrow::parquet::page::CompressedPage;
-use common_arrow::parquet::page::Page;
-use common_arrow::parquet::read::decompress;
-use common_arrow::parquet::FallibleStreamingIterator;
-use common_exception::Result;
+use databend_common_arrow::parquet::error::Error;
+use databend_common_arrow::parquet::page::CompressedPage;
+use databend_common_arrow::parquet::page::Page;
+use databend_common_arrow::parquet::read::decompress;
+use databend_common_arrow::parquet::FallibleStreamingIterator;
+use databend_common_exception::Result;
 use streaming_decompression::Compressed;
 use streaming_decompression::Decompressed;
 
@@ -44,21 +44,25 @@ impl UncompressedBuffer {
         })
     }
 
-    pub fn clear(&self) {
-        if self.used.fetch_add(1, Ordering::SeqCst) != 0 {
-            self.used.fetch_sub(1, Ordering::SeqCst);
+    pub fn clear(self: &Arc<Self>) {
+        let guard = self.borrow_mut();
+
+        if !guard.is_unique_borrow_mut() {
             panic!(
                 "UncompressedBuffer cannot be accessed between multiple threads at the same time."
             );
         }
 
         drop(std::mem::take(self.buffer_mut()));
-        self.used.fetch_sub(1, Ordering::SeqCst);
     }
 
     #[allow(clippy::mut_from_ref)]
     pub(in crate::io::read::block::decompressor) fn buffer_mut(&self) -> &mut Vec<u8> {
         unsafe { &mut *self.buffer.get() }
+    }
+
+    pub(in crate::io::read::block::decompressor) fn borrow_mut(self: &Arc<Self>) -> UsedGuard {
+        UsedGuard::create(self)
     }
 }
 
@@ -90,8 +94,9 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
     fn advance(&mut self) -> Result<(), Error> {
         if let Some(page) = self.current.as_mut() {
             if self.was_decompressed {
-                if self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0 {
-                    self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
+                let guard = self.uncompressed_buffer.borrow_mut();
+
+                if !guard.is_unique_borrow_mut() {
                     return Err(Error::FeatureNotSupported(String::from(
                         "UncompressedBuffer cannot be accessed between multiple threads at the same time.",
                     )));
@@ -104,16 +109,15 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
                         *borrow_buffer = std::mem::take(page.buffer_mut());
                     }
                 }
-
-                self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
             }
         }
 
         self.current = match self.iter.next() {
             None => None,
             Some(page) => {
-                if self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0 {
-                    self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
+                let guard = self.uncompressed_buffer.borrow_mut();
+
+                if !guard.is_unique_borrow_mut() {
                     return Err(Error::FeatureNotSupported(String::from(
                         "UncompressedBuffer cannot be accessed between multiple threads at the same time.",
                     )));
@@ -125,8 +129,6 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
                     // The uncompressed buffer will be take.
                     decompress(page, self.uncompressed_buffer.buffer_mut())?
                 };
-
-                self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
 
                 Some(decompress_page)
             }
@@ -149,10 +151,9 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
 impl<I: Iterator<Item = Result<CompressedPage, Error>>> Drop for BuffedBasicDecompressor<I> {
     fn drop(&mut self) {
         if let Some(page) = self.current.as_mut() {
-            if !std::thread::panicking()
-                && self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0
-            {
-                self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
+            let guard = self.uncompressed_buffer.borrow_mut();
+
+            if !std::thread::panicking() && !guard.is_unique_borrow_mut() {
                 panic!(
                     "UncompressedBuffer cannot be accessed between multiple threads at the same time."
                 );
@@ -165,8 +166,30 @@ impl<I: Iterator<Item = Result<CompressedPage, Error>>> Drop for BuffedBasicDeco
                     *borrow_buffer = std::mem::take(page.buffer_mut());
                 }
             }
-
-            self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
         }
+    }
+}
+
+struct UsedGuard {
+    unique_mut: bool,
+    inner: Arc<UncompressedBuffer>,
+}
+
+impl UsedGuard {
+    pub fn create(inner: &Arc<UncompressedBuffer>) -> UsedGuard {
+        let used = inner.used.fetch_add(1, Ordering::SeqCst);
+        UsedGuard {
+            unique_mut: used == 0,
+            inner: inner.clone(),
+        }
+    }
+    pub fn is_unique_borrow_mut(&self) -> bool {
+        self.unique_mut
+    }
+}
+
+impl Drop for UsedGuard {
+    fn drop(&mut self) {
+        self.inner.used.fetch_sub(1, Ordering::SeqCst);
     }
 }

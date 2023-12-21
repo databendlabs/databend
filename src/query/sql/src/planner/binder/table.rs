@@ -22,69 +22,69 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_ast::ast::Connection;
-use common_ast::ast::Expr;
-use common_ast::ast::FileLocation;
-use common_ast::ast::Identifier;
-use common_ast::ast::Indirection;
-use common_ast::ast::Join;
-use common_ast::ast::Literal;
-use common_ast::ast::Query;
-use common_ast::ast::SelectStageOptions;
-use common_ast::ast::SelectStmt;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::Statement;
-use common_ast::ast::TableAlias;
-use common_ast::ast::TableReference;
-use common_ast::ast::TimeTravelPoint;
-use common_ast::ast::UriLocation;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::StageTableInfo;
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::NavigationPoint;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_catalog::table_function::TableFunction;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::is_stream_column;
-use common_expression::types::DataType;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnId;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::FunctionKind;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::BASE_BLOCK_IDS_COL_NAME;
-use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use common_expression::ORIGIN_VERSION_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_types::MetaId;
-use common_storage::DataOperator;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
-use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetRSTable;
-use common_storages_result_cache::ResultCacheMetaManager;
-use common_storages_result_cache::ResultCacheReader;
-use common_storages_result_cache::ResultScan;
-use common_storages_stage::StageTable;
-use common_storages_view::view_table::QUERY;
-use common_users::UserApiProvider;
 use dashmap::DashMap;
+use databend_common_ast::ast::Connection;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectStageOptions;
+use databend_common_ast::ast::SelectStmt;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TimeTravelPoint;
+use databend_common_ast::ast::UriLocation;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_function::TableFunction;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::is_stream_column;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_types::MetaId;
+use databend_common_storage::DataOperator;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
+use databend_common_storages_parquet::Parquet2Table;
+use databend_common_storages_parquet::ParquetRSTable;
+use databend_common_storages_result_cache::ResultCacheMetaManager;
+use databend_common_storages_result_cache::ResultCacheReader;
+use databend_common_storages_result_cache::ResultScan;
+use databend_common_storages_stage::StageTable;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_users::UserApiProvider;
 use log::info;
 use parking_lot::RwLock;
 
@@ -241,7 +241,7 @@ impl Binder {
             .await
         {
             Ok(table) => table,
-            Err(_) => {
+            Err(e) => {
                 let mut parent = bind_context.parent.as_mut();
                 loop {
                     if parent.is_none() {
@@ -260,10 +260,13 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                return Err(ErrorCode::UnknownTable(format!(
-                    "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                ))
-                .set_span(*span));
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
+                    return Err(ErrorCode::UnknownTable(format!(
+                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
+                    ))
+                    .set_span(*span));
+                }
+                return Err(e);
             }
         };
 
@@ -378,7 +381,7 @@ impl Binder {
                     let field_expr = ScalarExpr::FunctionCall(FunctionCall {
                         span: *span,
                         func_name: "get".to_string(),
-                        params: vec![i + 1],
+                        params: vec![(i + 1) as i64],
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;
@@ -553,10 +556,10 @@ impl Binder {
                 hints: None,
                 distinct: false,
                 select_list: vec![SelectTarget::AliasedExpr {
-                    expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                    expr: Box::new(databend_common_ast::ast::Expr::FunctionCall {
                         span: *span,
                         distinct: false,
-                        name: common_ast::ast::Identifier {
+                        name: databend_common_ast::ast::Identifier {
                             span: *span,
                             name: func_name.name.clone(),
                             quote: None,
@@ -1439,7 +1442,7 @@ impl Binder {
                 );
 
                 match new_expr {
-                    common_expression::Expr::Constant {
+                    databend_common_expression::Expr::Constant {
                         scalar,
                         data_type: DataType::Timestamp,
                         ..

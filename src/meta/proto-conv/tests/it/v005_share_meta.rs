@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::share;
+use databend_common_meta_app::share;
 use minitrace::func_name;
 
 use crate::common;

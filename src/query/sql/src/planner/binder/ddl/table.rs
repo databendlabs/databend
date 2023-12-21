@@ -16,71 +16,72 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_ast::ast::AddColumnOption as AstAddColumnOption;
-use common_ast::ast::AlterTableAction;
-use common_ast::ast::AlterTableStmt;
-use common_ast::ast::AnalyzeTableStmt;
-use common_ast::ast::AttachTableStmt;
-use common_ast::ast::ColumnDefinition;
-use common_ast::ast::ColumnExpr;
-use common_ast::ast::CompactTarget;
-use common_ast::ast::CreateTableSource;
-use common_ast::ast::CreateTableStmt;
-use common_ast::ast::DescribeTableStmt;
-use common_ast::ast::DropTableStmt;
-use common_ast::ast::Engine;
-use common_ast::ast::ExistsTableStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::Literal;
-use common_ast::ast::ModifyColumnAction;
-use common_ast::ast::NullableConstraint;
-use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
-use common_ast::ast::OptimizeTableStmt;
-use common_ast::ast::RenameTableStmt;
-use common_ast::ast::ShowCreateTableStmt;
-use common_ast::ast::ShowDropTablesStmt;
-use common_ast::ast::ShowLimit;
-use common_ast::ast::ShowTablesStatusStmt;
-use common_ast::ast::ShowTablesStmt;
-use common_ast::ast::Statement;
-use common_ast::ast::TableReference;
-use common_ast::ast::TruncateTableStmt;
-use common_ast::ast::UndropTableStmt;
-use common_ast::ast::UriLocation;
-use common_ast::ast::VacuumDropTableStmt;
-use common_ast::ast::VacuumTableStmt;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::walk_expr_mut;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::infer_table_schema;
-use common_expression::types::DataType;
-use common_expression::ComputedExpr;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::storage::StorageParams;
-use common_storage::DataOperator;
-use common_storages_delta::DeltaTable;
-use common_storages_iceberg::IcebergTable;
-use common_storages_view::view_table::QUERY;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
+use databend_common_ast::ast::AlterTableAction;
+use databend_common_ast::ast::AlterTableStmt;
+use databend_common_ast::ast::AnalyzeTableStmt;
+use databend_common_ast::ast::AttachTableStmt;
+use databend_common_ast::ast::ColumnDefinition;
+use databend_common_ast::ast::ColumnExpr;
+use databend_common_ast::ast::CompactTarget;
+use databend_common_ast::ast::CreateTableSource;
+use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::DescribeTableStmt;
+use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::ExistsTableStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::ModifyColumnAction;
+use databend_common_ast::ast::NullableConstraint;
+use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
+use databend_common_ast::ast::OptimizeTableStmt;
+use databend_common_ast::ast::RenameTableStmt;
+use databend_common_ast::ast::ShowCreateTableStmt;
+use databend_common_ast::ast::ShowDropTablesStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowTablesStatusStmt;
+use databend_common_ast::ast::ShowTablesStmt;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TruncateTableStmt;
+use databend_common_ast::ast::UndropTableStmt;
+use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::VacuumDropTableStmt;
+use databend_common_ast::ast::VacuumTableStmt;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_expr_mut;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_storage::DataOperator;
+use databend_common_storages_delta::DeltaTable;
+use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::debug;
 use log::error;
-use storages_common_table_meta::table::is_reserved_opt_key;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_uri_location;
@@ -89,7 +90,6 @@ use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
@@ -413,6 +413,7 @@ impl Binder {
         // Take FUSE engine AS default engine
         let engine = engine.unwrap_or(Engine::Fuse);
         let mut options: BTreeMap<String, String> = BTreeMap::new();
+        let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -520,11 +521,12 @@ impl Binder {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
                         let table = DeltaTable::load(&sp).await?;
-                        let table_schema = DeltaTable::get_schema(&table).await?;
+                        let (table_schema, meta) = DeltaTable::get_meta(&table).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
+                        engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
                         (Arc::new(table_schema), vec![])
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -621,6 +623,7 @@ impl Binder {
             table,
             schema: schema.clone(),
             engine,
+            engine_options,
             storage_params,
             read_only_attach: false,
             part_prefix,
@@ -632,8 +635,8 @@ impl Binder {
                 let stmt = Statement::Query(Box::new(*query.clone()));
                 let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
                 // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
-                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
-                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
+                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+                let optimized_plan = optimize(opt_ctx, select_plan)?;
                 Some(Box::new(optimized_plan))
             } else {
                 None
@@ -700,6 +703,7 @@ impl Binder {
             table,
             schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            engine_options: BTreeMap::new(),
             storage_params: Some(sp),
             read_only_attach: stmt.read_only,
             part_prefix,
@@ -999,9 +1003,9 @@ impl Binder {
         let (new_catalog, new_database, new_table) =
             self.normalize_object_identifier_triple(new_catalog, new_database, new_table);
 
-        if new_catalog != catalog {
+        if new_catalog != catalog || new_database != database {
             return Err(ErrorCode::BadArguments(
-                "alter catalog not allowed while rename table",
+                "Rename table not allow modify catalog or database",
             ));
         }
 

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_config::GlobalConfig;
-use common_exception::Result;
-use common_sql::plans::TruncateTablePlan;
+use databend_common_catalog::table::TableExt;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::api::Packet;
 use crate::api::TruncateTablePacket;

@@ -14,25 +14,25 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::ComputedExpr;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_sql::plans::ShowCreateTablePlan;
-use common_storages_stream::stream_table::StreamTable;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use common_storages_view::view_table::QUERY;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_sql::plans::ShowCreateTablePlan;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::is_internal_opt_key;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use log::debug;
-use storages_common_table_meta::table::is_internal_opt_key;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

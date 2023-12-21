@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::Finder;
 use crate::binder::aggregate::AggregateRewriter;

@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::TableStatistics;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use itertools::Itertools;
 
 use super::ScalarItem;
@@ -169,6 +169,7 @@ impl Operator for Scan {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns: self.used_columns(),
+            orderings: vec![],
         }))
     }
 

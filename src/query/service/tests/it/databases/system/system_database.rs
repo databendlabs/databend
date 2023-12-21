@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use databend_query::catalogs::InMemoryMetas;
 use databend_query::catalogs::SYS_DB_ID_BEGIN;
 use databend_query::catalogs::SYS_TBL_ID_BEGIN;

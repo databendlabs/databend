@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int32Type;
-use common_expression::types::BooleanType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
 
 pub fn gen_schema_and_block(
     fields: Vec<TableField>,

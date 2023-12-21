@@ -17,9 +17,9 @@ mod marked_test;
 
 mod internal_seq;
 
-use common_meta_types::KVMeta;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 pub(in crate::sm_v002) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
@@ -240,7 +240,7 @@ impl From<Marked<String>> for Option<ExpireValue> {
 
 #[cfg(test)]
 mod tests {
-    use common_meta_types::KVMeta;
+    use databend_common_meta_types::KVMeta;
 
     use crate::sm_v002::marked::Marked;
 
@@ -256,36 +256,24 @@ mod tests {
             m
         );
 
-        let m = m.with_meta(Some(KVMeta {
-            expire_at: Some(20),
-        }));
+        let m = m.with_meta(Some(KVMeta::new_expire(20)));
 
         assert_eq!(
             Marked::Normal {
                 internal_seq: 1,
                 value: "a",
-                meta: Some(KVMeta {
-                    expire_at: Some(20)
-                })
+                meta: Some(KVMeta::new_expire(20))
             },
             m
         );
 
-        let m = Marked::new_with_meta(
-            2,
-            "b",
-            Some(KVMeta {
-                expire_at: Some(30),
-            }),
-        );
+        let m = Marked::new_with_meta(2, "b", Some(KVMeta::new_expire(30)));
 
         assert_eq!(
             Marked::Normal {
                 internal_seq: 2,
                 value: "b",
-                meta: Some(KVMeta {
-                    expire_at: Some(30)
-                })
+                meta: Some(KVMeta::new_expire(30))
             },
             m
         );

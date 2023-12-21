@@ -12,34 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+use std::time::Duration;
 
-use common_meta_types::protobuf as pb;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op;
-use common_meta_types::txn_op_response;
-use common_meta_types::ConditionResult;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteByPrefixRequest;
-use common_meta_types::TxnDeleteByPrefixResponse;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnDeleteResponse;
-use common_meta_types::TxnGetRequest;
-use common_meta_types::TxnGetResponse;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
-use common_meta_types::TxnPutResponse;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_meta_types::With;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_op;
+use databend_common_meta_types::txn_op_response;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnDeleteByPrefixRequest;
+use databend_common_meta_types::TxnDeleteByPrefixResponse;
+use databend_common_meta_types::TxnDeleteRequest;
+use databend_common_meta_types::TxnDeleteResponse;
+use databend_common_meta_types::TxnGetRequest;
+use databend_common_meta_types::TxnGetResponse;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnOpResponse;
+use databend_common_meta_types::TxnPutResponse;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::With;
 use log::debug;
 use log::info;
+use minitrace::full_name;
 use minitrace::func_name;
 
 use crate::kvapi;
@@ -58,11 +58,13 @@ impl kvapi::TestSuite {
         self.kv_delete(&builder.build().await).await?;
         self.kv_update(&builder.build().await).await?;
         self.kv_timeout(&builder.build().await).await?;
+        self.kv_upsert_with_ttl(&builder.build().await).await?;
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
         self.kv_mget(&builder.build().await).await?;
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
+        self.kv_transaction_with_ttl(&builder.build().await).await?;
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
             .await?;
         self.kv_transaction_delete_match_seq_some_not_match(&builder.build().await)
@@ -248,15 +250,10 @@ impl kvapi::TestSuite {
         // - Test list expired and non-expired.
         // - Test update with a new expire value.
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now_sec = SeqV::<()>::now_sec();
 
         let _res = kv
-            .upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta {
-                expire_at: Some(now + 2),
-            }))
+            .upsert_kv(UpsertKVReq::update("k1", b"v1").with(MetaSpec::new_expire(now_sec + 2)))
             .await?;
         // dbg!("upsert non expired k1", _res);
 
@@ -269,17 +266,14 @@ impl kvapi::TestSuite {
 
         info!("---get expired");
         {
-            tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+            tokio::time::sleep(Duration::from_millis(3000)).await;
             let res = kv.get_kv("k1").await?;
             // dbg!("k1 expired", &res);
             debug!("got k1:{:?}", res);
             assert!(res.is_none(), "got expired");
         }
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now_sec = SeqV::<()>::now_sec();
 
         info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
@@ -288,9 +282,7 @@ impl kvapi::TestSuite {
                 .upsert_kv(
                     UpsertKVReq::update("k1", b"v1")
                         .with(MatchSeq::Exact(0))
-                        .with(KVMeta {
-                            expire_at: Some(now - 1),
-                        }),
+                        .with(MetaSpec::new_expire(now_sec - 1)),
                 )
                 .await?;
             // dbg!("update expired k1", _res);
@@ -299,9 +291,7 @@ impl kvapi::TestSuite {
                 .upsert_kv(
                     UpsertKVReq::update("k2", b"v2")
                         .with(MatchSeq::Exact(0))
-                        .with(KVMeta {
-                            expire_at: Some(now + 10),
-                        }),
+                        .with(MetaSpec::new_expire(now_sec + 10)),
                 )
                 .await?;
             // dbg!("update non expired k2", _res);
@@ -312,9 +302,7 @@ impl kvapi::TestSuite {
                 None,
                 Some(SeqV::with_meta(
                     3,
-                    Some(KVMeta {
-                        expire_at: Some(now + 10)
-                    }),
+                    Some(KVMeta::new_expire(now_sec + 10)),
                     b"v2".to_vec()
                 ))
             ]);
@@ -333,9 +321,7 @@ impl kvapi::TestSuite {
             kv.upsert_kv(
                 UpsertKVReq::update("k2", b"v2")
                     .with(MatchSeq::Exact(3))
-                    .with(KVMeta {
-                        expire_at: Some(now - 1),
-                    }),
+                    .with(MetaSpec::new_expire(now_sec - 1)),
             )
             .await?;
 
@@ -347,15 +333,41 @@ impl kvapi::TestSuite {
     }
 
     #[minitrace::trace]
+    pub async fn kv_upsert_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        // - Add with ttl
+
+        info!("--- {}", full_name!());
+
+        let _res = kv
+            .upsert_kv(
+                UpsertKVReq::update("k1", b"v1")
+                    .with(MetaSpec::new_ttl(Duration::from_millis(2_000))),
+            )
+            .await?;
+
+        info!("---get unexpired");
+        {
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_some(), "got unexpired");
+        }
+
+        info!("---get expired");
+        {
+            tokio::time::sleep(Duration::from_millis(2_100)).await;
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_none(), "got expired");
+        }
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
     pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
         let test_key = "test_key_for_update_meta";
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now_sec = SeqV::<()>::now_sec();
 
         let r = kv.upsert_kv(UpsertKVReq::update(test_key, b"v1")).await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
@@ -368,9 +380,7 @@ impl kvapi::TestSuite {
                 test_key,
                 MatchSeq::Exact(seq + 1),
                 Operation::AsIs,
-                Some(KVMeta {
-                    expire_at: Some(now + 20),
-                }),
+                Some(MetaSpec::new_expire(now_sec + 20)),
             ))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
@@ -383,18 +393,14 @@ impl kvapi::TestSuite {
                 test_key,
                 MatchSeq::Exact(seq),
                 Operation::AsIs,
-                Some(KVMeta {
-                    expire_at: Some(now + 20),
-                }),
+                Some(MetaSpec::new_expire(now_sec + 20)),
             ))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
         assert_eq!(
             Some(SeqV::with_meta(
                 2,
-                Some(KVMeta {
-                    expire_at: Some(now + 20)
-                }),
+                Some(KVMeta::new_expire(now_sec + 20)),
                 b"v1".to_vec()
             )),
             r.result
@@ -406,9 +412,7 @@ impl kvapi::TestSuite {
         assert_eq!(
             SeqV::with_meta(
                 seq + 1,
-                Some(KVMeta {
-                    expire_at: Some(now + 20)
-                }),
+                Some(KVMeta::new_expire(now_sec + 20)),
                 b"v1".to_vec()
             ),
             key_value.unwrap(),
@@ -500,14 +504,7 @@ impl kvapi::TestSuite {
             target: Some(txn_condition::Target::Seq(0)),
         }];
 
-        let if_then: Vec<TxnOp> = vec![TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: txn_key.clone(),
-                value: b"new_v1".to_vec(),
-                prev_value: true,
-                expire_at: None,
-            })),
-        }];
+        let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
 
         let else_then: Vec<TxnOp> = vec![];
 
@@ -661,14 +658,7 @@ impl kvapi::TestSuite {
                 target: Some(txn_condition::Target::Seq(0)),
             }];
 
-            let if_then: Vec<TxnOp> = vec![TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: txn_key.clone(),
-                    value: b"new_v1".to_vec(),
-                    prev_value: true,
-                    expire_at: None,
-                })),
-            }];
+            let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
 
             let else_then: Vec<TxnOp> = vec![];
             let txn = TxnRequest {
@@ -713,14 +703,7 @@ impl kvapi::TestSuite {
                 },
             ];
 
-            let if_then: Vec<TxnOp> = vec![TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: txn_key1.clone(),
-                    value: b"new_v1".to_vec(),
-                    prev_value: true,
-                    expire_at: None,
-                })),
-            }];
+            let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key1.clone(), b("new_v1"))];
 
             let else_then: Vec<TxnOp> = vec![];
             let txn = TxnRequest {
@@ -768,23 +751,9 @@ impl kvapi::TestSuite {
 
             let if_then: Vec<TxnOp> = vec![
                 // change k1
-                TxnOp {
-                    request: Some(txn_op::Request::Put(TxnPutRequest {
-                        key: txn_key1.clone(),
-                        value: val1_new.to_vec(),
-                        prev_value: true,
-                        expire_at: None,
-                    })),
-                },
+                TxnOp::put(txn_key1.clone(), val1_new.clone()),
                 // change k2
-                TxnOp {
-                    request: Some(txn_op::Request::Put(TxnPutRequest {
-                        key: txn_key2.clone(),
-                        value: b"new_v2".to_vec(),
-                        prev_value: true,
-                        expire_at: None,
-                    })),
-                },
+                TxnOp::put(txn_key2.clone(), b("new_v2")),
                 // get k1
                 TxnOp {
                     request: Some(txn_op::Request::Get(TxnGetRequest {
@@ -886,14 +855,7 @@ impl kvapi::TestSuite {
 
             let if_then: Vec<TxnOp> = vec![
                 // change k1
-                TxnOp {
-                    request: Some(txn_op::Request::Put(TxnPutRequest {
-                        key: txn_key1.clone(),
-                        value: val1_new.to_vec(),
-                        prev_value: true,
-                        expire_at: None,
-                    })),
-                },
+                TxnOp::put(txn_key1.clone(), val1_new.clone()),
                 // get k1
                 TxnOp {
                     request: Some(txn_op::Request::Get(TxnGetRequest {
@@ -934,6 +896,36 @@ impl kvapi::TestSuite {
 
             self.check_transaction_responses(&resp, &expected, true);
         }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    pub async fn kv_transaction_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        // - Add a record via transaction with ttl
+
+        info!("--- {}", full_name!());
+
+        let txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![TxnOp::put_with_ttl("k1", b("v1"), Some(2_000))],
+            else_then: vec![],
+        };
+
+        let _resp = kv.transaction(txn).await?;
+
+        info!("---get unexpired");
+        {
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_some(), "got unexpired");
+        }
+
+        info!("---get expired");
+        {
+            tokio::time::sleep(Duration::from_millis(2_100)).await;
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_none(), "got expired");
+        }
+
         Ok(())
     }
 
@@ -1107,4 +1099,8 @@ impl kvapi::TestSuite {
         }
         Ok(())
     }
+}
+
+fn b(s: &str) -> Vec<u8> {
+    s.as_bytes().to_vec()
 }

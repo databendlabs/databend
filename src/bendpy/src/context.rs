@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeSet;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;

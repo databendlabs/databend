@@ -14,13 +14,13 @@
 
 //! Supporting utilities for tests.
 
-use common_meta_kvapi::kvapi;
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::MetaAPIError;
-use common_meta_types::MetaDataError;
-use common_meta_types::MetaDataReadError;
-use common_meta_types::MetaError;
-use common_proto_conv::FromToProto;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaDataError;
+use databend_common_meta_types::MetaDataReadError;
+use databend_common_meta_types::MetaError;
+use databend_common_proto_conv::FromToProto;
 
 use crate::kv_app_error::KVAppError;
 
@@ -31,7 +31,7 @@ pub(crate) async fn get_kv_data<T>(
 ) -> Result<T, KVAppError>
 where
     T: FromToProto,
-    T::PB: common_protos::prost::Message + Default,
+    T::PB: databend_common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {

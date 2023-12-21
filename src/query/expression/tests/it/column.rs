@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::new_empty_array;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Column;
+use databend_common_arrow::arrow::array::new_empty_array;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Column;
 
 #[test]
 fn test_from_arrow_extension_to_column() -> Result<()> {

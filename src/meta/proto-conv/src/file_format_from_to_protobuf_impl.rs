@@ -15,8 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_meta_app as mt;
-use common_protos::pb;
+use databend_common_meta_app as mt;
+use databend_common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;

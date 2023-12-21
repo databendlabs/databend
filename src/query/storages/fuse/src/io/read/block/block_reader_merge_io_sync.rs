@@ -15,18 +15,18 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read::read_metadata;
-use common_base::rangemap::RangeMerger;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_storage::infer_schema_with_extension;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read::read_metadata;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_storage::infer_schema_with_extension;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache_manager::CacheManager;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataCacheKey;
-use storages_common_cache_manager::CacheManager;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;

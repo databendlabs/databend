@@ -15,15 +15,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::lock::Lock;
-use common_catalog::table::Table;
-use common_exception::Result;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use metrics::gauge;
 use opendal::Operator;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;

@@ -14,15 +14,15 @@
 
 use std::default::Default;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::schema::TableInfo;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_normal_case() -> Result<()> {
@@ -77,7 +77,10 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "| 4        | (4, 6)   |",
             "+----------+----------+",
         ];
-        common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
+        databend_common_expression::block_debug::assert_blocks_sorted_eq(
+            expected,
+            blocks.as_slice(),
+        );
     }
 
     // test commit with overwrite
@@ -121,7 +124,10 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "| 6        | (6, 9)   |",
             "+----------+----------+",
         ];
-        common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
+        databend_common_expression::block_debug::assert_blocks_sorted_eq(
+            expected,
+            blocks.as_slice(),
+        );
     }
 
     Ok(())

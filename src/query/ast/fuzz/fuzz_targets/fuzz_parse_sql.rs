@@ -15,9 +15,9 @@
 #[macro_use]
 extern crate afl;
 
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Backtrace;
 
 fn main() {
     loop {

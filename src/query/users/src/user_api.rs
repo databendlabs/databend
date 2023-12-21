@@ -15,34 +15,36 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_grpc::RpcClientConf;
-use common_management::ConnectionApi;
-use common_management::ConnectionMgr;
-use common_management::FileFormatApi;
-use common_management::FileFormatMgr;
-use common_management::NetworkPolicyApi;
-use common_management::NetworkPolicyMgr;
-use common_management::QuotaApi;
-use common_management::QuotaMgr;
-use common_management::RoleApi;
-use common_management::RoleMgr;
-use common_management::SettingApi;
-use common_management::SettingMgr;
-use common_management::StageApi;
-use common_management::StageMgr;
-use common_management::UdfApi;
-use common_management::UdfMgr;
-use common_management::UserApi;
-use common_management::UserMgr;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::tenant::TenantQuota;
-use common_meta_kvapi::kvapi;
-use common_meta_store::MetaStore;
-use common_meta_store::MetaStoreProvider;
-use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_grpc::RpcClientConf;
+use databend_common_management::ConnectionApi;
+use databend_common_management::ConnectionMgr;
+use databend_common_management::FileFormatApi;
+use databend_common_management::FileFormatMgr;
+use databend_common_management::NetworkPolicyApi;
+use databend_common_management::NetworkPolicyMgr;
+use databend_common_management::PasswordPolicyApi;
+use databend_common_management::PasswordPolicyMgr;
+use databend_common_management::QuotaApi;
+use databend_common_management::QuotaMgr;
+use databend_common_management::RoleApi;
+use databend_common_management::RoleMgr;
+use databend_common_management::SettingApi;
+use databend_common_management::SettingMgr;
+use databend_common_management::StageApi;
+use databend_common_management::StageMgr;
+use databend_common_management::UdfApi;
+use databend_common_management::UdfMgr;
+use databend_common_management::UserApi;
+use databend_common_management::UserMgr;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaError;
 
 use crate::idm_config::IDMConfig;
 
@@ -134,6 +136,16 @@ impl UserApiProvider {
         tenant: &str,
     ) -> Result<Arc<impl NetworkPolicyApi>> {
         Ok(Arc::new(NetworkPolicyMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
+    }
+
+    pub fn get_password_policy_api_client(
+        &self,
+        tenant: &str,
+    ) -> Result<Arc<impl PasswordPolicyApi>> {
+        Ok(Arc::new(PasswordPolicyMgr::create(
             self.client.clone(),
             tenant,
         )?))

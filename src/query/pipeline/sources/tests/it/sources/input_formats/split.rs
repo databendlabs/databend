@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_pipeline_sources::input_formats::split_by_size;
+use databend_common_pipeline_sources::input_formats::split_by_size;
 
 #[test]
 fn test_split_by_size() {

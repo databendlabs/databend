@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_grpc::GrpcClaim;
-use common_grpc::GrpcToken;
+use databend_common_exception::Result;
+use databend_common_grpc::GrpcClaim;
+use databend_common_grpc::GrpcToken;
 
 #[test]
 fn test_flight_token() -> Result<()> {

@@ -575,6 +575,7 @@ jobs:
 
   deb:
     runs-on: ubuntu-latest
+    if: inputs.stable
     needs: [create_release, distribution]
     steps:
       - uses: actions/checkout@v4
@@ -661,6 +662,7 @@ jobs:
           name: test-sqlsmith
 
   bindings_python:
+    if: inputs.stable
     needs: create_release
     uses: ./.github/workflows/bindings.python.yml
     secrets: inherit
@@ -676,7 +678,6 @@ jobs:
       - docker_combined
       - docker_separate
       - distribution
-      - deb
     steps:
       - uses: actions/checkout@v4
         with:

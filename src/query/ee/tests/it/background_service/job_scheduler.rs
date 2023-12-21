@@ -19,17 +19,17 @@ use std::time::Duration;
 use chrono::TimeZone;
 use chrono::Utc;
 use chrono_tz::Tz;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::base::tokio::sync::Mutex;
-use common_exception::Result;
-use common_meta_app::background::BackgroundJobIdent;
-use common_meta_app::background::BackgroundJobInfo;
-use common_meta_app::background::BackgroundJobParams;
-use common_meta_app::background::BackgroundJobStatus;
-use common_meta_app::principal::UserIdentity;
-use enterprise_query::background_service::Job;
-use enterprise_query::background_service::JobScheduler;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_exception::Result;
+use databend_common_meta_app::background::BackgroundJobIdent;
+use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundJobParams;
+use databend_common_meta_app::background::BackgroundJobStatus;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_enterprise_query::background_service::Job;
+use databend_enterprise_query::background_service::JobScheduler;
 
 #[derive(Clone)]
 struct TestJob {

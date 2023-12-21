@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::Plan;
-use common_sql::Planner;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 

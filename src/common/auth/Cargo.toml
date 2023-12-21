@@ -1,5 +1,5 @@
 [package]
-name = "common-auth"
+name = "databend-common-auth"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,7 +13,8 @@ test = false
 [dependencies]
 base64 = "0.21.0"
 chrono = { workspace = true }
-common-base = { path = "../../common/base" }
+databend-common-base = { path = "../../common/base" }
 http = "0.2"
+
 [dev-dependencies]
 tempfile = "3.4.0"

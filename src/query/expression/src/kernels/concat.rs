@@ -15,10 +15,10 @@
 use std::iter::TrustedLen;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;

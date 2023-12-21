@@ -1,0 +1,8 @@
+statement error 1025
+alter table t2 set options(block_per_segment = 100)
+
+statement error 1003
+alter table database_error.t2 set options(block_per_segment = 100)
+
+statement error 1119
+alter table catalog_error.default.t2 set options(block_per_segment = 100)

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableDictionary;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableDictionary;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn test_single() -> Result<()> {

@@ -13511,6 +13511,7 @@ CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
+        if_not_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -13625,6 +13626,7 @@ ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 AlterVirtualColumn(
     AlterVirtualColumnStmt {
+        if_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -13739,6 +13741,7 @@ DROP VIRTUAL COLUMN FOR t
 ---------- AST ------------
 DropVirtualColumn(
     DropVirtualColumnStmt {
+        if_exists: false,
         catalog: None,
         database: None,
         table: Identifier {

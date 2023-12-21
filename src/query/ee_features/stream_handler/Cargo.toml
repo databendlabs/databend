@@ -1,5 +1,5 @@
 [package]
-name = "stream-handler"
+name = "databend-enterprise-stream-handler"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,11 +12,11 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
-common-sql = { path = "../../sql" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-sql = { path = "../../sql" }
 
 # Github dependencies
 async-backtrace = { workspace = true }

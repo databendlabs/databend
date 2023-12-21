@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_sql::SelectBuilder;
+use databend_common_sql::SelectBuilder;
 
 struct SelectBuilderCase {
     pub columns: Vec<String>,

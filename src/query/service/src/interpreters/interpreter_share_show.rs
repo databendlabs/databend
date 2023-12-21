@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_meta_api::ShareApi;
-use common_meta_app::share::ShowSharesReq;
-use common_sharing::ShareEndpointManager;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::ShowSharesReq;
+use databend_common_sharing::ShareEndpointManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -14,8 +14,8 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::uuid::Uuid;
-use common_datavalues as dv;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_datavalues as dv;
 use serde::Deserialize;
 use serde::Serialize;
 

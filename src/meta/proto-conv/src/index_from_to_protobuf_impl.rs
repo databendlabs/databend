@@ -17,8 +17,8 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::schema as mt;
-use common_protos::pb;
+use databend_common_meta_app::schema as mt;
+use databend_common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
@@ -81,6 +81,7 @@ impl FromToProto for mt::IndexMeta {
                 Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
                 None => None,
             },
+            original_query: p.original_query,
             query: p.query,
             sync_creation: p.sync_creation,
         };
@@ -102,6 +103,7 @@ impl FromToProto for mt::IndexMeta {
                 Some(update_on) => Some(update_on.to_pb()?),
                 None => None,
             },
+            original_query: self.original_query.clone(),
             query: self.query.clone(),
             sync_creation: self.sync_creation,
         };

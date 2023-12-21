@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use common_expression::TableField;
+use databend_common_expression::TableField;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::file::metadata::RowGroupMetaData;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::parquet_rs::statistics::column::convert_column_statistics;
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,14 +19,14 @@ use std::time::Duration;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use common_base::base::get_free_tcp_port;
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::PasswordHashMethod;
-use common_users::CustomClaims;
-use common_users::EnsureUser;
+use databend_common_base::base::get_free_tcp_port;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_users::CustomClaims;
+use databend_common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;

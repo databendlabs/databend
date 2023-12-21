@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-types"
+name = "databend-common-meta-types"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,7 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
-common-meta-stoerr = { path = "../stoerr" }
+databend-common-meta-stoerr = { path = "../stoerr" }
 
 openraft = { workspace = true }
 
@@ -27,7 +27,7 @@ tokio = { workspace = true }
 tonic = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }
 prost-build = { workspace = true }
 tonic-build = { workspace = true }
 

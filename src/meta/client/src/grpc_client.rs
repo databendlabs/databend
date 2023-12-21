@@ -21,50 +21,50 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::base::tokio::select;
-use common_base::base::tokio::sync::mpsc;
-use common_base::base::tokio::sync::mpsc::Receiver;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::base::tokio::sync::oneshot;
-use common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
-use common_base::base::tokio::sync::oneshot::Sender as OneSend;
-use common_base::base::tokio::time::sleep;
-use common_base::containers::ItemManager;
-use common_base::containers::Pool;
-use common_base::containers::TtlHashMap;
-use common_base::future::TimingFutureExt;
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_base::runtime::UnlimitedFuture;
-use common_base::GLOBAL_TASK;
-use common_grpc::ConnectionFactory;
-use common_grpc::GrpcConnectionError;
-use common_grpc::RpcClientConf;
-use common_grpc::RpcClientTlsConfig;
-use common_meta_api::reply::reply_to_api_result;
-use common_meta_kvapi::kvapi::ListKVReply;
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::protobuf as pb;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
-use common_meta_types::protobuf::ClientInfo;
-use common_meta_types::protobuf::ClusterStatus;
-use common_meta_types::protobuf::Empty;
-use common_meta_types::protobuf::ExportedChunk;
-use common_meta_types::protobuf::HandshakeRequest;
-use common_meta_types::protobuf::MemberListReply;
-use common_meta_types::protobuf::MemberListRequest;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::ConnectionError;
-use common_meta_types::GrpcConfig;
-use common_meta_types::MetaClientError;
-use common_meta_types::MetaError;
-use common_meta_types::MetaHandshakeError;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
+use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use databend_common_base::base::tokio::select;
+use databend_common_base::base::tokio::sync::mpsc;
+use databend_common_base::base::tokio::sync::mpsc::Receiver;
+use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::sync::oneshot;
+use databend_common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
+use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::containers::ItemManager;
+use databend_common_base::containers::Pool;
+use databend_common_base::containers::TtlHashMap;
+use databend_common_base::future::TimingFutureExt;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::UnlimitedFuture;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_grpc::GrpcConnectionError;
+use databend_common_grpc::RpcClientConf;
+use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_api::reply::reply_to_api_result;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use databend_common_meta_types::protobuf::ClientInfo;
+use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::Empty;
+use databend_common_meta_types::protobuf::ExportedChunk;
+use databend_common_meta_types::protobuf::HandshakeRequest;
+use databend_common_meta_types::protobuf::MemberListReply;
+use databend_common_meta_types::protobuf::MemberListRequest;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::ConnectionError;
+use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaHandshakeError;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use futures::stream::StreamExt;
 use log::as_debug;
 use log::as_display;
@@ -1139,7 +1139,7 @@ impl MetaGrpcClient {
         );
 
         let req: Request<TxnRequest> = Request::new(txn.clone());
-        let req = common_tracing::inject_span_to_tonic_request(req);
+        let req = databend_common_tracing::inject_span_to_tonic_request(req);
 
         let (mut client, _sver) = self.make_client().await?;
         let result = client.transaction(req).await;
@@ -1151,7 +1151,7 @@ impl MetaGrpcClient {
                     self.mark_current_endpoint_unhealthy();
                     let (mut client, _sver) = self.make_client().await?;
                     let req: Request<TxnRequest> = Request::new(txn);
-                    let req = common_tracing::inject_span_to_tonic_request(req);
+                    let req = databend_common_tracing::inject_span_to_tonic_request(req);
                     let ret = client.transaction(req).await?.into_inner();
                     return Ok(ret);
                 } else {
@@ -1191,7 +1191,7 @@ impl MetaGrpcClient {
 /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
 fn traced_req<T>(t: T) -> Request<T> {
     let req = Request::new(t);
-    common_tracing::inject_span_to_tonic_request(req)
+    databend_common_tracing::inject_span_to_tonic_request(req)
 }
 
 fn status_is_retryable(status: &Status) -> bool {

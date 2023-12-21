@@ -15,23 +15,23 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::plan::FullParquetMeta;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::TopK;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_storage::CopyStatus;
-use common_storage::FileStatus;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::plan::FullParquetMeta;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::FileStatus;
+use databend_storages_common_index::Index;
+use databend_storages_common_index::RangeIndex;
 use parquet::arrow::arrow_reader::RowSelector;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
 
 use super::meta::read_parquet_metas_batch;
 use super::table::ParquetRSTable;
@@ -97,6 +97,7 @@ impl ParquetRSTable {
             self.leaf_fields.clone(),
             &push_down,
             self.read_options,
+            vec![],
         )?);
 
         let copy_status = if matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable) {
@@ -358,11 +359,11 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
+        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref(), None)?;
         let mut row_selections = if omits.iter().all(|x| *x) {
             None
         } else {
-            pruner.prune_pages(meta, &rgs)?
+            pruner.prune_pages(meta, &rgs, None)?
         };
 
         let mut rows_read = 0; // Rows read in current file.

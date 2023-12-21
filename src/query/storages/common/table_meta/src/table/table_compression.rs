@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::native;
-use common_arrow::parquet;
-use common_exception::ErrorCode;
+use databend_common_arrow::native;
+use databend_common_arrow::parquet;
+use databend_common_exception::ErrorCode;
 
 use crate::meta;
 

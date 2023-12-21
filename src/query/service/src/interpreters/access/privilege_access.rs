@@ -15,21 +15,21 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::principal::StageType;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserPrivilegeType;
-use common_sql::optimizer::get_udf_names;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::PresignAction;
-use common_sql::plans::RewriteKind;
-use common_users::RoleCacheManager;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_sql::optimizer::get_udf_names;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::PresignAction;
+use databend_common_sql::plans::RewriteKind;
+use databend_common_users::RoleCacheManager;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -932,6 +932,10 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropNetworkPolicy(_)
             | Plan::DescNetworkPolicy(_)
             | Plan::ShowNetworkPolicies(_)
+            | Plan::CreatePasswordPolicy(_)
+            | Plan::AlterPasswordPolicy(_)
+            | Plan::DropPasswordPolicy(_)
+            | Plan::DescPasswordPolicy(_)
             | Plan::CreateConnection(_)
             | Plan::ShowConnections(_)
             | Plan::DescConnection(_)

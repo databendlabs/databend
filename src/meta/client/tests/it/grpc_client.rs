@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_grpc::ConnectionFactory;
-use common_meta_api::SchemaApi;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_client::MetaGrpcClient;
-use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_types::MetaClientError;
-use common_meta_types::MetaError;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
 
 use crate::grpc_server::start_grpc_server;
 

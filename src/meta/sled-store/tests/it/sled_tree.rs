@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::SledTree;
-use common_meta_types::new_log_id;
-use common_meta_types::Cmd;
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::LogEntry;
-use common_meta_types::LogIndex;
-use common_meta_types::SeqV;
-use common_meta_types::UpsertKV;
+use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::LogIndex;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
 use test_harness::test;
 
 use crate::testing::fake_key_spaces::Files;

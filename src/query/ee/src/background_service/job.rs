@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_exception::Result;
-use common_meta_app::background::BackgroundJobIdent;
-use common_meta_app::background::BackgroundJobInfo;
-use common_meta_app::background::BackgroundJobParams;
-use common_meta_app::background::BackgroundJobStatus;
+use databend_common_exception::Result;
+use databend_common_meta_app::background::BackgroundJobIdent;
+use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundJobParams;
+use databend_common_meta_app::background::BackgroundJobStatus;
 
 /// A trait for implementing a background job
 ///

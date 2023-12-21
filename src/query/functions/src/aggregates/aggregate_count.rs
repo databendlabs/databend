@@ -16,20 +16,20 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_expression::types::number::NumberColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::utils::column_merge_validity;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
@@ -150,12 +150,12 @@ impl AggregateFunction for AggregateCountFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        serialize_state(writer, &state.count)
+        borsh_serialize_state(writer, &state.count)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let other: u64 = deserialize_state(reader)?;
+        let other: u64 = borsh_deserialize_state(reader)?;
         state.count += other;
         Ok(())
     }

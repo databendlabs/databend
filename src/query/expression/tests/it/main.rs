@@ -15,12 +15,12 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::DecimalSize;
-use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::DataBlock;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 
 extern crate core;
 

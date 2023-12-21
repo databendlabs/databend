@@ -16,53 +16,53 @@ use std::collections::VecDeque;
 use std::str;
 use std::sync::Arc;
 
-use common_ast::ast::Engine;
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::cluster_info::Cluster;
-use common_catalog::table::AppendMode;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_expression::infer_table_schema;
-use common_expression::types::number::Int32Type;
-use common_expression::types::number::Int64Type;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::Column;
-use common_expression::ComputedExpr;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FromData;
-use common_expression::SendableDataBlockStream;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_license::license_manager::LicenseManager;
-use common_license::license_manager::OssLicenseManager;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::PasswordHashMethod;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::storage::StorageParams;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sinks::EmptySink;
-use common_pipeline_sources::BlocksSource;
-use common_sql::plans::CreateDatabasePlan;
-use common_sql::plans::CreateTablePlan;
-use common_tracing::set_panic_hook;
+use databend_common_ast::ast::Engine;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::table::AppendMode;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::Column;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FromData;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::EmptySink;
+use databend_common_pipeline_sources::BlocksSource;
+use databend_common_sql::plans::CreateDatabasePlan;
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_tracing::set_panic_hook;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
 use log::info;
 use parking_lot::Mutex;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use uuid::Uuid;
 
 use crate::clusters::ClusterDiscovery;
@@ -110,7 +110,7 @@ impl TestGuard {
 impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&self._thread_name);
+        databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
     }
 }
 
@@ -205,7 +205,7 @@ impl TestFixture {
         #[cfg(debug_assertions)]
         {
             let thread_name = std::thread::current().name().unwrap().to_string();
-            common_base::base::GlobalInstance::init_testing(&thread_name);
+            databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
         GlobalServices::init_with(config).await?;
@@ -307,6 +307,7 @@ impl TestFixture {
             table: self.default_table_name(),
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
+            engine_options: Default::default(),
             storage_params: None,
             read_only_attach: false,
             part_prefix: "".to_string(),
@@ -331,6 +332,7 @@ impl TestFixture {
             table: self.default_table_name(),
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
+            engine_options: Default::default(),
             storage_params: None,
             read_only_attach: false,
             part_prefix: "".to_string(),
@@ -366,6 +368,7 @@ impl TestFixture {
             table: self.default_table_name(),
             schema: TestFixture::variant_table_schema(),
             engine: Engine::Fuse,
+            engine_options: Default::default(),
             storage_params: None,
             read_only_attach: false,
             part_prefix: "".to_string(),
@@ -410,6 +413,7 @@ impl TestFixture {
             table: self.default_table_name(),
             schema: TestFixture::computed_table_schema(),
             engine: Engine::Fuse,
+            engine_options: Default::default(),
             storage_params: None,
             read_only_attach: false,
             part_prefix: "".to_string(),

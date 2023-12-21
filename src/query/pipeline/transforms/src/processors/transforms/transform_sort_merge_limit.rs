@@ -16,10 +16,10 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::intrinsics::unlikely;
 
-use common_base::containers::FixedHeap;
-use common_exception::Result;
-use common_expression::row::RowConverter as CommonConverter;
-use common_expression::DataBlock;
+use databend_common_base::containers::FixedHeap;
+use databend_common_exception::Result;
+use databend_common_expression::row::RowConverter as CommonConverter;
+use databend_common_expression::DataBlock;
 
 use super::sort::CommonRows;
 use super::sort::Cursor;

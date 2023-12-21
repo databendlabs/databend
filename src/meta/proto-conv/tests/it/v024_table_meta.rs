@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ex;
-use common_expression::types::NumberDataType;
-use common_meta_app::schema as mt;
-use common_meta_app::storage::StorageParams;
+use databend_common_expression as ex;
+use databend_common_expression::types::NumberDataType;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::storage::StorageParams;
 use maplit::btreemap;
 use minitrace::func_name;
 

@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::Span;
+use databend_common_exception::Span;
 
 use super::Lambda;
 use crate::ast::write_comma_separated_list;

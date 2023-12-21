@@ -14,9 +14,9 @@
 
 use std::collections::BTreeMap;
 
-use common_exception::Result;
-use common_meta_app::share::TableInfoMap;
-use common_storages_share::share_table_info_location;
+use databend_common_exception::Result;
+use databend_common_meta_app::share::TableInfoMap;
+use databend_common_storages_share::share_table_info_location;
 
 use crate::accessor::SharingAccessor;
 use crate::models::TableMetaLambdaInput;

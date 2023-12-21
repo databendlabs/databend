@@ -15,15 +15,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::runtime::GlobalIORuntime;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
-use common_metrics::storage::*;
-use common_pipeline_core::Pipeline;
-use common_storage::StageFileInfo;
-use common_storages_fuse::io::Files;
-use common_storages_stage::StageTable;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_fuse::io::Files;
+use databend_common_storages_stage::StageTable;
 use log::error;
 
 use crate::pipelines::PipelineBuilder;

@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_base::base::mask_string;
+use databend_common_base::base::mask_string;
 
 use crate::ast::Identifier;
 

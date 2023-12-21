@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataField;
-use common_expression::FunctionContext;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::PlanScope;
-use common_profile::SharedProcessorProfiles;
-use common_settings::Settings;
-use common_sql::executor::PhysicalPlan;
-use common_sql::IndexType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::FunctionContext;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::PlanScope;
+use databend_common_profile::SharedProcessorProfiles;
+use databend_common_settings::Settings;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
 use crate::api::DefaultExchangeInjector;

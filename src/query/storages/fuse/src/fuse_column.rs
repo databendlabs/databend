@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::ColumnStatisticsProvider;
-use common_expression::ColumnId;
-use common_storage::Datum;
-use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_expression::ColumnId;
+use databend_common_storage::Datum;
+use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 
 /// A column statistics provider for fuse table.
 #[derive(Default)]

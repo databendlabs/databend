@@ -39,7 +39,7 @@ fn test_decode_v49_network_policy() -> anyhow::Result<()> {
         49, 168, 6, 24,
     ];
 
-    let want = || common_meta_app::principal::NetworkPolicy {
+    let want = || databend_common_meta_app::principal::NetworkPolicy {
         name: "testpolicy1".to_string(),
         allowed_ip_list: vec!["192.168.1.0/24".to_string()],
         blocked_ip_list: vec!["192.168.1.10".to_string()],

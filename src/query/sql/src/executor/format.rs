@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::FormatTreeNode;
-use common_catalog::plan::PartStatistics;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_profile::SharedProcessorProfiles;
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_profile::SharedProcessorProfiles;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;

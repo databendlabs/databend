@@ -14,20 +14,20 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_catalog::catalog::Catalog;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::schema::CreateVirtualColumnReply;
-use common_meta_app::schema::CreateVirtualColumnReq;
-use common_meta_app::schema::DropVirtualColumnReply;
-use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_meta_app::schema::UpdateVirtualColumnReply;
-use common_meta_app::schema::UpdateVirtualColumnReq;
-use common_meta_app::schema::VirtualColumnMeta;
-use common_storages_fuse::FuseTable;
-use storages_common_table_meta::meta::Location;
+use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateVirtualColumnReply;
+use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DropVirtualColumnReply;
+use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::UpdateVirtualColumnReply;
+use databend_common_meta_app::schema::UpdateVirtualColumnReq;
+use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
 pub trait VirtualColumnHandler: Sync + Send {

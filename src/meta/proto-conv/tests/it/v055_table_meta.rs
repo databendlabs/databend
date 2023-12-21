@@ -13,12 +13,12 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ce;
-use common_expression::types::NumberDataType;
-use common_expression::ComputedExpr;
-use common_meta_app::schema as mt;
-use common_meta_app::schema::Ownership;
-use common_meta_app::share;
+use databend_common_expression as ce;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::schema::Ownership;
+use databend_common_meta_app::share;
 use maplit::btreemap;
 use maplit::btreeset;
 use minitrace::func_name;

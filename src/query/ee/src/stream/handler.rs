@@ -16,35 +16,35 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::CreateTableReply;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_types::MatchSeq;
-use common_sql::plans::CreateStreamPlan;
-use common_sql::plans::DropStreamPlan;
-use common_sql::plans::StreamNavigation;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
-use common_storages_stream::stream_table::StreamTable;
-use common_storages_stream::stream_table::MODE_APPEND_ONLY;
-use common_storages_stream::stream_table::OPT_KEY_DATABASE_NAME;
-use common_storages_stream::stream_table::OPT_KEY_MODE;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use stream_handler::StreamHandler;
-use stream_handler::StreamHandlerWrapper;
+use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::CreateStreamPlan;
+use databend_common_sql::plans::DropStreamPlan;
+use databend_common_sql::plans::StreamNavigation;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_stream::stream_table::MODE_APPEND_ONLY;
+use databend_common_storages_stream::stream_table::OPT_KEY_DATABASE_NAME;
+use databend_common_storages_stream::stream_table::OPT_KEY_MODE;
+use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
+use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
+use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_enterprise_stream_handler::StreamHandler;
+use databend_enterprise_stream_handler::StreamHandlerWrapper;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 pub struct RealStreamHandler {}
 
@@ -173,11 +173,15 @@ impl StreamHandler for RealStreamHandler {
                 )));
             }
 
+            let db = catalog.get_database(&tenant, &db_name).await?;
+
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: plan.if_exists,
-                    tenant,
+                    tenant: tenant.clone(),
+                    table_name: stream_name.clone(),
                     tb_id: table.get_id(),
+                    db_id: db.get_db_info().ident.db_id,
                 })
                 .await
         } else if plan.if_exists {

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_users::UserApiProvider;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_users::UserApiProvider;
 
 use crate::sessions::QueryContext;
 
@@ -39,7 +39,7 @@ pub async fn validate_grant_object_exists(
                 .exists_table(tenant.as_str(), database_name, table_name)
                 .await?
             {
-                return Err(common_exception::ErrorCode::UnknownTable(format!(
+                return Err(databend_common_exception::ErrorCode::UnknownTable(format!(
                     "table `{}`.`{}` not exists in catalog '{}'",
                     database_name, table_name, catalog_name,
                 )));
@@ -51,10 +51,9 @@ pub async fn validate_grant_object_exists(
                 .exists_database(tenant.as_str(), database_name)
                 .await?
             {
-                return Err(common_exception::ErrorCode::UnknownDatabase(format!(
-                    "database {} not exists",
-                    database_name,
-                )));
+                return Err(databend_common_exception::ErrorCode::UnknownDatabase(
+                    format!("database {} not exists", database_name,),
+                ));
             }
         }
         GrantObject::UDF(udf) => {
@@ -62,7 +61,7 @@ pub async fn validate_grant_object_exists(
                 .exists_udf(tenant.as_str(), udf)
                 .await?
             {
-                return Err(common_exception::ErrorCode::UnknownStage(format!(
+                return Err(databend_common_exception::ErrorCode::UnknownStage(format!(
                     "udf {udf} not exists"
                 )));
             }
@@ -72,7 +71,7 @@ pub async fn validate_grant_object_exists(
                 .exists_stage(ctx.get_tenant().as_str(), stage)
                 .await?
             {
-                return Err(common_exception::ErrorCode::UnknownStage(format!(
+                return Err(databend_common_exception::ErrorCode::UnknownStage(format!(
                     "stage {stage} not exists"
                 )));
             }

@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_io::display_decimal_256;
-use common_io::escape_string_with_quote;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_io::display_decimal_256;
+use databend_common_io::escape_string_with_quote;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;

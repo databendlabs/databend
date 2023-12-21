@@ -18,10 +18,10 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_meta_sled_store::openraft::ServerState;
-use common_meta_types::AppliedState;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
+use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::NodeId;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use log::info;

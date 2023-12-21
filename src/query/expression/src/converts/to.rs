@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValue;
+use databend_common_datavalues::DataValue;
 use ordered_float::OrderedFloat;
 
 use crate::Scalar;

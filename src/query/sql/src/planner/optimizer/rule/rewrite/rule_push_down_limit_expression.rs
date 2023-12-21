@@ -73,7 +73,11 @@ impl Rule for RulePushDownLimitExpression {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
+    fn apply(
+        &self,
+        s_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> databend_common_exception::Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         let eval_plan = s_expr.child(0)?;
         let eval_scalar: EvalScalar = eval_plan.plan().clone().try_into()?;

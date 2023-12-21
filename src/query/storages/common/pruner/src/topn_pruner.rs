@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::RemoteExpr;
-use common_expression::TableDataType;
-use common_expression::TableSchemaRef;
-use storages_common_table_meta::meta::BlockMeta;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::BlockMetaIndex;
 

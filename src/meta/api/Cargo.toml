@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-api"
+name = "databend-common-meta-api"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,14 +13,14 @@ doctest = false
 test = true
 
 [dependencies]
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../../query/expression" }
-common-meta-app = { path = "../app" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-stoerr = { path = "../stoerr" }
-common-meta-types = { path = "../types" }
-common-proto-conv = { path = "../proto-conv" }
-common-protos = { path = "../protos" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../../query/expression" }
+databend-common-meta-app = { path = "../app" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-stoerr = { path = "../stoerr" }
+databend-common-meta-types = { path = "../types" }
+databend-common-proto-conv = { path = "../proto-conv" }
+databend-common-protos = { path = "../protos" }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

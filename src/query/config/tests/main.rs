@@ -15,8 +15,8 @@
 use std::ffi::OsString;
 
 use clap::Parser;
-use common_config::Config;
-use common_config::InnerConfig;
+use databend_common_config::Config;
+use databend_common_config::InnerConfig;
 use pretty_assertions::assert_eq;
 
 /// It's required to make sure setting's default value is the same with clap.

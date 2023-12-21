@@ -17,14 +17,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::GroupBy;
-use common_ast::ast::Literal;
-use common_ast::ast::SelectTarget;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use itertools::Itertools;
 
 use super::prune_by_children;
@@ -282,7 +282,7 @@ impl<'a> AggregateRewriter<'a> {
         let mut replaced_params = Vec::with_capacity(function.arguments.len());
         for arg in &function.arguments {
             if let Some(index) = agg_info.group_items_map.get(arg) {
-                replaced_params.push(*index);
+                replaced_params.push(*index as _);
             } else {
                 return Err(ErrorCode::BadArguments(
                     "Arguments of grouping should be group by expressions",

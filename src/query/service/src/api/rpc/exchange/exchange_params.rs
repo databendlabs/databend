@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::io::ipc::write::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_expression::DataSchemaRef;
+use databend_common_arrow::arrow::io::ipc::write::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_expression::DataSchemaRef;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::ExchangeInjector;

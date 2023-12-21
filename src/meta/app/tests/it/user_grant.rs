@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
-use common_meta_app::principal::GrantEntry;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserPrivilegeType;
+use databend_common_exception::exception::Result;
+use databend_common_meta_app::principal::GrantEntry;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
 
 #[test]

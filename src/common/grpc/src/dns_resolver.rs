@@ -23,10 +23,10 @@ use std::task::Poll;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::tokio;
-use common_base::base::tokio::task::JoinHandle;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;

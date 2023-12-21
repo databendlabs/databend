@@ -45,6 +45,6 @@ pub use plans::insert::InsertInputSource;
 pub use plans::ScalarExpr;
 pub use plans::DELETE_NAME;
 pub use plans::INSERT_NAME;
-pub use plans::UPDTAE_NAME;
+pub use plans::UPDATE_NAME;
 pub use semantic::*;
 pub use stream_column::*;

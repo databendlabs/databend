@@ -17,14 +17,15 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSettingValue;
 use dashmap::DashMap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSettingValue;
 use itertools::Itertools;
 
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
+use crate::settings_default::SettingRange;
 use crate::SettingMode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -115,7 +116,7 @@ pub struct SettingsItem {
     pub desc: &'static str,
     pub user_value: UserSettingValue,
     pub default_value: UserSettingValue,
-    pub possible_values: Option<Vec<&'static str>>,
+    pub range: Option<SettingRange>,
 }
 
 pub struct SettingsIter<'a> {
@@ -156,7 +157,7 @@ impl<'a> Iterator for SettingsIter<'a> {
                         desc: default_value.desc,
                         user_value: default_value.value.clone(),
                         default_value: default_value.value,
-                        possible_values: default_value.possible_values,
+                        range: default_value.range,
                     },
                     Some(change_value) => SettingsItem {
                         name: key,
@@ -164,7 +165,7 @@ impl<'a> Iterator for SettingsIter<'a> {
                         desc: default_value.desc,
                         user_value: change_value.value.clone(),
                         default_value: default_value.value,
-                        possible_values: default_value.possible_values,
+                        range: default_value.range,
                     },
                 }),
             };

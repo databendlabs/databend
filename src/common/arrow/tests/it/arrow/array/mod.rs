@@ -28,15 +28,15 @@ mod struct_;
 mod union;
 mod utf8;
 
-use common_arrow::arrow::array::clone;
-use common_arrow::arrow::array::new_empty_array;
-use common_arrow::arrow::array::new_null_array;
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::UnionMode;
+use databend_common_arrow::arrow::array::clone;
+use databend_common_arrow::arrow::array::new_empty_array;
+use databend_common_arrow::arrow::array::new_null_array;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::PrimitiveArray;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::UnionMode;
 
 #[test]
 fn nulls() {

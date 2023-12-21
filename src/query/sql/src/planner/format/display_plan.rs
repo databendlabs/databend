@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ROW_ID_COL_NAME;
 use itertools::Itertools;
 
 use crate::binder::ColumnBindingBuilder;
@@ -176,6 +176,12 @@ impl Plan {
             Plan::DropNetworkPolicy(_) => Ok("DropNetworkPolicy".to_string()),
             Plan::DescNetworkPolicy(_) => Ok("DescNetworkPolicy".to_string()),
             Plan::ShowNetworkPolicies(_) => Ok("ShowNetworkPolicies".to_string()),
+
+            // password policy
+            Plan::CreatePasswordPolicy(_) => Ok("CreatePasswordPolicy".to_string()),
+            Plan::AlterPasswordPolicy(_) => Ok("AlterPasswordPolicy".to_string()),
+            Plan::DropPasswordPolicy(_) => Ok("DropPasswordPolicy".to_string()),
+            Plan::DescPasswordPolicy(_) => Ok("DescPasswordPolicy".to_string()),
 
             // task
             Plan::CreateTask(_) => Ok("CreateTask".to_string()),

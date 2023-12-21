@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::share::ShareNameIdent;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_dot_separated_list;

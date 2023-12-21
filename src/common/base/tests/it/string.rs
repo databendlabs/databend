@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::*;
-use common_exception::Result;
+use databend_common_base::base::*;
+use databend_common_exception::Result;
 
 #[test]
 fn test_progress() -> Result<()> {
@@ -78,7 +78,7 @@ fn test_unescape_string() {
 
 #[test]
 fn test_mask_connection_info() {
-    let sql = r#"COPY INTO table1 
+    let sql = r#"COPY INTO table1
         FROM 's3://xx/yy
         CONNECTION = (
             ACCESS_KEY_ID = 'aaa' ,
@@ -94,7 +94,7 @@ fn test_mask_connection_info() {
         );"#;
 
     let actual = mask_connection_info(sql);
-    let expect = r#"COPY INTO table1 
+    let expect = r#"COPY INTO table1
         FROM 's3://xx/yy
         CONNECTION = (***masked***)
         PATTERN = '.*[.]csv'
