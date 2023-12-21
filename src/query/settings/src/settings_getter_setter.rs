@@ -427,8 +427,13 @@ impl Settings {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
 
+    // Deprecated in the future, use enable_compact_after_write instead.
     pub fn get_enable_recluster_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_recluster_after_write")? != 0)
+    }
+
+    pub fn get_enable_compact_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
 
     pub fn get_auto_compaction_threshold(&self) -> Result<u64> {
