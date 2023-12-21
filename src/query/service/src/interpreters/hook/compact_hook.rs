@@ -22,7 +22,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::OptimizeTableAction;
 use databend_common_sql::plans::OptimizeTablePlan;
 use log::info;
-use log::warn;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
@@ -73,9 +72,6 @@ async fn do_hook_compact(
     // Inorder to compatibility with the old version, we need enable_recluster_after_write, it will deprecated in the future.
     // use enable_compact_after_write to replace it.
     if ctx.get_settings().get_enable_recluster_after_write()? {
-        warn!(
-            "setting: `enable_recluster_after_write` will be deprecated in the future, please use `enable_compact_after_write` instead."
-        );
         if ctx.get_settings().get_enable_compact_after_write()? {
             {
                 pipeline.set_on_finished(move |err| {
