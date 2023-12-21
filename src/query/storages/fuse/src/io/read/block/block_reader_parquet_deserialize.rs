@@ -38,6 +38,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use log::info;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
@@ -208,7 +209,7 @@ impl BlockReader {
                     vec![],
                     usize::MAX,
                 );
-
+                info!("One Column Rows Count:{}", pages.count());
                 Ok(BuffedBasicDecompressor::new(
                     pages,
                     uncompressed_buffer.clone(),

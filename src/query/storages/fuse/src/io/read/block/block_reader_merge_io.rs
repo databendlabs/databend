@@ -52,9 +52,15 @@ impl OwnerMemory {
 
 type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+// the read data layout is like below:
+// |------------|  |-------------| |-------------|
+//   merge_idx0      merge_idx1       merge_idx2
+// |-----|------|  |------|------| |-----|-------|
+//   col0  col1      col4   col5     col8   col9
 pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
+    // store the merged range column data
     owner_memory: OwnerMemory,
     pub cached_column_data: CachedColumnData,
     pub cached_column_array: CachedColumnArray,
