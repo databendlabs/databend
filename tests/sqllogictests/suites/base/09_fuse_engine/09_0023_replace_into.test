@@ -375,7 +375,7 @@ insert into test values(2, 2), (3, 2)
 
 # disable the auto re-clustering
 statement ok
-set enable_recluster_after_write = 0;
+set enable_compact_after_write = 0;
 
 statement ok
 replace into test on(a) values(3, 3), (4, 4)

@@ -47,7 +47,7 @@ pub struct CompactOptions {
     // the snapshot that compactor working on, it never changed during phases compaction.
     pub base_snapshot: Arc<TableSnapshot>,
     pub block_per_seg: usize,
-    pub limit: Option<usize>,
+    pub num_segment_limit: Option<usize>,
 }
 
 impl FuseTable {
@@ -246,7 +246,7 @@ impl FuseTable {
         Ok(Some(CompactOptions {
             base_snapshot,
             block_per_seg,
-            limit,
+            num_segment_limit: limit,
         }))
     }
 }

@@ -69,31 +69,37 @@ async fn do_hook_compact(
         return Ok(());
     }
 
-    if !pipeline.is_empty() && ctx.get_settings().get_enable_recluster_after_write()? {
-        pipeline.set_on_finished(move |err| {
-            if !ctx.get_auto_compact_after_write() {
-                return Ok(());
-            }
-
-            let op_name = &trace_ctx.operation_name;
-            metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
-
-            let compact_start_at = Instant::now();
-            if err.is_ok() {
-                info!("execute {op_name} finished successfully. running table optimization job.");
-                match GlobalIORuntime::instance().block_on({
-                    compact_table(ctx, compact_target, need_lock)
-                }) {
-                    Ok(_) => {
-                        info!("execute {op_name} finished successfully. table optimization job finished.");
+    // Inorder to compatibility with the old version, we need enable_recluster_after_write, it will deprecated in the future.
+    // use enable_compact_after_write to replace it.
+    if ctx.get_settings().get_enable_recluster_after_write()?
+        && ctx.get_settings().get_enable_compact_after_write()?
+    {
+        {
+            pipeline.set_on_finished(move |err| {
+                    if !ctx.get_need_compact_after_write() {
+                        return Ok(());
                     }
-                    Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e)}
-                }
-            }
-            metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
 
-            Ok(())
-        });
+                    let op_name = &trace_ctx.operation_name;
+                    metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
+
+                    let compact_start_at = Instant::now();
+                    if err.is_ok() {
+                        info!("execute {op_name} finished successfully. running table optimization job.");
+                        match GlobalIORuntime::instance().block_on({
+                            compact_table(ctx, compact_target, need_lock)
+                        }) {
+                            Ok(_) => {
+                                info!("execute {op_name} finished successfully. table optimization job finished.");
+                            }
+                            Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e) }
+                        }
+                    }
+                    metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
+
+                    Ok(())
+                });
+        }
     }
     Ok(())
 }
@@ -120,7 +126,7 @@ async fn compact_table(
             database: compact_target.database,
             table: compact_target.table,
             action: OptimizeTableAction::CompactBlocks,
-            limit: None,
+            limit: Some(3),
             need_lock,
         })?;
 
