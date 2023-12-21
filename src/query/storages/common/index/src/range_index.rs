@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_exception::Result;
 use databend_common_expression::is_internal_column;
 use databend_common_expression::is_stream_column;
@@ -134,6 +136,22 @@ impl RangeIndex {
             scalar: Scalar::Boolean(false),
             ..
         }))
+    }
+
+    #[minitrace::trace]
+    pub fn apply_with_partition_columns(
+        &self,
+        stats: &StatisticsOfColumns,
+        partition_columns: &HashMap<String, Scalar>,
+    ) -> Result<bool> {
+        let expr = self.expr.fill_const_column(partition_columns);
+        RangeIndex {
+            expr,
+            func_ctx: self.func_ctx.clone(),
+            schema: self.schema.clone(),
+            default_stats: self.default_stats.clone(),
+        }
+        .apply(stats, |_| false)
     }
 }
 

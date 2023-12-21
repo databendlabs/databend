@@ -19,6 +19,7 @@ use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -57,6 +58,7 @@ impl ParquetRSPruner {
         leaf_fields: Arc<Vec<TableField>>,
         push_down: &Option<PushDownInfo>,
         options: ParquetReadOptions,
+        partition_columns: Vec<String>,
     ) -> Result<Self> {
         // Build `RangePruner` by `filter`.
         let filter = push_down.as_ref().and_then(|p| p.filters.as_ref());
@@ -74,11 +76,18 @@ impl ParquetRSPruner {
                 predicate_columns = filter_expr
                     .column_refs()
                     .into_keys()
-                    .map(|name| {
+                    .filter_map(|name| {
                         leaf_fields
                             .iter()
                             .position(|f| f.name.eq_ignore_ascii_case(&name))
-                            .unwrap()
+                            .or_else(|| {
+                                // check partition columns
+                                partition_columns
+                                    .iter()
+                                    .position(|c| c.eq_ignore_ascii_case(&name))
+                                    .unwrap();
+                                None
+                            })
                     })
                     .collect::<Vec<_>>();
                 predicate_columns.sort();
@@ -105,10 +114,13 @@ impl ParquetRSPruner {
     /// Return the selected row groups' indices in the meta and omit filter flags.
     ///
     /// If `stats` is not [None], we use this statistics to prune but not collect again.
+    ///
+    /// `partition_values` is used only for Delta table engine.
     pub fn prune_row_groups(
         &self,
         meta: &ParquetMetaData,
         stats: Option<&[StatisticsOfColumns]>,
+        partition_values: Option<&HashMap<String, Scalar>>,
     ) -> Result<(Vec<usize>, Vec<bool>)> {
         let default_selection = (0..meta.num_row_groups()).collect();
         let default_omits = vec![false; meta.num_row_groups()];
@@ -124,10 +136,11 @@ impl ParquetRSPruner {
                 let mut omits = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep(row_group, None) {
+                        if pruner.should_keep_with_partition_columns(row_group, partition_values) {
                             selection.push(i);
 
-                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            let omit = !inverted_pruner
+                                .should_keep_with_partition_columns(row_group, partition_values);
                             omits.push(omit);
                         }
                     }
@@ -138,10 +151,11 @@ impl ParquetRSPruner {
                     Some(&self.predicate_columns),
                 ) {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep(row_group, None) {
+                        if pruner.should_keep_with_partition_columns(row_group, partition_values) {
                             selection.push(i);
 
-                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            let omit = !inverted_pruner
+                                .should_keep_with_partition_columns(row_group, partition_values);
                             omits.push(omit);
                         }
                     }
@@ -156,10 +170,12 @@ impl ParquetRSPruner {
     /// Prune pages of a parquet file.
     ///
     /// Return a vector of [`RowSelection`] to represent rows to read.
+    /// `partition_values` is used only for Delta table engine.
     pub fn prune_pages(
         &self,
         meta: &ParquetMetaData,
         row_groups: &[usize],
+        partition_values: Option<&HashMap<String, Scalar>>,
     ) -> Result<Option<RowSelection>> {
         if !self.prune_pages {
             return Ok(None);
@@ -199,9 +215,10 @@ impl ParquetRSPruner {
                             let page_num_rows = pages_num_rows[page_idx];
                             match stat {
                                 Some(s) => {
-                                    if !pruner
-                                        .should_keep(&HashMap::from([(*col_idx as u32, s)]), None)
-                                    {
+                                    if !pruner.should_keep_with_partition_columns(
+                                        &HashMap::from([(*col_idx as u32, s)]),
+                                        partition_values,
+                                    ) {
                                         sel_of_cur_col.push(RowSelector::skip(page_num_rows));
                                     } else {
                                         sel_of_cur_col.push(RowSelector::select(page_num_rows));

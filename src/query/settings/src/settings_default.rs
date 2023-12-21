@@ -490,6 +490,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("auto_compaction_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write (copy/insert) operations.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",

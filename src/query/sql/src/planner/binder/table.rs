@@ -241,7 +241,7 @@ impl Binder {
             .await
         {
             Ok(table) => table,
-            Err(_) => {
+            Err(e) => {
                 let mut parent = bind_context.parent.as_mut();
                 loop {
                     if parent.is_none() {
@@ -260,10 +260,13 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                return Err(ErrorCode::UnknownTable(format!(
-                    "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                ))
-                .set_span(*span));
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
+                    return Err(ErrorCode::UnknownTable(format!(
+                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
+                    ))
+                    .set_span(*span));
+                }
+                return Err(e);
             }
         };
 

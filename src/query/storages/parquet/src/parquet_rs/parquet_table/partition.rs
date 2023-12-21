@@ -97,6 +97,7 @@ impl ParquetRSTable {
             self.leaf_fields.clone(),
             &push_down,
             self.read_options,
+            vec![],
         )?);
 
         let copy_status = if matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable) {
@@ -358,11 +359,11 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
+        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref(), None)?;
         let mut row_selections = if omits.iter().all(|x| *x) {
             None
         } else {
-            pruner.prune_pages(meta, &rgs)?
+            pruner.prune_pages(meta, &rgs, None)?
         };
 
         let mut rows_read = 0; // Rows read in current file.

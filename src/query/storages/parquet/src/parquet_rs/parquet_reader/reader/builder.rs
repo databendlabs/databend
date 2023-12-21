@@ -56,6 +56,7 @@ pub struct ParquetRSReaderBuilder<'a> {
     options: ParquetReadOptions,
     pruner: Option<ParquetRSPruner>,
     topk: Option<&'a TopK>,
+    partition_columns: Vec<String>,
 
     // Can be reused to build multiple readers.
     built_predicate: Option<(Arc<ParquetPredicate>, Vec<usize>)>,
@@ -103,6 +104,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             built_predicate: None,
             built_topk: None,
             built_output: None,
+            partition_columns: vec![],
         }
     }
 
@@ -126,6 +128,11 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         self
     }
 
+    pub fn with_partition_columns(mut self, partition_columns: Vec<String>) -> Self {
+        self.partition_columns = partition_columns;
+        self
+    }
+
     fn build_predicate(&mut self) -> Result<()> {
         if self.built_predicate.is_some() {
             return Ok(());
@@ -137,6 +144,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
                     &prewhere,
                     &self.table_schema,
                     &self.schema_desc,
+                    &self.partition_columns,
                 )
             })
             .transpose()?;

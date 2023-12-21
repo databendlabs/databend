@@ -885,12 +885,12 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1, b + 1 from t group by b",

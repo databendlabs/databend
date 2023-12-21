@@ -62,7 +62,7 @@ pub struct Pipeline {
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
 
-    pub plans_scope: Vec<PlanScope>,
+    plans_scope: Vec<PlanScope>,
     scope_size: Arc<AtomicUsize>,
 }
 
@@ -152,6 +152,11 @@ impl Pipeline {
         }
 
         self
+    }
+
+    pub fn get_scopes(&self) -> Vec<PlanScope> {
+        let scope_size = self.scope_size.load(Ordering::SeqCst);
+        self.plans_scope[..scope_size].to_vec()
     }
 
     pub fn add_pipe(&mut self, mut pipe: Pipe) {
@@ -454,7 +459,7 @@ impl Pipeline {
 
         if self.plans_scope.len() > scope_idx {
             self.plans_scope[scope_idx] = scope;
-            self.plans_scope.shrink_to(scope_idx + 1);
+            self.plans_scope.truncate(scope_idx + 1);
             return PlanScopeGuard::create(self.scope_size.clone(), scope_idx);
         }
 
