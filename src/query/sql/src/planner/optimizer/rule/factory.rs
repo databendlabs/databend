@@ -23,6 +23,7 @@ use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
+use super::rewrite::RulePushDownFilterWindows;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitExpression;
 use super::rewrite::RulePushDownPrewhere;
@@ -70,6 +71,7 @@ impl RuleFactory {
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
+            RuleID::PushDownFilterWindows => Ok(Box::new(RulePushDownFilterWindows::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
