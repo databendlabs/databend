@@ -44,7 +44,6 @@ use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::RolesTable;
-use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_users::UserApiProvider;
@@ -351,22 +350,6 @@ async fn test_roles_table() -> Result<()> {
             .await?;
     }
     let table = RolesTable::create(1);
-    run_table_tests(file, ctx, table).await?;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_settings_table() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
-
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_max_threads(2)?;
-    ctx.get_settings().set_max_memory_usage(1073741824)?;
-
-    let table = SettingsTable::create(1);
     run_table_tests(file, ctx, table).await?;
 
     Ok(())

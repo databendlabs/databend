@@ -157,6 +157,7 @@ pub enum Statement {
     AlterVirtualColumn(AlterVirtualColumnStmt),
     DropVirtualColumn(DropVirtualColumnStmt),
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
+    ShowVirtualColumns(ShowVirtualColumnsStmt),
 
     // User
     ShowUsers,
@@ -251,6 +252,15 @@ pub enum Statement {
     DropNetworkPolicy(DropNetworkPolicyStmt),
     DescNetworkPolicy(DescNetworkPolicyStmt),
     ShowNetworkPolicies,
+
+    // password policy
+    CreatePasswordPolicy(CreatePasswordPolicyStmt),
+    AlterPasswordPolicy(AlterPasswordPolicyStmt),
+    DropPasswordPolicy(DropPasswordPolicyStmt),
+    DescPasswordPolicy(DescPasswordPolicyStmt),
+    ShowPasswordPolicies {
+        show_options: Option<ShowOptions>,
+    },
 
     // tasks
     CreateTask(CreateTaskStmt),
@@ -469,6 +479,7 @@ impl Display for Statement {
             Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
@@ -588,6 +599,16 @@ impl Display for Statement {
             Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
+            Statement::CreatePasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowPasswordPolicies { show_options } => {
+                write!(f, "SHOW PASSWORD POLICIES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateTask(stmt) => write!(f, "{stmt}")?,
             Statement::AlterTask(stmt) => write!(f, "{stmt}")?,
             Statement::ExecuteTask(stmt) => write!(f, "{stmt}")?,

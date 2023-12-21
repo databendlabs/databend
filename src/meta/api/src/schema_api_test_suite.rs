@@ -3528,6 +3528,7 @@ impl SchemaApiTestSuite {
                 created_on: Utc::now(),
                 dropped_on: None,
                 updated_on: None,
+                original_query: "select sum(number) from tb1".to_string(),
                 query: "select sum(number) from tb1".to_string(),
                 sync_creation: false,
             },
@@ -5540,6 +5541,7 @@ impl SchemaApiTestSuite {
             created_on,
             dropped_on: None,
             updated_on: None,
+            original_query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
             query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
             sync_creation: false,
         };
@@ -5551,6 +5553,7 @@ impl SchemaApiTestSuite {
             created_on,
             dropped_on: None,
             updated_on: None,
+            original_query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
             query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
             sync_creation: false,
         };
@@ -5768,6 +5771,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create virtual column");
             let req = CreateVirtualColumnReq {
+                if_not_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5776,6 +5780,7 @@ impl SchemaApiTestSuite {
 
             info!("--- create virtual column again");
             let req = CreateVirtualColumnReq {
+                if_not_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5810,6 +5815,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- update virtual column");
             let req = UpdateVirtualColumnReq {
+                if_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
             };
@@ -5835,6 +5841,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- drop virtual column");
             let req = DropVirtualColumnReq {
+                if_exists: false,
                 name_ident: name_ident.clone(),
             };
 
@@ -5855,6 +5862,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- update virtual column after drop");
             let req = UpdateVirtualColumnReq {
+                if_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k3".to_string(), "variant[3]".to_string()],
             };

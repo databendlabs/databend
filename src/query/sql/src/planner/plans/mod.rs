@@ -77,7 +77,7 @@ pub use merge_into::MergeInto;
 pub use merge_into::UnmatchedEvaluator;
 pub use merge_into::DELETE_NAME;
 pub use merge_into::INSERT_NAME;
-pub use merge_into::UPDTAE_NAME;
+pub use merge_into::UPDATE_NAME;
 pub use operator::*;
 pub use pattern::PatternPlan;
 pub use plan::*;

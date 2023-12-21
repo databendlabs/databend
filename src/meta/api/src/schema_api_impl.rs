@@ -1402,15 +1402,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 get_pb_value(self, &req.name_ident).await?;
 
             if old_virtual_column_opt.is_some() {
-                return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
-                    VirtualColumnAlreadyExists::new(
-                        req.name_ident.table_id,
-                        format!(
-                            "create virtual column with tenant: {} table_id: {}",
-                            req.name_ident.tenant, req.name_ident.table_id
+                if req.if_not_exists {
+                    return Ok(CreateVirtualColumnReply {});
+                } else {
+                    return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
+                        VirtualColumnAlreadyExists::new(
+                            req.name_ident.table_id,
+                            format!(
+                                "create virtual column with tenant: {} table_id: {}",
+                                req.name_ident.tenant, req.name_ident.table_id
+                            ),
                         ),
-                    ),
-                )));
+                    )));
+                }
             }
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
@@ -1464,7 +1468,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?;
 
             let (seq, old_virtual_column_meta) =
-                get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
+                match get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
+                    Ok((seq, old_virtual_column_meta)) => (seq, old_virtual_column_meta),
+                    Err(err) => {
+                        if req.if_exists {
+                            return Ok(UpdateVirtualColumnReply {});
+                        } else {
+                            return Err(err);
+                        }
+                    }
+                };
 
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
@@ -1517,7 +1530,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let (_, _) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
+            if let Err(err) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
+                if req.if_exists {
+                    return Ok(DropVirtualColumnReply {});
+                } else {
+                    return Err(err);
+                }
+            }
 
             // Drop virtual column by deleting this record:
             // (tenant, table_id) -> virtual_column_meta

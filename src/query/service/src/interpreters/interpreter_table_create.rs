@@ -305,6 +305,7 @@ impl CreateTableInterpreter {
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
             options: self.plan.options.clone(),
+            engine_options: self.plan.engine_options.clone(),
             default_cluster_key: None,
             field_comments,
             drop_on: None,

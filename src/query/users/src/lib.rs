@@ -20,6 +20,7 @@ extern crate core;
 
 mod jwt;
 mod network_policy;
+mod password_policy;
 mod role_mgr;
 mod user;
 mod user_api;
@@ -36,6 +37,7 @@ pub mod role_cache_mgr;
 pub mod role_util;
 
 pub use jwt::*;
+pub use password_policy::*;
 pub use role_cache_mgr::RoleCacheManager;
 pub use role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 pub use role_mgr::BUILTIN_ROLE_PUBLIC;

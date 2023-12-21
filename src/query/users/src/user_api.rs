@@ -24,6 +24,8 @@ use databend_common_management::FileFormatApi;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyApi;
 use databend_common_management::NetworkPolicyMgr;
+use databend_common_management::PasswordPolicyApi;
+use databend_common_management::PasswordPolicyMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
 use databend_common_management::RoleApi;
@@ -134,6 +136,16 @@ impl UserApiProvider {
         tenant: &str,
     ) -> Result<Arc<impl NetworkPolicyApi>> {
         Ok(Arc::new(NetworkPolicyMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
+    }
+
+    pub fn get_password_policy_api_client(
+        &self,
+        tenant: &str,
+    ) -> Result<Arc<impl PasswordPolicyApi>> {
+        Ok(Arc::new(PasswordPolicyMgr::create(
             self.client.clone(),
             tenant,
         )?))

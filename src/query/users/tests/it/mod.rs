@@ -14,6 +14,7 @@
 
 mod jwt;
 mod network_policy;
+mod password_policy;
 mod role_cache_mgr;
 mod role_mgr;
 mod user_mgr;

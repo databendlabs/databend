@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
 use databend_common_metrics::http::metrics_incr_http_slow_request_count;
+use databend_common_metrics::http::metrics_observe_http_response_duration;
 use databend_common_storages_fuse::TableContext;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -209,6 +210,8 @@ impl<E> HTTPSessionEndpoint<E> {
             node_id,
             deduplicate_label,
             user_agent,
+            req.method().to_string(),
+            req.uri().to_string(),
         ))
     }
 }
@@ -320,8 +323,10 @@ impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
         let output = self.ep.call(req).await?;
         let resp = output.into_response();
         let status_code = resp.status().to_string();
+        let duration = start_time.elapsed();
         metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
-        if start_time.elapsed().as_secs() > 20 {
+        metrics_observe_http_response_duration(method.clone(), self.api.clone(), duration);
+        if duration.as_secs_f64() > 60.0 {
             // TODO: replace this into histogram
             metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
         }

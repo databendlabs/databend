@@ -74,6 +74,7 @@ num-traits = "0.2.15"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = { workspace = true }
+passwords = { version = "3.1.16", features = ["common-password"] }
 percent-encoding = "2"
 regex = { workspace = true }
 roaring = "0.10.1"

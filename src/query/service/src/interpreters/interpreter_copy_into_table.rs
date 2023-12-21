@@ -358,7 +358,7 @@ impl Interpreter for CopyIntoTableInterpreter {
             .await?;
         }
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
