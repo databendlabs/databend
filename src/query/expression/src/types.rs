@@ -61,6 +61,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::SelectOp;
 
 pub type GenericMap = [DataType];
 
@@ -343,6 +344,40 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
+    }
+
+    fn cmp(_op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    #[inline(always)]
+    fn equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    #[inline(always)]
+    fn not_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    #[inline(always)]
+    fn greater_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    #[inline(always)]
+    fn less_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    #[inline(always)]
+    fn less_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
     }
 }
 

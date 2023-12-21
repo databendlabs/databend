@@ -17,21 +17,26 @@ use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::filter::select_op;
-use crate::filter::select_op_boolean;
-use crate::filter::select_op_string;
 use crate::filter::select_op_tuple;
-use crate::filter::select_op_variant;
 use crate::filter::tuple_compare_default_value;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
+use crate::select_op;
 use crate::types::array::ArrayColumn;
+use crate::types::decimal;
+use crate::types::decimal::DecimalType;
+use crate::types::number;
 use crate::types::string::StringColumn;
 use crate::types::AnyType;
+use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
+use crate::types::NumberType;
+use crate::types::StringType;
+use crate::types::ValueType;
+use crate::types::VariantType;
 use crate::Column;
 use crate::Scalar;
 use crate::ScalarRef;
@@ -91,7 +96,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::UInt8) => {
                 let scalar = scalar.into_number().unwrap().into_u_int8().unwrap();
                 let column = column.into_number().unwrap().into_u_int8().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -107,7 +112,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::UInt16) => {
                 let scalar = scalar.into_number().unwrap().into_u_int16().unwrap();
                 let column = column.into_number().unwrap().into_u_int16().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -123,7 +128,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::UInt32) => {
                 let scalar = scalar.into_number().unwrap().into_u_int32().unwrap();
                 let column = column.into_number().unwrap().into_u_int32().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -139,7 +144,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::UInt64) => {
                 let scalar = scalar.into_number().unwrap().into_u_int64().unwrap();
                 let column = column.into_number().unwrap().into_u_int64().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -155,7 +160,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::Int8) => {
                 let scalar = scalar.into_number().unwrap().into_int8().unwrap();
                 let column = column.into_number().unwrap().into_int8().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -171,7 +176,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::Int16) => {
                 let scalar = scalar.into_number().unwrap().into_int16().unwrap();
                 let column = column.into_number().unwrap().into_int16().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -187,7 +192,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::Int32) => {
                 let scalar = scalar.into_number().unwrap().into_int32().unwrap();
                 let column = column.into_number().unwrap().into_int32().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -203,7 +208,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::Int64) => {
                 let scalar = scalar.into_number().unwrap().into_int64().unwrap();
                 let column = column.into_number().unwrap().into_int64().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -219,7 +224,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::Float32) => {
                 let scalar = scalar.into_number().unwrap().into_float32().unwrap();
                 let column = column.into_number().unwrap().into_float32().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -235,7 +240,7 @@ impl<'a> Selector<'a> {
             DataType::Number(NumberDataType::Float64) => {
                 let scalar = scalar.into_number().unwrap().into_float64().unwrap();
                 let column = column.into_number().unwrap().into_float64().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -251,7 +256,7 @@ impl<'a> Selector<'a> {
             DataType::Decimal(DecimalDataType::Decimal128(_)) => {
                 let (scalar, _) = scalar.into_decimal().unwrap().into_decimal128().unwrap();
                 let (column, _) = column.into_decimal().unwrap().into_decimal128().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_decimal_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -267,7 +272,7 @@ impl<'a> Selector<'a> {
             DataType::Decimal(DecimalDataType::Decimal256(_)) => {
                 let (scalar, _) = scalar.into_decimal().unwrap().into_decimal256().unwrap();
                 let (column, _) = column.into_decimal().unwrap().into_decimal256().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_decimal_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -283,7 +288,7 @@ impl<'a> Selector<'a> {
             DataType::Date => {
                 let scalar = scalar.into_date().unwrap();
                 let column = column.into_date().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -299,7 +304,7 @@ impl<'a> Selector<'a> {
             DataType::Timestamp => {
                 let scalar = scalar.into_timestamp().unwrap();
                 let column = column.into_timestamp().unwrap();
-                self.select_primitive_scalar_and_column_adapt(
+                self.select_number_scalar_and_column_adapt(
                     op,
                     scalar,
                     column,
@@ -315,7 +320,7 @@ impl<'a> Selector<'a> {
             DataType::String => {
                 let scalar = scalar.into_string().unwrap();
                 let column = column.into_string().unwrap();
-                self.select_bytes_scalar_and_column_adapt(
+                self.select_string_scalar_and_column_adapt(
                     op,
                     &scalar,
                     column,
@@ -326,13 +331,12 @@ impl<'a> Selector<'a> {
                     mutable_false_idx,
                     select_strategy,
                     count,
-                    false,
                 )
             }
             DataType::Variant => {
                 let scalar = scalar.into_variant().unwrap();
                 let column = column.into_variant().unwrap();
-                self.select_bytes_scalar_and_column_adapt(
+                self.select_variant_scalar_and_column_adapt(
                     op,
                     &scalar,
                     column,
@@ -343,7 +347,6 @@ impl<'a> Selector<'a> {
                     mutable_false_idx,
                     select_strategy,
                     count,
-                    true,
                 )
             }
             DataType::Boolean => {
@@ -407,7 +410,7 @@ impl<'a> Selector<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn select_primitive_scalar_and_column_adapt<T: Copy>(
+    fn select_number_scalar_and_column_adapt<T: number::Number>(
         &self,
         op: &SelectOp,
         scalar: T,
@@ -426,7 +429,7 @@ impl<'a> Selector<'a> {
         let has_true = !true_selection.is_empty();
         let has_false = false_selection.1;
         if has_true && has_false {
-            self.select_primitive_scalar_and_column::<_, true, true>(
+            self.select_value_type_scalar_and_column::<NumberType<T>, true, true>(
                 op,
                 scalar,
                 column,
@@ -439,7 +442,7 @@ impl<'a> Selector<'a> {
                 count,
             )
         } else if has_true {
-            self.select_primitive_scalar_and_column::<_, true, false>(
+            self.select_value_type_scalar_and_column::<NumberType<T>, true, false>(
                 op,
                 scalar,
                 column,
@@ -452,7 +455,7 @@ impl<'a> Selector<'a> {
                 count,
             )
         } else {
-            self.select_primitive_scalar_and_column::<_, false, true>(
+            self.select_value_type_scalar_and_column::<NumberType<T>, false, true>(
                 op,
                 scalar,
                 column,
@@ -468,7 +471,68 @@ impl<'a> Selector<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn select_bytes_scalar_and_column_adapt(
+    fn select_decimal_scalar_and_column_adapt<T: decimal::Decimal>(
+        &self,
+        op: &SelectOp,
+        scalar: T,
+        column: Buffer<T>,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> usize
+    where
+        T: std::cmp::PartialOrd,
+    {
+        let has_true = !true_selection.is_empty();
+        let has_false = false_selection.1;
+        if has_true && has_false {
+            self.select_value_type_scalar_and_column::<DecimalType<T>, true, true>(
+                op,
+                scalar,
+                column,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else if has_true {
+            self.select_value_type_scalar_and_column::<DecimalType<T>, true, false>(
+                op,
+                scalar,
+                column,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else {
+            self.select_value_type_scalar_and_column::<DecimalType<T>, false, true>(
+                op,
+                scalar,
+                column,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn select_string_scalar_and_column_adapt(
         &self,
         op: &SelectOp,
         scalar: &[u8],
@@ -480,12 +544,11 @@ impl<'a> Selector<'a> {
         mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
-        is_variant: bool,
     ) -> usize {
         let has_true = !true_selection.is_empty();
         let has_false = false_selection.1;
         if has_true && has_false {
-            self.select_bytes_scalar_and_column::<true, true>(
+            self.select_value_type_scalar_and_column::<StringType, true, true>(
                 op,
                 scalar,
                 column,
@@ -496,10 +559,9 @@ impl<'a> Selector<'a> {
                 mutable_false_idx,
                 select_strategy,
                 count,
-                is_variant,
             )
         } else if has_true {
-            self.select_bytes_scalar_and_column::<true, false>(
+            self.select_value_type_scalar_and_column::<StringType, true, false>(
                 op,
                 scalar,
                 column,
@@ -510,10 +572,9 @@ impl<'a> Selector<'a> {
                 mutable_false_idx,
                 select_strategy,
                 count,
-                is_variant,
             )
         } else {
-            self.select_bytes_scalar_and_column::<false, true>(
+            self.select_value_type_scalar_and_column::<StringType, false, true>(
                 op,
                 scalar,
                 column,
@@ -524,7 +585,64 @@ impl<'a> Selector<'a> {
                 mutable_false_idx,
                 select_strategy,
                 count,
-                is_variant,
+            )
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn select_variant_scalar_and_column_adapt(
+        &self,
+        op: &SelectOp,
+        scalar: &[u8],
+        column: StringColumn,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> usize {
+        let has_true = !true_selection.is_empty();
+        let has_false = false_selection.1;
+        if has_true && has_false {
+            self.select_value_type_scalar_and_column::<VariantType, true, true>(
+                op,
+                scalar,
+                column,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else if has_true {
+            self.select_value_type_scalar_and_column::<VariantType, true, false>(
+                op,
+                scalar,
+                column,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else {
+            self.select_value_type_scalar_and_column::<VariantType, false, true>(
+                op,
+                scalar,
+                column,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
             )
         }
     }
@@ -546,7 +664,7 @@ impl<'a> Selector<'a> {
         let has_true = !true_selection.is_empty();
         let has_false = false_selection.1;
         if has_true && has_false {
-            self.select_boolean_scalar_and_column::<true, true>(
+            self.select_value_type_scalar_and_column::<BooleanType, true, true>(
                 op,
                 scalar,
                 column,
@@ -559,7 +677,7 @@ impl<'a> Selector<'a> {
                 count,
             )
         } else if has_true {
-            self.select_boolean_scalar_and_column::<true, false>(
+            self.select_value_type_scalar_and_column::<BooleanType, true, false>(
                 op,
                 scalar,
                 column,
@@ -572,7 +690,7 @@ impl<'a> Selector<'a> {
                 count,
             )
         } else {
-            self.select_boolean_scalar_and_column::<false, true>(
+            self.select_value_type_scalar_and_column::<BooleanType, false, false>(
                 op,
                 scalar,
                 column,
@@ -704,281 +822,11 @@ impl<'a> Selector<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn select_primitive_scalar_and_column<T: Copy, const TRUE: bool, const FALSE: bool>(
+    fn select_value_type_scalar_and_column<T: ValueType, const TRUE: bool, const FALSE: bool>(
         &self,
         op: &SelectOp,
-        scalar: T,
-        column: Buffer<T>,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> usize
-    where
-        T: std::cmp::PartialOrd,
-    {
-        let op = select_op::<T>(op);
-        let mut true_idx = *mutable_true_idx;
-        let mut false_idx = *mutable_false_idx;
-        match select_strategy {
-            SelectStrategy::True => unsafe {
-                let start = *mutable_true_idx;
-                let end = *mutable_true_idx + count;
-                match validity {
-                    Some(validity) => {
-                        for i in start..end {
-                            let idx = *true_selection.get_unchecked(i);
-                            let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, *column.get_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                    None => {
-                        for i in start..end {
-                            let idx = *true_selection.get_unchecked(i);
-                            let ret = op(scalar, *column.get_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                }
-            },
-            SelectStrategy::False => unsafe {
-                let start = *mutable_false_idx;
-                let end = *mutable_false_idx + count;
-                match validity {
-                    Some(validity) => {
-                        for i in start..end {
-                            let idx = *false_selection.get_unchecked(i);
-                            let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, *column.get_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                    None => {
-                        for i in start..end {
-                            let idx = *false_selection.get_unchecked(i);
-                            let ret = op(scalar, *column.get_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                }
-            },
-            SelectStrategy::All => unsafe {
-                match validity {
-                    Some(validity) => {
-                        for idx in 0u32..count as u32 {
-                            let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, *column.get_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                    None => {
-                        for idx in 0u32..count as u32 {
-                            let ret = op(scalar, *column.get_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                }
-            },
-        }
-        let true_count = true_idx - *mutable_true_idx;
-        let false_count = false_idx - *mutable_false_idx;
-        *mutable_true_idx = true_idx;
-        *mutable_false_idx = false_idx;
-        if TRUE {
-            true_count
-        } else {
-            count - false_count
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn select_bytes_scalar_and_column<const TRUE: bool, const FALSE: bool>(
-        &self,
-        op: &SelectOp,
-        scalar: &[u8],
-        column: StringColumn,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-        is_variant: bool,
-    ) -> usize {
-        let op = if is_variant {
-            select_op_variant(op)
-        } else {
-            select_op_string(op)
-        };
-        let mut true_idx = *mutable_true_idx;
-        let mut false_idx = *mutable_false_idx;
-        match select_strategy {
-            SelectStrategy::True => unsafe {
-                let start = *mutable_true_idx;
-                let end = *mutable_true_idx + count;
-                match validity {
-                    Some(validity) => {
-                        for i in start..end {
-                            let idx = *true_selection.get_unchecked(i);
-                            let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, column.index_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                    None => {
-                        for i in start..end {
-                            let idx = *true_selection.get_unchecked(i);
-                            let ret = op(scalar, column.index_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                }
-            },
-            SelectStrategy::False => unsafe {
-                let start = *mutable_false_idx;
-                let end = *mutable_false_idx + count;
-                match validity {
-                    Some(validity) => {
-                        for i in start..end {
-                            let idx = *false_selection.get_unchecked(i);
-                            let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, column.index_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                    None => {
-                        for i in start..end {
-                            let idx = *false_selection.get_unchecked(i);
-                            let ret = op(scalar, column.index_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                }
-            },
-            SelectStrategy::All => unsafe {
-                match validity {
-                    Some(validity) => {
-                        for idx in 0u32..count as u32 {
-                            let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, column.index_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                    None => {
-                        for idx in 0u32..count as u32 {
-                            let ret = op(scalar, column.index_unchecked(idx as usize));
-                            if TRUE {
-                                *true_selection.get_unchecked_mut(true_idx) = idx;
-                                true_idx += ret as usize;
-                            }
-                            if FALSE {
-                                *false_selection.get_unchecked_mut(false_idx) = idx;
-                                false_idx += !ret as usize;
-                            }
-                        }
-                    }
-                }
-            },
-        }
-        let true_count = true_idx - *mutable_true_idx;
-        let false_count = false_idx - *mutable_false_idx;
-        *mutable_true_idx = true_idx;
-        *mutable_false_idx = false_idx;
-        if TRUE {
-            true_count
-        } else {
-            count - false_count
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn select_boolean_scalar_and_column<const TRUE: bool, const FALSE: bool>(
-        &self,
-        op: &SelectOp,
-        scalar: bool,
-        column: Bitmap,
+        scalar: T::ScalarRef<'_>,
+        column: T::Column,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
@@ -987,7 +835,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let op = select_op_boolean(op);
+        let cmp = T::cmp(op);
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {
@@ -999,13 +847,16 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, column.get_bit_unchecked(idx as usize));
+                                && cmp(
+                                    scalar.clone(),
+                                    T::index_column_unchecked(&column, idx as usize),
+                                );
                             if TRUE {
-                                true_selection[true_idx] = idx;
+                                *true_selection.get_unchecked_mut(true_idx) = idx;
                                 true_idx += ret as usize;
                             }
                             if FALSE {
-                                false_selection[false_idx] = idx;
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
                                 false_idx += !ret as usize;
                             }
                         }
@@ -1013,13 +864,16 @@ impl<'a> Selector<'a> {
                     None => {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
-                            let ret = op(scalar, column.get_bit_unchecked(idx as usize));
+                            let ret = cmp(
+                                scalar.clone(),
+                                T::index_column_unchecked(&column, idx as usize),
+                            );
                             if TRUE {
-                                true_selection[true_idx] = idx;
+                                *true_selection.get_unchecked_mut(true_idx) = idx;
                                 true_idx += ret as usize;
                             }
                             if FALSE {
-                                false_selection[false_idx] = idx;
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
                                 false_idx += !ret as usize;
                             }
                         }
@@ -1034,13 +888,16 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, column.get_bit_unchecked(idx as usize));
+                                && cmp(
+                                    scalar.clone(),
+                                    T::index_column_unchecked(&column, idx as usize),
+                                );
                             if TRUE {
-                                true_selection[true_idx] = idx;
+                                *true_selection.get_unchecked_mut(true_idx) = idx;
                                 true_idx += ret as usize;
                             }
                             if FALSE {
-                                false_selection[false_idx] = idx;
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
                                 false_idx += !ret as usize;
                             }
                         }
@@ -1048,13 +905,16 @@ impl<'a> Selector<'a> {
                     None => {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
-                            let ret = op(scalar, column.get_bit_unchecked(idx as usize));
+                            let ret = cmp(
+                                scalar.clone(),
+                                T::index_column_unchecked(&column, idx as usize),
+                            );
                             if TRUE {
-                                true_selection[true_idx] = idx;
+                                *true_selection.get_unchecked_mut(true_idx) = idx;
                                 true_idx += ret as usize;
                             }
                             if FALSE {
-                                false_selection[false_idx] = idx;
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
                                 false_idx += !ret as usize;
                             }
                         }
@@ -1066,26 +926,32 @@ impl<'a> Selector<'a> {
                     Some(validity) => {
                         for idx in 0u32..count as u32 {
                             let ret = validity.get_bit_unchecked(idx as usize)
-                                && op(scalar, column.get_bit_unchecked(idx as usize));
+                                && cmp(
+                                    scalar.clone(),
+                                    T::index_column_unchecked(&column, idx as usize),
+                                );
                             if TRUE {
-                                true_selection[true_idx] = idx;
+                                *true_selection.get_unchecked_mut(true_idx) = idx;
                                 true_idx += ret as usize;
                             }
                             if FALSE {
-                                false_selection[false_idx] = idx;
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
                                 false_idx += !ret as usize;
                             }
                         }
                     }
                     None => {
                         for idx in 0u32..count as u32 {
-                            let ret = op(scalar, column.get_bit_unchecked(idx as usize));
+                            let ret = cmp(
+                                scalar.clone(),
+                                T::index_column_unchecked(&column, idx as usize),
+                            );
                             if TRUE {
-                                true_selection[true_idx] = idx;
+                                *true_selection.get_unchecked_mut(true_idx) = idx;
                                 true_idx += ret as usize;
                             }
                             if FALSE {
-                                false_selection[false_idx] = idx;
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
                                 false_idx += !ret as usize;
                             }
                         }

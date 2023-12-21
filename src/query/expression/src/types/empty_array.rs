@@ -105,6 +105,7 @@ impl ValueType for EmptyArrayType {
         if index < *len { Some(()) } else { None }
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(_len: &Self::Column, _index: usize) -> Self::ScalarRef<'_> {}
 
     fn slice_column(len: &Self::Column, range: Range<usize>) -> Self::Column {
