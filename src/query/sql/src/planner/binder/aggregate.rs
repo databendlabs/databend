@@ -282,7 +282,7 @@ impl<'a> AggregateRewriter<'a> {
         let mut replaced_params = Vec::with_capacity(function.arguments.len());
         for arg in &function.arguments {
             if let Some(index) = agg_info.group_items_map.get(arg) {
-                replaced_params.push(*index);
+                replaced_params.push(*index as _);
             } else {
                 return Err(ErrorCode::BadArguments(
                     "Arguments of grouping should be group by expressions",

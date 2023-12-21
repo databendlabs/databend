@@ -21,7 +21,6 @@ use bumpalo::Bump;
 use comfy_table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
@@ -84,11 +83,6 @@ pub fn run_agg_ast(
                     .map(|raw_expr| run_scalar_expr(raw_expr, &block))
                     .collect::<Result<_>>()
                     .unwrap();
-
-                let params = params
-                    .iter()
-                    .map(|p| Scalar::Number(NumberScalar::UInt64(*p as u64)))
-                    .collect();
 
                 // Convert the delimiter of string_agg to params
                 let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {

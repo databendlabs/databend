@@ -60,7 +60,7 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
     FunctionCall {
         span: Span,
         name: String,
-        params: Vec<usize>,
+        params: Vec<Scalar>,
         args: Vec<RawExpr<Index>>,
     },
     LambdaFunctionCall {

@@ -303,11 +303,6 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
         .get_settings()
         .set_enable_refresh_aggregating_index_after_write(true)?;
 
-    // ctx.get_settings()
-    //     .set_enable_refresh_aggregating_index_after_write(true)?;
-    // let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-    // let ctx = fixture.ctx();
-
     // Create table
     fixture
         .execute_command("CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'")

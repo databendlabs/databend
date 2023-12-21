@@ -269,7 +269,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         {
             return None;
         }
-        let params = params.to_vec();
+        let params: Vec<i64> = params.iter().map(|x| x.get_i64().unwrap()).collect();
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -707,7 +707,7 @@ impl FlattenGenerator {
         }
     }
 
-    fn generate(&mut self, seq: u64, input: &[u8], path: &str, params: &[usize]) -> Vec<Column> {
+    fn generate(&mut self, seq: u64, input: &[u8], path: &str, params: &[i64]) -> Vec<Column> {
         // Only columns required by parent plan need a builder.
         let mut key_builder = if params.is_empty() || params.contains(&2) {
             Some(NullableColumnBuilder::<StringType>::with_capacity(0, &[]))

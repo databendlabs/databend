@@ -59,6 +59,7 @@ use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UsersTable;
+use databend_common_storages_system::VirtualColumnsTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -125,6 +126,7 @@ impl SystemDatabase {
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
             ProcessorProfileTable::create(sys_db_meta.next_table_id()),
             LocksTable::create(sys_db_meta.next_table_id()),
+            VirtualColumnsTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

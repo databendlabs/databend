@@ -56,13 +56,15 @@ use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
+#[allow(dead_code)]
 struct MergeStyleJoin<'a> {
-    source_conditions: &'a [ScalarExpr],
-    target_conditions: &'a [ScalarExpr],
-    source_sexpr: &'a SExpr,
-    target_sexpr: &'a SExpr,
+    build_conditions: &'a [ScalarExpr],
+    probe_conditions: &'a [ScalarExpr],
+    build_sexpr: &'a SExpr,
+    probe_sexpr: &'a SExpr,
 }
 
+#[allow(dead_code)]
 impl MergeStyleJoin<'_> {
     pub fn new(join: &SExpr) -> MergeStyleJoin {
         let join_op = match join.plan() {
@@ -73,25 +75,27 @@ impl MergeStyleJoin<'_> {
             join_op.join_type == JoinType::Right
                 || join_op.join_type == JoinType::RightAnti
                 || join_op.join_type == JoinType::Inner
+                || join_op.join_type == JoinType::Left
+                || join_op.join_type == JoinType::LeftAnti
         );
-        let source_conditions = &join_op.right_conditions;
-        let target_conditions = &join_op.left_conditions;
-        let source_sexpr = join.child(1).unwrap();
-        let target_sexpr = join.child(0).unwrap();
+        let build_conditions = &join_op.right_conditions;
+        let probe_conditions = &join_op.left_conditions;
+        let build_sexpr = join.child(1).unwrap();
+        let probe_sexpr = join.child(0).unwrap();
         MergeStyleJoin {
-            source_conditions,
-            target_conditions,
-            source_sexpr,
-            target_sexpr,
+            build_conditions,
+            probe_conditions,
+            build_sexpr,
+            probe_sexpr,
         }
     }
 
     pub fn collect_column_map(&self) -> HashMap<String, ColumnBinding> {
         let mut column_map = HashMap::new();
         for (t, s) in self
-            .target_conditions
+            .probe_conditions
             .iter()
-            .zip(self.source_conditions.iter())
+            .zip(self.build_conditions.iter())
         {
             if let (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) = (t, s) {
                 column_map.insert(t_col.column.column_name.clone(), s_col.column.clone());
@@ -101,6 +105,7 @@ impl MergeStyleJoin<'_> {
     }
 }
 
+#[allow(dead_code)]
 impl MergeIntoInterpreter {
     pub async fn build_static_filter(
         join: &SExpr,
@@ -119,7 +124,7 @@ impl MergeIntoInterpreter {
         //          \
         //         SourcePlan
         let m_join = MergeStyleJoin::new(join);
-        if m_join.source_conditions.is_empty() {
+        if m_join.build_conditions.is_empty() {
             return Ok(Box::new(join.clone()));
         }
         let column_map = m_join.collect_column_map();
@@ -181,9 +186,9 @@ impl MergeIntoInterpreter {
 
         // 2. build filter and push down to target side
         ctx.set_status_info("building pushdown filters");
-        let mut filters = Vec::with_capacity(m_join.target_conditions.len());
+        let mut filters = Vec::with_capacity(m_join.probe_conditions.len());
 
-        for (i, target_side_expr) in m_join.target_conditions.iter().enumerate() {
+        for (i, target_side_expr) in m_join.probe_conditions.iter().enumerate() {
             let mut filter_parts = vec![];
             for block in blocks.iter() {
                 let block = block.convert_to_full();
@@ -225,11 +230,11 @@ impl MergeIntoInterpreter {
             }
             filters.extend(Self::combine_filter_parts(&filter_parts).into_iter());
         }
-        let mut target_plan = m_join.target_sexpr.clone();
-        Self::push_down_filters(&mut target_plan, &filters)?;
-        let source_plan = m_join.source_sexpr;
+        let mut probe_plan = m_join.probe_sexpr.clone();
+        Self::push_down_filters(&mut probe_plan, &filters)?;
+        let build_plan = m_join.build_sexpr;
         let new_sexpr =
-            join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
+            join.replace_children(vec![Arc::new(probe_plan), Arc::new(build_plan.clone())]);
 
         ctx.set_status_info("join expression replaced");
         Ok(Box::new(new_sexpr))
@@ -381,9 +386,9 @@ impl MergeIntoInterpreter {
         metadata: &MetadataRef,
         group_expr: ScalarExpr,
     ) -> Result<Plan> {
-        let mut eval_scalar_items = Vec::with_capacity(m_join.source_conditions.len());
-        let mut min_max_binding = Vec::with_capacity(m_join.source_conditions.len() * 2);
-        let mut min_max_scalar_items = Vec::with_capacity(m_join.source_conditions.len() * 2);
+        let mut eval_scalar_items = Vec::with_capacity(m_join.build_conditions.len());
+        let mut min_max_binding = Vec::with_capacity(m_join.build_conditions.len() * 2);
+        let mut min_max_scalar_items = Vec::with_capacity(m_join.build_conditions.len() * 2);
         let mut group_items = vec![];
 
         let index = metadata
@@ -407,46 +412,46 @@ impl MergeIntoInterpreter {
             scalar: evaled,
             index,
         });
-        for source_side_expr in m_join.source_conditions {
+        for build_side_expr in m_join.build_conditions {
             // eval source side join expr
             let index = metadata
                 .write()
-                .add_derived_column("".to_string(), source_side_expr.data_type()?);
+                .add_derived_column("".to_string(), build_side_expr.data_type()?);
             let evaled = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
                 column: ColumnBindingBuilder::new(
                     "".to_string(),
                     index,
-                    Box::new(source_side_expr.data_type()?),
+                    Box::new(build_side_expr.data_type()?),
                     Visibility::Visible,
                 )
                 .build(),
             });
             eval_scalar_items.push(ScalarItem {
-                scalar: source_side_expr.clone(),
+                scalar: build_side_expr.clone(),
                 index,
             });
 
             // eval min/max of source side join expr
-            let min_display_name = format!("min({:?})", source_side_expr);
-            let max_display_name = format!("max({:?})", source_side_expr);
+            let min_display_name = format!("min({:?})", build_side_expr);
+            let max_display_name = format!("max({:?})", build_side_expr);
             let min_index = metadata
                 .write()
-                .add_derived_column(min_display_name.clone(), source_side_expr.data_type()?);
+                .add_derived_column(min_display_name.clone(), build_side_expr.data_type()?);
             let max_index = metadata
                 .write()
-                .add_derived_column(max_display_name.clone(), source_side_expr.data_type()?);
+                .add_derived_column(max_display_name.clone(), build_side_expr.data_type()?);
             let min_binding = ColumnBindingBuilder::new(
                 min_display_name.clone(),
                 min_index,
-                Box::new(source_side_expr.data_type()?),
+                Box::new(build_side_expr.data_type()?),
                 Visibility::Visible,
             )
             .build();
             let max_binding = ColumnBindingBuilder::new(
                 max_display_name.clone(),
                 max_index,
-                Box::new(source_side_expr.data_type()?),
+                Box::new(build_side_expr.data_type()?),
                 Visibility::Visible,
             )
             .build();
@@ -458,7 +463,7 @@ impl MergeIntoInterpreter {
                     distinct: false,
                     params: vec![],
                     args: vec![evaled.clone()],
-                    return_type: Box::new(source_side_expr.data_type()?),
+                    return_type: Box::new(build_side_expr.data_type()?),
                     display_name: min_display_name.clone(),
                 }),
                 index: min_index,
@@ -469,7 +474,7 @@ impl MergeIntoInterpreter {
                     distinct: false,
                     params: vec![],
                     args: vec![evaled],
-                    return_type: Box::new(source_side_expr.data_type()?),
+                    return_type: Box::new(build_side_expr.data_type()?),
                     display_name: max_display_name.clone(),
                 }),
                 index: max_index,
@@ -478,21 +483,26 @@ impl MergeIntoInterpreter {
             min_max_scalar_items.push(max);
         }
 
-        let eval_source_side_join_expr_op = EvalScalar {
+        let eval_build_side_join_expr_op = EvalScalar {
             items: eval_scalar_items,
         };
-        let source_plan = m_join.source_sexpr;
-        let eval_target_side_condition_sexpr = if let RelOperator::Exchange(_) = source_plan.plan()
-        {
+        let build_plan = m_join.build_sexpr;
+        let eval_probe_side_condition_sexpr = if let RelOperator::Exchange(_) = build_plan.plan() {
             // there is another row_number operator here
             SExpr::create_unary(
-                Arc::new(eval_source_side_join_expr_op.into()),
-                Arc::new(source_plan.child(0)?.child(0)?.clone()),
+                Arc::new(eval_build_side_join_expr_op.into()),
+                Arc::new(SExpr::create_unary(
+                    // merge data here
+                    Arc::new(RelOperator::Exchange(
+                        databend_common_sql::plans::Exchange::Merge,
+                    )),
+                    Arc::new(build_plan.child(0)?.child(0)?.clone()),
+                )),
             )
         } else {
             SExpr::create_unary(
-                Arc::new(eval_source_side_join_expr_op.into()),
-                Arc::new(source_plan.clone()),
+                Arc::new(eval_build_side_join_expr_op.into()),
+                Arc::new(build_plan.clone()),
             )
         };
 
@@ -509,7 +519,7 @@ impl MergeIntoInterpreter {
         };
         let agg_partial_sexpr = SExpr::create_unary(
             Arc::new(agg_partial_op.into()),
-            Arc::new(eval_target_side_condition_sexpr),
+            Arc::new(eval_probe_side_condition_sexpr),
         );
         let agg_final_op = Aggregate {
             mode: AggregateMode::Final,

@@ -321,6 +321,7 @@ impl<'a> Binder {
             Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
             Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
+            Statement::ShowVirtualColumns(stmt) => self.bind_show_virtual_columns(bind_context, stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,

@@ -592,6 +592,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_refresh_virtual_column(&mut self, _stmt: &mut RefreshVirtualColumnStmt) {}
 
+    fn visit_show_virtual_columns(&mut self, _stmt: &mut ShowVirtualColumnsStmt) {}
+
     fn visit_show_users(&mut self) {}
 
     fn visit_create_user(&mut self, _stmt: &mut CreateUserStmt) {}

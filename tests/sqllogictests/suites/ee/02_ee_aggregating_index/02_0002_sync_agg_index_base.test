@@ -26,9 +26,6 @@ statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
 
 statement ok
-SET enable_refresh_aggregating_index_after_write=1;
-
-statement ok
 CREATE TABLE t (a int, b int, c int)
 
 statement ok
@@ -47,9 +44,6 @@ SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
 ----
 2 3
 3 1
-
-statement ok
-SET enable_refresh_aggregating_index_after_write=0;
 
 statement ok
 DROP AGGREGATING INDEX testi

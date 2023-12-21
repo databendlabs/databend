@@ -441,6 +441,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
         Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),
         Statement::RefreshVirtualColumn(stmt) => visitor.visit_refresh_virtual_column(stmt),
+        Statement::ShowVirtualColumns(stmt) => visitor.visit_show_virtual_columns(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),
