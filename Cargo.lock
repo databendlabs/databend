@@ -3528,7 +3528,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "siphasher",
- "streaming-decompression",
  "sys-info",
  "typetag",
  "uuid",
