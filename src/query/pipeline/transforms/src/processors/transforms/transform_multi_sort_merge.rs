@@ -261,7 +261,6 @@ where R: Rows
     }
 }
 
-// #[async_trait::async_trait]
 impl<R> Processor for MultiSortMergeProcessor<R>
 where R: Rows + Send + 'static
 {
@@ -298,7 +297,13 @@ where R: Rows + Send + 'static
             return Ok(Event::Finished);
         }
 
-        Ok(Event::Sync)
+        self.merger.poll_pending_stream()?;
+
+        if self.merger.has_pending_stream() {
+            Ok(Event::NeedData)
+        } else {
+            Ok(Event::Sync)
+        }
     }
 
     fn process(&mut self) -> Result<()> {
