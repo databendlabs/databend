@@ -41,7 +41,6 @@ use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
-use crate::io::UncompressedBuffer;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 
@@ -56,7 +55,6 @@ pub struct DeserializeDataTransform {
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<DataSource>,
-    uncompressed_buffer: Arc<UncompressedBuffer>,
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -76,7 +74,6 @@ impl DeserializeDataTransform {
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
-        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
@@ -106,7 +103,6 @@ impl DeserializeDataTransform {
             output_schema,
             parts: vec![],
             chunks: vec![],
-            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
@@ -127,7 +123,6 @@ impl Processor for DeserializeDataTransform {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
-            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -164,7 +159,6 @@ impl Processor for DeserializeDataTransform {
 
         if self.input.is_finished() {
             self.output.finish();
-            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -179,11 +173,7 @@ impl Processor for DeserializeDataTransform {
             match read_res {
                 DataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_parquet_data(
-                        actual_part,
-                        data,
-                        self.uncompressed_buffer.clone(),
-                    )?;
+                    let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
 
                     let progress_values = ProgressValues {
                         rows: block.num_rows(),
@@ -204,16 +194,12 @@ impl Processor for DeserializeDataTransform {
                         &part.compression,
                         &part.columns_meta,
                         columns_chunks,
-                        Some(self.uncompressed_buffer.clone()),
                     )?;
 
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                        data_block = virtual_reader.deserialize_virtual_columns(
-                            data_block,
-                            virtual_data,
-                            Some(self.uncompressed_buffer.clone()),
-                        )?;
+                        data_block =
+                            virtual_reader.deserialize_virtual_columns(data_block, virtual_data)?;
                     }
 
                     // Perf.

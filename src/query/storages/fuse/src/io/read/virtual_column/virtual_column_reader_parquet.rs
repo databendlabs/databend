@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
-use std::sync::Arc;
 
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::io::parquet::read as pread;
@@ -41,7 +40,6 @@ use crate::io::read::block::FieldDeserializationContext;
 use crate::io::read::utils::build_columns_meta;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
 use crate::FusePartInfo;
 use crate::MergeIOReadResult;
 
@@ -197,7 +195,6 @@ impl VirtualColumnReader {
         &self,
         mut data_block: DataBlock,
         virtual_data: Option<VirtualMergeIOReadResult>,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         let mut virtual_values = HashMap::new();
         if let Some(virtual_data) = virtual_data {
@@ -214,7 +211,6 @@ impl VirtualColumnReader {
                 column_chunks: &columns_chunks,
                 num_rows: part.nums_rows,
                 compression: &part.compression,
-                uncompressed_buffer: &uncompressed_buffer,
                 parquet_schema_descriptor: &Some(parquet_schema_descriptor),
             };
             for (index, virtual_column) in self.virtual_column_infos.iter().enumerate() {

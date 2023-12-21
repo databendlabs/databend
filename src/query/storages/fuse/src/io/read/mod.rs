@@ -26,7 +26,6 @@ pub use block::BlockReader;
 pub use block::MergeIOReadResult;
 pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
-pub use block::UncompressedBuffer;
 pub use bloom::BloomBlockFilterReader;
 pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;

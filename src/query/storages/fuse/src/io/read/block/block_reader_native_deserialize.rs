@@ -50,7 +50,6 @@ use super::block_reader_deserialize::FieldDeserializationContext;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
-use crate::io::UncompressedBuffer;
 
 impl BlockReader {
     /// Deserialize column chunks data from native format to DataBlock.
@@ -74,7 +73,6 @@ impl BlockReader {
             compression,
             column_metas,
             column_chunks,
-            None,
         );
 
         // Perf.
@@ -93,7 +91,6 @@ impl BlockReader {
         compression: &Compression,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
@@ -107,7 +104,6 @@ impl BlockReader {
             column_chunks: &column_chunks,
             num_rows,
             compression,
-            uncompressed_buffer: &uncompressed_buffer,
             parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
 

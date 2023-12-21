@@ -25,6 +25,7 @@ use databend_common_arrow::arrow::io::parquet::read::InitNested;
 use databend_common_arrow::parquet::compression::Compression as ParquetCompression;
 use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_arrow::parquet::read::BasicDecompressor;
 use databend_common_arrow::parquet::read::PageMetaData;
 use databend_common_arrow::parquet::read::PageReader;
 use databend_common_exception::ErrorCode;
@@ -42,9 +43,7 @@ use databend_storages_common_table_meta::meta::Compression;
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
 use crate::io::read::block::block_reader_merge_io::DataItem;
-use crate::io::read::block::decompressor::BuffedBasicDecompressor;
 use crate::io::BlockReader;
-use crate::io::UncompressedBuffer;
 
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
@@ -68,7 +67,6 @@ impl BlockReader {
             compression,
             column_metas,
             column_chunks,
-            None,
         );
 
         // Perf.
@@ -93,7 +91,6 @@ impl BlockReader {
         compression: &Compression,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
@@ -107,7 +104,6 @@ impl BlockReader {
             column_chunks: &column_chunks,
             num_rows,
             compression,
-            uncompressed_buffer: &uncompressed_buffer,
             parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
         for column_node in &self.project_column_nodes {
@@ -187,7 +183,6 @@ impl BlockReader {
         field: Field,
         init: Vec<InitNested>,
         compression: &Compression,
-        uncompressed_buffer: Arc<UncompressedBuffer>,
     ) -> Result<ArrayIter<'a>> {
         let columns = metas
             .iter()
@@ -209,10 +204,7 @@ impl BlockReader {
                     usize::MAX,
                 );
 
-                Ok(BuffedBasicDecompressor::new(
-                    pages,
-                    uncompressed_buffer.clone(),
-                ))
+                Ok(BasicDecompressor::new(pages, vec![]))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -236,7 +228,6 @@ impl BlockReader {
         let indices = &column.leaf_indices;
         let column_chunks = deserialization_context.column_chunks;
         let compression = deserialization_context.compression;
-        let uncompressed_buffer = deserialization_context.uncompressed_buffer;
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
         let is_nested = column.has_children();
@@ -298,9 +289,6 @@ impl BlockReader {
                 column.field.clone(),
                 column.init.clone(),
                 compression,
-                uncompressed_buffer
-                    .clone()
-                    .unwrap_or_else(|| UncompressedBuffer::new(0)),
             )?;
             let array = array_iter.next().transpose()?.ok_or_else(|| {
                 ErrorCode::StorageOther(format!(

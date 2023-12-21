@@ -32,7 +32,6 @@ pub use read::NativeSourceData;
 pub use read::ReadSettings;
 pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
-pub use read::UncompressedBuffer;
 pub use read::VirtualColumnReader;
 pub use read::VirtualMergeIOReadResult;
 pub use segments::SegmentsIO;

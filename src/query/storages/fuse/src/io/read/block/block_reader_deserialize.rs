@@ -29,7 +29,6 @@ use databend_storages_common_table_meta::meta::Compression;
 use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
 use crate::FusePartInfo;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
@@ -45,7 +44,6 @@ pub struct FieldDeserializationContext<'a> {
     pub(crate) column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
     pub(crate) num_rows: usize,
     pub(crate) compression: &'a Compression,
-    pub(crate) uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
     pub(crate) parquet_schema_descriptor: &'a Option<SchemaDescriptor>,
 }
 
@@ -129,7 +127,6 @@ impl BlockReader {
                 &meta.compression,
                 &meta.col_metas,
                 column_chunks,
-                None,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
                 &meta.location.0,
@@ -137,7 +134,6 @@ impl BlockReader {
                 &meta.compression,
                 &meta.col_metas,
                 column_chunks,
-                None,
             ),
         }
     }
