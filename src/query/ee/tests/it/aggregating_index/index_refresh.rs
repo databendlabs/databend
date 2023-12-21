@@ -538,7 +538,7 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     let settings = fixture.default_session().get_settings();
     settings.set_enable_refresh_aggregating_index_after_write(true)?;
-    settings.set_auto_compaction_threshold(1)?;
+    settings.set_auto_compaction_imperfect_blocks_threshold(1)?;
 
     // Create table
     fixture.execute_command(

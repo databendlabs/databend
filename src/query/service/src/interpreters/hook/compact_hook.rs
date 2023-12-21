@@ -71,10 +71,11 @@ async fn do_hook_compact(
 
     // Inorder to compatibility with the old version, we need enable_recluster_after_write, it will deprecated in the future.
     // use enable_compact_after_write to replace it.
-    if ctx.get_settings().get_enable_recluster_after_write()? {
-        if ctx.get_settings().get_enable_compact_after_write()? {
-            {
-                pipeline.set_on_finished(move |err| {
+    if ctx.get_settings().get_enable_recluster_after_write()?
+        && ctx.get_settings().get_enable_compact_after_write()?
+    {
+        {
+            pipeline.set_on_finished(move |err| {
                     if !ctx.get_need_compact_after_write() {
                         return Ok(());
                     }
@@ -98,7 +99,6 @@ async fn do_hook_compact(
 
                     Ok(())
                 });
-            }
         }
     }
     Ok(())
