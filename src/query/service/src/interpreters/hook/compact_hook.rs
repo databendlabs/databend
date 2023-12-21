@@ -43,7 +43,6 @@ pub struct CompactHookTraceCtx {
 }
 
 /// Hook compact action with a on-finished callback.
-/// only if target table have cluster keys defined, and auto-reclustering is enabled,
 /// errors (if any) are ignored.
 pub async fn hook_compact(
     ctx: Arc<QueryContext>,
@@ -59,8 +58,6 @@ pub async fn hook_compact(
 }
 
 /// hook the compact action with a on-finished callback.
-/// only if target table have cluster keys defined, and auto-reclustering is enabled,
-/// errors (if any) are ignored
 async fn do_hook_compact(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
@@ -101,20 +98,22 @@ async fn do_hook_compact(
     Ok(())
 }
 
-/// compact the target table
-/// only if target table have cluster keys defined, and auto-reclustering is enabled,
-/// errors (if any) are ignored
+/// compact the target table, will do optimize table actions, including:
+///  - compact blocks
+///  - re-cluster if the cluster keys are defined
 async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
     need_lock: bool,
 ) -> Result<()> {
-    // build the compact pipeline
+    // evict the table from cache
     ctx.evict_table_from_cache(
         &compact_target.catalog,
         &compact_target.database,
         &compact_target.table,
     )?;
+
+    // build the optimize table pipeline with compact action.
     let optimize_interpreter =
         OptimizeTableInterpreter::try_create(ctx.clone(), OptimizeTablePlan {
             catalog: compact_target.catalog,
