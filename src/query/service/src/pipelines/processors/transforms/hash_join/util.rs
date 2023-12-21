@@ -155,7 +155,7 @@ where
 {
     match method {
         HashMethodKind::Serializer(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -163,7 +163,7 @@ where
             );
         }
         HashMethodKind::DictionarySerializer(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -171,7 +171,7 @@ where
             );
         }
         HashMethodKind::SingleString(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -179,7 +179,7 @@ where
             );
         }
         HashMethodKind::KeysU8(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -187,7 +187,7 @@ where
             );
         }
         HashMethodKind::KeysU16(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -195,7 +195,7 @@ where
             );
         }
         HashMethodKind::KeysU32(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -203,7 +203,7 @@ where
             );
         }
         HashMethodKind::KeysU64(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -211,7 +211,7 @@ where
             );
         }
         HashMethodKind::KeysU128(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
@@ -219,7 +219,7 @@ where
             );
         }
         HashMethodKind::KeysU256(method) => {
-            let keys_state = method.build_keys_state(&columns, num_rows)?;
+            let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
