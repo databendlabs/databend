@@ -192,7 +192,7 @@ pub enum Expr {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
-        params: Vec<Literal>,
+        params: Vec<Expr>,
         window: Option<Window>,
         lambda: Option<Lambda>,
     },

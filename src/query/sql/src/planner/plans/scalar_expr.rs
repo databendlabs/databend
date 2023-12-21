@@ -526,7 +526,7 @@ pub struct FunctionCall {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
     pub func_name: String,
-    pub params: Vec<i64>,
+    pub params: Vec<Scalar>,
     pub arguments: Vec<ScalarExpr>,
 }
 
