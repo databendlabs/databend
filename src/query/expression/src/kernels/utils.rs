@@ -61,7 +61,7 @@ pub unsafe fn copy_advance_aligned<T>(src: *const T, ptr: &mut *mut T, count: us
 #[inline]
 pub unsafe fn set_vec_len_by_ptr<T>(vec: &mut Vec<T>, ptr: *const T) {
     unsafe {
-        vec.set_len((ptr as usize - vec.as_ptr() as usize) / std::mem::size_of::<T>());
+        vec.set_len(ptr.offset_from(vec.as_ptr()) as usize);
     }
 }
 
