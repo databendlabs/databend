@@ -261,7 +261,7 @@ async fn build_mutator(
     let compact_params = CompactOptions {
         base_snapshot,
         block_per_seg,
-        limit,
+        num_segment_limit: limit,
     };
 
     let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
