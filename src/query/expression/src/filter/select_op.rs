@@ -67,39 +67,6 @@ where T: std::cmp::PartialOrd {
     }
 }
 
-pub fn select_op_boolean(op: &SelectOp) -> fn(bool, bool) -> bool {
-    match op {
-        SelectOp::Equal => boolean_equal,
-        SelectOp::NotEqual => boolean_not_equal,
-        SelectOp::Gt => boolean_greater_than,
-        SelectOp::Gte => boolean_greater_than_equal,
-        SelectOp::Lt => boolean_less_than,
-        SelectOp::Lte => boolean_less_than_equal,
-    }
-}
-
-pub fn select_op_string(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
-    match op {
-        SelectOp::Equal => string_equal,
-        SelectOp::NotEqual => string_not_equal,
-        SelectOp::Gt => string_greater_than,
-        SelectOp::Gte => string_greater_than_equal,
-        SelectOp::Lt => string_less_than,
-        SelectOp::Lte => string_less_than_equal,
-    }
-}
-
-pub fn select_op_variant(op: &SelectOp) -> fn(&[u8], &[u8]) -> bool {
-    match op {
-        SelectOp::Equal => variant_equal,
-        SelectOp::NotEqual => variant_not_equal,
-        SelectOp::Gt => variant_greater_than,
-        SelectOp::Gte => variant_greater_than_equal,
-        SelectOp::Lt => variant_less_than,
-        SelectOp::Lte => variant_less_than_equal,
-    }
-}
-
 pub fn select_op_tuple<T>(op: &SelectOp) -> fn(T, T) -> Option<bool>
 where T: std::cmp::PartialOrd {
     match op {
@@ -168,96 +135,6 @@ where T: std::cmp::PartialOrd {
 fn less_than_equal<T>(left: T, right: T) -> bool
 where T: std::cmp::PartialOrd {
     left <= right
-}
-
-#[inline(always)]
-fn boolean_equal(left: bool, right: bool) -> bool {
-    left == right
-}
-
-#[inline(always)]
-fn boolean_not_equal(left: bool, right: bool) -> bool {
-    left != right
-}
-
-#[inline(always)]
-fn boolean_greater_than(left: bool, right: bool) -> bool {
-    left & !right
-}
-
-#[inline(always)]
-fn boolean_greater_than_equal(left: bool, right: bool) -> bool {
-    (left & !right) || (left & right)
-}
-
-#[inline(always)]
-fn boolean_less_than(left: bool, right: bool) -> bool {
-    !left & right
-}
-
-#[inline(always)]
-fn boolean_less_than_equal(left: bool, right: bool) -> bool {
-    (!left & right) || (left & right)
-}
-
-#[inline(always)]
-fn string_equal(left: &[u8], right: &[u8]) -> bool {
-    left == right
-}
-
-#[inline(always)]
-fn string_not_equal(left: &[u8], right: &[u8]) -> bool {
-    left != right
-}
-
-#[inline(always)]
-fn string_greater_than(left: &[u8], right: &[u8]) -> bool {
-    left > right
-}
-
-#[inline(always)]
-fn string_greater_than_equal(left: &[u8], right: &[u8]) -> bool {
-    left >= right
-}
-
-#[inline(always)]
-fn string_less_than(left: &[u8], right: &[u8]) -> bool {
-    left < right
-}
-
-#[inline(always)]
-fn string_less_than_equal(left: &[u8], right: &[u8]) -> bool {
-    left <= right
-}
-
-#[inline(always)]
-fn variant_equal(left: &[u8], right: &[u8]) -> bool {
-    jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Equal
-}
-
-#[inline(always)]
-fn variant_not_equal(left: &[u8], right: &[u8]) -> bool {
-    jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Equal
-}
-
-#[inline(always)]
-fn variant_greater_than(left: &[u8], right: &[u8]) -> bool {
-    jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Greater
-}
-
-#[inline(always)]
-fn variant_greater_than_equal(left: &[u8], right: &[u8]) -> bool {
-    jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Less
-}
-
-#[inline(always)]
-fn variant_less_than(left: &[u8], right: &[u8]) -> bool {
-    jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Less
-}
-
-#[inline(always)]
-fn variant_less_than_equal(left: &[u8], right: &[u8]) -> bool {
-    jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Greater
 }
 
 #[inline(always)]

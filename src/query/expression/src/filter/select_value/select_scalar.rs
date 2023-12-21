@@ -18,15 +18,16 @@ use databend_common_exception::Result;
 
 use crate::filter::empty_array_compare_value;
 use crate::filter::select_op;
-use crate::filter::select_op_boolean;
-use crate::filter::select_op_string;
 use crate::filter::select_op_tuple;
-use crate::filter::select_op_variant;
 use crate::filter::tuple_compare_default_value;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
+use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::StringType;
+use crate::types::ValueType;
+use crate::types::VariantType;
 use crate::Scalar;
 
 impl<'a> Selector<'a> {
@@ -71,17 +72,17 @@ impl<'a> Selector<'a> {
             DataType::Boolean => {
                 let left = left.into_boolean().unwrap();
                 let right = right.into_boolean().unwrap();
-                select_op_boolean(op)(left, right)
+                BooleanType::cmp(op)(left, right)
             }
             DataType::String => {
                 let left = left.into_string().unwrap();
                 let right = right.into_string().unwrap();
-                select_op_string(op)(&left, &right)
+                StringType::cmp(op)(&left, &right)
             }
             DataType::Variant => {
                 let left = left.into_variant().unwrap();
                 let right = right.into_variant().unwrap();
-                select_op_variant(op)(&left, &right)
+                VariantType::cmp(op)(&left, &right)
             }
             DataType::Tuple(_) => {
                 let left = left.into_tuple().unwrap();
