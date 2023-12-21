@@ -99,7 +99,7 @@ impl PipelineBuilder {
             right_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
@@ -154,7 +154,7 @@ impl PipelineBuilder {
             build_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
         let mut build_res = build_side_builder.finalize(build)?;
@@ -317,7 +317,7 @@ impl PipelineBuilder {
             left_side_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         left_side_builder.cte_state = self.cte_state.clone();
         let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
