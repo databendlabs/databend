@@ -57,17 +57,26 @@ impl Operator for Exchange {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 
     fn compute_required_prop_child(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Ok(required.clone())
+        rel_expr.compute_required_prop_child(ctx, 0, required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        rel_expr.compute_required_prop_children(ctx, required)
     }
 }
