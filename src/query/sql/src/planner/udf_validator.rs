@@ -31,6 +31,7 @@ use databend_common_functions::is_builtin_function;
 pub struct UDFValidator {
     pub name: String,
     pub parameters: Vec<String>,
+    pub lambda_parameters: Vec<String>,
 
     pub expr_params: HashSet<String>,
     pub has_recursive: bool,
@@ -46,7 +47,8 @@ impl UDFValidator {
             return Err(ErrorCode::SyntaxException("Recursive UDF is not supported"));
         }
         let expr_params = &self.expr_params;
-        let parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
+        let mut parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
+        parameters.extend(self.lambda_parameters.iter().cloned().collect::<HashSet<_>>().into_iter());
 
         let params_not_declared: HashSet<_> = expr_params.difference(&parameters).collect();
         let params_not_used: HashSet<_> = parameters.difference(expr_params).collect();
@@ -90,7 +92,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         args: &'ast [Expr],
         _params: &'ast [Literal],
         over: &'ast Option<Window>,
-        _lambda: &'ast Option<Lambda>,
+        lambda: &'ast Option<Lambda>,
     ) {
         let name = name.to_string();
         if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(&name) {
@@ -121,6 +123,12 @@ impl<'ast> Visitor<'ast> for UDFValidator {
                     self.visit_identifier(&reference.window_name);
                 }
             }
+        }
+        if let Some(lambda) = lambda {
+            lambda.params.iter().for_each(|param| {
+                self.lambda_parameters.push(param.name.clone())
+            });
+            walk_expr(self, &lambda.expr)
         }
     }
 }

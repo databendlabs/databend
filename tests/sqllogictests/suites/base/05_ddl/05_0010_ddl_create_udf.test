@@ -31,6 +31,9 @@ CREATE FUNCTION IF NOT EXISTS with_lambda AS(list) -> array_filter(list, x -> x 
 statement error 2603
 CREATE FUNCTION with_lambda AS(list) -> array_filter(list, x -> x > 42)
 
+statement error 1005
+CREATE FUNCTION my_filter as (list) -> array_filter(list, x -> y > 2);
+
 statement ok
 DROP FUNCTION isnotempty
 
